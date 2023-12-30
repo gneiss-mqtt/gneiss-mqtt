@@ -9,7 +9,7 @@ description = "Asynchronous and threaded MQTT(5) clients"
 homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 documentation = "https://docs.rs/gneiss-mqtt"
 repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
-readme = "https://github.com/gneiss-mqtt/gneiss-mqtt/README.md"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
