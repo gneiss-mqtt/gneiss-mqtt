@@ -19,6 +19,7 @@ Gneiss-mqtt supports all aspects of the MQTT5 specification with the following e
 * HTTP proxy support
 * Background thread client for no-async support
 * Support async-std as a runtime option
+* Support native-tls as a TLS option
 * Public API and documentation polish
 
 ### Tentative Roadmp post dev preview (unordered)
@@ -27,7 +28,7 @@ Gneiss-mqtt supports all aspects of the MQTT5 specification with the following e
 * Auth packet/exchange support.
 
 ### Tentative Roadmap post GA
-* Client crates for known MQTT services (AWS Shadow, Jobs, Fleet Provisioning)
+* Client crates for known MQTT services (AWS Shadow, Jobs, Fleet Provisioning, etc...)
 * Crates for non-AWS cloud provider connectors (Azure, etc...)
 * Embedded implementation targeting highly-constrained environments
 
