@@ -1,0 +1,20 @@
+[package]
+name = "gneiss-mqtt"
+license = "Apache-2.0"
+version = "0.1.0"
+edition = "2021"
+keywords = ["mqtt", "mqtt5", "iot"]
+categories = [ "asynchronous", "network-programming", "web-programming::websocket"]
+description = "Asynchronous and threaded MQTT(5) clients"
+homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+documentation = "https://docs.rs/gneiss-mqtt"
+repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+readme = "https://github.com/gneiss-mqtt/gneiss-mqtt/README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+lru = { version = "0.11" }
+log = { version = "0.4" }
+rand = { version = "0.8" }
