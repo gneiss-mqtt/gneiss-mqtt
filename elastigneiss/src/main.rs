@@ -4,7 +4,6 @@
  */
 
 extern crate argh;
-extern crate inline_colorization;
 extern crate gneiss_mqtt;
 extern crate rustls;
 extern crate rustls_pemfile;
@@ -15,7 +14,6 @@ extern crate url;
 
 use std::fs::File;
 use argh::FromArgs;
-use inline_colorization::*;
 use gneiss_mqtt::client;
 use gneiss_mqtt::client::builder::ClientBuilder;
 use simplelog::*;
@@ -151,17 +149,17 @@ fn client_event_callback(event: Arc<ClientEvent>) {
             println!("Connection Attempt!\n");
         }
         ClientEvent::ConnectionFailure(event) => {
-            println!("{color_red}Connection Failure!");
-            println!("{:?}\n{color_reset}", event);
+            println!("Connection Failure!");
+            println!("{:?}\n", event);
         }
         ClientEvent::ConnectionSuccess(event) => {
-            println!("{color_green}Connection Success!");
+            println!("Connection Success!");
             println!("{}", event.connack);
-            println!("{}\n{color_reset}", event.settings);
+            println!("{}\n", event.settings);
         }
         ClientEvent::Disconnection(event) => {
-            println!("{color_yellow}Disconnection!");
-            println!("{:?}\n{color_reset}", event);
+            println!("Disconnection!");
+            println!("{:?}\n", event);
         }
         ClientEvent::Stopped(_) => {
             println!("Stopped!\n");
@@ -187,7 +185,7 @@ fn handle_stop(client: &Mqtt5Client, args: StopArgs) {
                 ..Default::default()
             });
         } else {
-            println!("{color_red}Invalid input!  reason_code must be a valid numeric Disconnect reason code{color_reset}");
+            println!("Invalid input!  reason_code must be a valid numeric Disconnect reason code");
             return;
         }
     }
@@ -206,7 +204,7 @@ async fn handle_publish(client: &Mqtt5Client, args: PublishArgs) {
     if let Ok(qos) = convert_u8_to_quality_of_service(args.qos) {
         publish.qos = qos;
     } else {
-        println!("{color_red}Invalid input!  Qos must be 0, 1, or 2{color_reset}");
+        println!("Invalid input!  Qos must be 0, 1, or 2");
         return;
     }
 
@@ -217,10 +215,10 @@ async fn handle_publish(client: &Mqtt5Client, args: PublishArgs) {
     let publish_result = client.publish(publish, PublishOptionsBuilder::new().build()).await;
     match &publish_result {
         Ok(publish_response) => {
-            println!("{color_green}Publish Result: Ok(\n  {} )\n{color_reset}", publish_response);
+            println!("Publish Result: Ok(\n  {} )\n", publish_response);
         }
         Err(err) => {
-            println!("{color_red}Publish Result: Err( {} )\n{color_reset}", err);
+            println!("Publish Result: Err( {} )\n", err);
         }
     }
 }
@@ -228,7 +226,7 @@ async fn handle_publish(client: &Mqtt5Client, args: PublishArgs) {
 async fn handle_subscribe(client: &Mqtt5Client, args: SubscribeArgs) {
     let qos_result = convert_u8_to_quality_of_service(args.qos);
     if qos_result.is_err() {
-        println!("{color_red}Invalid input!  Qos must be 0, 1, or 2{color_reset}");
+        println!("Invalid input!  Qos must be 0, 1, or 2");
         return;
     }
 
@@ -243,10 +241,10 @@ async fn handle_subscribe(client: &Mqtt5Client, args: SubscribeArgs) {
 
     match &subscribe_result {
         Ok(subscribe_response) => {
-            println!("{color_green}Subscribe Result: Ok(\n  {} )\n{color_reset}", subscribe_response);
+            println!("Subscribe Result: Ok(\n  {} )\n", subscribe_response);
         }
         Err(err) => {
-            println!("{color_red}Subscribe Result: Err( {} )\n{color_reset}", err);
+            println!("Subscribe Result: Err( {} )\n", err);
         }
     }
 }
@@ -264,10 +262,10 @@ async fn handle_unsubscribe(client: &Mqtt5Client, args: UnsubscribeArgs) {
 
     match &unsubscribe_result {
         Ok(unsubscribe_response) => {
-            println!("{color_green}Unsubscribe Result: Ok(\n  {} )\n{color_reset}", unsubscribe_response);
+            println!("Unsubscribe Result: Ok(\n  {} )\n", unsubscribe_response);
         }
         Err(err) => {
-            println!("{color_red}Unsubscribe Result: Err( {} )\n{color_reset}", err);
+            println!("Unsubscribe Result: Err( {} )\n", err);
         }
     }
 }
@@ -275,17 +273,13 @@ async fn handle_unsubscribe(client: &Mqtt5Client, args: UnsubscribeArgs) {
 async fn handle_input(value: String, client: &Mqtt5Client) -> bool {
     let args : Vec<&str> = value.split_whitespace().collect();
     if args.is_empty() {
-        println!("{color_red}Invalid input!{color_reset}");
+        println!("Invalid input!");
         return false;
     }
 
     let parsed_result = CommandArgs::from_args(&[], &args[0..]);
     if let Err(err) = parsed_result {
-        if args[0].to_lowercase() == "help" || (args.len() > 1 && args[1].to_lowercase() == "--help") {
-            println!("{}", err.output);
-        } else {
-            println!("{color_red}{}{color_reset}", err.output);
-        }
+        println!("{}", err.output);
 
         return false;
     }
@@ -358,7 +352,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(log_file_path) = &cli_args.logpath {
         let log_file_result = File::create(log_file_path);
         if log_file_result.is_err() {
-            println!("{color_red}Could not create log file{color_reset}");
+            println!("Could not create log file");
             return Ok(());
         }
 
@@ -388,7 +382,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let client = build_client(config, &Handle::current(), &cli_args).unwrap();
 
-    println!("Elastimqtt5 - an interactive MQTT5 console\n");
+    println!("elastigneiss - an interactive MQTT5 console application\n");
     println!(" `help` for command assistance");
 
     let stdin = tokio::io::stdin();
