@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-pub mod tokio_impl;
 
 extern crate log;
 extern crate rand;
@@ -17,7 +16,6 @@ use std::collections::{HashMap, VecDeque};
 use std::mem;
 use std::time::{Duration, Instant};
 
-use log::*;
 use rand::Rng;
 
 pub(crate) struct PublishOptionsInternal {
@@ -312,7 +310,7 @@ impl Mqtt5ClientImpl {
         }
     }
 
-    fn compute_optional_state_transition(&self) -> Option<ClientImplState> {
+    pub(crate) fn compute_optional_state_transition(&self) -> Option<ClientImplState> {
         match self.current_state {
             ClientImplState::Stopped => {
                 match self.desired_state {
@@ -350,7 +348,7 @@ impl Mqtt5ClientImpl {
         None
     }
 
-    fn get_next_connected_service_time(&mut self) -> Option<Instant> {
+    pub(crate) fn get_next_connected_service_time(&mut self) -> Option<Instant> {
         if self.current_state == ClientImplState::Connected {
             return self.operational_state.get_next_service_timepoint(&Instant::now());
         }
@@ -409,7 +407,7 @@ impl Mqtt5ClientImpl {
         self.broadcast_event(Arc::new(ClientEvent::Stopped(stopped_event)));
     }
 
-    fn transition_to_state(&mut self, mut new_state: ClientImplState) -> Mqtt5Result<()> {
+    pub(crate) fn transition_to_state(&mut self, mut new_state: ClientImplState) -> Mqtt5Result<()> {
         let old_state = self.current_state;
         if old_state == new_state {
             return Ok(());

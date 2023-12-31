@@ -13,22 +13,18 @@ extern crate tokio;
 extern crate tokio_rustls;
 extern crate url;
 
+use std::fs::File;
 use argh::FromArgs;
 use inline_colorization::*;
 use gneiss_mqtt::client;
-use rustls::pki_types::PrivateKeyDer;
+use gneiss_mqtt::client::builder::ClientBuilder;
 use simplelog::*;
-use std::sync::Arc;
-use std::fs::File;
-use std::io;
-use std::net::{SocketAddr, ToSocketAddrs};
+
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::net::TcpStream;
 use tokio::runtime::Handle;
-use tokio_rustls::client::TlsStream;
-use tokio_rustls::{TlsConnector};
 use url::Url;
 
 use gneiss_mqtt::*;
@@ -40,15 +36,15 @@ struct CommandLineArgs {
     /// path to the root CA to use when connecting.  If the endpoint URI is a TLS-enabled
     /// scheme and this is not set, then the default system trust store will be used instead.
     #[argh(option)]
-    capath: Option<PathBuf>,
+    capath: Option<String>,
 
     /// path to a client X509 certificate to use while connecting via mTLS.
     #[argh(option)]
-    cert: Option<PathBuf>,
+    cert: Option<String>,
 
     /// path to the private key associated with the client X509 certificate to use while connecting via mTLS.
     #[argh(option)]
-    key: Option<PathBuf>,
+    key: Option<String>,
 
     /// URI of endpoint to connect to.  Supported schemes include `mqtt` and `mqtts`
     #[argh(positional)]
@@ -307,109 +303,50 @@ async fn handle_input(value: String, client: &Mqtt5Client) -> bool {
     false
 }
 
-async fn make_tls_stream(addr: SocketAddr, endpoint: String, connector: TlsConnector) -> std::io::Result<TlsStream<TcpStream>> {
-    let tcp_stream = TcpStream::connect(&addr).await?;
-
-    let domain = pki_types::ServerName::try_from(endpoint.as_str())
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid dnsname"))?
-        .to_owned();
-
-    connector.connect(domain, tcp_stream).await
-}
-
-fn load_private_key(keypath: &PathBuf) -> PrivateKeyDer<'static> {
-    let mut reader = std::io::BufReader::new(File::open(keypath).expect("cannot open private key file"));
-
-    loop {
-        match rustls_pemfile::read_one(&mut reader).expect("cannot parse private key .pem file") {
-            Some(rustls_pemfile::Item::Pkcs1Key(key)) => return key.into(),
-            Some(rustls_pemfile::Item::Pkcs8Key(key)) => return key.into(),
-            Some(rustls_pemfile::Item::Sec1Key(key)) => return key.into(),
-            None => break,
-            _ => {}
-        }
-    }
-
-    panic!(
-        "no keys found in {:?} (encrypted keys not supported)",
-        keypath
-    );
-}
-
-fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> std::io::Result<Mqtt5Client> {
+fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> Mqtt5Result<Mqtt5Client> {
     let url_parse_result = Url::parse(&args.endpoint_uri);
     if url_parse_result.is_err() {
-        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Invalid URL!"));
+        return Err(Mqtt5Error::Unknown);
     }
 
     let uri = url_parse_result.unwrap();
     if uri.host_str().is_none() {
-        return Err(std::io::Error::new(std::io::ErrorKind::Other, "URL must specify host!"));
+        return Err(Mqtt5Error::Unknown);
     }
 
     let endpoint = uri.host_str().unwrap().to_string();
 
     if uri.port().is_none() {
-        return Err(std::io::Error::new(std::io::ErrorKind::Other, "URL must specify port!"));
+        return Err(Mqtt5Error::Unknown);
     }
 
     let port = uri.port().unwrap();
 
-    let to_socket_addrs = (endpoint.clone(), port).to_socket_addrs();
-    if to_socket_addrs.is_err()  {
-        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to convert URL to address!"));
-    }
-
-    let addr = to_socket_addrs.unwrap().next().unwrap();
-
     match uri.scheme().to_lowercase().as_str() {
         "mqtt" => {
-            Ok(Mqtt5Client::new(config,TokioClientOptions {
-                connection_factory: Box::new(move || { Box::pin(TcpStream::connect(addr)) })
-            }, runtime))
+            ClientBuilder::new(&endpoint, port)
+                .unwrap()
+                .with_client_options(config)
+                .build(runtime)
         }
         "mqtts" => {
-            let mut root_cert_store = rustls::RootCertStore::empty();
-            if let Some(capath) = &args.capath {
-                let mut pem = std::io::BufReader::new(File::open(capath)?);
-                for cert in rustls_pemfile::certs(&mut pem) {
-                    root_cert_store.add(cert?).unwrap();
-                }
+            let capath = args.capath.as_deref();
+
+            if args.cert.is_some() && args.key.is_some() {
+                ClientBuilder::new_with_mtls_from_path(&endpoint, port, args.cert.as_ref().unwrap(), args.key.as_ref().unwrap(), capath)
+                    .unwrap()
+                    .with_client_options(config)
+                    .build(runtime)
             } else {
-                for cert in rustls_native_certs::load_native_certs().expect("could not load platform certs") {
-                    root_cert_store.add(cert).unwrap();
-                }
+                ClientBuilder::new_with_tls(&endpoint, port, capath)
+                    .unwrap()
+                    .with_client_options(config)
+                    .build(runtime)
             }
-
-            let rustls_config_builder = rustls::ClientConfig::builder()
-                .with_root_certificates(root_cert_store);
-
-            let rustls_config =
-                if args.cert.is_some() && args.key.is_some() {
-                    let mut reader = std::io::BufReader::new(File::open(args.cert.as_ref().unwrap())?);
-                    let certs = rustls_pemfile::certs(&mut reader)
-                        .map(|result| result.unwrap())
-                        .collect();
-
-                    let private_key = load_private_key(args.key.as_ref().unwrap());
-
-                    rustls_config_builder.with_client_auth_cert(certs, private_key).unwrap()
-                } else {
-                    rustls_config_builder.with_no_client_auth()
-                };
-
-            let connector = TlsConnector::from(Arc::new(rustls_config));
-
-            let tokio_options = TokioClientOptions {
-                connection_factory: Box::new(move || {
-                    Box::pin(make_tls_stream(addr, endpoint.clone(), connector.clone()))
-                })
-            };
-
-            Ok(Mqtt5Client::new(config, tokio_options, runtime))
         }
         _ => {
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "Unsupported scheme in URL!"))
+            Err(Mqtt5Error::Unknown)
+            //Err(std::io::Error::new(std::io::ErrorKind::Other, "Unsupported scheme in URL!"))
         }
     }
 }

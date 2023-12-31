@@ -3,11 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-pub mod internal;
+pub mod asyncstd_impl;
+pub mod builder;
+pub mod shared_impl;
+pub mod thread_impl;
+pub mod tokio_impl;
 
 use crate::*;
 use crate::alias::OutboundAliasResolver;
-use crate::client::internal::*;
+use crate::client::shared_impl::*;
 use crate::spec::*;
 use crate::spec::disconnect::validate_disconnect_packet_outbound;
 use crate::spec::utils::*;
@@ -21,7 +25,7 @@ use std::time::Duration;
 
 // async choice conditional
 extern crate tokio;
-use crate::client::internal::tokio_impl::*;
+use crate::client::tokio_impl::*;
 use tokio::runtime;
 use tokio::io::{AsyncRead, AsyncWrite};
 

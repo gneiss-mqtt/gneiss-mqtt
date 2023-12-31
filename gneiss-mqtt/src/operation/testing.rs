@@ -7,7 +7,7 @@
 mod operational_state_tests {
 
     // feature conditional
-    use crate::client::internal::tokio_impl::*;
+    use crate::client::tokio_impl::*;
     use crate::operation::*;
 
     fn build_standard_test_config() -> OperationalStateConfig {
