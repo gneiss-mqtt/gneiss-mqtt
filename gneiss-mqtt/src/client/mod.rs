@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-pub mod asyncstd_impl;
+pub(crate) mod asyncstd_impl;
 pub mod builder;
-pub mod shared_impl;
-pub mod thread_impl;
+pub(crate) mod shared_impl;
+pub(crate) mod thread_impl;
 pub mod tokio_impl;
 
 use crate::*;
