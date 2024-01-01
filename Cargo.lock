@@ -146,19 +146,37 @@ dependencies = [
 ]
 
 [[package]]
-name = "elastigneiss"
+name = "elasti-gneiss"
+version = "0.1.0"
+dependencies = [
+ "argh",
+ "elasti-gneiss-core",
+ "gneiss-mqtt",
+ "simplelog",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "elasti-gneiss-aws"
+version = "0.1.0"
+dependencies = [
+ "argh",
+ "elasti-gneiss-core",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+ "simplelog",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "elasti-gneiss-core"
 version = "0.1.0"
 dependencies = [
  "argh",
  "gneiss-mqtt",
- "rustls",
- "rustls-native-certs",
- "rustls-pemfile",
- "rustls-pki-types",
- "simplelog",
  "tokio",
- "tokio-rustls",
- "url",
 ]
 
 [[package]]
@@ -200,6 +218,14 @@ dependencies = [
  "rustls-pki-types",
  "tokio",
  "tokio-rustls",
+]
+
+[[package]]
+name = "gneiss-mqtt-aws"
+version = "0.1.0"
+dependencies = [
+ "gneiss-mqtt",
+ "tokio",
 ]
 
 [[package]]

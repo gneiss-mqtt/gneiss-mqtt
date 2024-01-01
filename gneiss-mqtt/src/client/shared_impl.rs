@@ -84,7 +84,7 @@ impl Mqtt5ClientImpl {
 
     pub(crate) fn new(mut config: Mqtt5ClientOptions) -> Self {
         let state_config = OperationalStateConfig {
-            connect_options: config.connect_options.unwrap_or(ConnectOptions { ..Default::default() }),
+            connect_options: config.connect_options,
             base_timestamp: Instant::now(),
             offline_queue_policy: config.offline_queue_policy,
             connack_timeout: config.connack_timeout,

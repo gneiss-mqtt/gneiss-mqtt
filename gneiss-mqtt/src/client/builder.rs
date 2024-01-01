@@ -85,7 +85,7 @@ impl ClientBuilder {
         )
     }
 
-    pub fn new_with_mtls_from_path(endpoint: &str, port: u16, certificate_path: &str, private_key_path: &str, root_ca_path: Option<&str>) -> Mqtt5Result<Self> {
+    pub fn new_with_mtls_from_fs(endpoint: &str, port: u16, certificate_path: &str, private_key_path: &str, root_ca_path: Option<&str>) -> Mqtt5Result<Self> {
         let root_cert_store = load_root_ca_store(root_ca_path)?;
         let certs = load_certs(certificate_path)?;
         let private_key = load_private_key(private_key_path)?;

@@ -1,18 +1,15 @@
 [package]
-name = "elastigneiss"
+name = "elasti-gneiss-aws"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+elasti-gneiss-core = { path = "../elasti-gneiss-core" }
 gneiss-mqtt = { path = "../gneiss-mqtt" }
+gneiss-mqtt-aws = { path = "../gneiss-mqtt-aws" }
 tokio = { version = "1", features = ["full"] }
 simplelog = { version = "0.12" }
-rustls = { version = "0.22", default-features = false }
-tokio-rustls = { version = "0.25" }
-rustls-native-certs = { version = "0.7" }
-pki-types = { package = "rustls-pki-types", version = "1" }
 argh = { version = "0.1" }
 url = { version = "2.5" }
-rustls-pemfile = "2"

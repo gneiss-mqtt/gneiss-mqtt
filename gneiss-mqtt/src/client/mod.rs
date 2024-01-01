@@ -377,12 +377,12 @@ pub struct ConnectOptions {
     /// A string value that the server may use for client authentication and authorization.
     ///
     /// See [MQTT5 User Name](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901071)
-    username: Option<String>,
+    pub username: Option<String>,
 
     /// Opaque binary data that the server may use for client authentication and authorization.
     ///
     /// See [MQTT5 Password](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901072)
-    password: Option<Vec<u8>>,
+    pub password: Option<Vec<u8>>,
 
     /// A time interval, in seconds, that the client requests the server to persist this connection's MQTT session state
     /// for.  Has no meaning if the client has not been configured to rejoin sessions.  Must be non-zero in order to
@@ -604,7 +604,7 @@ impl Default for ReconnectOptions {
 
 #[derive(Default)]
 pub struct Mqtt5ClientOptions {
-    connect_options : Option<ConnectOptions>,
+    pub connect_options : ConnectOptions,
 
     offline_queue_policy: OfflineQueuePolicy,
 
@@ -652,12 +652,12 @@ impl Mqtt5ClientOptionsBuilder {
     }
 
     pub fn with_connect_options(mut self, connect_options: ConnectOptions) -> Self {
-        self.options.connect_options = Some(connect_options);
+        self.options.connect_options = connect_options;
         self
     }
 
-    pub fn set_user_properties(&mut self, connect_options: ConnectOptions) {
-        self.options.connect_options = Some(connect_options);
+    pub fn set_connect_options(&mut self, connect_options: ConnectOptions) {
+        self.options.connect_options = connect_options;
     }
 
     pub fn with_offline_queue_policy(mut self, offline_queue_policy: OfflineQueuePolicy) -> Self {
