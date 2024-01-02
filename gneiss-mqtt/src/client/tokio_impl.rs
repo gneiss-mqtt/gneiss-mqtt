@@ -28,7 +28,7 @@ macro_rules! submit_async_client_operation {
 
         let (response_sender, rx) = AsyncOperationChannel::new().split();
         let internal_options = $options_internal_type {
-            options : $options_value,
+            options : $options_value.unwrap_or_default(),
             response_sender : Some(response_sender)
         };
         let send_result = $self.user_state.try_send(OperationOptions::$operation_type($packet_value, internal_options));

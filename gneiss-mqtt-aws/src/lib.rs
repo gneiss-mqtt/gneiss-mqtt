@@ -41,11 +41,11 @@ impl AwsCustomAuthUnsignedOptions {
 
 pub struct AwsCustomAuthSignedOptions {
     authorizer_name: String,
-    username: Option<String>,
-    password: Option<Vec<u8>>,
     authorizer_signature: String,
     authorizer_token_key_name: String,
-    authorizer_token_key_value: String
+    authorizer_token_key_value: String,
+    username: Option<String>,
+    password: Option<Vec<u8>>
 }
 
 impl AwsCustomAuthSignedOptions {

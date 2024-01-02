@@ -780,7 +780,9 @@ impl Mqtt5Client {
         self.user_state.try_send(OperationOptions::Start())
     }
 
-    pub fn stop(&self, options: StopOptions) -> Mqtt5Result<()> {
+    pub fn stop(&self, options: Option<StopOptions>) -> Mqtt5Result<()> {
+        let options = options.unwrap_or_default();
+
         if let Some(disconnect) = &options.disconnect {
             validate_disconnect_packet_outbound(disconnect)?;
         }
@@ -800,7 +802,7 @@ impl Mqtt5Client {
         self.user_state.try_send(OperationOptions::Shutdown())
     }
 
-    pub fn publish(&self, packet: PublishPacket, options: PublishOptions) -> Pin<Box<PublishResultFuture>> {
+    pub fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> Pin<Box<PublishResultFuture>> {
         let boxed_packet = Box::new(MqttPacket::Publish(packet));
         if let Err(error) = validate_packet_outbound(&boxed_packet) {
             return Box::pin(async move { Err(error) });
@@ -809,7 +811,7 @@ impl Mqtt5Client {
         submit_async_client_operation!(self, Publish, PublishOptionsInternal, options, boxed_packet)
     }
 
-    pub fn subscribe(&self, packet: SubscribePacket, options: SubscribeOptions) -> Pin<Box<SubscribeResultFuture>> {
+    pub fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> Pin<Box<SubscribeResultFuture>> {
         let boxed_packet = Box::new(MqttPacket::Subscribe(packet));
         if let Err(error) = validate_packet_outbound(&boxed_packet) {
             return Box::pin(async move { Err(error) });
@@ -818,7 +820,7 @@ impl Mqtt5Client {
         submit_async_client_operation!(self, Subscribe, SubscribeOptionsInternal, options, boxed_packet)
     }
 
-    pub fn unsubscribe(&self, packet: UnsubscribePacket, options: UnsubscribeOptions) -> Pin<Box<UnsubscribeResultFuture>> {
+    pub fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> Pin<Box<UnsubscribeResultFuture>> {
         let boxed_packet = Box::new(MqttPacket::Unsubscribe(packet));
         if let Err(error) = validate_packet_outbound(&boxed_packet) {
             return Box::pin(async move { Err(error) });

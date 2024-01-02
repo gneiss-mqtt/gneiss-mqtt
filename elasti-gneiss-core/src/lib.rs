@@ -152,7 +152,7 @@ fn handle_stop(client: &Mqtt5Client, args: StopArgs) {
         }
     }
 
-    let _ = client.stop(stop_options_builder.build());
+    let _ = client.stop(Some(stop_options_builder.build()));
 }
 
 fn handle_close(client: &Mqtt5Client, _ : CloseArgs) {
@@ -174,7 +174,7 @@ async fn handle_publish(client: &Mqtt5Client, args: PublishArgs) {
         publish.payload = Some(payload.as_bytes().to_vec());
     }
 
-    let publish_result = client.publish(publish, PublishOptionsBuilder::new().build()).await;
+    let publish_result = client.publish(publish, None).await;
     match &publish_result {
         Ok(publish_response) => {
             println!("Publish Result: Ok(\n  {} )\n", publish_response);
@@ -199,7 +199,7 @@ async fn handle_subscribe(client: &Mqtt5Client, args: SubscribeArgs) {
         ..Default::default()
     };
 
-    let subscribe_result = client.subscribe(subscribe, SubscribeOptionsBuilder::new().build()).await;
+    let subscribe_result = client.subscribe(subscribe, None).await;
 
     match &subscribe_result {
         Ok(subscribe_response) => {
@@ -220,7 +220,7 @@ async fn handle_unsubscribe(client: &Mqtt5Client, args: UnsubscribeArgs) {
         ..Default::default()
     };
 
-    let unsubscribe_result = client.unsubscribe(unsubscribe, UnsubscribeOptionsBuilder::new().build()).await;
+    let unsubscribe_result = client.unsubscribe(unsubscribe, None).await;
 
     match &unsubscribe_result {
         Ok(unsubscribe_response) => {
