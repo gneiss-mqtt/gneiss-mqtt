@@ -74,15 +74,15 @@ struct CommandLineArgs {
     authorizer_token_key_value: Option<String>,
 }
 
-fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> Mqtt5Result<Mqtt5Client> {
+fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> MqttResult<Mqtt5Client> {
     let url_parse_result = Url::parse(&args.endpoint_uri);
     if url_parse_result.is_err() {
-        return Err(Mqtt5Error::InvalidArgument);
+        return Err(MqttError::InvalidArgument);
     }
 
     let uri = url_parse_result.unwrap();
     if uri.host_str().is_none() {
-        return Err(Mqtt5Error::InvalidArgument);
+        return Err(MqttError::InvalidArgument);
     }
 
     let endpoint = uri.host_str().unwrap().to_string();
@@ -95,7 +95,7 @@ fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLine
                     .with_client_options(config)
                     .build(runtime)
             } else {
-                Err(Mqtt5Error::InvalidArgument)
+                Err(MqttError::InvalidArgument)
             }
         }
         "aws-custom-auth" => {
@@ -127,14 +127,14 @@ fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLine
                         .build(runtime)
                 }
             } else {
-                Err(Mqtt5Error::InvalidArgument)
+                Err(MqttError::InvalidArgument)
             }
         }
         "aws-wss-sigv4" => {
-            Err(Mqtt5Error::Unimplemented)
+            Err(MqttError::Unimplemented)
         }
         _ => {
-            Err(Mqtt5Error::InvalidArgument)
+            Err(MqttError::InvalidArgument)
         }
     }
 }

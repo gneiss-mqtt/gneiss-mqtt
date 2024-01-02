@@ -78,14 +78,14 @@ pub const SUBSCRIPTION_OPTIONS_NO_LOCAL_MASK : u8 = 1u8 << 2;
 pub const SUBSCRIPTION_OPTIONS_RETAIN_AS_PUBLISHED_MASK : u8 = 1u8 << 3;
 pub const SUBSCRIPTION_OPTIONS_RETAIN_HANDLING_SHIFT : u8 = 4;
 
-pub fn convert_u8_to_quality_of_service(value: u8) -> Mqtt5Result<QualityOfService> {
+pub fn convert_u8_to_quality_of_service(value: u8) -> MqttResult<QualityOfService> {
     match value {
         0 => { Ok(QualityOfService::AtMostOnce) }
         1 => { Ok(QualityOfService::AtLeastOnce) }
         2 => { Ok(QualityOfService::ExactlyOnce) }
         _ => {
             error!("Packet Decode - Invalid quality of service value ({})", value);
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }
@@ -98,13 +98,13 @@ pub(crate) fn quality_of_service_to_str (qos: QualityOfService) -> &'static str 
     }
 }
 
-pub fn convert_u8_to_payload_format_indicator(value: u8) -> Mqtt5Result<PayloadFormatIndicator> {
+pub fn convert_u8_to_payload_format_indicator(value: u8) -> MqttResult<PayloadFormatIndicator> {
     match value {
         0 => { Ok(PayloadFormatIndicator::Bytes) }
         1 => { Ok(PayloadFormatIndicator::Utf8) }
         _ => {
             error!("Packet Decode - Invalid payload format indicator value ({})", value);
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }
@@ -116,7 +116,7 @@ pub(crate) fn payload_format_indicator_to_str (pfi: PayloadFormatIndicator) -> &
     }
 }
 
-pub(crate) fn convert_u8_to_puback_reason_code(value: u8) -> Mqtt5Result<PubackReasonCode> {
+pub(crate) fn convert_u8_to_puback_reason_code(value: u8) -> MqttResult<PubackReasonCode> {
     match value {
         0 => { Ok(PubackReasonCode::Success) }
         16 => { Ok(PubackReasonCode::NoMatchingSubscribers) }
@@ -129,7 +129,7 @@ pub(crate) fn convert_u8_to_puback_reason_code(value: u8) -> Mqtt5Result<PubackR
         153 => { Ok(PubackReasonCode::PayloadFormatInvalid) }
         _ => {
             error!("Packet Decode - Invalid puback reason code value ({})", value);
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }
@@ -148,7 +148,7 @@ pub(crate) fn puback_reason_code_to_str (reason_code: PubackReasonCode) -> &'sta
     }
 }
 
-pub(crate) fn convert_u8_to_pubrec_reason_code(value: u8) -> Mqtt5Result<PubrecReasonCode> {
+pub(crate) fn convert_u8_to_pubrec_reason_code(value: u8) -> MqttResult<PubrecReasonCode> {
     match value {
         0 => { Ok(PubrecReasonCode::Success) }
         16 => { Ok(PubrecReasonCode::NoMatchingSubscribers) }
@@ -161,7 +161,7 @@ pub(crate) fn convert_u8_to_pubrec_reason_code(value: u8) -> Mqtt5Result<PubrecR
         153 => { Ok(PubrecReasonCode::PayloadFormatInvalid) }
         _ => {
             error!("Packet Decode - Invalid pubrec reason code value ({})", value);
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }
@@ -180,13 +180,13 @@ pub(crate) fn pubrec_reason_code_to_str (reason_code: PubrecReasonCode) -> &'sta
     }
 }
 
-pub(crate) fn convert_u8_to_pubrel_reason_code(value: u8) -> Mqtt5Result<PubrelReasonCode> {
+pub(crate) fn convert_u8_to_pubrel_reason_code(value: u8) -> MqttResult<PubrelReasonCode> {
     match value {
         0 => { Ok(PubrelReasonCode::Success) }
         146 => { Ok(PubrelReasonCode::PacketIdentifierNotFound) }
         _ => {
             error!("Packet Decode - Invalid pubrel reason code value ({})", value);
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }
@@ -198,13 +198,13 @@ pub(crate) fn pubrel_reason_code_to_str (reason_code: PubrelReasonCode) -> &'sta
     }
 }
 
-pub(crate) fn convert_u8_to_pubcomp_reason_code(value: u8) -> Mqtt5Result<PubcompReasonCode> {
+pub(crate) fn convert_u8_to_pubcomp_reason_code(value: u8) -> MqttResult<PubcompReasonCode> {
     match value {
         0 => { Ok(PubcompReasonCode::Success) }
         146 => { Ok(PubcompReasonCode::PacketIdentifierNotFound) }
         _ => {
             error!("Packet Decode - Invalid pubcomp reason code value ({})", value);
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }
@@ -216,7 +216,7 @@ pub(crate) fn pubcomp_reason_code_to_str (reason_code: PubcompReasonCode) -> &'s
     }
 }
 
-pub(crate) fn convert_u8_to_connect_reason_code(value: u8) -> Mqtt5Result<ConnectReasonCode> {
+pub(crate) fn convert_u8_to_connect_reason_code(value: u8) -> MqttResult<ConnectReasonCode> {
     match value {
         0 => { Ok(ConnectReasonCode::Success) }
         128 => { Ok(ConnectReasonCode::UnspecifiedError) }
@@ -242,7 +242,7 @@ pub(crate) fn convert_u8_to_connect_reason_code(value: u8) -> Mqtt5Result<Connec
         159 => { Ok(ConnectReasonCode::ConnectionRateExceeded) }
         _ => {
             error!("Packet Decode - Invalid connect reason code value ({})", value);
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }
@@ -274,7 +274,7 @@ pub(crate) fn connect_reason_code_to_str (reason_code: ConnectReasonCode) -> &'s
     }
 }
 
-pub fn convert_u8_to_disconnect_reason_code(value: u8) -> Mqtt5Result<DisconnectReasonCode> {
+pub fn convert_u8_to_disconnect_reason_code(value: u8) -> MqttResult<DisconnectReasonCode> {
     match value {
         0 => { Ok(DisconnectReasonCode::NormalDisconnection) }
         4 => { Ok(DisconnectReasonCode::DisconnectWithWillMessage) }
@@ -307,7 +307,7 @@ pub fn convert_u8_to_disconnect_reason_code(value: u8) -> Mqtt5Result<Disconnect
         162 => { Ok(DisconnectReasonCode::WildcardSubscriptionsNotSupported) }
         _ => {
             error!("Packet Decode - Invalid disconnect reason code value ({})", value);
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }
@@ -346,14 +346,14 @@ pub(crate) fn disconnect_reason_code_to_str (reason_code: DisconnectReasonCode) 
     }
 }
 
-pub fn convert_u8_to_authenticate_reason_code(value: u8) -> Mqtt5Result<AuthenticateReasonCode> {
+pub fn convert_u8_to_authenticate_reason_code(value: u8) -> MqttResult<AuthenticateReasonCode> {
     match value {
         0 => { Ok(AuthenticateReasonCode::Success) }
         24 => { Ok(AuthenticateReasonCode::ContinueAuthentication) }
         25 => { Ok(AuthenticateReasonCode::ReAuthenticate) }
         _ => {
             error!("Packet Decode - Invalid authenticate reason code value ({})", value);
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }
@@ -366,7 +366,7 @@ pub(crate) fn authenticate_reason_code_to_str (reason_code: AuthenticateReasonCo
     }
 }
 
-pub(crate) fn convert_u8_to_unsuback_reason_code(value: u8) -> Mqtt5Result<UnsubackReasonCode> {
+pub(crate) fn convert_u8_to_unsuback_reason_code(value: u8) -> MqttResult<UnsubackReasonCode> {
     match value {
         0 => { Ok(UnsubackReasonCode::Success) }
         17 => { Ok(UnsubackReasonCode::NoSubscriptionExisted) }
@@ -377,7 +377,7 @@ pub(crate) fn convert_u8_to_unsuback_reason_code(value: u8) -> Mqtt5Result<Unsub
         145 => { Ok(UnsubackReasonCode::PacketIdentifierInUse) }
         _ => {
             error!("Packet Decode - Invalid unsuback reason code value ({})", value);
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }
@@ -394,7 +394,7 @@ pub(crate) fn unsuback_reason_code_to_str (reason_code: UnsubackReasonCode) -> &
     }
 }
 
-pub(crate) fn convert_u8_to_suback_reason_code(value: u8) -> Mqtt5Result<SubackReasonCode> {
+pub(crate) fn convert_u8_to_suback_reason_code(value: u8) -> MqttResult<SubackReasonCode> {
     match value {
         0 => { Ok(SubackReasonCode::GrantedQos0) }
         1 => { Ok(SubackReasonCode::GrantedQos1) }
@@ -410,7 +410,7 @@ pub(crate) fn convert_u8_to_suback_reason_code(value: u8) -> Mqtt5Result<SubackR
         162 => { Ok(SubackReasonCode::WildcardSubscriptionsNotSupported) }
         _ => {
             error!("Packet Decode - Invalid suback reason code value ({})", value);
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }
@@ -432,14 +432,14 @@ pub(crate) fn suback_reason_code_to_str (reason_code: SubackReasonCode) -> &'sta
     }
 }
 
-pub fn convert_u8_to_retain_handling_type(value: u8) -> Mqtt5Result<RetainHandlingType> {
+pub fn convert_u8_to_retain_handling_type(value: u8) -> MqttResult<RetainHandlingType> {
     match value {
         0 => { Ok(RetainHandlingType::SendOnSubscribe) }
         1 => { Ok(RetainHandlingType::SendOnSubscribeIfNew) }
         2 => { Ok(RetainHandlingType::DontSend) }
         _ => {
             error!("Packet Decode - Invalid retain handling type value ({})", value);
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }

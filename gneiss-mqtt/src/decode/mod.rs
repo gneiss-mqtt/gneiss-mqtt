@@ -67,7 +67,7 @@ pub(crate) struct Decoder {
     remaining_length : Option<usize>,
 }
 
-fn decode_packet(first_byte: u8, packet_body: &[u8]) -> Mqtt5Result<Box<MqttPacket>> {
+fn decode_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
     let packet_type = first_byte >> 4;
 
     info!("Decoding a packet of type {}", packet_type_to_str(packet_type));
@@ -89,7 +89,7 @@ fn decode_packet(first_byte: u8, packet_body: &[u8]) -> Mqtt5Result<Box<MqttPack
         PACKET_TYPE_DISCONNECT => { decode_disconnect_packet(first_byte, packet_body) }
         PACKET_TYPE_AUTH => { decode_auth_packet(first_byte, packet_body) }
         _ => {
-            Err(Mqtt5Error::MalformedPacket)
+            Err(MqttError::MalformedPacket)
         }
     }
 }
@@ -179,7 +179,7 @@ impl Decoder {
         (DecoderDirective::TerminalError, &[])
     }
 
-    pub fn decode_bytes(&mut self, bytes: &[u8], context: &mut DecodingContext) -> Mqtt5Result<()> {
+    pub fn decode_bytes(&mut self, bytes: &[u8], context: &mut DecodingContext) -> MqttResult<()> {
         let mut current_slice = bytes;
 
         let mut decode_result = DecoderDirective::Continue;
@@ -205,7 +205,7 @@ impl Decoder {
 
         if decode_result == DecoderDirective::TerminalError {
             self.state = DecoderState::TerminalError;
-            return Err(Mqtt5Error::MalformedPacket);
+            return Err(MqttError::MalformedPacket);
         }
 
         Ok(())
@@ -375,7 +375,7 @@ pub(crate) mod testing {
         };
 
         let decode_result = decoder.decode_bytes(bad_encoded_bytes.as_slice(), &mut decoding_context);
-        assert_eq!(decode_result, Err(Mqtt5Error::MalformedPacket));
+        assert_eq!(decode_result, Err(MqttError::MalformedPacket));
         assert_eq!(0, decoded_packets.len());
     }
 
@@ -410,7 +410,7 @@ pub(crate) mod testing {
         };
 
         let decode_result = decoder.decode_bytes(encoded_bytes.as_slice(), &mut decoding_context);
-        assert_eq!(decode_result, Err(Mqtt5Error::MalformedPacket));
+        assert_eq!(decode_result, Err(MqttError::MalformedPacket));
         assert_eq!(0, decoded_packets.len());
     }
 

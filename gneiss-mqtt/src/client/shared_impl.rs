@@ -72,7 +72,7 @@ pub(crate) struct Mqtt5ClientImpl {
 
     last_connack: Option<ConnackPacket>,
     last_disconnect: Option<DisconnectPacket>,
-    last_error: Option<Mqtt5Error>,
+    last_error: Option<MqttError>,
 
     successful_connect_time: Option<Instant>,
     next_reconnect_period: Duration,
@@ -143,7 +143,7 @@ impl Mqtt5ClientImpl {
         }
     }
 
-    pub(crate) fn apply_error(&mut self, error: Mqtt5Error) {
+    pub(crate) fn apply_error(&mut self, error: MqttError) {
         if self.last_error.is_none() {
             self.last_error = Some(error);
         }
@@ -236,7 +236,7 @@ impl Mqtt5ClientImpl {
         self.packet_events.clear();
     }
 
-    pub(crate) fn handle_incoming_bytes(&mut self, bytes: &[u8]) -> Mqtt5Result<()> {
+    pub(crate) fn handle_incoming_bytes(&mut self, bytes: &[u8]) -> MqttResult<()> {
         let mut context = NetworkEventContext {
             event: NetworkEvent::IncomingData(bytes),
             current_time: Instant::now(),
@@ -253,7 +253,7 @@ impl Mqtt5ClientImpl {
         result
     }
 
-    pub(crate) fn handle_write_completion(&mut self) -> Mqtt5Result<()> {
+    pub(crate) fn handle_write_completion(&mut self) -> MqttResult<()> {
         let mut context = NetworkEventContext {
             event: NetworkEvent::WriteCompletion,
             current_time: Instant::now(),
@@ -268,7 +268,7 @@ impl Mqtt5ClientImpl {
         result
     }
 
-    pub(crate) fn handle_service(&mut self, outbound_data: &mut Vec<u8>) -> Mqtt5Result<()> {
+    pub(crate) fn handle_service(&mut self, outbound_data: &mut Vec<u8>) -> MqttResult<()> {
         let mut context = ServiceContext {
             to_socket: outbound_data,
             current_time: Instant::now(),
@@ -376,7 +376,7 @@ impl Mqtt5ClientImpl {
 
     fn emit_connection_failure_event(&self) {
         let mut connection_failure_event = ConnectionFailureEvent {
-            error: self.last_error.unwrap_or(Mqtt5Error::Unknown),
+            error: self.last_error.unwrap_or(MqttError::Unknown),
             connack: None,
         };
 
@@ -389,7 +389,7 @@ impl Mqtt5ClientImpl {
 
     fn emit_disconnection_event(&self) {
         let mut disconnection_event = DisconnectionEvent {
-            error: self.last_error.unwrap_or(Mqtt5Error::Unknown),
+            error: self.last_error.unwrap_or(MqttError::Unknown),
             disconnect: None,
         };
 
@@ -407,7 +407,7 @@ impl Mqtt5ClientImpl {
         self.broadcast_event(Arc::new(ClientEvent::Stopped(stopped_event)));
     }
 
-    pub(crate) fn transition_to_state(&mut self, mut new_state: ClientImplState) -> Mqtt5Result<()> {
+    pub(crate) fn transition_to_state(&mut self, mut new_state: ClientImplState) -> MqttResult<()> {
         let old_state = self.current_state;
         if old_state == new_state {
             return Ok(());

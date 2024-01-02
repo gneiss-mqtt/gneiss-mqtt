@@ -23,15 +23,15 @@ use tokio_rustls::{TlsConnector};
 
 
 
-impl From<std::io::Error> for Mqtt5Error {
+impl From<std::io::Error> for MqttError {
     fn from(_: std::io::Error) -> Self {
-        Mqtt5Error::Unknown
+        MqttError::Unknown
     }
 }
 
-impl From<rustls::Error> for Mqtt5Error {
+impl From<rustls::Error> for MqttError {
     fn from(_: rustls::Error) -> Self {
-        Mqtt5Error::Unknown
+        MqttError::Unknown
     }
 }
 
@@ -46,7 +46,7 @@ pub struct ClientBuilder {
 
 impl ClientBuilder {
 
-    pub fn new(endpoint: &str, port: u16) -> Mqtt5Result<Self> {
+    pub fn new(endpoint: &str, port: u16) -> MqttResult<Self> {
         Ok(
             ClientBuilder {
                 endpoint: endpoint.to_string(),
@@ -57,7 +57,7 @@ impl ClientBuilder {
         )
     }
 
-    pub fn new_with_tls(endpoint: &str, port: u16, root_ca_path: Option<&str>) -> Mqtt5Result<Self> {
+    pub fn new_with_tls(endpoint: &str, port: u16, root_ca_path: Option<&str>) -> MqttResult<Self> {
         let root_cert_store = load_root_ca_store(root_ca_path)?;
 
         let tls_config = rustls::ClientConfig::builder()
@@ -74,7 +74,7 @@ impl ClientBuilder {
         )
     }
 
-    pub fn new_with_tls_config(endpoint: &str, port: u16, tls_config: rustls::ClientConfig) -> Mqtt5Result<Self> {
+    pub fn new_with_tls_config(endpoint: &str, port: u16, tls_config: rustls::ClientConfig) -> MqttResult<Self> {
         Ok(
             ClientBuilder {
                 endpoint: endpoint.to_string(),
@@ -85,7 +85,7 @@ impl ClientBuilder {
         )
     }
 
-    pub fn new_with_mtls_from_fs(endpoint: &str, port: u16, certificate_path: &str, private_key_path: &str, root_ca_path: Option<&str>) -> Mqtt5Result<Self> {
+    pub fn new_with_mtls_from_fs(endpoint: &str, port: u16, certificate_path: &str, private_key_path: &str, root_ca_path: Option<&str>) -> MqttResult<Self> {
         let root_cert_store = load_root_ca_store(root_ca_path)?;
         let certs = load_certs(certificate_path)?;
         let private_key = load_private_key(private_key_path)?;
@@ -104,7 +104,7 @@ impl ClientBuilder {
         )
     }
 
-    pub fn new_with_mtls_from_memory(endpoint: &str, port: u16, certificate_bytes: &[u8], private_key_bytes: &[u8], root_ca_bytes: Option<&[u8]>) -> Mqtt5Result<Self> {
+    pub fn new_with_mtls_from_memory(endpoint: &str, port: u16, certificate_bytes: &[u8], private_key_bytes: &[u8], root_ca_bytes: Option<&[u8]>) -> MqttResult<Self> {
         let root_cert_store = build_root_ca_store(root_ca_bytes)?;
         let certs = build_certs(certificate_bytes)?;
         let private_key = build_private_key(private_key_bytes)?;
@@ -132,10 +132,10 @@ impl ClientBuilder {
         self
     }
 
-    pub fn build(self, runtime: &Handle) -> Mqtt5Result<Mqtt5Client> {
+    pub fn build(self, runtime: &Handle) -> MqttResult<Mqtt5Client> {
         let to_socket_addrs = (self.endpoint.clone(), self.port).to_socket_addrs();
         if to_socket_addrs.is_err()  {
-            return Err(Mqtt5Error::Unknown);
+            return Err(MqttError::Unknown);
         }
 
         let addr = to_socket_addrs.unwrap().next().unwrap();
@@ -178,7 +178,7 @@ async fn make_tls_stream(addr: SocketAddr, endpoint: String, connector: TlsConne
     connector.connect(domain, tcp_stream).await
 }
 
-fn load_certs(certificate_path: &str) -> Mqtt5Result<Vec<rustls::pki_types::CertificateDer<'static>>> {
+fn load_certs(certificate_path: &str) -> MqttResult<Vec<rustls::pki_types::CertificateDer<'static>>> {
     let mut cert_bytes_vec = Vec::new();
     let mut cert_file = File::open(certificate_path)?;
     cert_file.read_to_end(&mut cert_bytes_vec)?;
@@ -186,7 +186,7 @@ fn load_certs(certificate_path: &str) -> Mqtt5Result<Vec<rustls::pki_types::Cert
     build_certs(cert_bytes_vec.as_slice())
 }
 
-fn build_certs(certificate_bytes: &[u8]) -> Mqtt5Result<Vec<rustls::pki_types::CertificateDer<'static>>> {
+fn build_certs(certificate_bytes: &[u8]) -> MqttResult<Vec<rustls::pki_types::CertificateDer<'static>>> {
     let mut reader = std::io::BufReader::new(certificate_bytes);
 
     Ok(rustls_pemfile::certs(&mut reader)
@@ -195,7 +195,7 @@ fn build_certs(certificate_bytes: &[u8]) -> Mqtt5Result<Vec<rustls::pki_types::C
         .collect())
 }
 
-fn load_root_ca_store(root_ca_path: Option<&str>) -> Mqtt5Result<rustls::RootCertStore> {
+fn load_root_ca_store(root_ca_path: Option<&str>) -> MqttResult<rustls::RootCertStore> {
     let mut ca_bytes_vec = Vec::new();
     let ca_bytes =
         match root_ca_path {
@@ -210,7 +210,7 @@ fn load_root_ca_store(root_ca_path: Option<&str>) -> Mqtt5Result<rustls::RootCer
     build_root_ca_store(ca_bytes)
 }
 
-fn build_root_ca_store(root_ca_bytes: Option<&[u8]>) -> Mqtt5Result<rustls::RootCertStore> {
+fn build_root_ca_store(root_ca_bytes: Option<&[u8]>) -> MqttResult<rustls::RootCertStore> {
     let mut root_cert_store = rustls::RootCertStore::empty();
     if let Some(root_ca_bytes) = root_ca_bytes {
         let mut pem = std::io::BufReader::new(root_ca_bytes);
@@ -227,7 +227,7 @@ fn build_root_ca_store(root_ca_bytes: Option<&[u8]>) -> Mqtt5Result<rustls::Root
     Ok(root_cert_store)
 }
 
-fn load_private_key(key_path: &str) -> Mqtt5Result<PrivateKeyDer<'static>> {
+fn load_private_key(key_path: &str) -> MqttResult<PrivateKeyDer<'static>> {
     let mut pk_bytes_vec = Vec::new();
     let mut pk_file = File::open(key_path)?;
     pk_file.read_to_end(&mut pk_bytes_vec)?;
@@ -235,7 +235,7 @@ fn load_private_key(key_path: &str) -> Mqtt5Result<PrivateKeyDer<'static>> {
     build_private_key(pk_bytes_vec.as_slice())
 }
 
-fn build_private_key(key_bytes: &[u8]) -> Mqtt5Result<PrivateKeyDer<'static>> {
+fn build_private_key(key_bytes: &[u8]) -> MqttResult<PrivateKeyDer<'static>> {
     let mut reader = std::io::BufReader::new(key_bytes);
 
     loop {
@@ -243,7 +243,7 @@ fn build_private_key(key_bytes: &[u8]) -> Mqtt5Result<PrivateKeyDer<'static>> {
             Some(rustls_pemfile::Item::Pkcs1Key(key)) => return Ok(key.into()),
             Some(rustls_pemfile::Item::Pkcs8Key(key)) => return Ok(key.into()),
             Some(rustls_pemfile::Item::Sec1Key(key)) => return Ok(key.into()),
-            None => { return Err(Mqtt5Error::Unknown); }
+            None => { return Err(MqttError::Unknown); }
             _ => {}
         }
     }

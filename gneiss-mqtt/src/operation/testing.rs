@@ -21,9 +21,9 @@ mod operational_state_tests {
         }
     }
 
-    type PacketHandler = Box<dyn Fn(&Box<MqttPacket>, &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> + 'static>;
+    type PacketHandler = Box<dyn Fn(&Box<MqttPacket>, &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> + 'static>;
 
-    fn handle_connect_with_successful_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_connect_with_successful_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Connect(connect) = &**packet {
             let mut assigned_client_identifier = None;
             if connect.client_id.is_none() {
@@ -39,10 +39,10 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_connect_with_session_resumption(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_connect_with_session_resumption(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Connect(connect) = &**packet {
             let mut assigned_client_identifier = None;
             if connect.client_id.is_none() {
@@ -59,10 +59,10 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_connect_with_low_receive_maximum(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_connect_with_low_receive_maximum(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Connect(connect) = &**packet {
             let mut assigned_client_identifier = None;
             if connect.client_id.is_none() {
@@ -79,10 +79,10 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_connect_with_topic_aliasing(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_connect_with_topic_aliasing(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Connect(connect) = &**packet {
             let mut assigned_client_identifier = None;
             if connect.client_id.is_none() {
@@ -99,7 +99,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
     fn create_connack_rejection() -> ConnackPacket {
@@ -109,7 +109,7 @@ mod operational_state_tests {
         }
     }
 
-    fn handle_connect_with_failure_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_connect_with_failure_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Connect(_) = &**packet {
             let response = Box::new(MqttPacket::Connack(create_connack_rejection()));
             response_packets.push_back(response);
@@ -117,10 +117,10 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_connect_with_tiny_maximum_packet_size(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_connect_with_tiny_maximum_packet_size(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Connect(_) = &**packet {
             let response = Box::new(MqttPacket::Connack(ConnackPacket {
                 maximum_packet_size: Some(10),
@@ -131,17 +131,17 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_pingreq_with_pingresp(_: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_pingreq_with_pingresp(_: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         let response = Box::new(MqttPacket::Pingresp(PingrespPacket{}));
         response_packets.push_back(response);
 
         Ok(())
     }
 
-    fn handle_publish_with_success_no_relay(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_publish_with_success_no_relay(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Publish(publish) = &**packet {
             match publish.qos {
                 QualityOfService::AtMostOnce => {}
@@ -164,10 +164,10 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_publish_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_publish_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Publish(publish) = &**packet {
             match publish.qos {
                 QualityOfService::AtMostOnce => {}
@@ -192,10 +192,10 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_pubrec_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_pubrec_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Pubrec(pubrec) = &**packet {
             let response = Box::new(MqttPacket::Pubrel(PubrelPacket{
                 packet_id : pubrec.packet_id,
@@ -206,10 +206,10 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_pubrel_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_pubrel_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Pubrel(pubrel) = &**packet {
             let response = Box::new(MqttPacket::Pubcomp(PubcompPacket{
                 packet_id : pubrel.packet_id,
@@ -220,10 +220,10 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_pubrel_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_pubrel_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Pubrel(pubrel) = &**packet {
             let response = Box::new(MqttPacket::Pubcomp(PubcompPacket{
                 packet_id : pubrel.packet_id,
@@ -235,10 +235,10 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_subscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_subscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Subscribe(subscribe) = &**packet {
             let mut reason_codes = Vec::new();
             for subscription in &subscribe.subscriptions {
@@ -259,10 +259,10 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_subscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_subscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Subscribe(subscribe) = &**packet {
             let mut reason_codes = Vec::new();
             for _ in &subscribe.subscriptions {
@@ -279,10 +279,10 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_unsubscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_unsubscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Unsubscribe(unsubscribe) = &**packet {
             let mut reason_codes = Vec::new();
             for _ in &unsubscribe.topic_filters {
@@ -299,10 +299,10 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_unsubscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_unsubscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         if let MqttPacket::Unsubscribe(unsubscribe) = &**packet {
             let mut reason_codes = Vec::new();
             for _ in &unsubscribe.topic_filters {
@@ -319,14 +319,14 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(Mqtt5Error::ProtocolError)
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_with_protocol_error(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
-        Err(Mqtt5Error::ProtocolError)
+    fn handle_with_protocol_error(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+        Err(MqttError::ProtocolError)
     }
 
-    fn handle_with_nothing(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>) -> Mqtt5Result<()> {
+    fn handle_with_nothing(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
         Ok(())
     }
 
@@ -386,7 +386,7 @@ mod operational_state_tests {
             }
         }
 
-        fn handle_to_broker_packet(&mut self, packet: &Box<MqttPacket>, response_bytes: &mut Vec<u8>) -> Mqtt5Result<()> {
+        fn handle_to_broker_packet(&mut self, packet: &Box<MqttPacket>, response_bytes: &mut Vec<u8>) -> MqttResult<()> {
             let mut response_packets = VecDeque::new();
             let packet_type = mqtt_packet_to_packet_type(&*packet);
 
@@ -419,7 +419,7 @@ mod operational_state_tests {
             Ok(())
         }
 
-        pub(crate) fn service_once(&mut self, elapsed_millis: u64, socket_buffer_size: usize) -> Mqtt5Result<Vec<u8>> {
+        pub(crate) fn service_once(&mut self, elapsed_millis: u64, socket_buffer_size: usize) -> MqttResult<Vec<u8>> {
             let current_time = self.base_timestamp + Duration::from_millis(elapsed_millis);
 
             let mut to_socket = Vec::with_capacity(socket_buffer_size);
@@ -434,7 +434,7 @@ mod operational_state_tests {
             Ok(to_socket)
         }
 
-        pub(crate) fn write_to_socket(&mut self, bytes: &[u8]) -> Mqtt5Result<Vec<u8>> {
+        pub(crate) fn write_to_socket(&mut self, bytes: &[u8]) -> MqttResult<Vec<u8>> {
             let mut response_bytes = Vec::new();
             let mut broker_packets = VecDeque::new();
 
@@ -464,7 +464,7 @@ mod operational_state_tests {
             self.client_state.reset(&current_time);
         }
 
-        pub(crate) fn service_with_drain(&mut self, elapsed_millis: u64, socket_buffer_size: usize) -> Mqtt5Result<Vec<u8>> {
+        pub(crate) fn service_with_drain(&mut self, elapsed_millis: u64, socket_buffer_size: usize) -> MqttResult<Vec<u8>> {
             let current_time = self.base_timestamp + Duration::from_millis(elapsed_millis);
             let mut done = false;
             let mut response_bytes = Vec::new();
@@ -520,7 +520,7 @@ mod operational_state_tests {
             Ok(response_bytes)
         }
 
-        pub(crate) fn service_round_trip(&mut self, service_time: u64, response_time: u64, socket_buffer_size: usize) -> Mqtt5Result<()> {
+        pub(crate) fn service_round_trip(&mut self, service_time: u64, response_time: u64, socket_buffer_size: usize) -> MqttResult<()> {
             let server_bytes = self.service_with_drain(service_time, socket_buffer_size)?;
 
             self.on_incoming_bytes(response_time, server_bytes.as_slice())?;
@@ -528,7 +528,7 @@ mod operational_state_tests {
             Ok(())
         }
 
-        pub(crate) fn on_connection_opened(&mut self, elapsed_millis: u64) -> Mqtt5Result<()> {
+        pub(crate) fn on_connection_opened(&mut self, elapsed_millis: u64) -> MqttResult<()> {
             let mut context = NetworkEventContext {
                 current_time : self.base_timestamp + Duration::from_millis(elapsed_millis),
                 event: NetworkEvent::ConnectionOpened,
@@ -538,7 +538,7 @@ mod operational_state_tests {
             self.client_state.handle_network_event(&mut context)
         }
 
-        pub(crate) fn on_write_completion(&mut self, elapsed_millis: u64) -> Mqtt5Result<()> {
+        pub(crate) fn on_write_completion(&mut self, elapsed_millis: u64) -> MqttResult<()> {
             let mut context = NetworkEventContext {
                 current_time : self.base_timestamp + Duration::from_millis(elapsed_millis),
                 event: NetworkEvent::WriteCompletion,
@@ -548,7 +548,7 @@ mod operational_state_tests {
             self.client_state.handle_network_event(&mut context)
         }
 
-        pub(crate) fn on_connection_closed(&mut self, elapsed_millis: u64) -> Mqtt5Result<()> {
+        pub(crate) fn on_connection_closed(&mut self, elapsed_millis: u64) -> MqttResult<()> {
             self.broker_decoder.reset_for_new_connection();
 
             let mut context = NetworkEventContext {
@@ -560,7 +560,7 @@ mod operational_state_tests {
             self.client_state.handle_network_event(&mut context)
         }
 
-        pub(crate) fn on_incoming_bytes(&mut self, elapsed_millis: u64, bytes: &[u8]) -> Mqtt5Result<()> {
+        pub(crate) fn on_incoming_bytes(&mut self, elapsed_millis: u64, bytes: &[u8]) -> MqttResult<()> {
             let mut context = NetworkEventContext {
                 current_time : self.base_timestamp + Duration::from_millis(elapsed_millis),
                 event: NetworkEvent::IncomingData(bytes),
@@ -582,7 +582,7 @@ mod operational_state_tests {
             None
         }
 
-        pub(crate) fn subscribe(&mut self, elapsed_millis: u64, subscribe: SubscribePacket, options: SubscribeOptions) -> Mqtt5Result<AsyncOperationReceiver<SubscribeResult>> {
+        pub(crate) fn subscribe(&mut self, elapsed_millis: u64, subscribe: SubscribePacket, options: SubscribeOptions) -> MqttResult<AsyncOperationReceiver<SubscribeResult>> {
             let (sender, receiver) = AsyncOperationChannel::new().split();
             let packet = Box::new(MqttPacket::Subscribe(subscribe));
             let subscribe_options = SubscribeOptionsInternal {
@@ -600,7 +600,7 @@ mod operational_state_tests {
             Ok(receiver)
         }
 
-        pub(crate) fn unsubscribe(&mut self, elapsed_millis: u64, unsubscribe: UnsubscribePacket, options: UnsubscribeOptions) -> Mqtt5Result<AsyncOperationReceiver<UnsubscribeResult>> {
+        pub(crate) fn unsubscribe(&mut self, elapsed_millis: u64, unsubscribe: UnsubscribePacket, options: UnsubscribeOptions) -> MqttResult<AsyncOperationReceiver<UnsubscribeResult>> {
             let (sender, receiver) = AsyncOperationChannel::new().split();
             let packet = Box::new(MqttPacket::Unsubscribe(unsubscribe));
             let unsubscribe_options = UnsubscribeOptionsInternal {
@@ -618,7 +618,7 @@ mod operational_state_tests {
             Ok(receiver)
         }
 
-        pub(crate) fn publish(&mut self, elapsed_millis: u64, publish: PublishPacket, options: PublishOptions) -> Mqtt5Result<AsyncOperationReceiver<PublishResult>> {
+        pub(crate) fn publish(&mut self, elapsed_millis: u64, publish: PublishPacket, options: PublishOptions) -> MqttResult<AsyncOperationReceiver<PublishResult>> {
             let (sender, receiver) = AsyncOperationChannel::new().split();
             let packet = Box::new(MqttPacket::Publish(publish));
             let publish_options = PublishOptionsInternal {
@@ -636,7 +636,7 @@ mod operational_state_tests {
             Ok(receiver)
         }
 
-        pub(crate) fn disconnect(&mut self, elapsed_millis: u64, disconnect: DisconnectPacket) -> Mqtt5Result<()> {
+        pub(crate) fn disconnect(&mut self, elapsed_millis: u64, disconnect: DisconnectPacket) -> MqttResult<()> {
             let packet = Box::new(MqttPacket::Disconnect(disconnect));
             let disconnect_event = UserEvent::Disconnect(packet);
 
@@ -648,7 +648,7 @@ mod operational_state_tests {
             Ok(())
         }
 
-        pub(crate) fn advance_disconnected_to_state(&mut self, state: OperationalStateType, elapsed_millis: u64) -> Mqtt5Result<()> {
+        pub(crate) fn advance_disconnected_to_state(&mut self, state: OperationalStateType, elapsed_millis: u64) -> MqttResult<()> {
             assert_eq!(OperationalStateType::Disconnected, self.client_state.state);
 
             let result = match state {
@@ -725,14 +725,14 @@ mod operational_state_tests {
         let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
         assert_eq!(OperationalStateType::Disconnected, fixture.client_state.state);
 
-        assert_eq!(Mqtt5Error::InternalStateError, fixture.on_connection_closed(0).err().unwrap());
+        assert_eq!(MqttError::InternalStateError, fixture.on_connection_closed(0).err().unwrap());
         assert!(fixture.client_packet_events.is_empty());
 
-        assert_eq!(Mqtt5Error::InternalStateError, fixture.on_write_completion(0).err().unwrap());
+        assert_eq!(MqttError::InternalStateError, fixture.on_write_completion(0).err().unwrap());
         assert!(fixture.client_packet_events.is_empty());
 
         let bytes : Vec<u8> = vec!(0, 1, 2, 3, 4, 5);
-        assert_eq!(Mqtt5Error::InternalStateError, fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap());
+        assert_eq!(MqttError::InternalStateError, fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap());
         assert!(fixture.client_packet_events.is_empty());
     }
 
@@ -782,16 +782,16 @@ mod operational_state_tests {
         let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
         assert_eq!(Ok(()), fixture.advance_disconnected_to_state(OperationalStateType::Halted, 0));
 
-        assert_eq!(Mqtt5Error::InternalStateError, fixture.on_connection_opened(0).err().unwrap());
+        assert_eq!(MqttError::InternalStateError, fixture.on_connection_opened(0).err().unwrap());
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
 
-        assert_eq!(Mqtt5Error::InternalStateError, fixture.on_write_completion(0).err().unwrap());
+        assert_eq!(MqttError::InternalStateError, fixture.on_write_completion(0).err().unwrap());
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
 
         let bytes : Vec<u8> = vec!(0, 1, 2, 3, 4, 5);
-        assert_eq!(Mqtt5Error::InternalStateError, fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap());
+        assert_eq!(MqttError::InternalStateError, fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap());
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
     }
@@ -828,7 +828,7 @@ mod operational_state_tests {
         assert_eq!(Ok(()), fixture.on_connection_opened(0));
         assert_eq!(OperationalStateType::PendingConnack, fixture.client_state.state);
 
-        assert_eq!(Mqtt5Error::InternalStateError, fixture.on_connection_opened(0).err().unwrap());
+        assert_eq!(MqttError::InternalStateError, fixture.on_connection_opened(0).err().unwrap());
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
     }
@@ -840,7 +840,7 @@ mod operational_state_tests {
         assert_eq!(Ok(()), fixture.on_connection_opened(0));
         assert_eq!(OperationalStateType::PendingConnack, fixture.client_state.state);
 
-        assert_eq!(Mqtt5Error::InternalStateError, fixture.on_write_completion(0).err().unwrap());
+        assert_eq!(MqttError::InternalStateError, fixture.on_write_completion(0).err().unwrap());
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
     }
@@ -861,7 +861,7 @@ mod operational_state_tests {
         assert_eq!(Some(1 + connack_timeout_millis as u64), fixture.get_next_service_time(1));
 
         // service post-timeout
-        assert_eq!(Err(Mqtt5Error::ConnackTimeout), fixture.service_with_drain(1 + connack_timeout_millis as u64, 4096));
+        assert_eq!(Err(MqttError::ConnackTimeout), fixture.service_with_drain(1 + connack_timeout_millis as u64, 4096));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
         verify_operational_state_empty(&fixture);
@@ -877,7 +877,7 @@ mod operational_state_tests {
 
         let server_bytes = fixture.service_with_drain(0, 4096).unwrap();
 
-        assert_eq!(Err(Mqtt5Error::ConnectionRejected), fixture.on_incoming_bytes(0, server_bytes.as_slice()));
+        assert_eq!(Err(MqttError::ConnectionRejected), fixture.on_incoming_bytes(0, server_bytes.as_slice()));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
 
         let expected_events = VecDeque::from(vec!(PacketEvent::Connack(create_connack_rejection())));
@@ -911,20 +911,20 @@ mod operational_state_tests {
         let mut garbage = vec!(1, 2, 3, 4, 5, 6, 7, 8);
         server_bytes.append(&mut garbage);
 
-        assert_eq!(Err(Mqtt5Error::MalformedPacket), fixture.on_incoming_bytes(0, server_bytes.as_slice()));
+        assert_eq!(Err(MqttError::MalformedPacket), fixture.on_incoming_bytes(0, server_bytes.as_slice()));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
         verify_operational_state_empty(&fixture);
     }
 
-    fn encode_packet_to_buffer(packet: MqttPacket, buffer: &mut Vec<u8>) -> Mqtt5Result<()> {
+    fn encode_packet_to_buffer(packet: MqttPacket, buffer: &mut Vec<u8>) -> MqttResult<()> {
         encode_packet_to_buffer_with_alias_resolution(packet, buffer, OutboundAliasResolution{
             skip_topic: false,
             alias: None,
         })
     }
 
-    fn encode_packet_to_buffer_with_alias_resolution(packet: MqttPacket, buffer: &mut Vec<u8>, alias_resolution: OutboundAliasResolution) -> Mqtt5Result<()> {
+    fn encode_packet_to_buffer_with_alias_resolution(packet: MqttPacket, buffer: &mut Vec<u8>, alias_resolution: OutboundAliasResolution) -> MqttResult<()> {
         let mut encode_buffer = Vec::with_capacity(4096);
         let encoding_context = EncodingContext {
             outbound_alias_resolution: alias_resolution
@@ -952,7 +952,7 @@ mod operational_state_tests {
 
         assert_eq!(Ok(()), encode_packet_to_buffer(packet, &mut server_bytes));
 
-        assert_eq!(Err(Mqtt5Error::ProtocolError), fixture.on_incoming_bytes(0, server_bytes.as_slice()));
+        assert_eq!(Err(MqttError::ProtocolError), fixture.on_incoming_bytes(0, server_bytes.as_slice()));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
         verify_operational_state_empty(&fixture);
@@ -1025,7 +1025,7 @@ mod operational_state_tests {
             ..Default::default()
         }), &mut server_bytes));
 
-        assert_eq!(Err(Mqtt5Error::ProtocolError), fixture.on_incoming_bytes(0, server_bytes.as_slice()));
+        assert_eq!(Err(MqttError::ProtocolError), fixture.on_incoming_bytes(0, server_bytes.as_slice()));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
     }
@@ -1065,7 +1065,7 @@ mod operational_state_tests {
 
         let client_event_count = fixture.client_packet_events.len();
 
-        assert_eq!(Mqtt5Error::InternalStateError, fixture.on_connection_opened(0).err().unwrap());
+        assert_eq!(MqttError::InternalStateError, fixture.on_connection_opened(0).err().unwrap());
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert_eq!(client_event_count, fixture.client_packet_events.len());
         verify_operational_state_empty(&fixture);
@@ -1077,7 +1077,7 @@ mod operational_state_tests {
 
         assert_eq!(Ok(()), fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0));
 
-        assert_eq!(Mqtt5Error::InternalStateError, fixture.on_write_completion(0).err().unwrap());
+        assert_eq!(MqttError::InternalStateError, fixture.on_write_completion(0).err().unwrap());
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         verify_operational_state_empty(&fixture);
     }
@@ -1101,7 +1101,7 @@ mod operational_state_tests {
 
         let garbage = vec!(1, 2, 3, 4, 5, 6, 7, 8);
 
-        assert_eq!(Err(Mqtt5Error::MalformedPacket), fixture.on_incoming_bytes(0, garbage.as_slice()));
+        assert_eq!(Err(MqttError::MalformedPacket), fixture.on_incoming_bytes(0, garbage.as_slice()));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         verify_operational_state_empty(&fixture);
     }
@@ -1114,7 +1114,7 @@ mod operational_state_tests {
         let mut buffer = Vec::new();
         assert_eq!(Ok(()), encode_packet_to_buffer(packet, &mut buffer));
 
-        assert_eq!(Err(Mqtt5Error::ProtocolError), fixture.on_incoming_bytes(0, buffer.as_slice()));
+        assert_eq!(Err(MqttError::ProtocolError), fixture.on_incoming_bytes(0, buffer.as_slice()));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         verify_operational_state_empty(&fixture);
     }
@@ -1142,7 +1142,7 @@ mod operational_state_tests {
         }
     }
 
-    fn do_connected_state_invalid_ack_packet_id_test(packet : MqttPacket, error: Mqtt5Error) {
+    fn do_connected_state_invalid_ack_packet_id_test(packet : MqttPacket, error: MqttError) {
         let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
 
         assert_eq!(Ok(()), fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0));
@@ -1181,7 +1181,7 @@ mod operational_state_tests {
         );
 
         for packet in packets {
-            do_connected_state_invalid_ack_packet_id_test(packet, Mqtt5Error::ProtocolError);
+            do_connected_state_invalid_ack_packet_id_test(packet, MqttError::ProtocolError);
         }
     }
 
@@ -1191,22 +1191,22 @@ mod operational_state_tests {
             (MqttPacket::Publish(PublishPacket{
                 qos: QualityOfService::AtLeastOnce,
                 ..Default::default()
-            }), Mqtt5Error::PublishPacketValidation),
+            }), MqttError::PublishPacketValidation),
             (MqttPacket::Puback(PubackPacket{
                 ..Default::default()
-            }), Mqtt5Error::PubackPacketValidation),
+            }), MqttError::PubackPacketValidation),
             (MqttPacket::Suback(SubackPacket{
                 ..Default::default()
-            }), Mqtt5Error::SubackPacketValidation),
+            }), MqttError::SubackPacketValidation),
             (MqttPacket::Unsuback(UnsubackPacket{
                 ..Default::default()
-            }), Mqtt5Error::UnsubackPacketValidation),
+            }), MqttError::UnsubackPacketValidation),
             (MqttPacket::Pubrec(PubrecPacket{
                 ..Default::default()
-            }), Mqtt5Error::PubrecPacketValidation),
+            }), MqttError::PubrecPacketValidation),
             (MqttPacket::Pubcomp(PubcompPacket{
                 ..Default::default()
-            }), Mqtt5Error::PubcompPacketValidation),
+            }), MqttError::PubcompPacketValidation),
         );
 
         for (packet, expected_error) in packets {
@@ -1548,7 +1548,7 @@ mod operational_state_tests {
         assert_eq!(outbound_packet_count, fixture.to_broker_packet_stream.len());
 
         // invoke service after timeout, verify failure and halt
-        assert_eq!(Err(Mqtt5Error::PingTimeout), fixture.service_once(ping_timeout_timepoint, 4096));
+        assert_eq!(Err(MqttError::PingTimeout), fixture.service_once(ping_timeout_timepoint, 4096));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert_eq!(outbound_packet_count, fixture.to_broker_packet_stream.len());
         verify_operational_state_empty(&fixture);
@@ -2113,7 +2113,7 @@ mod operational_state_tests {
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_eq!(Mqtt5Error::$expected_error_type, operation_result.unwrap_err());
+                assert_eq!(MqttError::$expected_error_type, operation_result.unwrap_err());
                 verify_operational_state_empty(&fixture);
             }
         };
@@ -2255,12 +2255,12 @@ mod operational_state_tests {
                     let elapsed_millis = i * 1000;
                     assert_eq!(Some(30000), fixture.get_next_service_time(elapsed_millis));
                     assert_eq!(Ok(()), fixture.service_round_trip(elapsed_millis, elapsed_millis, 4096));
-                    assert_eq!(Err(Mqtt5Error::OperationChannelEmpty), operation_result_receiver.try_recv());
+                    assert_eq!(Err(MqttError::OperationChannelEmpty), operation_result_receiver.try_recv());
                 }
 
                 assert_eq!(Ok(()), fixture.service_round_trip(30000, 30000, 4096));
                 let result = operation_result_receiver.blocking_recv();
-                assert_eq!(Mqtt5Error::AckTimeout, result.unwrap().unwrap_err());
+                assert_eq!(MqttError::AckTimeout, result.unwrap().unwrap_err());
                 verify_operational_state_empty(&fixture);
             }
         };
@@ -2343,12 +2343,12 @@ mod operational_state_tests {
             let elapsed_millis = i * 1000;
             assert_eq!(Some(30000), fixture.get_next_service_time(elapsed_millis));
             assert_eq!(Ok(()), fixture.service_round_trip(elapsed_millis, elapsed_millis, 4096));
-            assert_eq!(Err(Mqtt5Error::OperationChannelEmpty), operation_result_receiver.try_recv());
+            assert_eq!(Err(MqttError::OperationChannelEmpty), operation_result_receiver.try_recv());
         }
 
         assert_eq!(Ok(()), fixture.service_round_trip(30000, 30000, 4096));
         let result = operation_result_receiver.blocking_recv();
-        assert_eq!(Mqtt5Error::AckTimeout, result.unwrap().unwrap_err());
+        assert_eq!(MqttError::AckTimeout, result.unwrap().unwrap_err());
         assert_eq!(Ok(()), fixture.service_round_trip(30010, 30010, 4096));
         verify_operational_state_empty(&fixture);
     }
@@ -2371,7 +2371,7 @@ mod operational_state_tests {
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_eq!(Mqtt5Error::OfflineQueuePolicyFailed, operation_result.unwrap_err());
+                assert_eq!(MqttError::OfflineQueuePolicyFailed, operation_result.unwrap_err());
                 verify_operational_state_empty(&fixture);
             }
         };
@@ -2467,7 +2467,7 @@ mod operational_state_tests {
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_eq!(Mqtt5Error::OfflineQueuePolicyFailed, operation_result.unwrap_err());
+                assert_eq!(MqttError::OfflineQueuePolicyFailed, operation_result.unwrap_err());
                 verify_operational_state_empty(&fixture);
             }
         };
@@ -2569,7 +2569,7 @@ mod operational_state_tests {
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_eq!(Mqtt5Error::OfflineQueuePolicyFailed, operation_result.unwrap_err());
+                assert_eq!(MqttError::OfflineQueuePolicyFailed, operation_result.unwrap_err());
                 verify_operational_state_empty(&fixture);
             }
         };
@@ -2675,7 +2675,7 @@ mod operational_state_tests {
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_eq!(Mqtt5Error::OfflineQueuePolicyFailed, operation_result.unwrap_err());
+                assert_eq!(MqttError::OfflineQueuePolicyFailed, operation_result.unwrap_err());
                 verify_operational_state_empty(&fixture);
             }
         };
@@ -2769,7 +2769,7 @@ mod operational_state_tests {
                 assert!(!result.is_err());
 
                 let operation_result = result.unwrap();
-                assert_eq!(Mqtt5Error::OfflineQueuePolicyFailed, operation_result.unwrap_err());
+                assert_eq!(MqttError::OfflineQueuePolicyFailed, operation_result.unwrap_err());
             }
         };
     }
@@ -2982,7 +2982,7 @@ mod operational_state_tests {
         assert_eq!(1, fixture.client_state.pending_write_completion_operations.len());
 
         // write complete and verify final state
-        assert_eq!(Err(Mqtt5Error::UserInitiatedDisconnect), fixture.on_write_completion(20));
+        assert_eq!(Err(MqttError::UserInitiatedDisconnect), fixture.on_write_completion(20));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         verify_operational_state_empty(&fixture);
     }
@@ -3083,7 +3083,7 @@ mod operational_state_tests {
 
         // (8) do a complete service
         let disconnect_service_result = fixture.service_round_trip(70, 80, 4096);
-        assert_eq!(Err(Mqtt5Error::UserInitiatedDisconnect), disconnect_service_result);
+        assert_eq!(Err(MqttError::UserInitiatedDisconnect), disconnect_service_result);
 
         // (9) verify the current operation got sent, the disconnect was sent and nothing else happened
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
@@ -3133,7 +3133,7 @@ mod operational_state_tests {
 
         assert!(fixture.disconnect(10, disconnect).is_ok());
 
-        assert_eq!(Err(Mqtt5Error::UserInitiatedDisconnect), fixture.service_round_trip(0, 0, 4096));
+        assert_eq!(Err(MqttError::UserInitiatedDisconnect), fixture.service_round_trip(0, 0, 4096));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
 
         verify_operational_state_empty(&fixture);
@@ -3167,7 +3167,7 @@ mod operational_state_tests {
         let encode_result = fixture.broker_encoder.encode(&packet, &mut encoded_buffer).unwrap();
         assert_eq!(EncodeResult::Complete, encode_result);
 
-        assert_eq!(Err(Mqtt5Error::ServerSideDisconnect), fixture.on_incoming_bytes(10, encoded_buffer.as_slice()));
+        assert_eq!(Err(MqttError::ServerSideDisconnect), fixture.on_incoming_bytes(10, encoded_buffer.as_slice()));
         verify_operational_state_empty(&fixture);
 
         assert_eq!(2, fixture.client_packet_events.len());
@@ -3465,7 +3465,7 @@ mod operational_state_tests {
         assert_eq!(expected_ack_sequence, sent_acks);
     }
 
-    fn packet_to_sequence_number(packet: &MqttPacket) -> Mqtt5Result<Option<u64>> {
+    fn packet_to_sequence_number(packet: &MqttPacket) -> MqttResult<Option<u64>> {
         match packet {
             MqttPacket::Publish(publish) => {
                 if let Some(payload) = &publish.payload {
@@ -3489,7 +3489,7 @@ mod operational_state_tests {
             _ => {}
         }
 
-        Err(Mqtt5Error::InternalStateError)
+        Err(MqttError::InternalStateError)
     }
 
     struct MultiOperationContext {
@@ -3714,7 +3714,7 @@ mod operational_state_tests {
             if result_value.is_ok() {
                 successful_sequence_ids.push(*sequence_id);
             } else {
-                assert_eq!(Err(Mqtt5Error::OfflineQueuePolicyFailed), result_value);
+                assert_eq!(Err(MqttError::OfflineQueuePolicyFailed), result_value);
                 failing_sequence_ids.push(*sequence_id);
             }
         }
@@ -3724,7 +3724,7 @@ mod operational_state_tests {
             if result_value.is_ok() {
                 successful_sequence_ids.push(*sequence_id);
             } else {
-                assert_eq!(Err(Mqtt5Error::OfflineQueuePolicyFailed), result_value);
+                assert_eq!(Err(MqttError::OfflineQueuePolicyFailed), result_value);
                 failing_sequence_ids.push(*sequence_id);
             }
         }
@@ -3734,7 +3734,7 @@ mod operational_state_tests {
             if result_value.is_ok() {
                 successful_sequence_ids.push(*sequence_id);
             } else {
-                assert_eq!(Err(Mqtt5Error::OfflineQueuePolicyFailed), result_value);
+                assert_eq!(Err(MqttError::OfflineQueuePolicyFailed), result_value);
                 failing_sequence_ids.push(*sequence_id);
             }
         }

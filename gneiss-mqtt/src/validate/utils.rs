@@ -9,7 +9,7 @@ use crate::validate::*;
 
 use log::*;
 
-pub(crate) fn validate_string_length(value: &String, error: Mqtt5Error, packet_type: &str, field_name: &str) -> Mqtt5Result<()> {
+pub(crate) fn validate_string_length(value: &String, error: MqttError, packet_type: &str, field_name: &str) -> MqttResult<()> {
     if value.len() > MAXIMUM_STRING_PROPERTY_LENGTH {
         error!("{}Packet Validation - {} string field too long", packet_type, field_name);
         return Err(error);
@@ -18,7 +18,7 @@ pub(crate) fn validate_string_length(value: &String, error: Mqtt5Error, packet_t
     Ok(())
 }
 
-pub(crate) fn validate_optional_string_length(optional_string: &Option<String>, error: Mqtt5Error, packet_type: &str, field_name: &str) -> Mqtt5Result<()> {
+pub(crate) fn validate_optional_string_length(optional_string: &Option<String>, error: MqttError, packet_type: &str, field_name: &str) -> MqttResult<()> {
     if let Some(value) = &optional_string {
         if value.len() > MAXIMUM_STRING_PROPERTY_LENGTH {
             error!("{}Packet Validation - {} string field too long", packet_type, field_name);
@@ -29,7 +29,7 @@ pub(crate) fn validate_optional_string_length(optional_string: &Option<String>, 
     Ok(())
 }
 
-pub(crate) fn validate_optional_binary_length(optional_data: &Option<Vec<u8>>, error: Mqtt5Error, packet_type: &str, field_name: &str) -> Mqtt5Result<()> {
+pub(crate) fn validate_optional_binary_length(optional_data: &Option<Vec<u8>>, error: MqttError, packet_type: &str, field_name: &str) -> MqttResult<()> {
     if let Some(value) = &optional_data {
         if value.len() > MAXIMUM_BINARY_PROPERTY_LENGTH {
             error!("{}Packet Validation - {} binary field too long", packet_type, field_name);
@@ -45,7 +45,7 @@ macro_rules! validate_optional_integer_non_zero {
         if let Some($value_name) = $optional_integer_expr {
             if $value_name == 0 {
                 error!("{}Packet Validation - {} integer field is zero", $packet_type, $field_name);
-                return Err(Mqtt5Error::$error);
+                return Err(MqttError::$error);
             }
         }
     };
@@ -55,7 +55,7 @@ pub(crate) use validate_optional_integer_non_zero;
 
 macro_rules! validate_ack_outbound {
     ($function_name: ident, $packet_type: ident, $error: expr, $packet_type_string: expr) => {
-        pub(crate) fn $function_name(packet: &$packet_type) -> Mqtt5Result<()> {
+        pub(crate) fn $function_name(packet: &$packet_type) -> MqttResult<()> {
 
             validate_optional_string_length(&packet.reason_string, $error, $packet_type_string, "reason_string")?;
             validate_user_properties(&packet.user_properties, $error, $packet_type_string)?;
@@ -69,18 +69,18 @@ pub(crate) use validate_ack_outbound;
 
 macro_rules! validate_ack_outbound_internal {
     ($function_name: ident, $packet_type: ident, $error: ident, $packet_length_function_name: ident, $packet_type_string: expr) => {
-        pub(crate) fn $function_name(packet: &$packet_type, context: &OutboundValidationContext) -> Mqtt5Result<()> {
+        pub(crate) fn $function_name(packet: &$packet_type, context: &OutboundValidationContext) -> MqttResult<()> {
 
             let (total_remaining_length, _) = $packet_length_function_name(packet)?;
             let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
             if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
                 error!("{}Packet Validation - packet length exceeds allowed maximum to server", $packet_type_string);
-                return Err(Mqtt5Error::$error);
+                return Err(MqttError::$error);
             }
 
             if packet.packet_id == 0 {
                 error!("{}Packet Validation - packet id is zero", $packet_type_string);
-                return Err(Mqtt5Error::$error);
+                return Err(MqttError::$error);
             }
 
             Ok(())
@@ -92,11 +92,11 @@ pub(crate) use validate_ack_outbound_internal;
 
 macro_rules! validate_ack_inbound_internal {
     ($function_name: ident, $packet_type: ident, $error: ident, $packet_type_string: expr) => {
-        pub(crate) fn $function_name(packet: &$packet_type, _: &InboundValidationContext) -> Mqtt5Result<()> {
+        pub(crate) fn $function_name(packet: &$packet_type, _: &InboundValidationContext) -> MqttResult<()> {
 
             if packet.packet_id == 0 {
                 error!("{}Packet Validation - packet id is zero", $packet_type_string);
-                return Err(Mqtt5Error::$error);
+                return Err(MqttError::$error);
             }
 
             Ok(())
@@ -233,7 +233,7 @@ pub(crate) mod testing {
                 let mut packet = $packet_factory_function();
                 packet.reason_string = Some("A".repeat(128 * 1024).to_string());
 
-                assert_eq!(validate_packet_outbound(&MqttPacket::$packet_type(packet)), Err(Mqtt5Error::$error));
+                assert_eq!(validate_packet_outbound(&MqttPacket::$packet_type(packet)), Err(MqttError::$error));
             }
         };
     }
@@ -247,7 +247,7 @@ pub(crate) mod testing {
                 let mut packet = $packet_factory_function();
                 packet.user_properties = Some(create_invalid_user_properties());
 
-                assert_eq!(validate_packet_outbound(&MqttPacket::$packet_type(packet)), Err(Mqtt5Error::$error));
+                assert_eq!(validate_packet_outbound(&MqttPacket::$packet_type(packet)), Err(MqttError::$error));
             }
         };
     }
@@ -260,7 +260,7 @@ pub(crate) mod testing {
             fn $function_name() {
                 let packet = $packet_factory_function();
 
-                do_outbound_size_validate_failure_test(&MqttPacket::$packet_type(packet), Mqtt5Error::$error);
+                do_outbound_size_validate_failure_test(&MqttPacket::$packet_type(packet), MqttError::$error);
             }
         };
     }
@@ -279,10 +279,10 @@ pub(crate) mod testing {
                 let test_validation_context = create_pinned_validation_context();
 
                 let outbound_context = create_outbound_validation_context_from_pinned(&test_validation_context);
-                assert_eq!(validate_packet_outbound_internal(&packet, &outbound_context), Err(Mqtt5Error::$error));
+                assert_eq!(validate_packet_outbound_internal(&packet, &outbound_context), Err(MqttError::$error));
 
                 let inbound_context = create_inbound_validation_context_from_pinned(&test_validation_context);
-                assert_eq!(validate_packet_inbound_internal(&packet, &inbound_context), Err(Mqtt5Error::$error));
+                assert_eq!(validate_packet_inbound_internal(&packet, &inbound_context), Err(MqttError::$error));
             }
         };
     }
@@ -300,7 +300,7 @@ pub(crate) mod testing {
 
                 let test_validation_context = create_pinned_validation_context();
                 let inbound_context = create_inbound_validation_context_from_pinned(&test_validation_context);
-                assert_eq!(validate_packet_inbound_internal(&packet, &inbound_context), Err(Mqtt5Error::$error));
+                assert_eq!(validate_packet_inbound_internal(&packet, &inbound_context), Err(MqttError::$error));
             }
         };
     }

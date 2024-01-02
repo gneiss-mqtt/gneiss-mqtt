@@ -8,7 +8,7 @@ extern crate tokio;
 
 use gneiss_mqtt::client::builder::{ClientBuilder};
 use gneiss_mqtt::{Mqtt5Client, Mqtt5ClientOptions, Mqtt5ClientOptionsBuilder};
-use gneiss_mqtt::{Mqtt5Result};
+use gneiss_mqtt::{MqttResult};
 use tokio::runtime::Handle;
 
 const CUSTOM_AUTH_AUTHORIZER_QUERY_PARAM_NAME: &str = "x-amz-customauthorizer-name";
@@ -104,7 +104,7 @@ const DIRECT_ALPN_PROTOCOL : &[u8] = b"x-amzn-mqtt-ca";
 const CUSTOM_AUTH_ALPN_PROTOCOL : &[u8] = b"mqtt";
 
 impl AwsClientBuilder {
-    pub fn new_direct_with_mtls_from_fs(endpoint: &str, certificate_path: &str, private_key_path: &str, root_ca_path: Option<&str>) -> Mqtt5Result<Self> {
+    pub fn new_direct_with_mtls_from_fs(endpoint: &str, certificate_path: &str, private_key_path: &str, root_ca_path: Option<&str>) -> MqttResult<Self> {
         let mut builder =  AwsClientBuilder {
             auth_type: AuthType::Mtls,
             custom_auth_options: None,
@@ -117,7 +117,7 @@ impl AwsClientBuilder {
         Ok(builder)
     }
 
-    pub fn new_direct_with_mtls_from_memory(endpoint: &str, certificate_bytes: &[u8], private_key_bytes: &[u8], root_ca_bytes: Option<&[u8]>) -> Mqtt5Result<Self> {
+    pub fn new_direct_with_mtls_from_memory(endpoint: &str, certificate_bytes: &[u8], private_key_bytes: &[u8], root_ca_bytes: Option<&[u8]>) -> MqttResult<Self> {
         let mut builder =  AwsClientBuilder {
             auth_type: AuthType::Mtls,
             custom_auth_options: None,
@@ -130,7 +130,7 @@ impl AwsClientBuilder {
         Ok(builder)
     }
 
-    pub fn new_direct_with_unsigned_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthUnsignedOptions, root_ca_path: Option<&str>) -> Mqtt5Result<Self> {
+    pub fn new_direct_with_unsigned_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthUnsignedOptions, root_ca_path: Option<&str>) -> MqttResult<Self> {
         let mut builder =  AwsClientBuilder {
             auth_type: AuthType::CustomAuth,
             custom_auth_options: Some(AwsCustomAuthOptions::Unsigned(custom_auth_options)),
@@ -143,7 +143,7 @@ impl AwsClientBuilder {
         Ok(builder)
     }
 
-    pub fn new_direct_with_signed_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthSignedOptions, root_ca_path: Option<&str>) -> Mqtt5Result<Self> {
+    pub fn new_direct_with_signed_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthSignedOptions, root_ca_path: Option<&str>) -> MqttResult<Self> {
         let mut builder =  AwsClientBuilder {
             auth_type: AuthType::CustomAuth,
             custom_auth_options: Some(AwsCustomAuthOptions::Signed(custom_auth_options)),
@@ -161,7 +161,7 @@ impl AwsClientBuilder {
         self
     }
 
-    pub fn build(mut self, runtime: &Handle) -> Mqtt5Result<Mqtt5Client> {
+    pub fn build(mut self, runtime: &Handle) -> MqttResult<Mqtt5Client> {
         if self.client_options.is_none() {
             self.client_options = Some(Mqtt5ClientOptionsBuilder::new().build());
         }

@@ -49,21 +49,21 @@ struct CommandLineArgs {
     logpath: Option<PathBuf>,
 }
 
-fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> Mqtt5Result<Mqtt5Client> {
+fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> MqttResult<Mqtt5Client> {
     let url_parse_result = Url::parse(&args.endpoint_uri);
     if url_parse_result.is_err() {
-        return Err(Mqtt5Error::Unknown);
+        return Err(MqttError::Unknown);
     }
 
     let uri = url_parse_result.unwrap();
     if uri.host_str().is_none() {
-        return Err(Mqtt5Error::Unknown);
+        return Err(MqttError::Unknown);
     }
 
     let endpoint = uri.host_str().unwrap().to_string();
 
     if uri.port().is_none() {
-        return Err(Mqtt5Error::Unknown);
+        return Err(MqttError::Unknown);
     }
 
     let port = uri.port().unwrap();
@@ -91,7 +91,7 @@ fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLine
             }
         }
         _ => {
-            Err(Mqtt5Error::Unknown)
+            Err(MqttError::Unknown)
         }
     }
 }

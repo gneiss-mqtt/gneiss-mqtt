@@ -98,7 +98,7 @@ impl Display for PublishResponse {
     }
 }
 
-pub type PublishResult = Mqtt5Result<PublishResponse>;
+pub type PublishResult = MqttResult<PublishResponse>;
 
 pub type PublishResultFuture = dyn Future<Output = PublishResult>;
 
@@ -129,7 +129,7 @@ impl SubscribeOptionsBuilder {
     }
 }
 
-pub type SubscribeResult = Mqtt5Result<SubackPacket>;
+pub type SubscribeResult = MqttResult<SubackPacket>;
 
 pub type SubscribeResultFuture = dyn Future<Output = SubscribeResult>;
 
@@ -160,7 +160,7 @@ impl UnsubscribeOptionsBuilder {
     }
 }
 
-pub type UnsubscribeResult = Mqtt5Result<UnsubackPacket>;
+pub type UnsubscribeResult = MqttResult<UnsubackPacket>;
 
 pub type UnsubscribeResultFuture = dyn Future<Output = UnsubscribeResult>;
 
@@ -287,13 +287,13 @@ pub struct ConnectionSuccessEvent {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct ConnectionFailureEvent {
-    pub error: Mqtt5Error,
+    pub error: MqttError,
     pub connack: Option<ConnackPacket>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct DisconnectionEvent {
-    pub error: Mqtt5Error,
+    pub error: MqttError,
     pub disconnect: Option<DisconnectPacket>,
 }
 
@@ -776,11 +776,11 @@ impl Mqtt5Client {
         }
     }
 
-    pub fn start(&self) -> Mqtt5Result<()> {
+    pub fn start(&self) -> MqttResult<()> {
         self.user_state.try_send(OperationOptions::Start())
     }
 
-    pub fn stop(&self, options: Option<StopOptions>) -> Mqtt5Result<()> {
+    pub fn stop(&self, options: Option<StopOptions>) -> MqttResult<()> {
         let options = options.unwrap_or_default();
 
         if let Some(disconnect) = &options.disconnect {
@@ -798,7 +798,7 @@ impl Mqtt5Client {
         self.user_state.try_send(OperationOptions::Stop(stop_options_internal))
     }
 
-    pub fn close(&self) -> Mqtt5Result<()> {
+    pub fn close(&self) -> MqttResult<()> {
         self.user_state.try_send(OperationOptions::Shutdown())
     }
 
@@ -829,7 +829,7 @@ impl Mqtt5Client {
         submit_async_client_operation!(self, Unsubscribe, UnsubscribeOptionsInternal, options, boxed_packet)
     }
 
-    pub fn add_event_listener(&self, listener: ClientEventListener) -> Mqtt5Result<ListenerHandle> {
+    pub fn add_event_listener(&self, listener: ClientEventListener) -> MqttResult<ListenerHandle> {
         let mut current_id = self.listener_id_allocator.lock().unwrap();
         let listener_id = *current_id;
         *current_id += 1;
@@ -841,7 +841,7 @@ impl Mqtt5Client {
         })
     }
 
-    pub fn remove_event_listener(&self, listener: ListenerHandle) -> Mqtt5Result<()> {
+    pub fn remove_event_listener(&self, listener: ListenerHandle) -> MqttResult<()> {
         self.user_state.try_send(OperationOptions::RemoveListener(listener.id))
     }
 }
