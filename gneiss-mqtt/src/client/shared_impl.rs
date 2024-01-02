@@ -82,17 +82,17 @@ pub(crate) struct Mqtt5ClientImpl {
 
 impl Mqtt5ClientImpl {
 
-    pub(crate) fn new(mut config: Mqtt5ClientOptions) -> Self {
+    pub(crate) fn new(mut client_config: Mqtt5ClientOptions, connect_config: ConnectOptions) -> Self {
         let state_config = OperationalStateConfig {
-            connect_options: config.connect_options,
+            connect_options: connect_config,
             base_timestamp: Instant::now(),
-            offline_queue_policy: config.offline_queue_policy,
-            connack_timeout: config.connack_timeout,
-            ping_timeout: config.ping_timeout,
-            outbound_alias_resolver: config.outbound_alias_resolver.take(),
+            offline_queue_policy: client_config.offline_queue_policy,
+            connack_timeout: client_config.connack_timeout,
+            ping_timeout: client_config.ping_timeout,
+            outbound_alias_resolver: client_config.outbound_alias_resolver.take(),
         };
 
-        let default_listener = config.default_event_listener.take();
+        let default_listener = client_config.default_event_listener.take();
 
         let mut client_impl = Mqtt5ClientImpl {
             operational_state: OperationalState::new(state_config),
@@ -105,8 +105,8 @@ impl Mqtt5ClientImpl {
             last_disconnect: None,
             last_error: None,
             successful_connect_time: None,
-            next_reconnect_period: config.reconnect_options.base_reconnect_period,
-            reconnect_options: config.reconnect_options
+            next_reconnect_period: client_config.reconnect_options.base_reconnect_period,
+            reconnect_options: client_config.reconnect_options
         };
 
         client_impl.reconnect_options.normalize();

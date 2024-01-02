@@ -14,7 +14,6 @@ use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{client_event_callback, ElastiError, ElastiResult, main_loop};
 use gneiss_mqtt::*;
-use gneiss_mqtt::client;
 use gneiss_mqtt::client::builder::ClientBuilder;
 use simplelog::*;
 use std::path::PathBuf;
@@ -49,7 +48,7 @@ struct CommandLineArgs {
     logpath: Option<PathBuf>,
 }
 
-fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
+fn build_client(connect_options: ConnectOptions, client_config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&args.endpoint_uri);
@@ -73,7 +72,8 @@ fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLine
     match scheme.as_str() {
         "mqtt" => {
             Ok(ClientBuilder::new(&endpoint, port)?
-                .with_client_options(config)
+                .with_connect_options(connect_options)
+                .with_client_options(client_config)
                 .build(runtime)?)
         }
         "mqtts" => {
@@ -81,11 +81,13 @@ fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLine
 
             if args.cert.is_some() && args.key.is_some() {
                 Ok(ClientBuilder::new_with_mtls_from_fs(&endpoint, port, args.cert.as_ref().unwrap(), args.key.as_ref().unwrap(), capath)?
-                    .with_client_options(config)
+                    .with_connect_options(connect_options)
+                    .with_client_options(client_config)
                     .build(runtime)?)
             } else {
                 Ok(ClientBuilder::new_with_tls(&endpoint, port, capath)?
-                    .with_client_options(config)
+                    .with_connect_options(connect_options)
+                    .with_client_options(client_config)
                     .build(runtime)?)
             }
         }
@@ -121,8 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
         .build();
 
-    let config = client::Mqtt5ClientOptionsBuilder::new()
-        .with_connect_options(connect_options)
+    let config = Mqtt5ClientOptionsBuilder::new()
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
         .with_connack_timeout(Duration::from_secs(60))
         .with_ping_timeout(Duration::from_secs(60))
@@ -130,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::None)
         .build();
 
-    let client = build_client(config, &Handle::current(), &cli_args).unwrap();
+    let client = build_client(connect_options, config, &Handle::current(), &cli_args).unwrap();
 
     println!("elasti-gneiss - an interactive MQTT5 console application\n");
     println!(" `help` for command assistance\n");

@@ -41,6 +41,8 @@ pub struct ClientBuilder {
 
     tls_config: Option<rustls::ClientConfig>,
 
+    connect_options: Option<ConnectOptions>,
+
     client_options: Option<Mqtt5ClientOptions>
 }
 
@@ -52,6 +54,7 @@ impl ClientBuilder {
                 endpoint: endpoint.to_string(),
                 port,
                 tls_config: None,
+                connect_options: None,
                 client_options: None
             }
         )
@@ -69,6 +72,7 @@ impl ClientBuilder {
                 endpoint: endpoint.to_string(),
                 port,
                 tls_config: Some(tls_config),
+                connect_options: None,
                 client_options: None
             }
         )
@@ -80,6 +84,7 @@ impl ClientBuilder {
                 endpoint: endpoint.to_string(),
                 port,
                 tls_config: Some(tls_config),
+                connect_options: None,
                 client_options: None
             }
         )
@@ -99,6 +104,7 @@ impl ClientBuilder {
                 endpoint: endpoint.to_string(),
                 port,
                 tls_config: Some(tls_config),
+                connect_options: None,
                 client_options: None
             }
         )
@@ -118,6 +124,7 @@ impl ClientBuilder {
                 endpoint: endpoint.to_string(),
                 port,
                 tls_config: Some(tls_config),
+                connect_options: None,
                 client_options: None
             }
         )
@@ -125,6 +132,11 @@ impl ClientBuilder {
 
     pub fn get_mut_tls_config(&mut self) -> Option<&mut rustls::ClientConfig> {
         self.tls_config.as_mut()
+    }
+
+    pub fn with_connect_options(mut self, connect_options: ConnectOptions) -> Self {
+        self.connect_options = Some(connect_options);
+        self
     }
 
     pub fn with_client_options(mut self, client_options: Mqtt5ClientOptions) -> Self {
@@ -140,13 +152,18 @@ impl ClientBuilder {
 
         let addr = to_socket_addrs.unwrap().next().unwrap();
 
+        let connect_options =
+            if let Some(options) = self.connect_options {
+                options
+            } else {
+                ConnectOptionsBuilder::new().build()
+            };
+
         let client_options =
             if let Some(options) = self.client_options {
                 options
             } else {
-                Mqtt5ClientOptionsBuilder::new()
-                    .with_connect_options(ConnectOptionsBuilder::new().build())
-                    .build()
+                Mqtt5ClientOptionsBuilder::new().build()
             };
 
         if let Some(tls_config) = self.tls_config {
@@ -159,9 +176,9 @@ impl ClientBuilder {
                 })
             };
 
-            Ok(Mqtt5Client::new(client_options, tokio_options, runtime))
+            Ok(Mqtt5Client::new(client_options, connect_options, tokio_options, runtime))
         } else {
-            Ok(Mqtt5Client::new(client_options,TokioClientOptions {
+            Ok(Mqtt5Client::new(client_options, connect_options, TokioClientOptions {
                 connection_factory: Box::new(move || { Box::pin(TcpStream::connect(addr)) })
             }, runtime))
         }

@@ -74,7 +74,7 @@ struct CommandLineArgs {
     authorizer_token_key_value: Option<String>,
 }
 
-fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
+fn build_client(connect_config: ConnectOptions, client_config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&uri_string);
@@ -95,7 +95,8 @@ fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLine
         "aws-mqtts" => {
             if args.cert.is_some() && args.key.is_some() {
                 Ok(AwsClientBuilder::new_direct_with_mtls_from_fs(&endpoint, args.cert.as_ref().unwrap(), args.key.as_ref().unwrap(), capath)?
-                    .with_client_options(config)
+                    .with_connect_options(connect_config)
+                    .with_client_options(client_config)
                     .build(runtime)?)
             } else {
                 println!("ERROR: aws-mqtts scheme requires certification and private key fields for mTLS");
@@ -117,7 +118,8 @@ fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLine
                     );
 
                     Ok(AwsClientBuilder::new_direct_with_signed_custom_auth(&endpoint, signed_config, capath)?
-                        .with_client_options(config)
+                        .with_connect_options(connect_config)
+                        .with_client_options(client_config)
                         .build(runtime)?)
                 } else {
                     let unsigned_config = AwsCustomAuthOptions::new_unsigned(
@@ -127,7 +129,8 @@ fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLine
                     );
 
                     Ok(AwsClientBuilder::new_direct_with_unsigned_custom_auth(&endpoint, unsigned_config, capath)?
-                        .with_client_options(config)
+                        .with_connect_options(connect_config)
+                        .with_client_options(client_config)
                         .build(runtime)?)
                 }
             } else {
@@ -167,7 +170,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build();
 
     let config = client::Mqtt5ClientOptionsBuilder::new()
-        .with_connect_options(connect_options)
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
         .with_connack_timeout(Duration::from_secs(60))
         .with_ping_timeout(Duration::from_secs(60))
@@ -175,7 +177,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::Uniform)
         .build();
 
-    let client = build_client(config, &Handle::current(), &cli_args).unwrap();
+    let client = build_client(connect_options, config, &Handle::current(), &cli_args).unwrap();
 
     println!("elasti-gneiss - an interactive MQTT5 console application\n");
     println!(" `help` for command assistance\n");

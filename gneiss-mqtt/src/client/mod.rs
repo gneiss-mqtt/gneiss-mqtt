@@ -346,7 +346,7 @@ pub struct ListenerHandle {
 /// few differences that make exposing a ConnectPacket directly awkward and potentially misleading.
 ///
 /// Auth-related fields are not yet exposed because we don't support authentication exchanges yet.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone)]
 pub struct ConnectOptions {
 
     /// The maximum time interval, in seconds, that is permitted to elapse between the point at which the client
@@ -492,6 +492,27 @@ impl ConnectOptions {
     }
 }
 
+impl Default for ConnectOptions {
+    fn default() -> Self {
+        ConnectOptions {
+            keep_alive_interval_seconds: Some(1200),
+            rejoin_session_policy: RejoinSessionPolicy::PostSuccess,
+            client_id: None,
+            username: None,
+            password: None,
+            session_expiry_interval_seconds: None,
+            request_response_information: None,
+            request_problem_information: None,
+            receive_maximum: None,
+            topic_alias_maximum: None,
+            maximum_packet_size_bytes: None,
+            will_delay_interval_seconds: None,
+            will: None,
+            user_properties: None,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ConnectOptionsBuilder {
     options: ConnectOptions
@@ -612,8 +633,6 @@ impl Default for ReconnectOptions {
 
 #[derive(Default)]
 pub struct Mqtt5ClientOptions {
-    pub connect_options : ConnectOptions,
-
     offline_queue_policy: OfflineQueuePolicy,
 
     connack_timeout: Duration,
@@ -629,7 +648,6 @@ pub struct Mqtt5ClientOptions {
 impl Debug for Mqtt5ClientOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "Mqtt5ClientOptions {{ ")?;
-        write!(f, "connect_options: {:?}, ", self.connect_options)?;
         write!(f, "offline_queue_policy: {:?}, ", self.offline_queue_policy)?;
         write!(f, "connack_timeout: {:?}, ", self.connack_timeout)?;
         write!(f, "ping_timeout: {:?}, ", self.ping_timeout)?;
@@ -657,15 +675,6 @@ impl Mqtt5ClientOptionsBuilder {
                 ..Default::default()
             }
         }
-    }
-
-    pub fn with_connect_options(mut self, connect_options: ConnectOptions) -> Self {
-        self.options.connect_options = connect_options;
-        self
-    }
-
-    pub fn set_connect_options(&mut self, connect_options: ConnectOptions) {
-        self.options.connect_options = connect_options;
     }
 
     pub fn with_offline_queue_policy(mut self, offline_queue_policy: OfflineQueuePolicy) -> Self {
@@ -754,8 +763,6 @@ impl Mqtt5ClientOptionsBuilder {
     }
 }
 
-// Note to self: don't implement clone.  the interface is not &mut so sharing across threads just
-// needs an Arc wrapper
 pub struct Mqtt5Client where {
     user_state: UserRuntimeState,
 
@@ -771,10 +778,10 @@ pub struct TokioClientOptions<T> where T : AsyncRead + AsyncWrite + Send + Sync 
 impl Mqtt5Client {
 
     // async choice conditional
-    pub fn new<T>(config: Mqtt5ClientOptions, tokio_config: TokioClientOptions<T>, runtime_handle: &runtime::Handle) -> Mqtt5Client where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
+    pub fn new<T>(client_config: Mqtt5ClientOptions, connect_config: ConnectOptions, tokio_config: TokioClientOptions<T>, runtime_handle: &runtime::Handle) -> Mqtt5Client where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
         let (user_state, internal_state) = create_runtime_states(tokio_config);
 
-        let client_impl = Mqtt5ClientImpl::new(config);
+        let client_impl = Mqtt5ClientImpl::new(client_config, connect_config);
 
         spawn_client_impl(client_impl, internal_state, runtime_handle);
 
