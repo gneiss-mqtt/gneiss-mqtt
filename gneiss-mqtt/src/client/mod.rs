@@ -377,12 +377,12 @@ pub struct ConnectOptions {
     /// A string value that the server may use for client authentication and authorization.
     ///
     /// See [MQTT5 User Name](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901071)
-    pub username: Option<String>,
+    username: Option<String>,
 
     /// Opaque binary data that the server may use for client authentication and authorization.
     ///
     /// See [MQTT5 Password](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901072)
-    pub password: Option<Vec<u8>>,
+    password: Option<Vec<u8>>,
 
     /// A time interval, in seconds, that the client requests the server to persist this connection's MQTT session state
     /// for.  Has no meaning if the client has not been configured to rejoin sessions.  Must be non-zero in order to
@@ -481,6 +481,14 @@ impl ConnectOptions {
             will: self.will.clone(),
             user_properties: self.user_properties.clone(),
         }
+    }
+
+    pub fn set_username(&mut self, username: Option<&str>) {
+        self.username = username.map(str::to_string);
+    }
+
+    pub fn set_password(&mut self, password: Option<&[u8]>) {
+        self.password = password.map(|p| p.to_vec());
     }
 }
 

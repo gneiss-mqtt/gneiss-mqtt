@@ -16,7 +16,7 @@ use argh::FromArgs;
 use elasti_gneiss_core::{client_event_callback, ElastiError, ElastiResult, main_loop};
 use gneiss_mqtt::*;
 use gneiss_mqtt::client::{ExponentialBackoffJitterType};
-use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthSignedOptions, AwsCustomAuthUnsignedOptions};
+use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
 use simplelog::*;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -107,7 +107,7 @@ fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLine
 
             if args.authorizer.is_some() {
                 if args.authorizer_signature.is_some() && args.authorizer_token_key_value.is_some() && args.authorizer_token_key_name.is_some() {
-                    let signed_config = AwsCustomAuthSignedOptions::new(
+                    let signed_config = AwsCustomAuthOptions::new_signed(
                         args.authorizer.as_ref().unwrap(),
                         args.authorizer_signature.as_ref().unwrap(),
                         args.authorizer_token_key_name.as_ref().unwrap(),
@@ -120,7 +120,7 @@ fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLine
                         .with_client_options(config)
                         .build(runtime)?)
                 } else {
-                    let unsigned_config = AwsCustomAuthUnsignedOptions::new(
+                    let unsigned_config = AwsCustomAuthOptions::new_unsigned(
                         args.authorizer.as_ref().unwrap(),
                         args.username.as_deref(),
                         password.as_deref()

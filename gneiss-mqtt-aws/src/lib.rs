@@ -14,74 +14,40 @@ use tokio::runtime::Handle;
 const CUSTOM_AUTH_AUTHORIZER_QUERY_PARAM_NAME: &str = "x-amz-customauthorizer-name";
 const CUSTOM_AUTH_SIGNATURE_QUERY_PARAM_NAME: &str = "x-amz-customauthorizer-signature";
 
-pub struct AwsCustomAuthUnsignedOptions {
-    authorizer_name: String,
-    username: Option<String>,
+pub struct AwsCustomAuthOptions {
+    username: String,
     password: Option<Vec<u8>>
 }
 
-impl AwsCustomAuthUnsignedOptions {
-    pub fn new(authorizer_name: &str, username: Option<&str>, password: Option<&[u8]>) -> Self {
-        AwsCustomAuthUnsignedOptions {
-            authorizer_name: authorizer_name.to_string(),
-            username: username.map(str::to_string),
+impl AwsCustomAuthOptions {
+    pub fn new_unsigned(authorizer_name: &str, username: Option<&str>, password: Option<&[u8]>) -> Self {
+        AwsCustomAuthOptions {
+            username: format!("{}?{}={}", username.unwrap_or(""), CUSTOM_AUTH_AUTHORIZER_QUERY_PARAM_NAME, authorizer_name),
             password: password.map(|p| p.to_vec())
         }
     }
 
-    pub(crate) fn build_username(&self) -> Option<String> {
-        let username = format!("{}?{}={}", self.username.as_deref().unwrap_or(""), CUSTOM_AUTH_AUTHORIZER_QUERY_PARAM_NAME, self.authorizer_name);
-        Some(username)
-    }
-
-    pub(crate) fn build_password(&self) -> Option<Vec<u8>> {
-        self.password.as_ref().map(|p| p.to_vec())
-    }
-}
-
-pub struct AwsCustomAuthSignedOptions {
-    authorizer_name: String,
-    authorizer_signature: String,
-    authorizer_token_key_name: String,
-    authorizer_token_key_value: String,
-    username: Option<String>,
-    password: Option<Vec<u8>>
-}
-
-impl AwsCustomAuthSignedOptions {
-    pub fn new(authorizer_name: &str, authorizer_signature: &str, authorizer_token_key_name: &str, authorizer_token_key_value: &str, username: Option<&str>, password: Option<&[u8]>) -> Self {
-        AwsCustomAuthSignedOptions {
-            authorizer_name: authorizer_name.to_string(),
-            authorizer_signature: authorizer_signature.to_string(),
-            authorizer_token_key_name: authorizer_token_key_name.to_string(),
-            authorizer_token_key_value: authorizer_token_key_value.to_string(),
-            username: username.map(str::to_string),
-            password: password.map(|p| p.to_vec())
-        }
-    }
-
-    pub(crate) fn build_username(&self) -> Option<String> {
-        let username =
-            format!("{}?{}={}&{}={}&{}={}",
-                self.username.as_deref().unwrap_or(""),
+    pub fn new_signed(authorizer_name: &str, authorizer_signature: &str, authorizer_token_key_name: &str, authorizer_token_key_value: &str, username: Option<&str>, password: Option<&[u8]>) -> Self {
+        AwsCustomAuthOptions {
+            username: format!("{}?{}={}&{}={}&{}={}",
+                username.unwrap_or(""),
                 CUSTOM_AUTH_AUTHORIZER_QUERY_PARAM_NAME,
-                self.authorizer_name,
+                authorizer_name,
                 CUSTOM_AUTH_SIGNATURE_QUERY_PARAM_NAME,
-                self.authorizer_signature,
-                self.authorizer_token_key_name,
-                self.authorizer_token_key_value);
-
-        Some(username)
+                authorizer_signature,
+                authorizer_token_key_name,
+                authorizer_token_key_value),
+            password: password.map(|p| p.to_vec())
+        }
     }
 
-    pub(crate) fn build_password(&self) -> Option<Vec<u8>> {
-        self.password.as_ref().map(|p| p.to_vec())
+    pub(crate) fn get_username(&self) -> &str {
+        self.username.as_str()
     }
-}
 
-enum AwsCustomAuthOptions {
-    Unsigned(AwsCustomAuthUnsignedOptions),
-    Signed(AwsCustomAuthSignedOptions)
+    pub(crate) fn get_password(&self) -> Option<&[u8]> {
+        self.password.as_deref()
+    }
 }
 
 #[derive(PartialEq, Eq)]
@@ -130,10 +96,10 @@ impl AwsClientBuilder {
         Ok(builder)
     }
 
-    pub fn new_direct_with_unsigned_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthUnsignedOptions, root_ca_path: Option<&str>) -> MqttResult<Self> {
+    pub fn new_direct_with_unsigned_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthOptions, root_ca_path: Option<&str>) -> MqttResult<Self> {
         let mut builder =  AwsClientBuilder {
             auth_type: AuthType::CustomAuth,
-            custom_auth_options: Some(AwsCustomAuthOptions::Unsigned(custom_auth_options)),
+            custom_auth_options: Some(custom_auth_options),
             client_options: None,
             inner_builder: ClientBuilder::new_with_tls(endpoint, DEFAULT_PORT, root_ca_path)?
         };
@@ -143,10 +109,10 @@ impl AwsClientBuilder {
         Ok(builder)
     }
 
-    pub fn new_direct_with_signed_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthSignedOptions, root_ca_path: Option<&str>) -> MqttResult<Self> {
+    pub fn new_direct_with_signed_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthOptions, root_ca_path: Option<&str>) -> MqttResult<Self> {
         let mut builder =  AwsClientBuilder {
             auth_type: AuthType::CustomAuth,
-            custom_auth_options: Some(AwsCustomAuthOptions::Signed(custom_auth_options)),
+            custom_auth_options: Some(custom_auth_options),
             client_options: None,
             inner_builder: ClientBuilder::new_with_tls(endpoint, DEFAULT_PORT, root_ca_path)?
         };
@@ -178,16 +144,9 @@ impl AwsClientBuilder {
             return;
         }
 
-        match &self.custom_auth_options {
-            Some(AwsCustomAuthOptions::Unsigned(options)) => {
-                client_options.connect_options.username = options.build_username();
-                client_options.connect_options.password = options.build_password();
-            }
-            Some(AwsCustomAuthOptions::Signed(options)) => {
-                client_options.connect_options.username = options.build_username();
-                client_options.connect_options.password = options.build_password();
-            }
-            _ => {}
+        if let Some(options) = &self.custom_auth_options {
+            client_options.connect_options.set_username(Some(options.get_username()));
+            client_options.connect_options.set_password(options.get_password());
         }
     }
 
