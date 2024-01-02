@@ -56,8 +56,6 @@ use std::error::Error;
 use std::fmt;
 use std::time::Instant;
 
-//type InnerError = Option<Box<dyn Error + Send + Sync + 'static>>;
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum MqttError {
     Unknown,
@@ -88,10 +86,10 @@ pub enum MqttError {
     SubscribePacketValidation,
     UnsubscribePacketValidation,
     InternalStateError,
-    ConnectionRejected, // inner? or rename to ConnectRejectedByBroker
+    ConnectionRejected,
     ConnackTimeout,
     PingTimeout,
-    ConnectionClosed, // inner?
+    ConnectionClosed,
     OfflineQueuePolicyFailed,
     ServerSideDisconnect,
     AckTimeout,
@@ -101,12 +99,12 @@ pub enum MqttError {
     ClientClosed,
     ConnectionTimeout,
     UserRequestedStop,
-    ConnectionEstablishmentFailure, // inner?
-    StreamWriteFailure, // inner?
-    StreamReadFailure, // inner?
+    ConnectionEstablishmentFailure,
+    StreamWriteFailure,
+    StreamReadFailure,
     OperationChannelEmpty,
-    IoError, // inner
-    TlsError // inner
+    IoError,
+    TlsError
 }
 
 impl Error for MqttError {
