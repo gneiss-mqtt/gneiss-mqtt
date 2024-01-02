@@ -56,6 +56,8 @@ use std::error::Error;
 use std::fmt;
 use std::time::Instant;
 
+//type InnerError = Option<Box<dyn Error + Send + Sync + 'static>>;
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum MqttError {
     Unknown,
@@ -86,10 +88,10 @@ pub enum MqttError {
     SubscribePacketValidation,
     UnsubscribePacketValidation,
     InternalStateError,
-    ConnectionRejected,
+    ConnectionRejected, // inner? or rename to ConnectRejectedByBroker
     ConnackTimeout,
     PingTimeout,
-    ConnectionClosed,
+    ConnectionClosed, // inner?
     OfflineQueuePolicyFailed,
     ServerSideDisconnect,
     AckTimeout,
@@ -99,11 +101,12 @@ pub enum MqttError {
     ClientClosed,
     ConnectionTimeout,
     UserRequestedStop,
-    ConnectionEstablishmentFailure,
-    StreamWriteFailure,
-    StreamReadFailure,
+    ConnectionEstablishmentFailure, // inner?
+    StreamWriteFailure, // inner?
+    StreamReadFailure, // inner?
     OperationChannelEmpty,
-    InvalidArgument
+    IoError, // inner
+    TlsError // inner
 }
 
 impl Error for MqttError {
@@ -157,7 +160,8 @@ impl fmt::Display for MqttError {
             MqttError::StreamWriteFailure => { write!(f, "StreamWriteFailure") }
             MqttError::StreamReadFailure => { write!(f, "StreamReadFailure") }
             MqttError::OperationChannelEmpty => { write!(f, "OperationChannelEmpty") }
-            MqttError::InvalidArgument => { write!(f, "InvalidArgument") }
+            MqttError::IoError => { write!(f, "io error") }
+            MqttError::TlsError => { write!(f, "tls error") }
         }
     }
 }

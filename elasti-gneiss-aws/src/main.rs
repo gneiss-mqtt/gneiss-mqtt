@@ -13,7 +13,7 @@ extern crate url;
 
 use std::fs::File;
 use argh::FromArgs;
-use elasti_gneiss_core::{client_event_callback, main_loop};
+use elasti_gneiss_core::{client_event_callback, ElastiError, ElastiResult, main_loop};
 use gneiss_mqtt::*;
 use gneiss_mqtt::client::{ExponentialBackoffJitterType};
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthSignedOptions, AwsCustomAuthUnsignedOptions};
@@ -74,28 +74,32 @@ struct CommandLineArgs {
     authorizer_token_key_value: Option<String>,
 }
 
-fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> MqttResult<Mqtt5Client> {
-    let url_parse_result = Url::parse(&args.endpoint_uri);
+fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
+    let uri_string = args.endpoint_uri.clone();
+
+    let url_parse_result = Url::parse(&uri_string);
     if url_parse_result.is_err() {
-        return Err(MqttError::InvalidArgument);
+        return Err(ElastiError::InvalidUri(uri_string));
     }
 
     let uri = url_parse_result.unwrap();
     if uri.host_str().is_none() {
-        return Err(MqttError::InvalidArgument);
+        return Err(ElastiError::InvalidUri(uri_string));
     }
 
     let endpoint = uri.host_str().unwrap().to_string();
     let capath = args.capath.as_deref();
 
-    match uri.scheme().to_lowercase().as_str() {
+    let scheme = uri.scheme().to_lowercase();
+    match scheme.as_str() {
         "aws-mqtts" => {
             if args.cert.is_some() && args.key.is_some() {
-                AwsClientBuilder::new_direct_with_mtls_from_fs(&endpoint, args.cert.as_ref().unwrap(), args.key.as_ref().unwrap(), capath)?
+                Ok(AwsClientBuilder::new_direct_with_mtls_from_fs(&endpoint, args.cert.as_ref().unwrap(), args.key.as_ref().unwrap(), capath)?
                     .with_client_options(config)
-                    .build(runtime)
+                    .build(runtime)?)
             } else {
-                Err(MqttError::InvalidArgument)
+                println!("ERROR: aws-mqtts scheme requires certification and private key fields for mTLS");
+                Err(ElastiError::MissingArguments("--cert, --key"))
             }
         }
         "aws-custom-auth" => {
@@ -112,9 +116,9 @@ fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLine
                         password.as_deref()
                     );
 
-                    AwsClientBuilder::new_direct_with_signed_custom_auth(&endpoint, signed_config, capath)?
+                    Ok(AwsClientBuilder::new_direct_with_signed_custom_auth(&endpoint, signed_config, capath)?
                         .with_client_options(config)
-                        .build(runtime)
+                        .build(runtime)?)
                 } else {
                     let unsigned_config = AwsCustomAuthUnsignedOptions::new(
                         args.authorizer.as_ref().unwrap(),
@@ -122,19 +126,17 @@ fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLine
                         password.as_deref()
                     );
 
-                    AwsClientBuilder::new_direct_with_unsigned_custom_auth(&endpoint, unsigned_config, capath)?
+                    Ok(AwsClientBuilder::new_direct_with_unsigned_custom_auth(&endpoint, unsigned_config, capath)?
                         .with_client_options(config)
-                        .build(runtime)
+                        .build(runtime)?)
                 }
             } else {
-                Err(MqttError::InvalidArgument)
+                println!("ERROR: aws-custom-auth scheme requires authorizer parameter");
+                Err(ElastiError::MissingArguments("--authorizer"))
             }
         }
-        "aws-wss-sigv4" => {
-            Err(MqttError::Unimplemented)
-        }
         _ => {
-            Err(MqttError::InvalidArgument)
+            Err(ElastiError::UnsupportedUriScheme(scheme))
         }
     }
 }

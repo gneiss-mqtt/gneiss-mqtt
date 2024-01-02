@@ -25,13 +25,13 @@ use tokio_rustls::{TlsConnector};
 
 impl From<std::io::Error> for MqttError {
     fn from(_: std::io::Error) -> Self {
-        MqttError::Unknown
+        MqttError::IoError
     }
 }
 
 impl From<rustls::Error> for MqttError {
     fn from(_: rustls::Error) -> Self {
-        MqttError::Unknown
+        MqttError::TlsError
     }
 }
 

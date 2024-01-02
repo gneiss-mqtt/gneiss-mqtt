@@ -12,7 +12,7 @@ extern crate url;
 
 use std::fs::File;
 use argh::FromArgs;
-use elasti_gneiss_core::{client_event_callback, main_loop};
+use elasti_gneiss_core::{client_event_callback, ElastiError, ElastiResult, main_loop};
 use gneiss_mqtt::*;
 use gneiss_mqtt::client;
 use gneiss_mqtt::client::builder::ClientBuilder;
@@ -49,49 +49,48 @@ struct CommandLineArgs {
     logpath: Option<PathBuf>,
 }
 
-fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> MqttResult<Mqtt5Client> {
+fn build_client(config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
+    let uri_string = args.endpoint_uri.clone();
+
     let url_parse_result = Url::parse(&args.endpoint_uri);
     if url_parse_result.is_err() {
-        return Err(MqttError::Unknown);
+        return Err(ElastiError::InvalidUri(uri_string));
     }
 
     let uri = url_parse_result.unwrap();
     if uri.host_str().is_none() {
-        return Err(MqttError::Unknown);
+        return Err(ElastiError::InvalidUri(uri_string));
     }
 
     let endpoint = uri.host_str().unwrap().to_string();
 
     if uri.port().is_none() {
-        return Err(MqttError::Unknown);
+        return Err(ElastiError::InvalidUri(uri_string));
     }
 
     let port = uri.port().unwrap();
-
-    match uri.scheme().to_lowercase().as_str() {
+    let scheme = uri.scheme().to_lowercase();
+    match scheme.as_str() {
         "mqtt" => {
-            ClientBuilder::new(&endpoint, port)
-                .unwrap()
+            Ok(ClientBuilder::new(&endpoint, port)?
                 .with_client_options(config)
-                .build(runtime)
+                .build(runtime)?)
         }
         "mqtts" => {
             let capath = args.capath.as_deref();
 
             if args.cert.is_some() && args.key.is_some() {
-                ClientBuilder::new_with_mtls_from_fs(&endpoint, port, args.cert.as_ref().unwrap(), args.key.as_ref().unwrap(), capath)
-                    .unwrap()
+                Ok(ClientBuilder::new_with_mtls_from_fs(&endpoint, port, args.cert.as_ref().unwrap(), args.key.as_ref().unwrap(), capath)?
                     .with_client_options(config)
-                    .build(runtime)
+                    .build(runtime)?)
             } else {
-                ClientBuilder::new_with_tls(&endpoint, port, capath)
-                    .unwrap()
+                Ok(ClientBuilder::new_with_tls(&endpoint, port, capath)?
                     .with_client_options(config)
-                    .build(runtime)
+                    .build(runtime)?)
             }
         }
         _ => {
-            Err(MqttError::Unknown)
+            Err(ElastiError::UnsupportedUriScheme(scheme))
         }
     }
 }

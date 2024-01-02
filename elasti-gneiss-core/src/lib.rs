@@ -11,6 +11,7 @@ extern crate tokio;
 use argh::FromArgs;
 use gneiss_mqtt::*;
 use gneiss_mqtt::client::Mqtt5Client;
+use std::fmt;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -104,6 +105,47 @@ struct CommandArgs {
     #[argh(subcommand)]
     nested: SubCommandEnum,
 }
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum ElastiError {
+    Unimplemented,
+    ClientError(MqttError),
+    InvalidUri(String),
+    UnsupportedUriScheme(String),
+    MissingArguments(&'static str),
+}
+
+impl fmt::Display for ElastiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ElastiError::Unimplemented => { write!(f, "unimplemented") }
+            ElastiError::ClientError(inner) => {
+                write!(f, "client error - {}", inner)
+            }
+            ElastiError::InvalidUri(uri) => {
+                write!(f, "invalid uri - `{}`", uri)
+            }
+            ElastiError::UnsupportedUriScheme(scheme) => {
+                write!(f, "invalid uri scheme - `{}`", scheme)
+            }
+            ElastiError::MissingArguments(args) => {
+                write!(f, "missing arguments - {}", *args)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ElastiError {
+
+}
+
+impl From<MqttError> for ElastiError {
+    fn from(value: MqttError) -> Self {
+        ElastiError::ClientError(value)
+    }
+}
+
+pub type ElastiResult<T> = Result<T, ElastiError>;
 
 pub fn client_event_callback(event: Arc<ClientEvent>) {
     match &*event {
