@@ -14,14 +14,13 @@ use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{client_event_callback, ElastiError, ElastiResult, main_loop};
 use gneiss_mqtt::*;
-use gneiss_mqtt::client::builder::GenericClientBuilder;
+use gneiss_mqtt::config::*;
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Handle;
 use url::Url;
-use gneiss_mqtt::builder::TlsOptionsBuilder;
 
 #[derive(FromArgs, Debug, PartialEq)]
 /// elasti-gneiss - an interactive MQTT5 console

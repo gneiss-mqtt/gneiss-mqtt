@@ -23,24 +23,24 @@ Gneiss-mqtt supports all aspects of the MQTT5 specification with the following e
 * 0.3.0 Release (March 2024)
 * * Internal refactoring and unit/integration tests that were delayed once "it worked"
 * * Background thread client for no-async support
-* 0.4.0 Release (June 2024, dev preview complete, this will be a huge breaking change and hopefully the last one)
-* * MQTT311 support
-* 0.5.0 Release (July 2024)
 * * Support async-std as a runtime option
 * * Support native-tls as a TLS option
-* 0.6.0 Release (August 2024)
-* * Non-AWS cloud provider builders (Azure, HiveMQ, etc...)
-* 0.7.0 Release (October 2024)
+* * CI/CD
+* 0.4.0 Release (July 2024)
+* * MQTT311 support
+* 0.5.0 Release (September 2024)
+* * Public API finalization
 * * Performance measurements and tuning
+* * Non-AWS cloud provider builders (Azure, HiveMQ, etc...)
+* 0.6.0 Release (October 2024)
 * * Bridging support
 * * MQTT5 authentication exchange support
 * 0.8.0 Release (No ETA)
-* * Persistence support
-* 0.9.0 Release (No ETA)
 * * Canaries, soak testing
 * 1.0.0 Release (GA, No ETA)
 
 ### Tentative Roadmap post GA
+* Persistence support
 * Client crates for known MQTT services (AWS Shadow, Jobs, Fleet Provisioning, etc...)
 * gneiss-mqtt-embedded: Embedded implementation targeting highly-constrained environments
 

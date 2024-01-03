@@ -6,8 +6,8 @@
 extern crate rustls;
 extern crate rustls_pemfile;
 
-use crate::builder::{TlsData, TlsMode, TlsOptions};
-use crate::builder::TlsOptionsBuilder;
+use crate::config::{TlsData, TlsMode, TlsOptions};
+use crate::config::TlsOptionsBuilder;
 
 use rustls::pki_types::{PrivateKeyDer};
 

@@ -6,11 +6,14 @@
 extern crate log;
 extern crate tokio;
 
+use std::future::Future;
+use std::pin::Pin;
 use crate::*;
 use crate::client::shared_impl::*;
+use crate::config::*;
 
 use log::*;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::runtime;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, split, WriteHalf};
@@ -46,7 +49,7 @@ macro_rules! submit_async_client_operation {
 }
 
 pub(crate) use submit_async_client_operation;
-
+use crate::config::{ConnectOptions, Mqtt5ClientOptions};
 
 
 pub(crate) struct AsyncOperationChannel<T> {
@@ -445,4 +448,25 @@ pub(crate) fn spawn_event_callback(event: Arc<ClientEvent>, callback: Arc<Client
     tokio::spawn(async move {
         (callback)(event)
     });
+}
+
+type TokioConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = std::io::Result<T>> + Send + Sync>>;
+pub struct TokioClientOptions<T> where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
+    pub connection_factory: Box<dyn Fn() -> TokioConnectionFactoryReturnType<T> + Send + Sync>
+}
+
+impl Mqtt5Client {
+
+    pub fn new_with_tokio<T>(client_config: Mqtt5ClientOptions, connect_config: ConnectOptions, tokio_config: TokioClientOptions<T>, runtime_handle: &runtime::Handle) -> Mqtt5Client where T: AsyncRead + AsyncWrite + Send + Sync + 'static {
+        let (user_state, internal_state) = create_runtime_states(tokio_config);
+
+        let client_impl = Mqtt5ClientImpl::new(client_config, connect_config);
+
+        spawn_client_impl(client_impl, internal_state, runtime_handle);
+
+        Mqtt5Client {
+            user_state,
+            listener_id_allocator: Mutex::new(1),
+        }
+    }
 }

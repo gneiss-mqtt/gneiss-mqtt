@@ -10,6 +10,7 @@ extern crate log;
 use crate::*;
 use crate::alias::*;
 use crate::client::*;
+use crate::config::*;
 use crate::spec::*;
 use crate::spec::auth::*;
 use crate::spec::connack::*;

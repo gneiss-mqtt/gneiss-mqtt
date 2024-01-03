@@ -9,6 +9,7 @@ extern crate rand;
 
 use crate::*;
 use crate::client::*;
+use crate::config::*;
 use crate::operation::*;
 use crate::spec::*;
 

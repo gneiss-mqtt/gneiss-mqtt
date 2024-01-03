@@ -5,6 +5,7 @@
 
 pub mod alias;
 pub mod client;
+pub mod config;
 mod decode;
 mod encode;
 pub mod features;

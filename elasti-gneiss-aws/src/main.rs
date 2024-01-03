@@ -15,7 +15,7 @@ use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{client_event_callback, ElastiError, ElastiResult, main_loop};
 use gneiss_mqtt::*;
-use gneiss_mqtt::client::{ExponentialBackoffJitterType};
+use gneiss_mqtt::config::*;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
@@ -166,7 +166,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let connect_options = ConnectOptionsBuilder::new().build();
 
-    let config = client::Mqtt5ClientOptionsBuilder::new()
+    let config = Mqtt5ClientOptionsBuilder::new()
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
         .with_connack_timeout(Duration::from_secs(60))
         .with_ping_timeout(Duration::from_secs(60))

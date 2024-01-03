@@ -240,6 +240,7 @@ impl fmt::Display for DisconnectPacket {
 mod tests {
 
     use super::*;
+    use crate::config::*;
     use crate::decode::testing::*;
 
     #[test]
