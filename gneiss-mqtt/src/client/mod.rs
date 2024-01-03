@@ -71,25 +71,38 @@ impl Display for Qos2Response {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum PublishResponse {
+pub enum QosResponse {
     Qos0,
     Qos1(PubackPacket),
     Qos2(Qos2Response),
 }
 
-impl Display for PublishResponse {
+impl Display for QosResponse {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            PublishResponse::Qos0 => {
+            QosResponse::Qos0 => {
                 write!(f, "Qos0")
             }
-            PublishResponse::Qos1(puback) => {
+            QosResponse::Qos1(puback) => {
                 write!(f, "Qos1 ( {} )", puback)
             }
-            PublishResponse::Qos2(qos2response) => {
+            QosResponse::Qos2(qos2response) => {
                 write!(f, "Qos2 ( {} )", qos2response)
             }
         }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct PublishResponse {
+    pub qos_response: QosResponse
+}
+
+impl Display for PublishResponse {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "PublishResponse {{")?;
+        writeln!(f, "  qos_response: {}", self.qos_response)?;
+        write!(f, "}}")
     }
 }
 
