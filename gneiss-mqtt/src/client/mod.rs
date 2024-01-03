@@ -3,11 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-pub(crate) mod asyncstd_impl;
+
 pub mod builder;
 pub(crate) mod shared_impl;
-pub(crate) mod thread_impl;
-pub mod tokio_impl;
 
 use crate::*;
 use crate::alias::OutboundAliasResolver;
@@ -25,7 +23,7 @@ use std::time::Duration;
 
 // async choice conditional
 extern crate tokio;
-use crate::client::tokio_impl::*;
+use crate::features::gneiss_tokio::*;
 use tokio::runtime;
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -340,6 +338,7 @@ pub struct ListenerHandle {
     id: u64
 }
 
+pub(crate) const DEFAULT_KEEP_ALIVE_SECONDS : u16 = 1200;
 
 /// Configuration options that will determine packet field values for the CONNECT packet sent out
 /// by the client on each connection attempt.  Almost equivalent to ConnectPacket, but there are a
@@ -495,7 +494,7 @@ impl ConnectOptions {
 impl Default for ConnectOptions {
     fn default() -> Self {
         ConnectOptions {
-            keep_alive_interval_seconds: Some(1200),
+            keep_alive_interval_seconds: Some(DEFAULT_KEEP_ALIVE_SECONDS),
             rejoin_session_policy: RejoinSessionPolicy::PostSuccess,
             client_id: None,
             username: None,
@@ -525,8 +524,8 @@ impl ConnectOptionsBuilder {
         }
     }
 
-    pub fn with_keep_alive_interval_seconds(mut self, keep_alive: u16) -> Self {
-        self.options.keep_alive_interval_seconds = Some(keep_alive);
+    pub fn with_keep_alive_interval_seconds(mut self, keep_alive: Option<u16>) -> Self {
+        self.options.keep_alive_interval_seconds = keep_alive;
         self
     }
 

@@ -6,8 +6,8 @@
 extern crate gneiss_mqtt;
 extern crate tokio;
 
-use gneiss_mqtt::client::builder::{ClientBuilder};
-use gneiss_mqtt::{ConnectOptions, ConnectOptionsBuilder, Mqtt5Client, Mqtt5ClientOptions, Mqtt5ClientOptionsBuilder};
+use gneiss_mqtt::client::builder::{GenericClientBuilder, TlsOptionsBuilder, TlsOptions};
+use gneiss_mqtt::{ConnectOptions, ConnectOptionsBuilder, Mqtt5Client, Mqtt5ClientOptions, Mqtt5ClientOptionsBuilder, MqttError};
 use gneiss_mqtt::{MqttResult};
 use tokio::runtime::Handle;
 
@@ -62,7 +62,8 @@ pub struct AwsClientBuilder {
     custom_auth_options: Option<AwsCustomAuthOptions>,
     connect_options: Option<ConnectOptions>,
     client_options: Option<Mqtt5ClientOptions>,
-    inner_builder: ClientBuilder
+    tls_options: TlsOptions,
+    inner_builder: GenericClientBuilder
 }
 
 const ALPN_PORT : u16 = 443;
@@ -72,57 +73,73 @@ const CUSTOM_AUTH_ALPN_PROTOCOL : &[u8] = b"mqtt";
 
 impl AwsClientBuilder {
     pub fn new_direct_with_mtls_from_fs(endpoint: &str, certificate_path: &str, private_key_path: &str, root_ca_path: Option<&str>) -> MqttResult<Self> {
-        let mut builder =  AwsClientBuilder {
+        let mut tls_options_builder = TlsOptionsBuilder::new_with_mtls_from_path(certificate_path, private_key_path)?;
+        if let Some(root_ca) = root_ca_path {
+            tls_options_builder = tls_options_builder.with_root_ca_from_path(root_ca)?;
+        }
+        tls_options_builder = tls_options_builder.with_alpn(DIRECT_ALPN_PROTOCOL);
+
+        let tls_options_result = tls_options_builder.build_rustls();
+        if tls_options_result.is_err() {
+            return Err(MqttError::TlsError);
+        }
+
+        let builder =  AwsClientBuilder {
             auth_type: AuthType::Mtls,
             custom_auth_options: None,
             connect_options: None,
             client_options: None,
-            inner_builder: ClientBuilder::new_with_mtls_from_fs(endpoint, DEFAULT_PORT, certificate_path, private_key_path, root_ca_path)?
+            tls_options: tls_options_result.unwrap(),
+            inner_builder: GenericClientBuilder::new(endpoint, DEFAULT_PORT)
         };
-
-        builder.set_alpn(DIRECT_ALPN_PROTOCOL);
 
         Ok(builder)
     }
 
     pub fn new_direct_with_mtls_from_memory(endpoint: &str, certificate_bytes: &[u8], private_key_bytes: &[u8], root_ca_bytes: Option<&[u8]>) -> MqttResult<Self> {
-        let mut builder =  AwsClientBuilder {
+        let mut tls_options_builder = TlsOptionsBuilder::new_with_mtls_from_memory(certificate_bytes, private_key_bytes);
+        if let Some(root_ca) = root_ca_bytes {
+            tls_options_builder = tls_options_builder.with_root_ca_from_memory(root_ca);
+        }
+        tls_options_builder = tls_options_builder.with_alpn(DIRECT_ALPN_PROTOCOL);
+
+        let tls_options_result = tls_options_builder.build_rustls();
+        if tls_options_result.is_err() {
+            return Err(MqttError::TlsError);
+        }
+
+        let builder =  AwsClientBuilder {
             auth_type: AuthType::Mtls,
             custom_auth_options: None,
             connect_options: None,
             client_options: None,
-            inner_builder: ClientBuilder::new_with_mtls_from_memory(endpoint, DEFAULT_PORT, certificate_bytes, private_key_bytes, root_ca_bytes)?
+            tls_options: tls_options_result.unwrap(),
+            inner_builder: GenericClientBuilder::new(endpoint, DEFAULT_PORT)
         };
-
-        builder.set_alpn(DIRECT_ALPN_PROTOCOL);
 
         Ok(builder)
     }
 
-    pub fn new_direct_with_unsigned_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthOptions, root_ca_path: Option<&str>) -> MqttResult<Self> {
-        let mut builder =  AwsClientBuilder {
+    pub fn new_direct_with_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthOptions, root_ca_path: Option<&str>) -> MqttResult<Self> {
+        let mut tls_options_builder = TlsOptionsBuilder::new();
+        if let Some(root_ca) = root_ca_path {
+            tls_options_builder = tls_options_builder.with_root_ca_from_path(root_ca)?;
+        }
+        tls_options_builder = tls_options_builder.with_alpn(CUSTOM_AUTH_ALPN_PROTOCOL);
+
+        let tls_options_result = tls_options_builder.build_rustls();
+        if tls_options_result.is_err() {
+            return Err(MqttError::TlsError);
+        }
+
+        let builder =  AwsClientBuilder {
             auth_type: AuthType::CustomAuth,
             custom_auth_options: Some(custom_auth_options),
             connect_options: None,
             client_options: None,
-            inner_builder: ClientBuilder::new_with_tls(endpoint, DEFAULT_PORT, root_ca_path)?
+            tls_options: tls_options_result.unwrap(),
+            inner_builder: GenericClientBuilder::new(endpoint, DEFAULT_PORT)
         };
-
-        builder.set_alpn(CUSTOM_AUTH_ALPN_PROTOCOL);
-
-        Ok(builder)
-    }
-
-    pub fn new_direct_with_signed_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthOptions, root_ca_path: Option<&str>) -> MqttResult<Self> {
-        let mut builder =  AwsClientBuilder {
-            auth_type: AuthType::CustomAuth,
-            custom_auth_options: Some(custom_auth_options),
-            connect_options: None,
-            client_options: None,
-            inner_builder: ClientBuilder::new_with_tls(endpoint, DEFAULT_PORT, root_ca_path)?
-        };
-
-        builder.set_alpn(CUSTOM_AUTH_ALPN_PROTOCOL);
 
         Ok(builder)
     }
@@ -150,6 +167,7 @@ impl AwsClientBuilder {
 
         self.inner_builder = self.inner_builder.with_connect_options(connect_options);
         self.inner_builder = self.inner_builder.with_client_options(self.client_options.take().unwrap());
+        self.inner_builder = self.inner_builder.with_tls_options(self.tls_options);
         self.inner_builder.build(runtime)
     }
 
@@ -162,14 +180,5 @@ impl AwsClientBuilder {
             connect_options.set_username(Some(options.get_username()));
             connect_options.set_password(options.get_password());
         }
-    }
-
-    fn set_alpn(&mut self, protocol_name: &[u8]) {
-        self.clear_alpn();
-        self.inner_builder.get_mut_tls_config().unwrap().alpn_protocols.push(protocol_name.to_vec());
-    }
-
-    fn clear_alpn(&mut self) {
-        self.inner_builder.get_mut_tls_config().unwrap().alpn_protocols.clear();
     }
 }

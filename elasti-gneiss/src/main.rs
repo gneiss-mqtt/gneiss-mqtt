@@ -14,13 +14,14 @@ use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{client_event_callback, ElastiError, ElastiResult, main_loop};
 use gneiss_mqtt::*;
-use gneiss_mqtt::client::builder::ClientBuilder;
-use simplelog::*;
+use gneiss_mqtt::client::builder::GenericClientBuilder;
+use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Handle;
 use url::Url;
+use gneiss_mqtt::builder::TlsOptionsBuilder;
 
 #[derive(FromArgs, Debug, PartialEq)]
 /// elasti-gneiss - an interactive MQTT5 console
@@ -69,32 +70,22 @@ fn build_client(connect_options: ConnectOptions, client_config: Mqtt5ClientOptio
 
     let port = uri.port().unwrap();
     let scheme = uri.scheme().to_lowercase();
-    match scheme.as_str() {
-        "mqtt" => {
-            Ok(ClientBuilder::new(&endpoint, port)?
-                .with_connect_options(connect_options)
-                .with_client_options(client_config)
-                .build(runtime)?)
-        }
-        "mqtts" => {
-            let capath = args.capath.as_deref();
 
+    let mut builder = GenericClientBuilder::new(&endpoint, port)
+        .with_connect_options(connect_options)
+        .with_client_options(client_config);
+
+    if scheme == "mqtts" {
+        let tls_options =
             if args.cert.is_some() && args.key.is_some() {
-                Ok(ClientBuilder::new_with_mtls_from_fs(&endpoint, port, args.cert.as_ref().unwrap(), args.key.as_ref().unwrap(), capath)?
-                    .with_connect_options(connect_options)
-                    .with_client_options(client_config)
-                    .build(runtime)?)
+                TlsOptionsBuilder::new_with_mtls_from_path(args.cert.as_ref().unwrap(), args.key.as_ref().unwrap()).unwrap().build_rustls().unwrap()
             } else {
-                Ok(ClientBuilder::new_with_tls(&endpoint, port, capath)?
-                    .with_connect_options(connect_options)
-                    .with_client_options(client_config)
-                    .build(runtime)?)
-            }
-        }
-        _ => {
-            Err(ElastiError::UnsupportedUriScheme(scheme))
-        }
+                TlsOptionsBuilder::new().build_rustls().unwrap()
+            };
+        builder = builder.with_tls_options(tls_options);
     }
+
+    Ok(builder.build(runtime)?)
 }
 
 #[tokio::main]
@@ -118,7 +109,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let callback = ClientEventListener::Callback(dyn_function);
 
     let connect_options = ConnectOptionsBuilder::new()
-        .with_keep_alive_interval_seconds(60)
+        .with_keep_alive_interval_seconds(Some(60))
         .with_client_id("HelloClient")
         .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
         .build();

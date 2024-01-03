@@ -7,6 +7,7 @@ pub mod alias;
 pub mod client;
 mod decode;
 mod encode;
+pub mod features;
 mod logging;
 mod operation;
 pub mod spec;
@@ -167,6 +168,12 @@ impl fmt::Display for MqttError {
 impl From<&MqttError> for MqttError {
     fn from(value: &MqttError) -> Self {
         *value
+    }
+}
+
+impl From<std::io::Error> for MqttError {
+    fn from(_: std::io::Error) -> Self {
+        MqttError::IoError
     }
 }
 

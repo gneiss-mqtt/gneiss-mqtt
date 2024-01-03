@@ -7,12 +7,12 @@
 mod operational_state_tests {
 
     // feature conditional
-    use crate::client::tokio_impl::*;
+    use crate::features::gneiss_tokio::*;
     use crate::operation::*;
 
     fn build_standard_test_config() -> OperationalStateConfig {
         OperationalStateConfig {
-            connect_options : ConnectOptionsBuilder::new().with_client_id("DefaultTesting").build(),
+            connect_options : ConnectOptionsBuilder::new().with_client_id("DefaultTesting").with_keep_alive_interval_seconds(None).build(),
             base_timestamp: Instant::now(),
             offline_queue_policy: OfflineQueuePolicy::PreserveAll,
             connack_timeout: Duration::from_millis(10000),

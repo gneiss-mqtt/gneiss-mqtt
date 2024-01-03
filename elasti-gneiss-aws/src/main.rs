@@ -17,7 +17,7 @@ use elasti_gneiss_core::{client_event_callback, ElastiError, ElastiResult, main_
 use gneiss_mqtt::*;
 use gneiss_mqtt::client::{ExponentialBackoffJitterType};
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
-use simplelog::*;
+use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -117,7 +117,7 @@ fn build_client(connect_config: ConnectOptions, client_config: Mqtt5ClientOption
                         password.as_deref()
                     );
 
-                    Ok(AwsClientBuilder::new_direct_with_signed_custom_auth(&endpoint, signed_config, capath)?
+                    Ok(AwsClientBuilder::new_direct_with_custom_auth(&endpoint, signed_config, capath)?
                         .with_connect_options(connect_config)
                         .with_client_options(client_config)
                         .build(runtime)?)
@@ -128,7 +128,7 @@ fn build_client(connect_config: ConnectOptions, client_config: Mqtt5ClientOption
                         password.as_deref()
                     );
 
-                    Ok(AwsClientBuilder::new_direct_with_unsigned_custom_auth(&endpoint, unsigned_config, capath)?
+                    Ok(AwsClientBuilder::new_direct_with_custom_auth(&endpoint, unsigned_config, capath)?
                         .with_connect_options(connect_config)
                         .with_client_options(client_config)
                         .build(runtime)?)
@@ -164,10 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dyn_function = Arc::new(function);
     let callback = ClientEventListener::Callback(dyn_function);
 
-    let connect_options = ConnectOptionsBuilder::new()
-        .with_keep_alive_interval_seconds(60)
-        .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
-        .build();
+    let connect_options = ConnectOptionsBuilder::new().build();
 
     let config = client::Mqtt5ClientOptionsBuilder::new()
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)

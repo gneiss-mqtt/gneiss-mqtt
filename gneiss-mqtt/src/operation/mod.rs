@@ -2107,7 +2107,7 @@ mod tests {
             receive_maximum_from_server : 65535,
             maximum_packet_size_to_server : MAXIMUM_VARIABLE_LENGTH_INTEGER as u32,
             topic_alias_maximum_to_server : 0,
-            server_keep_alive : 0,
+            server_keep_alive : DEFAULT_KEEP_ALIVE_SECONDS,
             retain_available : true,
             wildcard_subscriptions_available : true,
             subscription_identifiers_available : true,
@@ -2123,7 +2123,7 @@ mod tests {
     fn build_negotiated_settings_max_connect_min_connack() {
         let config = build_operational_state_config_for_settings_test(
             ConnectOptionsBuilder::new()
-                .with_keep_alive_interval_seconds(1200)
+                .with_keep_alive_interval_seconds(None)
                 .with_rejoin_session_policy(RejoinSessionPolicy::Always)
                 .with_client_id("connect_client_id")
                 .with_session_expiry_interval_seconds(3600)
@@ -2143,7 +2143,7 @@ mod tests {
             receive_maximum_from_server : 65535,
             maximum_packet_size_to_server : MAXIMUM_VARIABLE_LENGTH_INTEGER as u32,
             topic_alias_maximum_to_server : 0,
-            server_keep_alive : 1200,
+            server_keep_alive : 0,
             retain_available : true,
             wildcard_subscriptions_available : true,
             subscription_identifiers_available : true,
@@ -2198,7 +2198,6 @@ mod tests {
     fn build_negotiated_settings_max_connect_max_connack() {
         let config = build_operational_state_config_for_settings_test(
             ConnectOptionsBuilder::new()
-                .with_keep_alive_interval_seconds(1200)
                 .with_rejoin_session_policy(RejoinSessionPolicy::Never)
                 .with_client_id("connect_client_id")
                 .with_session_expiry_interval_seconds(3600)
@@ -2262,7 +2261,7 @@ mod tests {
             receive_maximum_from_server : 65535,
             maximum_packet_size_to_server : MAXIMUM_VARIABLE_LENGTH_INTEGER as u32,
             topic_alias_maximum_to_server : 0,
-            server_keep_alive : 0,
+            server_keep_alive : DEFAULT_KEEP_ALIVE_SECONDS,
             retain_available : true,
             wildcard_subscriptions_available : true,
             subscription_identifiers_available : true,
