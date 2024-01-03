@@ -28,19 +28,19 @@ Gneiss-mqtt supports all aspects of the MQTT5 specification with the following e
 * * CI/CD
 * 0.4.0 Release (July 2024)
 * * MQTT311 support
-* 0.5.0 Release (September 2024)
+* 1.0.0 Release (GA, September 2024)
 * * Public API finalization
 * * Performance measurements and tuning
+* * Canaries, soak testing, samples
 * * Non-AWS cloud provider builders (Azure, HiveMQ, etc...)
-* 0.6.0 Release (October 2024)
+* 1.1.0 Release
 * * Bridging support
+* 1.2.0 Release 
 * * MQTT5 authentication exchange support
-* 0.8.0 Release (No ETA)
-* * Canaries, soak testing
-* 1.0.0 Release (GA, No ETA)
+* 1.3.0 Release 
+* * Persistence support
 
-### Tentative Roadmap post GA
-* Persistence support
+### Additional post GA ideas
 * Client crates for known MQTT services (AWS Shadow, Jobs, Fleet Provisioning, etc...)
 * gneiss-mqtt-embedded: Embedded implementation targeting highly-constrained environments
 
