@@ -7,7 +7,8 @@ extern crate gneiss_mqtt;
 extern crate tokio;
 
 use gneiss_mqtt::config::*;
-use gneiss_mqtt::{Mqtt5Client, MqttError, MqttResult};
+use gneiss_mqtt::client::Mqtt5Client;
+use gneiss_mqtt::{MqttError, MqttResult};
 use tokio::runtime::Handle;
 
 const CUSTOM_AUTH_AUTHORIZER_QUERY_PARAM_NAME: &str = "x-amz-customauthorizer-name";

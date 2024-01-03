@@ -9,6 +9,7 @@ extern crate tokio;
 use std::future::Future;
 use std::pin::Pin;
 use crate::*;
+use crate::client::*;
 use crate::client::shared_impl::*;
 use crate::config::*;
 

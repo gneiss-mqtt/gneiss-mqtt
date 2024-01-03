@@ -10,7 +10,7 @@ extern crate tokio;
 
 use argh::FromArgs;
 use gneiss_mqtt::*;
-use gneiss_mqtt::client::Mqtt5Client;
+use gneiss_mqtt::client::*;
 use std::fmt;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};

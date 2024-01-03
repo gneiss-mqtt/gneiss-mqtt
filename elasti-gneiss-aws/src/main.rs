@@ -14,7 +14,7 @@ extern crate url;
 use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{client_event_callback, ElastiError, ElastiResult, main_loop};
-use gneiss_mqtt::*;
+use gneiss_mqtt::client::Mqtt5Client;
 use gneiss_mqtt::config::*;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
 use simplelog::{LevelFilter, WriteLogger};

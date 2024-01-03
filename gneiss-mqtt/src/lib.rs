@@ -52,8 +52,6 @@ pub use spec::utils::{
     convert_u8_to_retain_handling_type
 };
 
-pub use client::*;
-
 use std::error::Error;
 use std::fmt;
 use std::time::Instant;
