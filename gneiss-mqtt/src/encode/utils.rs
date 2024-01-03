@@ -229,7 +229,7 @@ pub(crate) use encode_enum;
 
 macro_rules! define_ack_packet_lengths_function {
     ($function_name: ident, $packet_type: ident, $reason_code_type: ident) => {
-        fn $function_name(packet: &$packet_type) -> Mqtt5Result<(u32, u32)> {
+        fn $function_name(packet: &$packet_type) -> MqttResult<(u32, u32)> {
             let mut property_section_length = compute_user_properties_length(&packet.user_properties);
 
             add_optional_string_property_length!(property_section_length, packet.reason_string);
@@ -277,7 +277,7 @@ pub(crate) use define_ack_packet_user_property_accessor;
 
 macro_rules! define_ack_packet_encoding_impl {
     ($function_name: ident, $packet_type: ident, $reason_code_type: ident, $first_byte: expr, $length_function: ident, $reason_string_accessor: ident, $user_property_accessor: ident) => {
-        pub(crate) fn $function_name(packet: &$packet_type, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> Mqtt5Result<()> {
+        pub(crate) fn $function_name(packet: &$packet_type, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
             let (total_remaining_length, property_length) = $length_function(packet)?;
 
             encode_integral_expression!(steps, Uint8, $first_byte);
@@ -401,7 +401,7 @@ pub fn compute_user_properties_length(properties: &Option<Vec<UserProperty>>) ->
     total
 }
 
-pub fn compute_variable_length_integer_encode_size(value: usize) -> Mqtt5Result<usize> {
+pub fn compute_variable_length_integer_encode_size(value: usize) -> MqttResult<usize> {
     if value < 1usize << 7 {
         Ok(1)
     } else if value < 1usize << 14 {
@@ -411,13 +411,13 @@ pub fn compute_variable_length_integer_encode_size(value: usize) -> Mqtt5Result<
     } else if value < 1usize << 28 {
         Ok(4)
     } else {
-        Err(Mqtt5Error::VariableLengthIntegerMaximumExceeded)
+        Err(MqttError::VariableLengthIntegerMaximumExceeded)
     }
 }
 
-fn encode_vli(value: u32, dest: &mut Vec<u8>) -> Mqtt5Result<()> {
+fn encode_vli(value: u32, dest: &mut Vec<u8>) -> MqttResult<()> {
     if value > MAXIMUM_VARIABLE_LENGTH_INTEGER as u32 {
-        return Err(Mqtt5Error::VariableLengthIntegerMaximumExceeded);
+        return Err(MqttError::VariableLengthIntegerMaximumExceeded);
     }
 
     let mut done = false;
@@ -458,7 +458,7 @@ pub(crate) fn process_encoding_step(
     step: EncodingStep,
     packet: &MqttPacket,
     dest: &mut Vec<u8>,
-) -> Mqtt5Result<()> {
+) -> MqttResult<()> {
     match step {
         EncodingStep::Uint8(val) => {
             dest.push(val);

@@ -10,6 +10,7 @@ extern crate log;
 use crate::*;
 use crate::alias::*;
 use crate::client::*;
+use crate::config::*;
 use crate::spec::*;
 use crate::spec::auth::*;
 use crate::spec::connack::*;
@@ -48,14 +49,14 @@ pub(crate) struct InboundValidationContext<'a> {
     pub negotiated_settings : Option<&'a NegotiatedSettings>,
 }
 
-fn validate_user_property(property: &UserProperty, error: Mqtt5Error, packet_type: &str) -> Mqtt5Result<()> {
+fn validate_user_property(property: &UserProperty, error: MqttError, packet_type: &str) -> MqttResult<()> {
     validate_string_length(&property.name, error, packet_type, "UserProperty Name")?;
     validate_string_length(&property.name, error, packet_type, "UserProperty Value")?;
 
     Ok(())
 }
 
-pub(crate) fn validate_user_properties(properties: &Option<Vec<UserProperty>>, error: Mqtt5Error, packet_type: &str) -> Mqtt5Result<()> {
+pub(crate) fn validate_user_properties(properties: &Option<Vec<UserProperty>>, error: MqttError, packet_type: &str) -> MqttResult<()> {
     if let Some(props) = properties {
         for property in props {
             validate_user_property(property, error, packet_type)?;
@@ -73,7 +74,7 @@ pub(crate) fn validate_user_properties(properties: &Option<Vec<UserProperty>>, e
 /// the async boundary into the client implementation.
 ///
 /// Utf-8 codepoints are not currently checked by any validation function.
-pub(crate) fn validate_packet_outbound(packet: &MqttPacket) -> Mqtt5Result<()> {
+pub(crate) fn validate_packet_outbound(packet: &MqttPacket) -> MqttResult<()> {
     match packet {
         MqttPacket::Auth(auth) => { validate_auth_packet_outbound(auth) }
         MqttPacket::Connect(connect) => { validate_connect_packet_outbound(connect) }
@@ -88,14 +89,14 @@ pub(crate) fn validate_packet_outbound(packet: &MqttPacket) -> Mqtt5Result<()> {
         MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound(unsubscribe) }
         _ => {
             error!("Packet Outbound Validation - unexpected packet type");
-            Err(Mqtt5Error::ProtocolError)
+            Err(MqttError::ProtocolError)
         }
     }
 }
 
 /// Validates outbound packets against per-connection dynamic constraints.  Called internally
 /// right before a packet is seated as the current operation of the client.
-pub(crate) fn validate_packet_outbound_internal(packet: &MqttPacket, context: &OutboundValidationContext) -> Mqtt5Result<()> {
+pub(crate) fn validate_packet_outbound_internal(packet: &MqttPacket, context: &OutboundValidationContext) -> MqttResult<()> {
     match packet {
         MqttPacket::Auth(auth) => { validate_auth_packet_outbound_internal(auth, context) }
         MqttPacket::Connect(_) => { Ok(()) }
@@ -110,7 +111,7 @@ pub(crate) fn validate_packet_outbound_internal(packet: &MqttPacket, context: &O
         MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound_internal(unsubscribe, context) }
         _ => {
             error!("Packet Outbound Internal Validation - unexpected packet type");
-            Err(Mqtt5Error::ProtocolError)
+            Err(MqttError::ProtocolError)
         }
     }
 }
@@ -118,7 +119,7 @@ pub(crate) fn validate_packet_outbound_internal(packet: &MqttPacket, context: &O
 /// Validates client-inbound packets against the MQTT5 spec requirements.  Many things can be
 /// skipped during inbound validation based on the fact that we assume the decoder created the
 /// packet, and so problems like invalid string or binary lengths are impossible.
-pub(crate) fn validate_packet_inbound_internal(packet: &MqttPacket, context: &InboundValidationContext) -> Mqtt5Result<()> {
+pub(crate) fn validate_packet_inbound_internal(packet: &MqttPacket, context: &InboundValidationContext) -> MqttResult<()> {
     match packet {
         MqttPacket::Auth(auth) => { validate_auth_packet_inbound_internal(auth, context) }
         MqttPacket::Connack(connack) => { validate_connack_packet_inbound_internal(connack) }
@@ -133,7 +134,7 @@ pub(crate) fn validate_packet_inbound_internal(packet: &MqttPacket, context: &In
         MqttPacket::Unsuback(unsuback) => { validate_unsuback_packet_inbound_internal(unsuback, context) }
         _ => {
             error!("Packet Inbound Validation - unexpected packet type");
-            Err(Mqtt5Error::ProtocolError)
+            Err(MqttError::ProtocolError)
         }
     }
 }
@@ -185,7 +186,7 @@ pub(crate) mod testing {
 
     use crate::decode::testing::*;
 
-    pub(crate) fn do_outbound_size_validate_failure_test(packet: &MqttPacket, error: Mqtt5Error) {
+    pub(crate) fn do_outbound_size_validate_failure_test(packet: &MqttPacket, error: MqttError) {
         let encoded_bytes = encode_packet_for_test(packet);
 
         let mut test_validation_context = create_pinned_validation_context();

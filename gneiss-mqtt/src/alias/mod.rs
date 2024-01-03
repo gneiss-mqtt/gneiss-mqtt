@@ -230,7 +230,7 @@ impl InboundAliasResolver {
         self.current_aliases.clear();
     }
 
-    pub(crate) fn resolve_topic_alias(&mut self, alias: &Option<u16>, topic: &mut String) -> Mqtt5Result<()> {
+    pub(crate) fn resolve_topic_alias(&mut self, alias: &Option<u16>, topic: &mut String) -> MqttResult<()> {
         if let Some(alias_value) = alias {
             if topic.is_empty() {
                 if let Some(existing_topic) = self.current_aliases.get(alias_value) {
@@ -239,12 +239,12 @@ impl InboundAliasResolver {
                 }
 
                 error!("Topic Alias Resolution - zero length topic");
-                return Err(Mqtt5Error::InboundTopicAliasNotValid);
+                return Err(MqttError::InboundTopicAliasNotValid);
             }
 
             if *alias_value == 0 || *alias_value > self.maximum_alias_value {
                 error!("Topic Alias Resolution - inbound alias out of range");
-                return Err(Mqtt5Error::InboundTopicAliasNotValid);
+                return Err(MqttError::InboundTopicAliasNotValid);
             }
 
             self.current_aliases.insert(*alias_value, topic.clone());
@@ -257,7 +257,7 @@ impl InboundAliasResolver {
 #[cfg(test)]
 mod tests {
     use crate::alias::*;
-    use crate::Mqtt5Error;
+    use crate::MqttError;
 
     #[test]
     fn outbound_topic_alias_null() {
@@ -458,11 +458,11 @@ mod tests {
 
         let mut topic1 = "topic1".to_string();
 
-        assert_eq!(resolver.resolve_topic_alias(&Some(0), &mut topic1), Err(Mqtt5Error::InboundTopicAliasNotValid));
-        assert_eq!(resolver.resolve_topic_alias(&Some(11), &mut topic1), Err(Mqtt5Error::InboundTopicAliasNotValid));
+        assert_eq!(resolver.resolve_topic_alias(&Some(0), &mut topic1), Err(MqttError::InboundTopicAliasNotValid));
+        assert_eq!(resolver.resolve_topic_alias(&Some(11), &mut topic1), Err(MqttError::InboundTopicAliasNotValid));
 
         let mut empty_topic = "".to_string();
-        assert_eq!(resolver.resolve_topic_alias(&Some(2), &mut empty_topic), Err(Mqtt5Error::InboundTopicAliasNotValid));
+        assert_eq!(resolver.resolve_topic_alias(&Some(2), &mut empty_topic), Err(MqttError::InboundTopicAliasNotValid));
     }
 
     #[test]
@@ -479,7 +479,7 @@ mod tests {
 
         resolver.reset_for_new_connection();
         empty_topic = "".to_string();
-        assert_eq!(resolver.resolve_topic_alias(&Some(1), &mut empty_topic), Err(Mqtt5Error::InboundTopicAliasNotValid));
+        assert_eq!(resolver.resolve_topic_alias(&Some(1), &mut empty_topic), Err(MqttError::InboundTopicAliasNotValid));
     }
 }
 

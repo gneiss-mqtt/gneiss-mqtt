@@ -37,7 +37,7 @@ pub(crate) struct EncodingContext {
     pub outbound_alias_resolution: OutboundAliasResolution,
 }
 
-fn write_encoding_steps(mqtt_packet: &MqttPacket, context: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> Mqtt5Result<()> {
+fn write_encoding_steps(mqtt_packet: &MqttPacket, context: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
     log_packet("Writing encode steps for packet: ", mqtt_packet);
 
     match mqtt_packet {
@@ -76,7 +76,7 @@ impl Encoder {
         }
     }
 
-    pub fn reset(&mut self, packet: &MqttPacket, context: &EncodingContext) -> Mqtt5Result<()> {
+    pub fn reset(&mut self, packet: &MqttPacket, context: &EncodingContext) -> MqttResult<()> {
         self.steps.clear();
 
         write_encoding_steps(packet, context, &mut self.steps)
@@ -86,11 +86,11 @@ impl Encoder {
         &mut self,
         packet: &MqttPacket,
         dest: &mut Vec<u8>,
-    ) -> Mqtt5Result<EncodeResult> {
+    ) -> MqttResult<EncodeResult> {
         let capacity = dest.capacity();
         if capacity < 4 {
             error!("Encoder - target buffer too small");
-            return Err(Mqtt5Error::EncodeBufferTooSmall);
+            return Err(MqttError::EncodeBufferTooSmall);
         }
 
         while !self.steps.is_empty() && dest.len() + 4 <= dest.capacity() {

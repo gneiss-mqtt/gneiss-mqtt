@@ -53,7 +53,7 @@ define_ack_packet_encoding_impl!(write_pubrel_encoding_steps, PubrelPacket, Pubr
 define_ack_packet_decode_properties_function!(decode_pubrel_properties, PubrelPacket, "Pubrel");
 define_ack_packet_decode_function!(decode_pubrel_packet, Pubrel, PubrelPacket, "Pubrel", PUBREL_FIRST_BYTE, convert_u8_to_pubrel_reason_code, decode_pubrel_properties);
 
-validate_ack_outbound!(validate_pubrel_packet_outbound, PubrelPacket, Mqtt5Error::PubrelPacketValidation, "Pubrel");
+validate_ack_outbound!(validate_pubrel_packet_outbound, PubrelPacket, MqttError::PubrelPacketValidation, "Pubrel");
 validate_ack_outbound_internal!(validate_pubrel_packet_outbound_internal, PubrelPacket, PubrelPacketValidation, compute_pubrel_packet_length_properties, "Pubrel");
 validate_ack_inbound_internal!(validate_pubrel_packet_inbound_internal, PubrelPacket, PubrelPacketValidation, "Pubrel");
 

@@ -20,7 +20,7 @@ use std::fmt;
 pub struct PingreqPacket {}
 
 #[rustfmt::skip]
-pub(crate) fn write_pingreq_encoding_steps(_: &PingreqPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> Mqtt5Result<()> {
+pub(crate) fn write_pingreq_encoding_steps(_: &PingreqPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_PINGREQ << 4);
     encode_integral_expression!(steps, Uint8, 0);
 
@@ -29,15 +29,15 @@ pub(crate) fn write_pingreq_encoding_steps(_: &PingreqPacket, _: &EncodingContex
 
 const PINGREQ_FIRST_BYTE : u8 = PACKET_TYPE_PINGREQ << 4;
 
-pub(crate) fn decode_pingreq_packet(first_byte: u8, packet_body: &[u8]) -> Mqtt5Result<Box<MqttPacket>> {
+pub(crate) fn decode_pingreq_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
     if !packet_body.is_empty() {
         error!("Packet Decode - Pingreq packet with non-zero remaining length");
-        return Err(Mqtt5Error::MalformedPacket);
+        return Err(MqttError::MalformedPacket);
     }
 
     if first_byte != PINGREQ_FIRST_BYTE {
         error!("Packet Decode - Pingreq packet with invalid first byte");
-        return Err(Mqtt5Error::MalformedPacket);
+        return Err(MqttError::MalformedPacket);
     }
 
     Ok(Box::new(MqttPacket::Pingreq(PingreqPacket{})))

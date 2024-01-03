@@ -47,7 +47,7 @@ pub struct SubscribePacket {
 
 
 #[rustfmt::skip]
-fn compute_subscribe_packet_length_properties(packet: &SubscribePacket) -> Mqtt5Result<(u32, u32)> {
+fn compute_subscribe_packet_length_properties(packet: &SubscribePacket) -> MqttResult<(u32, u32)> {
     let mut subscribe_property_section_length = compute_user_properties_length(&packet.user_properties);
     add_optional_u32_property_length!(subscribe_property_section_length, packet.subscription_identifier);
 
@@ -97,7 +97,7 @@ fn compute_subscription_options_byte(subscription: &Subscription) -> u8 {
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_subscribe_encoding_steps(packet: &SubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> Mqtt5Result<()> {
+pub(crate) fn write_subscribe_encoding_steps(packet: &SubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
     let (total_remaining_length, subscribe_property_length) = compute_subscribe_packet_length_properties(packet)?;
 
     encode_integral_expression!(steps, Uint8, SUBSCRIBE_FIRST_BYTE);
@@ -117,7 +117,7 @@ pub(crate) fn write_subscribe_encoding_steps(packet: &SubscribePacket, _: &Encod
     Ok(())
 }
 
-fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePacket) -> Mqtt5Result<()> {
+fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePacket) -> MqttResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
     while !mutable_property_bytes.is_empty() {
@@ -129,7 +129,7 @@ fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePac
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
                 error!("SubscribePacket Decode - Invalid property type ({})", property_key);
-                return Err(Mqtt5Error::MalformedPacket);
+                return Err(MqttError::MalformedPacket);
             }
         }
     }
@@ -139,11 +139,11 @@ fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePac
 
 const SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK : u8 = 192;
 
-pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Mqtt5Result<Box<MqttPacket>> {
+pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
 
     if first_byte != SUBSCRIBE_FIRST_BYTE {
         error!("SubscribePacket Decode - invalid first byte");
-        return Err(Mqtt5Error::MalformedPacket);
+        return Err(MqttError::MalformedPacket);
     }
 
     let mut box_packet = Box::new(MqttPacket::Subscribe(SubscribePacket { ..Default::default() }));
@@ -155,7 +155,7 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Mqt
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
             error!("SubscribePacket Decode - property length exceeds overall packet length");
-            return Err(Mqtt5Error::MalformedPacket);
+            return Err(MqttError::MalformedPacket);
         }
 
         let properties_bytes = &mutable_body[..properties_length];
@@ -174,7 +174,7 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Mqt
             payload_bytes = decode_u8(payload_bytes, &mut subscription_options)?;
 
             if (subscription_options & SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK) != 0 {
-                return Err(Mqtt5Error::MalformedPacket);
+                return Err(MqttError::MalformedPacket);
             }
 
             subscription.qos = convert_u8_to_quality_of_service(subscription_options & 0x03)?;
@@ -198,41 +198,41 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Mqt
     panic!("SubscribePacket Decode - Internal error");
 }
 
-pub(crate) fn validate_subscribe_packet_outbound(packet: &SubscribePacket) -> Mqtt5Result<()> {
+pub(crate) fn validate_subscribe_packet_outbound(packet: &SubscribePacket) -> MqttResult<()> {
 
     if packet.packet_id != 0 {
         error!("SubscribePacket Outbound Validation - packet id may not be set");
-        return Err(Mqtt5Error::SubscribePacketValidation);
+        return Err(MqttError::SubscribePacketValidation);
     }
 
     if packet.subscriptions.is_empty() {
         error!("SubscribePacket Outbound Validation - empty subscription set");
-        return Err(Mqtt5Error::SubscribePacketValidation);
+        return Err(MqttError::SubscribePacketValidation);
     }
 
-    validate_user_properties(&packet.user_properties, Mqtt5Error::SubscribePacketValidation, "Subscribe")?;
+    validate_user_properties(&packet.user_properties, MqttError::SubscribePacketValidation, "Subscribe")?;
 
     Ok(())
 }
 
-pub(crate) fn validate_subscribe_packet_outbound_internal(packet: &SubscribePacket, context: &OutboundValidationContext) -> Mqtt5Result<()> {
+pub(crate) fn validate_subscribe_packet_outbound_internal(packet: &SubscribePacket, context: &OutboundValidationContext) -> MqttResult<()> {
 
     let (total_remaining_length, _) = compute_subscribe_packet_length_properties(packet)?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
         error!("SubscribePacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(Mqtt5Error::SubscribePacketValidation);
+        return Err(MqttError::SubscribePacketValidation);
     }
 
     if packet.packet_id == 0 {
         error!("SubscribePacket Outbound Validation - packet id is zero");
-        return Err(Mqtt5Error::SubscribePacketValidation);
+        return Err(MqttError::SubscribePacketValidation);
     }
 
     for subscription in &packet.subscriptions {
         if !is_valid_topic_filter_internal(&subscription.topic_filter, context, Some(subscription.no_local)) {
             error!("SubscribePacket Outbound Validation - invalid topic filter");
-            return Err(Mqtt5Error::SubscribePacketValidation);
+            return Err(MqttError::SubscribePacketValidation);
         }
     }
 
@@ -427,7 +427,7 @@ mod tests {
         let mut packet = create_subscribe_all_properties();
         packet.packet_id = 1;
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), Err(Mqtt5Error::SubscribePacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), Err(MqttError::SubscribePacketValidation));
     }
 
     #[test]
@@ -435,7 +435,7 @@ mod tests {
         let mut packet = create_subscribe_all_properties();
         packet.subscriptions = vec![];
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), Err(Mqtt5Error::SubscribePacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), Err(MqttError::SubscribePacketValidation));
     }
 
     #[test]
@@ -443,14 +443,14 @@ mod tests {
         let mut packet = create_subscribe_all_properties();
         packet.user_properties = Some(create_invalid_user_properties());
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), Err(Mqtt5Error::SubscribePacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), Err(MqttError::SubscribePacketValidation));
     }
 
     #[test]
     fn subscribe_validate_failure_outbound_size() {
         let packet = create_subscribe_all_properties();
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Subscribe(packet), Mqtt5Error::SubscribePacketValidation);
+        do_outbound_size_validate_failure_test(&MqttPacket::Subscribe(packet), MqttError::SubscribePacketValidation);
     }
 
     #[test]
@@ -463,7 +463,7 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(Mqtt5Error::SubscribePacketValidation));
+        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::SubscribePacketValidation));
     }
 
     #[test]
@@ -476,7 +476,7 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(Mqtt5Error::SubscribePacketValidation));
+        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::SubscribePacketValidation));
     }
 
     #[test]
@@ -492,7 +492,7 @@ mod tests {
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(Mqtt5Error::SubscribePacketValidation));
+        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::SubscribePacketValidation));
     }
 
     #[test]
@@ -506,7 +506,7 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(Mqtt5Error::SubscribePacketValidation));
+        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::SubscribePacketValidation));
     }
 
     #[test]
@@ -521,6 +521,6 @@ mod tests {
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(Mqtt5Error::SubscribePacketValidation));
+        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::SubscribePacketValidation));
     }
 }

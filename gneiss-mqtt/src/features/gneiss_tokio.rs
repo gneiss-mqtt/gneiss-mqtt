@@ -3,18 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+extern crate log;
 extern crate tokio;
 
+use std::future::Future;
+use std::pin::Pin;
+use crate::*;
+use crate::client::shared_impl::*;
+use crate::config::*;
+
+use log::*;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt, split, WriteHalf};
+use tokio::runtime;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, split, WriteHalf};
 use tokio::sync::oneshot;
 use tokio::time::{sleep};
 
-use crate::client::internal::*;
-
-impl From<oneshot::error::RecvError> for Mqtt5Error {
+impl From<oneshot::error::RecvError> for MqttError {
     fn from(_: oneshot::error::RecvError) -> Self {
-        Mqtt5Error::OperationChannelReceiveError
+        MqttError::OperationChannelReceiveError
     }
 }
 
@@ -23,7 +31,7 @@ macro_rules! submit_async_client_operation {
 
         let (response_sender, rx) = AsyncOperationChannel::new().split();
         let internal_options = $options_internal_type {
-            options : $options_value,
+            options : $options_value.unwrap_or_default(),
             response_sender : Some(response_sender)
         };
         let send_result = $self.user_state.try_send(OperationOptions::$operation_type($packet_value, internal_options));
@@ -41,7 +49,7 @@ macro_rules! submit_async_client_operation {
 }
 
 pub(crate) use submit_async_client_operation;
-
+use crate::config::{ConnectOptions, Mqtt5ClientOptions};
 
 
 pub(crate) struct AsyncOperationChannel<T> {
@@ -75,9 +83,9 @@ impl <T> AsyncOperationSender<T> {
         }
     }
 
-    pub(crate) fn send(self, operation_options: T) -> Mqtt5Result<()> {
+    pub(crate) fn send(self, operation_options: T) -> MqttResult<()> {
         if self.sender.send(operation_options).is_err() {
-            return Err(Mqtt5Error::OperationChannelSendError);
+            return Err(MqttError::OperationChannelSendError);
         }
 
         Ok(())
@@ -96,17 +104,17 @@ impl <T> AsyncOperationReceiver<T> {
         }
     }
 
-    pub async fn recv(self) -> Mqtt5Result<T> {
+    pub async fn recv(self) -> MqttResult<T> {
         match self.receiver.await {
-            Err(_) => { Err(Mqtt5Error::OperationChannelReceiveError) }
+            Err(_) => { Err(MqttError::OperationChannelReceiveError) }
             Ok(val) => { Ok(val) }
         }
     }
 
-    pub fn try_recv(&mut self) -> Mqtt5Result<T> {
+    pub fn try_recv(&mut self) -> MqttResult<T> {
         match self.receiver.try_recv() {
             Err(_) => {
-                Err(Mqtt5Error::OperationChannelEmpty)
+                Err(MqttError::OperationChannelEmpty)
             }
             Ok(val) => {
                 Ok(val)
@@ -115,10 +123,10 @@ impl <T> AsyncOperationReceiver<T> {
         }
     }
 
-    pub fn blocking_recv(self) -> Mqtt5Result<T> {
+    pub fn blocking_recv(self) -> MqttResult<T> {
         match self.receiver.blocking_recv() {
             Err(_) => {
-                Err(Mqtt5Error::OperationChannelReceiveError)
+                Err(MqttError::OperationChannelReceiveError)
             }
             Ok(val) => {
                 Ok(val)
@@ -164,9 +172,9 @@ impl AsyncClientEventSender {
         }
     }
 
-    pub(crate) fn send(&self, event: Arc<ClientEvent>) -> Mqtt5Result<()> {
+    pub(crate) fn send(&self, event: Arc<ClientEvent>) -> MqttResult<()> {
         if self.sender.send(event).is_err() {
-            return Err(Mqtt5Error::OperationChannelSendError);
+            return Err(MqttError::OperationChannelSendError);
         }
 
         Ok(())
@@ -194,9 +202,9 @@ pub(crate) struct UserRuntimeState {
 }
 
 impl UserRuntimeState {
-    pub(crate) fn try_send(&self, operation_options: OperationOptions) -> Mqtt5Result<()> {
+    pub(crate) fn try_send(&self, operation_options: OperationOptions) -> MqttResult<()> {
         if self.operation_sender.try_send(operation_options).is_err() {
-            return Err(Mqtt5Error::OperationChannelSendError);
+            return Err(MqttError::OperationChannelSendError);
         }
 
         Ok(())
@@ -210,7 +218,7 @@ pub(crate) struct ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send 
 }
 
 impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
-    pub(crate) async fn process_stopped(&mut self, client: &mut Mqtt5ClientImpl) -> Mqtt5Result<ClientImplState> {
+    pub(crate) async fn process_stopped(&mut self, client: &mut Mqtt5ClientImpl) -> MqttResult<ClientImplState> {
         loop {
             tokio::select! {
                 operation_result = self.operation_receiver.recv() => {
@@ -226,7 +234,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
         }
     }
 
-    pub(crate) async fn process_connecting(&mut self, client: &mut Mqtt5ClientImpl) -> Mqtt5Result<ClientImplState> {
+    pub(crate) async fn process_connecting(&mut self, client: &mut Mqtt5ClientImpl) -> MqttResult<ClientImplState> {
         let mut connect = (self.tokio_config.connection_factory)();
 
         let timeout = sleep(Duration::from_millis(30 * 1000));
@@ -240,7 +248,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                     }
                 }
                 () = &mut timeout => {
-                    client.apply_error(Mqtt5Error::ConnectionTimeout);
+                    client.apply_error(MqttError::ConnectionTimeout);
                     return Ok(ClientImplState::PendingReconnect);
                 }
                 connection_result = &mut connect => {
@@ -248,7 +256,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                         self.stream = Some(stream);
                         return Ok(ClientImplState::Connected);
                     } else {
-                        client.apply_error(Mqtt5Error::ConnectionEstablishmentFailure);
+                        client.apply_error(MqttError::ConnectionEstablishmentFailure);
                         return Ok(ClientImplState::PendingReconnect);
                     }
                 }
@@ -260,7 +268,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
         }
     }
 
-    pub(crate) async fn process_connected(&mut self, client: &mut Mqtt5ClientImpl) -> Mqtt5Result<ClientImplState> {
+    pub(crate) async fn process_connected(&mut self, client: &mut Mqtt5ClientImpl) -> MqttResult<ClientImplState> {
         let mut outbound_data: Vec<u8> = Vec::with_capacity(4096);
         let mut cumulative_bytes_written : usize = 0;
 
@@ -294,14 +302,14 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                     match read_result {
                         Ok(bytes_read) => {
                             if bytes_read == 0 {
-                                client.apply_error(Mqtt5Error::ConnectionClosed);
+                                client.apply_error(MqttError::ConnectionClosed);
                                 next_state = Some(ClientImplState::PendingReconnect);
                             } else if client.handle_incoming_bytes(&inbound_data[..bytes_read]).is_err() {
                                 next_state = Some(ClientImplState::PendingReconnect);
                             }
                         }
                         Err(_) => {
-                            client.apply_error(Mqtt5Error::StreamReadFailure);
+                            client.apply_error(MqttError::StreamReadFailure);
                             next_state = Some(ClientImplState::PendingReconnect);
                         }
                     }
@@ -326,7 +334,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                             }
                         }
                         Err(_) => {
-                            client.apply_error(Mqtt5Error::StreamWriteFailure);
+                            client.apply_error(MqttError::StreamWriteFailure);
                             next_state = Some(ClientImplState::PendingReconnect);
                         }
                     }
@@ -343,7 +351,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
         Ok(next_state.unwrap())
     }
 
-    pub(crate) async fn process_pending_reconnect(&mut self, client: &mut Mqtt5ClientImpl, wait: Duration) -> Mqtt5Result<ClientImplState> {
+    pub(crate) async fn process_pending_reconnect(&mut self, client: &mut Mqtt5ClientImpl, wait: Duration) -> MqttResult<ClientImplState> {
         let reconnect_timer = sleep(wait);
         tokio::pin!(reconnect_timer);
 
@@ -440,4 +448,25 @@ pub(crate) fn spawn_event_callback(event: Arc<ClientEvent>, callback: Arc<Client
     tokio::spawn(async move {
         (callback)(event)
     });
+}
+
+type TokioConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = std::io::Result<T>> + Send + Sync>>;
+pub struct TokioClientOptions<T> where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
+    pub connection_factory: Box<dyn Fn() -> TokioConnectionFactoryReturnType<T> + Send + Sync>
+}
+
+impl Mqtt5Client {
+
+    pub fn new_with_tokio<T>(client_config: Mqtt5ClientOptions, connect_config: ConnectOptions, tokio_config: TokioClientOptions<T>, runtime_handle: &runtime::Handle) -> Mqtt5Client where T: AsyncRead + AsyncWrite + Send + Sync + 'static {
+        let (user_state, internal_state) = create_runtime_states(tokio_config);
+
+        let client_impl = Mqtt5ClientImpl::new(client_config, connect_config);
+
+        spawn_client_impl(client_impl, internal_state, runtime_handle);
+
+        Mqtt5Client {
+            user_state,
+            listener_id_allocator: Mutex::new(1),
+        }
+    }
 }

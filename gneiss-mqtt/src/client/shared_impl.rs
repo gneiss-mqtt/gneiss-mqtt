@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-pub mod tokio_impl;
 
 extern crate log;
 extern crate rand;
 
 use crate::*;
 use crate::client::*;
+use crate::config::*;
 use crate::operation::*;
 use crate::spec::*;
 
@@ -17,7 +17,6 @@ use std::collections::{HashMap, VecDeque};
 use std::mem;
 use std::time::{Duration, Instant};
 
-use log::*;
 use rand::Rng;
 
 pub(crate) struct PublishOptionsInternal {
@@ -74,7 +73,7 @@ pub(crate) struct Mqtt5ClientImpl {
 
     last_connack: Option<ConnackPacket>,
     last_disconnect: Option<DisconnectPacket>,
-    last_error: Option<Mqtt5Error>,
+    last_error: Option<MqttError>,
 
     successful_connect_time: Option<Instant>,
     next_reconnect_period: Duration,
@@ -84,17 +83,17 @@ pub(crate) struct Mqtt5ClientImpl {
 
 impl Mqtt5ClientImpl {
 
-    pub(crate) fn new(mut config: Mqtt5ClientOptions) -> Self {
+    pub(crate) fn new(mut client_config: Mqtt5ClientOptions, connect_config: ConnectOptions) -> Self {
         let state_config = OperationalStateConfig {
-            connect_options: config.connect_options.unwrap_or(ConnectOptions { ..Default::default() }),
+            connect_options: connect_config,
             base_timestamp: Instant::now(),
-            offline_queue_policy: config.offline_queue_policy,
-            connack_timeout: config.connack_timeout,
-            ping_timeout: config.ping_timeout,
-            outbound_alias_resolver: config.outbound_alias_resolver.take(),
+            offline_queue_policy: client_config.offline_queue_policy,
+            connack_timeout: client_config.connack_timeout,
+            ping_timeout: client_config.ping_timeout,
+            outbound_alias_resolver: client_config.outbound_alias_resolver.take(),
         };
 
-        let default_listener = config.default_event_listener.take();
+        let default_listener = client_config.default_event_listener.take();
 
         let mut client_impl = Mqtt5ClientImpl {
             operational_state: OperationalState::new(state_config),
@@ -107,8 +106,8 @@ impl Mqtt5ClientImpl {
             last_disconnect: None,
             last_error: None,
             successful_connect_time: None,
-            next_reconnect_period: config.reconnect_options.base_reconnect_period,
-            reconnect_options: config.reconnect_options
+            next_reconnect_period: client_config.reconnect_options.base_reconnect_period,
+            reconnect_options: client_config.reconnect_options
         };
 
         client_impl.reconnect_options.normalize();
@@ -145,7 +144,7 @@ impl Mqtt5ClientImpl {
         }
     }
 
-    pub(crate) fn apply_error(&mut self, error: Mqtt5Error) {
+    pub(crate) fn apply_error(&mut self, error: MqttError) {
         if self.last_error.is_none() {
             self.last_error = Some(error);
         }
@@ -238,7 +237,7 @@ impl Mqtt5ClientImpl {
         self.packet_events.clear();
     }
 
-    pub(crate) fn handle_incoming_bytes(&mut self, bytes: &[u8]) -> Mqtt5Result<()> {
+    pub(crate) fn handle_incoming_bytes(&mut self, bytes: &[u8]) -> MqttResult<()> {
         let mut context = NetworkEventContext {
             event: NetworkEvent::IncomingData(bytes),
             current_time: Instant::now(),
@@ -255,7 +254,7 @@ impl Mqtt5ClientImpl {
         result
     }
 
-    pub(crate) fn handle_write_completion(&mut self) -> Mqtt5Result<()> {
+    pub(crate) fn handle_write_completion(&mut self) -> MqttResult<()> {
         let mut context = NetworkEventContext {
             event: NetworkEvent::WriteCompletion,
             current_time: Instant::now(),
@@ -270,7 +269,7 @@ impl Mqtt5ClientImpl {
         result
     }
 
-    pub(crate) fn handle_service(&mut self, outbound_data: &mut Vec<u8>) -> Mqtt5Result<()> {
+    pub(crate) fn handle_service(&mut self, outbound_data: &mut Vec<u8>) -> MqttResult<()> {
         let mut context = ServiceContext {
             to_socket: outbound_data,
             current_time: Instant::now(),
@@ -312,7 +311,7 @@ impl Mqtt5ClientImpl {
         }
     }
 
-    fn compute_optional_state_transition(&self) -> Option<ClientImplState> {
+    pub(crate) fn compute_optional_state_transition(&self) -> Option<ClientImplState> {
         match self.current_state {
             ClientImplState::Stopped => {
                 match self.desired_state {
@@ -350,7 +349,7 @@ impl Mqtt5ClientImpl {
         None
     }
 
-    fn get_next_connected_service_time(&mut self) -> Option<Instant> {
+    pub(crate) fn get_next_connected_service_time(&mut self) -> Option<Instant> {
         if self.current_state == ClientImplState::Connected {
             return self.operational_state.get_next_service_timepoint(&Instant::now());
         }
@@ -378,7 +377,7 @@ impl Mqtt5ClientImpl {
 
     fn emit_connection_failure_event(&self) {
         let mut connection_failure_event = ConnectionFailureEvent {
-            error: self.last_error.unwrap_or(Mqtt5Error::Unknown),
+            error: self.last_error.unwrap_or(MqttError::Unknown),
             connack: None,
         };
 
@@ -391,7 +390,7 @@ impl Mqtt5ClientImpl {
 
     fn emit_disconnection_event(&self) {
         let mut disconnection_event = DisconnectionEvent {
-            error: self.last_error.unwrap_or(Mqtt5Error::Unknown),
+            error: self.last_error.unwrap_or(MqttError::Unknown),
             disconnect: None,
         };
 
@@ -409,7 +408,7 @@ impl Mqtt5ClientImpl {
         self.broadcast_event(Arc::new(ClientEvent::Stopped(stopped_event)));
     }
 
-    fn transition_to_state(&mut self, mut new_state: ClientImplState) -> Mqtt5Result<()> {
+    pub(crate) fn transition_to_state(&mut self, mut new_state: ClientImplState) -> MqttResult<()> {
         let old_state = self.current_state;
         if old_state == new_state {
             return Ok(());

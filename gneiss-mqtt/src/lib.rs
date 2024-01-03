@@ -5,8 +5,10 @@
 
 pub mod alias;
 pub mod client;
+pub mod config;
 mod decode;
 mod encode;
+pub mod features;
 mod logging;
 mod operation;
 pub mod spec;
@@ -57,7 +59,7 @@ use std::fmt;
 use std::time::Instant;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Mqtt5Error {
+pub enum MqttError {
     Unknown,
     Unimplemented,
     OperationChannelReceiveError,
@@ -102,73 +104,83 @@ pub enum Mqtt5Error {
     ConnectionEstablishmentFailure,
     StreamWriteFailure,
     StreamReadFailure,
-    OperationChannelEmpty
+    OperationChannelEmpty,
+    IoError,
+    TlsError
 }
 
-impl Error for Mqtt5Error {
+impl Error for MqttError {
 }
 
-impl fmt::Display for Mqtt5Error {
+impl fmt::Display for MqttError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Mqtt5Error::Unknown => { write!(f, "Unknown") }
-            Mqtt5Error::Unimplemented => { write!(f, "Unimplemented") }
-            Mqtt5Error::OperationChannelReceiveError => { write!(f, "OperationChannelReceiveError") }
-            Mqtt5Error::OperationChannelSendError => { write!(f, "OperationChannelSendError") }
-            Mqtt5Error::VariableLengthIntegerMaximumExceeded => { write!(f, "VariableLengthIntegerMaximumExceeded") }
-            Mqtt5Error::EncodeBufferTooSmall => { write!(f, "EncodeBufferTooSmall") }
-            Mqtt5Error::DecoderInvalidVli => { write!(f, "DecoderInvalidVli") }
-            Mqtt5Error::MalformedPacket => { write!(f, "MalformedPacket") }
-            Mqtt5Error::ProtocolError => { write!(f, "ProtocolError") }
-            Mqtt5Error::InboundTopicAliasNotAllowed => { write!(f, "InboundTopicAliasNotAllowed") }
-            Mqtt5Error::InboundTopicAliasNotValid => { write!(f, "InboundTopicAliasNotValid") }
-            Mqtt5Error::OutboundTopicAliasNotAllowed => { write!(f, "OutboundTopicAliasNotAllowed") }
-            Mqtt5Error::OutboundTopicAliasInvalid => { write!(f, "OutboundTopicAliasInvalid") }
-            Mqtt5Error::UserPropertyValidation => { write!(f, "UserPropertyValidation") }
-            Mqtt5Error::AuthPacketValidation => { write!(f, "AuthPacketValidation") }
-            Mqtt5Error::ConnackPacketValidation => { write!(f, "ConnackPacketValidation") }
-            Mqtt5Error::ConnectPacketValidation => { write!(f, "ConnectPacketValidation") }
-            Mqtt5Error::DisconnectPacketValidation => { write!(f, "DisconnectPacketValidation") }
-            Mqtt5Error::PubackPacketValidation => { write!(f, "PubackPacketValidation") }
-            Mqtt5Error::PubcompPacketValidation => { write!(f, "PubcompPacketValidation") }
-            Mqtt5Error::PubrecPacketValidation => { write!(f, "PubrecPacketValidation") }
-            Mqtt5Error::PubrelPacketValidation => { write!(f, "PubrelPacketValidation") }
-            Mqtt5Error::PublishPacketValidation => { write!(f, "PublishPacketValidation") }
-            Mqtt5Error::SubackPacketValidation => { write!(f, "SubackPacketValidation") }
-            Mqtt5Error::UnsubackPacketValidation => { write!(f, "UnsubackPacketValidation") }
-            Mqtt5Error::SubscribePacketValidation => { write!(f, "SubscribePacketValidation") }
-            Mqtt5Error::UnsubscribePacketValidation => { write!(f, "UnsubscribePacketValidation") }
-            Mqtt5Error::InternalStateError => { write!(f, "InternalStateError") }
-            Mqtt5Error::ConnectionRejected => { write!(f, "ConnectionRejected") }
-            Mqtt5Error::ConnackTimeout => { write!(f, "ConnackTimeout") }
-            Mqtt5Error::PingTimeout => { write!(f, "PingTimeout") }
-            Mqtt5Error::ConnectionClosed => { write!(f, "ConnectionClosed") }
-            Mqtt5Error::OfflineQueuePolicyFailed => { write!(f, "OfflineQueuePolicyFailed") }
-            Mqtt5Error::ServerSideDisconnect => { write!(f, "ServerSideDisconnect") }
-            Mqtt5Error::AckTimeout => { write!(f, "AckTimeout") }
-            Mqtt5Error::PacketIdSpaceExhausted => { write!(f, "PacketIdSpaceExhausted") }
-            Mqtt5Error::OperationalStateReset => { write!(f, "OperationalStateReset") }
-            Mqtt5Error::UserInitiatedDisconnect => { write!(f, "UserInitiatedDisconnect") }
-            Mqtt5Error::ClientClosed => { write!(f, "ClientClosed") }
-            Mqtt5Error::ConnectionTimeout => { write!(f, "ConnectionTimeout") }
-            Mqtt5Error::UserRequestedStop => { write!(f, "UserRequestedStop") }
-            Mqtt5Error::ConnectionEstablishmentFailure => { write!(f, "ConnectionEstablishmentFailure") }
-            Mqtt5Error::StreamWriteFailure => { write!(f, "StreamWriteFailure") }
-            Mqtt5Error::StreamReadFailure => { write!(f, "StreamReadFailure") }
-            Mqtt5Error::OperationChannelEmpty => { write!(f, "OperationChannelEmpty") }
+            MqttError::Unknown => { write!(f, "Unknown") }
+            MqttError::Unimplemented => { write!(f, "Unimplemented") }
+            MqttError::OperationChannelReceiveError => { write!(f, "OperationChannelReceiveError") }
+            MqttError::OperationChannelSendError => { write!(f, "OperationChannelSendError") }
+            MqttError::VariableLengthIntegerMaximumExceeded => { write!(f, "VariableLengthIntegerMaximumExceeded") }
+            MqttError::EncodeBufferTooSmall => { write!(f, "EncodeBufferTooSmall") }
+            MqttError::DecoderInvalidVli => { write!(f, "DecoderInvalidVli") }
+            MqttError::MalformedPacket => { write!(f, "MalformedPacket") }
+            MqttError::ProtocolError => { write!(f, "ProtocolError") }
+            MqttError::InboundTopicAliasNotAllowed => { write!(f, "InboundTopicAliasNotAllowed") }
+            MqttError::InboundTopicAliasNotValid => { write!(f, "InboundTopicAliasNotValid") }
+            MqttError::OutboundTopicAliasNotAllowed => { write!(f, "OutboundTopicAliasNotAllowed") }
+            MqttError::OutboundTopicAliasInvalid => { write!(f, "OutboundTopicAliasInvalid") }
+            MqttError::UserPropertyValidation => { write!(f, "UserPropertyValidation") }
+            MqttError::AuthPacketValidation => { write!(f, "AuthPacketValidation") }
+            MqttError::ConnackPacketValidation => { write!(f, "ConnackPacketValidation") }
+            MqttError::ConnectPacketValidation => { write!(f, "ConnectPacketValidation") }
+            MqttError::DisconnectPacketValidation => { write!(f, "DisconnectPacketValidation") }
+            MqttError::PubackPacketValidation => { write!(f, "PubackPacketValidation") }
+            MqttError::PubcompPacketValidation => { write!(f, "PubcompPacketValidation") }
+            MqttError::PubrecPacketValidation => { write!(f, "PubrecPacketValidation") }
+            MqttError::PubrelPacketValidation => { write!(f, "PubrelPacketValidation") }
+            MqttError::PublishPacketValidation => { write!(f, "PublishPacketValidation") }
+            MqttError::SubackPacketValidation => { write!(f, "SubackPacketValidation") }
+            MqttError::UnsubackPacketValidation => { write!(f, "UnsubackPacketValidation") }
+            MqttError::SubscribePacketValidation => { write!(f, "SubscribePacketValidation") }
+            MqttError::UnsubscribePacketValidation => { write!(f, "UnsubscribePacketValidation") }
+            MqttError::InternalStateError => { write!(f, "InternalStateError") }
+            MqttError::ConnectionRejected => { write!(f, "ConnectionRejected") }
+            MqttError::ConnackTimeout => { write!(f, "ConnackTimeout") }
+            MqttError::PingTimeout => { write!(f, "PingTimeout") }
+            MqttError::ConnectionClosed => { write!(f, "ConnectionClosed") }
+            MqttError::OfflineQueuePolicyFailed => { write!(f, "OfflineQueuePolicyFailed") }
+            MqttError::ServerSideDisconnect => { write!(f, "ServerSideDisconnect") }
+            MqttError::AckTimeout => { write!(f, "AckTimeout") }
+            MqttError::PacketIdSpaceExhausted => { write!(f, "PacketIdSpaceExhausted") }
+            MqttError::OperationalStateReset => { write!(f, "OperationalStateReset") }
+            MqttError::UserInitiatedDisconnect => { write!(f, "UserInitiatedDisconnect") }
+            MqttError::ClientClosed => { write!(f, "ClientClosed") }
+            MqttError::ConnectionTimeout => { write!(f, "ConnectionTimeout") }
+            MqttError::UserRequestedStop => { write!(f, "UserRequestedStop") }
+            MqttError::ConnectionEstablishmentFailure => { write!(f, "ConnectionEstablishmentFailure") }
+            MqttError::StreamWriteFailure => { write!(f, "StreamWriteFailure") }
+            MqttError::StreamReadFailure => { write!(f, "StreamReadFailure") }
+            MqttError::OperationChannelEmpty => { write!(f, "OperationChannelEmpty") }
+            MqttError::IoError => { write!(f, "io error") }
+            MqttError::TlsError => { write!(f, "tls error") }
         }
     }
 }
 
-impl From<&Mqtt5Error> for Mqtt5Error {
-    fn from(value: &Mqtt5Error) -> Self {
+impl From<&MqttError> for MqttError {
+    fn from(value: &MqttError) -> Self {
         *value
     }
 }
 
-pub type Mqtt5Result<T> = Result<T, Mqtt5Error>;
+impl From<std::io::Error> for MqttError {
+    fn from(_: std::io::Error) -> Self {
+        MqttError::IoError
+    }
+}
 
-fn fold_mqtt5_result<T>(base: Mqtt5Result<T>, new_result: Mqtt5Result<T>) -> Mqtt5Result<T> {
+pub type MqttResult<T> = Result<T, MqttError>;
+
+fn fold_mqtt_result<T>(base: MqttResult<T>, new_result: MqttResult<T>) -> MqttResult<T> {
     new_result.as_ref()?;
     base
 }

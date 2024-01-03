@@ -116,7 +116,7 @@ pub struct PublishPacket {
 
 
 #[rustfmt::skip]
-fn compute_publish_packet_length_properties(packet: &PublishPacket, alias_resolution: &OutboundAliasResolution) -> Mqtt5Result<(u32, u32)> {
+fn compute_publish_packet_length_properties(packet: &PublishPacket, alias_resolution: &OutboundAliasResolution) -> MqttResult<(u32, u32)> {
     let mut publish_property_section_length = compute_user_properties_length(&packet.user_properties);
 
     add_optional_u8_property_length!(publish_property_section_length, packet.payload_format);
@@ -228,7 +228,7 @@ fn get_publish_packet_payload(packet: &MqttPacket) -> &[u8] {
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_publish_encoding_steps(packet: &PublishPacket, context: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> Mqtt5Result<()> {
+pub(crate) fn write_publish_encoding_steps(packet: &PublishPacket, context: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
 
     let resolution = &context.outbound_alias_resolution;
 
@@ -274,7 +274,7 @@ pub(crate) fn write_publish_encoding_steps(packet: &PublishPacket, context: &Enc
 }
 
 
-fn decode_publish_properties(property_bytes: &[u8], packet : &mut PublishPacket) -> Mqtt5Result<()> {
+fn decode_publish_properties(property_bytes: &[u8], packet : &mut PublishPacket) -> MqttResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
     while !mutable_property_bytes.is_empty() {
@@ -301,7 +301,7 @@ fn decode_publish_properties(property_bytes: &[u8], packet : &mut PublishPacket)
             PROPERTY_KEY_CONTENT_TYPE => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.content_type)?; }
             _ => {
                 error!("PublishPacket Decode - Invalid property type ({})", property_key);
-                return Err(Mqtt5Error::MalformedPacket);
+                return Err(MqttError::MalformedPacket);
             }
         }
     }
@@ -309,7 +309,7 @@ fn decode_publish_properties(property_bytes: &[u8], packet : &mut PublishPacket)
     Ok(())
 }
 
-pub(crate) fn decode_publish_packet(first_byte: u8, packet_body: &[u8]) -> Mqtt5Result<Box<MqttPacket>> {
+pub(crate) fn decode_publish_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
 
     let mut box_packet = Box::new(MqttPacket::Publish(PublishPacket { ..Default::default() }));
 
@@ -336,7 +336,7 @@ pub(crate) fn decode_publish_packet(first_byte: u8, packet_body: &[u8]) -> Mqtt5
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
             error!("PublishPacket Decode - property length exceeds overall packet length");
-            return Err(Mqtt5Error::MalformedPacket);
+            return Err(MqttError::MalformedPacket);
         }
 
         let properties_bytes = &mutable_body[..properties_length];
@@ -354,84 +354,84 @@ pub(crate) fn decode_publish_packet(first_byte: u8, packet_body: &[u8]) -> Mqtt5
     panic!("PublishPacket Decode - Internal error");
 }
 
-pub(crate) fn validate_publish_packet_outbound(packet: &PublishPacket) -> Mqtt5Result<()> {
+pub(crate) fn validate_publish_packet_outbound(packet: &PublishPacket) -> MqttResult<()> {
 
     if packet.packet_id != 0 {
         error!("PublishPacket Outbound Validation - packet id may not be set");
-        return Err(Mqtt5Error::PublishPacketValidation);
+        return Err(MqttError::PublishPacketValidation);
     }
 
     if packet.qos == QualityOfService::AtMostOnce && packet.duplicate {
         error!("PublishPacket Outbound Validation - packet id is zero");
-        return Err(Mqtt5Error::PublishPacketValidation);
+        return Err(MqttError::PublishPacketValidation);
     }
 
-    validate_string_length(&packet.topic, Mqtt5Error::PublishPacketValidation, "Publish", "topic")?;
+    validate_string_length(&packet.topic, MqttError::PublishPacketValidation, "Publish", "topic")?;
 
     if !is_valid_topic(&packet.topic) {
         error!("PublishPacket Outbound Validation - invalid topic");
-        return Err(Mqtt5Error::PublishPacketValidation);
+        return Err(MqttError::PublishPacketValidation);
     }
 
     if let Some(alias) = packet.topic_alias {
         if alias == 0 {
             error!("PublishPacket Outbound Validation - topic alias is zero");
-            return Err(Mqtt5Error::PublishPacketValidation);
+            return Err(MqttError::PublishPacketValidation);
         }
     }
 
     if packet.subscription_identifiers.is_some() {
         error!("PublishPacket Outbound Validation - subscription identifiers not allowed on client packets");
-        return Err(Mqtt5Error::PublishPacketValidation);
+        return Err(MqttError::PublishPacketValidation);
     }
 
     if let Some(response_topic) = &packet.response_topic {
         if !is_valid_topic(response_topic) {
             error!("PublishPacket Outbound Validation - invalid response topic");
-            return Err(Mqtt5Error::PublishPacketValidation);
+            return Err(MqttError::PublishPacketValidation);
         }
 
-        validate_string_length(response_topic, Mqtt5Error::PublishPacketValidation, "Publish", "response_topic")?;
+        validate_string_length(response_topic, MqttError::PublishPacketValidation, "Publish", "response_topic")?;
     }
 
-    validate_user_properties(&packet.user_properties, Mqtt5Error::PublishPacketValidation, "Publish")?;
-    validate_optional_binary_length(&packet.correlation_data, Mqtt5Error::PublishPacketValidation, "Publish", "correlation_data")?;
-    validate_optional_string_length(&packet.content_type, Mqtt5Error::PublishPacketValidation, "Publish", "content_type")?;
+    validate_user_properties(&packet.user_properties, MqttError::PublishPacketValidation, "Publish")?;
+    validate_optional_binary_length(&packet.correlation_data, MqttError::PublishPacketValidation, "Publish", "correlation_data")?;
+    validate_optional_string_length(&packet.content_type, MqttError::PublishPacketValidation, "Publish", "content_type")?;
 
     Ok(())
 }
 
-pub(crate) fn validate_publish_packet_outbound_internal(packet: &PublishPacket, context: &OutboundValidationContext) -> Mqtt5Result<()> {
+pub(crate) fn validate_publish_packet_outbound_internal(packet: &PublishPacket, context: &OutboundValidationContext) -> MqttResult<()> {
 
     let (total_remaining_length, _) = compute_publish_packet_length_properties(packet, &context.outbound_alias_resolution.unwrap_or(OutboundAliasResolution{..Default::default() }))?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
         error!("PublishPacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(Mqtt5Error::PublishPacketValidation);
+        return Err(MqttError::PublishPacketValidation);
     }
 
     if packet.packet_id == 0 && packet.qos != QualityOfService::AtMostOnce {
         error!("PublishPacket Outbound Validation - packet id must be non zero");
-        return Err(Mqtt5Error::PublishPacketValidation);
+        return Err(MqttError::PublishPacketValidation);
     }
 
     let settings = context.negotiated_settings.unwrap();
     if packet.retain && !settings.retain_available {
         error!("PublishPacket Outbound Validation - retained messages not allowed on this connection");
-        return Err(Mqtt5Error::PublishPacketValidation);
+        return Err(MqttError::PublishPacketValidation);
     }
 
     match settings.maximum_qos {
         QualityOfService::AtMostOnce => {
             if packet.qos != QualityOfService::AtMostOnce {
                 error!("PublishPacket Outbound Validation - quality of service exceeds established maximum");
-                return Err(Mqtt5Error::PublishPacketValidation);
+                return Err(MqttError::PublishPacketValidation);
             }
         }
         QualityOfService::AtLeastOnce => {
             if packet.qos == QualityOfService::ExactlyOnce {
                 error!("PublishPacket Outbound Validation - quality of service exceeds established maximum");
-                return Err(Mqtt5Error::PublishPacketValidation);
+                return Err(MqttError::PublishPacketValidation);
             }
         }
         _ => {}
@@ -440,17 +440,17 @@ pub(crate) fn validate_publish_packet_outbound_internal(packet: &PublishPacket, 
     Ok(())
 }
 
-pub(crate) fn validate_publish_packet_inbound_internal(packet: &PublishPacket, _: &InboundValidationContext) -> Mqtt5Result<()> {
+pub(crate) fn validate_publish_packet_inbound_internal(packet: &PublishPacket, _: &InboundValidationContext) -> MqttResult<()> {
 
     /* alias resolution happens after decode and before validation, so by now we should have a real topic */
     if packet.topic.is_empty() {
         error!("PublishPacket Inbound Validation - topic could not be resolved");
-        return Err(Mqtt5Error::PublishPacketValidation);
+        return Err(MqttError::PublishPacketValidation);
     }
 
     if packet.packet_id == 0 && packet.qos != QualityOfService::AtMostOnce {
         error!("PublishPacket Inbound Validation - packet id must be non zero");
-        return Err(Mqtt5Error::PublishPacketValidation);
+        return Err(MqttError::PublishPacketValidation);
     }
 
     Ok(())
@@ -868,7 +868,7 @@ mod tests {
         packet.qos = QualityOfService::AtMostOnce;
         packet.duplicate = true;
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -877,7 +877,7 @@ mod tests {
         packet.qos = QualityOfService::AtMostOnce;
         packet.packet_id = 1;
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -885,7 +885,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.topic = "A".repeat(65536).to_string();
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -893,7 +893,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.topic = "A/+/B".to_string();
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -901,7 +901,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.topic_alias = Some(0);
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -909,7 +909,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.response_topic = Some("A/#/B".to_string());
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -917,7 +917,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.response_topic = Some("AB".repeat(33000).to_string());
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -925,7 +925,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.subscription_identifiers = Some(vec![2, 3, 4]);
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -933,7 +933,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.user_properties = Some(create_invalid_user_properties());
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -941,7 +941,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.correlation_data = Some(vec![0; 80 * 1024]);
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -949,7 +949,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.content_type = Some("CD".repeat(33000).to_string());
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound(&MqttPacket::Publish(packet)), Err(MqttError::PublishPacketValidation));
     }
 
     use crate::validate::testing::*;
@@ -960,7 +960,7 @@ mod tests {
         packet.topic_alias = None;
         packet.subscription_identifiers = None;
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Publish(packet), Mqtt5Error::PublishPacketValidation);
+        do_outbound_size_validate_failure_test(&MqttPacket::Publish(packet), MqttError::PublishPacketValidation);
     }
 
 
@@ -975,7 +975,7 @@ mod tests {
         test_validation_context.settings.retain_available = false;
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -989,7 +989,7 @@ mod tests {
         test_validation_context.settings.maximum_qos = QualityOfService::AtMostOnce;
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -1003,7 +1003,7 @@ mod tests {
         test_validation_context.settings.maximum_qos = QualityOfService::AtLeastOnce;
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -1014,7 +1014,7 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
         let validation_context = create_inbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_inbound_internal(&MqttPacket::Publish(packet), &validation_context), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_inbound_internal(&MqttPacket::Publish(packet), &validation_context), Err(MqttError::PublishPacketValidation));
     }
 
     #[test]
@@ -1028,9 +1028,9 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PublishPacketValidation));
 
         let inbound_validation_context = create_inbound_validation_context_from_pinned(&test_validation_context);
-        assert_eq!(validate_packet_inbound_internal(&packet, &inbound_validation_context), Err(Mqtt5Error::PublishPacketValidation));
+        assert_eq!(validate_packet_inbound_internal(&packet, &inbound_validation_context), Err(MqttError::PublishPacketValidation));
     }
 }
