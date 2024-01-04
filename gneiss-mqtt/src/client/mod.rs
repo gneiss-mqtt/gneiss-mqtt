@@ -7,6 +7,8 @@
 Module containing the public MQTT client and associated types necessary to invoke operations on it.
  */
 
+#![warn(missing_docs)]
+
 pub(crate) mod shared_impl;
 
 use crate::*;

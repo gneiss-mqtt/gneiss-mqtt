@@ -19,91 +19,104 @@ use lru::LruCache;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 
+/// Captures the outcome of an outbound topic alias resolution attempt.  Outbound topic alias
+/// resolution is performed as the client encodes a Publish packet before writing it to the
+/// socket.
 #[derive(Default, Copy, Clone)]
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct OutboundAliasResolution {
+    /// Should the client use an empty topic during packet encoding?
     pub skip_topic : bool,
 
+    /// What topic alias to use, if any, during packet encoding.
     pub alias : Option<u16>,
 }
 
+/// Trait allowing users to implement their own outbound topic alias resolver.
 pub trait OutboundAliasResolver : Send {
-    fn get_maximum_alias_value(&self) -> u16;
 
+    /// Called by the client after receiving a successful Connack from the broker.  Informs the
+    /// resolver of the maximum allowed alias.  If zero is passed in, then topic aliases are
+    /// forbidden.
     fn reset_for_new_connection(&mut self, max_aliases : u16);
 
-    fn resolve_topic_alias(&self, alias: &Option<u16>, topic: &str) -> OutboundAliasResolution;
-
+    /// Attempts to resolve a topic alias, updating the resolver's internal state while doing
+    /// so.
+    ///
+    /// `alias` - current topic alias value in the Publish packet
+    /// `topic` - current topic value in the Publish packet
+    ///
+    /// Output: the resolver's topic alias resolution outcome
     fn resolve_and_apply_topic_alias(&mut self, alias: &Option<u16>, topic: &str) -> OutboundAliasResolution;
 }
 
-impl<T: OutboundAliasResolver + ?Sized> OutboundAliasResolver for Box<T> {
-    fn get_maximum_alias_value(&self) -> u16 { self.as_ref().get_maximum_alias_value() }
+/// Static factory for constructing all of the outbound topic alias resolver variants that are
+/// included in the base library.
+pub struct OutboundAliasResolverFactory {
+}
 
-    fn reset_for_new_connection(&mut self, max_aliases : u16) { self.as_mut().reset_for_new_connection(max_aliases); }
+impl OutboundAliasResolverFactory {
 
-    fn resolve_topic_alias(&self, alias: &Option<u16>, topic: &str) -> OutboundAliasResolution {
-        self.as_ref().resolve_topic_alias(alias, topic)
+    /// Creates a new outbound topic alias resolver that never uses topic aliases.
+    pub fn new_null() -> Box<dyn OutboundAliasResolver + Send> {
+        return Box::new( NullOutboundAliasResolver::new() );
     }
 
-    fn resolve_and_apply_topic_alias(&mut self, alias: &Option<u16>, topic: &str) -> OutboundAliasResolution {
-        self.as_mut().resolve_and_apply_topic_alias(alias, topic)
+    /// An outbound topic alias resolver that only uses aliases supplied by the user in the Publish
+    /// packet.  Note that there are multiple reasons why a user-supplied alias might not be
+    /// usable (too big, not-yet-seen, etc...).  In these cases, the resolver does not use a topic
+    /// alias.
+    pub fn new_manual() -> Box<dyn OutboundAliasResolver + Send> {
+        return Box::new( ManualOutboundAliasResolver::new() );
+    }
+
+    /// An outbound topic alias resolver that uses an LRU cache to automatically make topic
+    /// aliasing choices.  This is likely to give good (topic compression) performance in normal
+    /// use cases.  Sub-optimal performance could occur if the working set of topics substantially
+    /// exceeds what the broker is allowing, or if there is a highly skewed distribution where
+    /// commonly-used topics are very short and uncommon topics are very long.
+    pub fn new_lru(maximum_alias_value : u16) -> Box<dyn OutboundAliasResolver + Send> {
+        return Box::new( LruOutboundAliasResolver::new(maximum_alias_value) );
     }
 }
 
-pub struct NullOutboundAliasResolver {
-
+struct NullOutboundAliasResolver {
 }
 
 impl NullOutboundAliasResolver {
-    pub fn new() -> NullOutboundAliasResolver {
+    fn new() -> NullOutboundAliasResolver {
         NullOutboundAliasResolver {}
     }
-}
 
-impl Default for NullOutboundAliasResolver {
-    fn default() -> Self {
-        Self::new()
-    }
+    #[cfg(test)]
+    fn get_maximum_alias_value(&self) -> u16 { 0 }
 }
 
 impl OutboundAliasResolver for NullOutboundAliasResolver {
-    fn get_maximum_alias_value(&self) -> u16 { 0 }
 
     fn reset_for_new_connection(&mut self, _ : u16) {}
 
-    fn resolve_topic_alias(&self, _: &Option<u16>, _: &str) -> OutboundAliasResolution {
+    fn resolve_and_apply_topic_alias(&mut self, _: &Option<u16>, _: &str) -> OutboundAliasResolution {
         OutboundAliasResolution {
             ..Default::default()
         }
     }
-
-    fn resolve_and_apply_topic_alias(&mut self, alias: &Option<u16>, topic: &str) -> OutboundAliasResolution {
-        self.resolve_topic_alias(alias, topic)
-    }
 }
 
-pub struct ManualOutboundAliasResolver {
+
+struct ManualOutboundAliasResolver {
     maximum_alias_value : u16,
 
     current_aliases : HashMap<u16, String>,
 }
 
 impl ManualOutboundAliasResolver {
-    pub fn new(maximum_alias_value : u16) -> ManualOutboundAliasResolver {
+
+    fn new() -> ManualOutboundAliasResolver {
         ManualOutboundAliasResolver {
-            maximum_alias_value,
+            maximum_alias_value: 0,
             current_aliases : HashMap::new(),
         }
-    }
-}
-
-impl OutboundAliasResolver for ManualOutboundAliasResolver {
-    fn get_maximum_alias_value(&self) -> u16 { self.maximum_alias_value }
-
-    fn reset_for_new_connection(&mut self, maximum_alias_value : u16) {
-        self.maximum_alias_value = maximum_alias_value;
-        self.current_aliases.clear();
     }
 
     fn resolve_topic_alias(&self, alias: &Option<u16>, topic: &str) -> OutboundAliasResolution {
@@ -111,7 +124,7 @@ impl OutboundAliasResolver for ManualOutboundAliasResolver {
             let alias_value = *alias_ref_value;
             if let Some(existing_alias) = self.current_aliases.get(alias_ref_value) {
                 if *existing_alias == *topic {
-                    return  OutboundAliasResolution {
+                    return OutboundAliasResolution {
                         skip_topic: true,
                         alias : Some(alias_value)
                     };
@@ -129,6 +142,18 @@ impl OutboundAliasResolver for ManualOutboundAliasResolver {
         OutboundAliasResolution { ..Default::default() }
     }
 
+    #[cfg(test)]
+    fn get_maximum_alias_value(&self) -> u16 { self.maximum_alias_value }
+}
+
+
+impl OutboundAliasResolver for ManualOutboundAliasResolver {
+
+    fn reset_for_new_connection(&mut self, maximum_alias_value : u16) {
+        self.maximum_alias_value = maximum_alias_value;
+        self.current_aliases.clear();
+    }
+
     fn resolve_and_apply_topic_alias(&mut self, alias: &Option<u16>, topic: &str) -> OutboundAliasResolution {
         let resolution = self.resolve_topic_alias(alias, topic);
 
@@ -142,31 +167,24 @@ impl OutboundAliasResolver for ManualOutboundAliasResolver {
     }
 }
 
-pub struct LruOutboundAliasResolver {
+struct LruOutboundAliasResolver {
+    current_maximum_alias_value: u16,
     maximum_alias_value : u16,
 
     cache : LruCache<String, u16>
 }
 
 impl LruOutboundAliasResolver {
-    pub fn new(maximum_alias_value : u16) -> LruOutboundAliasResolver {
+    fn new(maximum_alias_value : u16) -> LruOutboundAliasResolver {
         LruOutboundAliasResolver {
+            current_maximum_alias_value: 0,
             maximum_alias_value,
-            cache : LruCache::new(NonZeroUsize::new(maximum_alias_value as usize).unwrap())
+            cache : LruCache::new(NonZeroUsize::new(u16::max(1, maximum_alias_value) as usize).unwrap())
         }
-    }
-}
-
-impl OutboundAliasResolver for LruOutboundAliasResolver {
-    fn get_maximum_alias_value(&self) -> u16 { self.maximum_alias_value }
-
-    fn reset_for_new_connection(&mut self, maximum_alias_value : u16) {
-        self.maximum_alias_value = maximum_alias_value;
-        self.cache.clear();
     }
 
     fn resolve_topic_alias(&self, _: &Option<u16>, topic: &str) -> OutboundAliasResolution {
-        if self.maximum_alias_value == 0 {
+        if self.current_maximum_alias_value == 0 {
             return OutboundAliasResolution{
                 skip_topic: false,
                 alias : None
@@ -183,7 +201,7 @@ impl OutboundAliasResolver for LruOutboundAliasResolver {
         }
 
         let mut alias_value : u16 = (self.cache.len() + 1) as u16;
-        if alias_value > self.maximum_alias_value {
+        if alias_value > self.current_maximum_alias_value {
             if let Some((_, recycled_alias)) = self.cache.peek_lru() {
                 alias_value = *recycled_alias;
             } else {
@@ -197,6 +215,17 @@ impl OutboundAliasResolver for LruOutboundAliasResolver {
         }
     }
 
+    #[cfg(test)]
+    fn get_maximum_alias_value(&self) -> u16 { self.current_maximum_alias_value }
+}
+
+impl OutboundAliasResolver for LruOutboundAliasResolver {
+
+    fn reset_for_new_connection(&mut self, maximum_alias_value : u16) {
+        self.current_maximum_alias_value = u16::min(self.maximum_alias_value, maximum_alias_value);
+        self.cache.clear();
+    }
+
     fn resolve_and_apply_topic_alias(&mut self, alias: &Option<u16>, topic: &str) -> OutboundAliasResolution {
         let resolution = self.resolve_topic_alias(alias, topic);
         if resolution.alias.is_none() {
@@ -206,7 +235,7 @@ impl OutboundAliasResolver for LruOutboundAliasResolver {
         if resolution.skip_topic {
             self.cache.promote(topic);
         } else {
-            if self.cache.len() == self.maximum_alias_value as usize {
+            if self.cache.len() == self.current_maximum_alias_value as usize {
                 self.cache.pop_lru();
             }
 
@@ -218,7 +247,7 @@ impl OutboundAliasResolver for LruOutboundAliasResolver {
     }
 }
 
-pub struct InboundAliasResolver {
+pub(crate) struct InboundAliasResolver {
     maximum_alias_value: u16,
 
     current_aliases : HashMap<u16, String>
@@ -269,6 +298,7 @@ mod tests {
     fn outbound_topic_alias_null() {
         let mut resolver = NullOutboundAliasResolver::new();
 
+        resolver.reset_for_new_connection(20);
         assert_eq!(resolver.get_maximum_alias_value(), 0);
         assert_eq!(resolver.resolve_and_apply_topic_alias(&Some(1), &"some/topic".to_string()), OutboundAliasResolution{skip_topic: false, alias: None});
 
@@ -278,8 +308,9 @@ mod tests {
 
     #[test]
     fn outbound_topic_alias_manual_invalid() {
-        let mut resolver = ManualOutboundAliasResolver::new(20);
+        let mut resolver = ManualOutboundAliasResolver::new();
 
+        resolver.reset_for_new_connection(20);
         assert_eq!(resolver.get_maximum_alias_value(), 20);
         assert_eq!(resolver.resolve_and_apply_topic_alias(&Some(0), &"some/topic".to_string()), OutboundAliasResolution{skip_topic: false, alias: None});
         assert_eq!(resolver.resolve_and_apply_topic_alias(&Some(21), &"some/topic".to_string()), OutboundAliasResolution{skip_topic: false, alias: None});
@@ -295,8 +326,9 @@ mod tests {
 
     #[test]
     fn outbound_topic_alias_manual_success() {
-        let mut resolver = ManualOutboundAliasResolver::new(20);
+        let mut resolver = ManualOutboundAliasResolver::new();
 
+        resolver.reset_for_new_connection(20);
         assert_eq!(resolver.get_maximum_alias_value(), 20);
         assert_eq!(resolver.resolve_and_apply_topic_alias(&Some(1), &"some/topic".to_string()), OutboundAliasResolution{skip_topic: false, alias: Some(1)});
         assert_eq!(resolver.resolve_and_apply_topic_alias(&Some(2), &"some/topic/2".to_string()), OutboundAliasResolution{skip_topic: false, alias: Some(2)});
@@ -311,8 +343,9 @@ mod tests {
 
     #[test]
     fn outbound_topic_alias_manual_reset() {
-        let mut resolver = ManualOutboundAliasResolver::new(20);
+        let mut resolver = ManualOutboundAliasResolver::new();
 
+        resolver.reset_for_new_connection(20);
         assert_eq!(resolver.get_maximum_alias_value(), 20);
         assert_eq!(resolver.resolve_and_apply_topic_alias(&Some(1), &"some/topic".to_string()), OutboundAliasResolution{skip_topic: false, alias: Some(1)});
         assert_eq!(resolver.resolve_and_apply_topic_alias(&Some(2), &"some/topic/2".to_string()), OutboundAliasResolution{skip_topic: false, alias: Some(2)});
@@ -336,6 +369,7 @@ mod tests {
     #[test]
     fn outbound_topic_alias_lru_a_ar() {
         let mut resolver = LruOutboundAliasResolver::new(2);
+        resolver.reset_for_new_connection(2);
 
         assert_eq!(resolver.get_maximum_alias_value(), 2);
         assert_eq!(resolver.resolve_and_apply_topic_alias(&None, &"a".to_string()), OutboundAliasResolution{skip_topic: false, alias: Some(1)});
@@ -345,6 +379,7 @@ mod tests {
     #[test]
     fn outbound_topic_alias_lru_b_a_br() {
         let mut resolver = LruOutboundAliasResolver::new(2);
+        resolver.reset_for_new_connection(2);
 
         assert_eq!(resolver.get_maximum_alias_value(), 2);
         assert_eq!(resolver.resolve_and_apply_topic_alias(&None, &"b".to_string()), OutboundAliasResolution{skip_topic: false, alias: Some(1)});
@@ -355,6 +390,7 @@ mod tests {
     #[test]
     fn outbound_topic_alias_lru_a_b_ar_br() {
         let mut resolver = LruOutboundAliasResolver::new(2);
+        resolver.reset_for_new_connection(2);
 
         assert_eq!(resolver.get_maximum_alias_value(), 2);
         assert_eq!(resolver.resolve_and_apply_topic_alias(&None, &"a".to_string()), OutboundAliasResolution{skip_topic: false, alias: Some(1)});
@@ -366,6 +402,7 @@ mod tests {
     #[test]
     fn outbound_topic_alias_lru_a_b_c_br_cr_br_cr_a() {
         let mut resolver = LruOutboundAliasResolver::new(2);
+        resolver.reset_for_new_connection(2);
 
         assert_eq!(resolver.get_maximum_alias_value(), 2);
         assert_eq!(resolver.resolve_and_apply_topic_alias(&None, &"a".to_string()), OutboundAliasResolution{skip_topic: false, alias: Some(1)});
@@ -381,6 +418,7 @@ mod tests {
     #[test]
     fn outbound_topic_alias_lru_a_b_c_a_cr_b() {
         let mut resolver = LruOutboundAliasResolver::new(2);
+        resolver.reset_for_new_connection(2);
 
         assert_eq!(resolver.get_maximum_alias_value(), 2);
         assert_eq!(resolver.resolve_and_apply_topic_alias(&None, &"a".to_string()), OutboundAliasResolution{skip_topic: false, alias: Some(1)});
@@ -394,6 +432,7 @@ mod tests {
     #[test]
     fn outbound_topic_alias_lru_a_b_reset_a_b() {
         let mut resolver = LruOutboundAliasResolver::new(2);
+        resolver.reset_for_new_connection(2);
 
         assert_eq!(resolver.get_maximum_alias_value(), 2);
         assert_eq!(resolver.resolve_and_apply_topic_alias(&None, &"a".to_string()), OutboundAliasResolution{skip_topic: false, alias: Some(1)});
@@ -406,6 +445,7 @@ mod tests {
     #[test]
     fn outbound_topic_alias_lru_disabled_by_zero_maximum() {
         let mut resolver = LruOutboundAliasResolver::new(2);
+        resolver.reset_for_new_connection(2);
 
         assert_eq!(resolver.get_maximum_alias_value(), 2);
         assert_eq!(resolver.resolve_and_apply_topic_alias(&None, &"a".to_string()), OutboundAliasResolution{skip_topic: false, alias: Some(1)});

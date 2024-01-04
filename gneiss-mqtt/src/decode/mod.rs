@@ -238,7 +238,8 @@ pub(crate) mod testing {
         let mut full_encoded_stream = Vec::with_capacity( 128 * 1024);
         let mut encode_buffer = Vec::with_capacity(encode_size);
 
-        let mut outbound_resolver : Box<dyn OutboundAliasResolver> = Box::new(ManualOutboundAliasResolver::new(65535));
+        let mut outbound_resolver  = OutboundAliasResolverFactory::new_manual();
+        outbound_resolver.reset_for_new_connection(65535);
 
         /* encode 5 copies of the packet */
         for _ in 0..encode_repetitions {
