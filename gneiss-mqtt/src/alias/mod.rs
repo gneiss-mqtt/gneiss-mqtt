@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+/*!
+A module with types for handling topic alias resolution, both outbound and inbound.  The included
+outbound resolvers should be sufficient for most use cases, but this module also includes a trait
+that allows for custom resolution implementations to be injected into a client.
+*/
+
 extern crate log;
 extern crate lru;
 

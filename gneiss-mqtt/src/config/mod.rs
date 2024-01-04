@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+/*!
+Module containing types for configuring an MQTT client.
+ */
+
 extern crate rustls;
 extern crate tokio;
 extern crate tokio_rustls;

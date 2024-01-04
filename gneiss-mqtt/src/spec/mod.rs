@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+/*!
+Module containing a set of structured data types that model the MQTT5 specification.
+ */
+
 pub(crate) mod auth;
 pub(crate) mod connack;
 pub(crate) mod connect;

@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+/*!
+Functionality for using [`tokio`](https://crates.io/crates/tokio) as an MQTT client's async
+runtime implementation.
+ */
+
 extern crate log;
 extern crate tokio;
 

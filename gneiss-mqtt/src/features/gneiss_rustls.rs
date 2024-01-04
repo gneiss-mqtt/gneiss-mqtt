@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+/*!
+Functionality for using [`rustls`](https://crates.io/crates/rustls) as an MQTT client's TLS
+implementation.
+ */
+
 extern crate rustls;
 extern crate rustls_pemfile;
 

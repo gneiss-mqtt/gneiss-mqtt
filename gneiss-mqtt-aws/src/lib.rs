@@ -204,6 +204,8 @@ different combinations expected by users.
 
  */
 
+#![warn(missing_docs)]
+
 extern crate gneiss_mqtt;
 extern crate tokio;
 

@@ -1620,7 +1620,7 @@ impl OperationalState {
             let packet_id = puback.packet_id;
             let operation_id_option = self.pending_publish_operations.get(&packet_id);
             if let Some(operation_id) = operation_id_option {
-                return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Publish(PublishResponse{ qos_response: QosResponse::Qos1(puback) })));
+                return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Publish(PublishResponse::Qos1(puback))));
             }
 
             error!("[{} ms] handle_puback - no matching operation corresponding to PUBACK packet id {}", self.elapsed_time_ms, packet_id);
@@ -1646,7 +1646,7 @@ impl OperationalState {
             let operation_id_option = self.pending_publish_operations.get(&packet_id);
             if let Some(operation_id) = operation_id_option {
                 if pubrec.reason_code as u8 >= 128 {
-                    return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Publish(PublishResponse{ qos_response: QosResponse::Qos2(Qos2Response::Pubrec(pubrec)) })));
+                    return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Publish(PublishResponse::Qos2(Qos2Response::Pubrec(pubrec)))));
                 } else {
                     let operation_option = self.operations.get_mut(operation_id);
                     if let Some(operation) = operation_option {
@@ -1721,7 +1721,7 @@ impl OperationalState {
             let packet_id = pubcomp.packet_id;
             let operation_id_option = self.pending_publish_operations.get(&packet_id);
             if let Some(operation_id) = operation_id_option {
-                return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Publish(PublishResponse{ qos_response: QosResponse::Qos2(Qos2Response::Pubcomp(pubcomp)) })));
+                return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Publish(PublishResponse::Qos2(Qos2Response::Pubcomp(pubcomp)))));
             }
 
             error!("[{} ms] handle_pubcomp - no matching operation corresponding to PUBCOMP packet id {}", self.elapsed_time_ms, packet_id);
@@ -1985,7 +1985,7 @@ fn build_negotiated_settings(config: &OperationalStateConfig, packet: &ConnackPa
 fn complete_operation_with_result(operation_options: &mut MqttOperationOptions, completion_result: Option<OperationResponse>) -> MqttResult<()> {
     match operation_options {
         MqttOperationOptions::Publish(publish_options) => {
-            let mut publish_response = PublishResponse { qos_response: QosResponse::Qos0 };
+            let mut publish_response = PublishResponse::Qos0;
             if completion_result.is_some() {
                 if let Some(OperationResponse::Publish(publish_result)) = completion_result {
                     publish_response = publish_result;
