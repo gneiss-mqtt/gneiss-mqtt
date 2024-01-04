@@ -8,23 +8,25 @@ Functionality for using [`tokio`](https://crates.io/crates/tokio) as an MQTT cli
 runtime implementation.
  */
 
+#![warn(missing_docs)]
+
 extern crate log;
 extern crate tokio;
 
-use std::future::Future;
-use std::pin::Pin;
 use crate::*;
 use crate::client::*;
 use crate::client::shared_impl::*;
 use crate::config::*;
-
 use log::*;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::runtime;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, split, WriteHalf};
 use tokio::sync::oneshot;
 use tokio::time::{sleep};
+
 
 impl From<oneshot::error::RecvError> for MqttError {
     fn from(_: oneshot::error::RecvError) -> Self {
@@ -55,8 +57,6 @@ macro_rules! submit_async_client_operation {
 }
 
 pub(crate) use submit_async_client_operation;
-use crate::config::{ConnectOptions, Mqtt5ClientOptions};
-
 
 pub(crate) struct AsyncOperationChannel<T> {
     sender: AsyncOperationSender<T>,
@@ -98,6 +98,7 @@ impl <T> AsyncOperationSender<T> {
     }
 }
 
+/// tokio-specific client event channel receiver
 pub struct AsyncOperationReceiver<T> {
     receiver: oneshot::Receiver<T>
 }
@@ -110,44 +111,24 @@ impl <T> AsyncOperationReceiver<T> {
         }
     }
 
+    /// Async function that waits for the next client event sent to this receiver
     pub async fn recv(self) -> MqttResult<T> {
         match self.receiver.await {
             Err(_) => { Err(MqttError::OperationChannelReceiveError) }
             Ok(val) => { Ok(val) }
         }
     }
-
-    pub fn try_recv(&mut self) -> MqttResult<T> {
-        match self.receiver.try_recv() {
-            Err(_) => {
-                Err(MqttError::OperationChannelEmpty)
-            }
-            Ok(val) => {
-                Ok(val)
-            }
-
-        }
-    }
-
-    pub fn blocking_recv(self) -> MqttResult<T> {
-        match self.receiver.blocking_recv() {
-            Err(_) => {
-                Err(MqttError::OperationChannelReceiveError)
-            }
-            Ok(val) => {
-                Ok(val)
-            }
-
-        }
-    }
 }
 
+/// tokio-specific client event channel
 pub struct AsyncClientEventChannel {
     sender: AsyncClientEventSender,
     receiver: AsyncClientEventReceiver
 }
 
 impl AsyncClientEventChannel {
+
+    /// Creates a new tokio-specific client event channel
     pub fn new() -> Self {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         AsyncClientEventChannel {
@@ -156,6 +137,7 @@ impl AsyncClientEventChannel {
         }
     }
 
+    ///
     pub fn split(self) -> (AsyncClientEventSender, AsyncClientEventReceiver) {
         (self.sender, self.receiver)
     }
@@ -167,6 +149,7 @@ impl Default for AsyncClientEventChannel {
     }
 }
 
+/// A client event sender specific to the tokio runtime
 pub struct AsyncClientEventSender {
     sender: tokio::sync::mpsc::UnboundedSender<Arc<ClientEvent>>
 }
@@ -187,17 +170,20 @@ impl AsyncClientEventSender {
     }
 }
 
+/// A client event receiver specific to the tokio runtime
 pub struct AsyncClientEventReceiver {
     receiver: tokio::sync::mpsc::UnboundedReceiver<Arc<ClientEvent>>
 }
 
 impl AsyncClientEventReceiver {
+
     fn new(receiver: tokio::sync::mpsc::UnboundedReceiver<Arc<ClientEvent>>) -> Self {
         AsyncClientEventReceiver {
             receiver
         }
     }
 
+    /// Async function to wait for the next client event sent to this receiver
     pub async fn recv(&mut self) -> Option<Arc<ClientEvent>> {
         self.receiver.recv().await
     }
@@ -457,12 +443,21 @@ pub(crate) fn spawn_event_callback(event: Arc<ClientEvent>, callback: Arc<Client
 }
 
 type TokioConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = std::io::Result<T>> + Send + Sync>>;
+
+/// Tokio-specific client configuration
 pub struct TokioClientOptions<T> where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
+
+    /// Factory function for creating the final connection object based on all the various
+    /// configuration options and features.  It might be a TcpStream, it might be a TlsStream,
+    /// it might be a websocketstream, it might be some scary combination.
+    ///
+    /// Ultimately, the type must implement AsyncRead and AsyncWrite.
     pub connection_factory: Box<dyn Fn() -> TokioConnectionFactoryReturnType<T> + Send + Sync>
 }
 
 impl Mqtt5Client {
 
+    /// Creates a new async MQTT5 client that will use the tokio async runtime
     pub fn new_with_tokio<T>(client_config: Mqtt5ClientOptions, connect_config: ConnectOptions, tokio_config: TokioClientOptions<T>, runtime_handle: &runtime::Handle) -> Mqtt5Client where T: AsyncRead + AsyncWrite + Send + Sync + 'static {
         let (user_state, internal_state) = create_runtime_states(tokio_config);
 

@@ -8,6 +8,8 @@ Functionality for using [`rustls`](https://crates.io/crates/rustls) as an MQTT c
 implementation.
  */
 
+#![warn(missing_docs)]
+
 extern crate rustls;
 extern crate rustls_pemfile;
 
@@ -19,6 +21,7 @@ use rustls::pki_types::{PrivateKeyDer};
 
 impl TlsOptionsBuilder {
 
+    /// Builds client TLS options using the `rustls` crate
     pub fn build_rustls(self) -> Result<TlsOptions, rustls::Error> {
         if let Ok(root_cert_store) = build_root_ca_store(self.root_ca_bytes.as_deref()) {
 
