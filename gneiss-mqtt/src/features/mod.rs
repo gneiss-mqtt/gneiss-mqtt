@@ -3,5 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+/*!
+Module that encompasses feature-specific logic (primarily TLS and Async runtime).
+ */
+
 pub mod gneiss_rustls;
 pub mod gneiss_tokio;

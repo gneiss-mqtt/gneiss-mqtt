@@ -1379,13 +1379,13 @@ mod operational_state_tests {
 
         let publish_response = op_result.unwrap();
 
-        match &publish_response.qos_response {
-            QosResponse::Qos0 => {
+        match &publish_response {
+            PublishResponse::Qos0 => {
                 assert_eq!(expected_response, publish_response);
             }
 
-            QosResponse::Qos1(puback) => {
-                if let QosResponse::Qos1(expected_puback) = &expected_response.qos_response {
+            PublishResponse::Qos1(puback) => {
+                if let PublishResponse::Qos1(expected_puback) = &expected_response {
                     assert_eq!(expected_puback.reason_code, puback.reason_code);
                 } else {
                     panic!("expected puback");
@@ -1394,13 +1394,13 @@ mod operational_state_tests {
                 assert_eq!(1, index);
             }
 
-            QosResponse::Qos2(qos2_response) => {
+            PublishResponse::Qos2(qos2_response) => {
                 let (index, _) = find_nth_packet_of_type(fixture.to_client_packet_stream.iter(), PacketType::Pubrec, 1, None, None).unwrap();
                 assert_eq!(1, index);
 
                 match &qos2_response {
                     Qos2Response::Pubcomp(pubcomp) => {
-                        if let QosResponse::Qos2(Qos2Response::Pubcomp(expected_pubcomp)) = &expected_response.qos_response {
+                        if let PublishResponse::Qos2(Qos2Response::Pubcomp(expected_pubcomp)) = &expected_response {
                             assert_eq!(expected_pubcomp.reason_code, pubcomp.reason_code);
                         } else {
                             panic!("expected pubcomp");
@@ -1414,7 +1414,7 @@ mod operational_state_tests {
                     }
 
                     Qos2Response::Pubrec(pubrec) => {
-                        if let QosResponse::Qos2(Qos2Response::Pubrec(expected_pubrec)) = expected_response.qos_response {
+                        if let PublishResponse::Qos2(Qos2Response::Pubrec(expected_pubrec)) = expected_response {
                             assert_eq!(expected_pubrec.reason_code, pubrec.reason_code);
                         } else {
                             panic!("expected pubcomp");
@@ -1487,7 +1487,7 @@ mod operational_state_tests {
     fn connected_state_ping_no_push_out_by_qos0_publish_completion() {
         do_connected_state_ping_push_out_test(Box::new(
             |fixture, transmission_time, response_time|{
-                do_publish_success(fixture, QualityOfService::AtMostOnce, transmission_time, response_time, PublishResponse{ qos_response: QosResponse::Qos0 });
+                do_publish_success(fixture, QualityOfService::AtMostOnce, transmission_time, response_time, PublishResponse::Qos0);
             }
         ), 666, 1336, 0);
     }
@@ -1496,10 +1496,10 @@ mod operational_state_tests {
     fn connected_state_ping_push_out_by_qos1_publish_completion() {
         do_connected_state_ping_push_out_test(Box::new(
             |fixture, transmission_time, response_time|{
-                do_publish_success(fixture, QualityOfService::AtLeastOnce, transmission_time, response_time, PublishResponse{ qos_response: QosResponse::Qos1(PubackPacket{
+                do_publish_success(fixture, QualityOfService::AtLeastOnce, transmission_time, response_time, PublishResponse::Qos1(PubackPacket{
                     reason_code: PubackReasonCode::Success,
                     ..Default::default()
-                }) });
+                }));
             }
         ), 333, 777, 333);
     }
@@ -1508,10 +1508,10 @@ mod operational_state_tests {
     fn connected_state_ping_push_out_by_qos2_publish_completion() {
         do_connected_state_ping_push_out_test(Box::new(
             |fixture, transmission_time, response_time|{
-                do_publish_success(fixture, QualityOfService::ExactlyOnce, transmission_time, response_time, PublishResponse{ qos_response: QosResponse::Qos2(Qos2Response::Pubcomp(PubcompPacket{
+                do_publish_success(fixture, QualityOfService::ExactlyOnce, transmission_time, response_time, PublishResponse::Qos2(Qos2Response::Pubcomp(PubcompPacket{
                     reason_code: PubcompReasonCode::Success,
                     ..Default::default()
-                })) });
+                })));
             }
         ), 444, 888, 888);
     }
@@ -1592,7 +1592,7 @@ mod operational_state_tests {
         let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
         assert_eq!(Ok(()), fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0));
 
-        do_publish_success(&mut fixture, QualityOfService::AtMostOnce, 11, 13, PublishResponse{ qos_response: QosResponse::Qos0 });
+        do_publish_success(&mut fixture, QualityOfService::AtMostOnce, 11, 13, PublishResponse::Qos0);
     }
 
     #[test]
@@ -1600,10 +1600,10 @@ mod operational_state_tests {
         let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
         assert_eq!(Ok(()), fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0));
 
-        do_publish_success(&mut fixture, QualityOfService::AtLeastOnce, 17, 23, PublishResponse{ qos_response: QosResponse::Qos1(PubackPacket{
+        do_publish_success(&mut fixture, QualityOfService::AtLeastOnce, 17, 23, PublishResponse::Qos1(PubackPacket{
             reason_code: PubackReasonCode::Success,
             ..Default::default()
-        }) });
+        }));
     }
 
     #[test]
@@ -1611,10 +1611,10 @@ mod operational_state_tests {
         let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
         assert_eq!(Ok(()), fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0));
 
-        do_publish_success(&mut fixture, QualityOfService::ExactlyOnce, 29, 31, PublishResponse{ qos_response: QosResponse::Qos2(Qos2Response::Pubcomp(PubcompPacket{
+        do_publish_success(&mut fixture, QualityOfService::ExactlyOnce, 29, 31, PublishResponse::Qos2(Qos2Response::Pubcomp(PubcompPacket{
             reason_code: PubcompReasonCode::Success,
             ..Default::default()
-        })) });
+        })));
     }
 
     macro_rules! define_operation_success_reconnect_while_in_user_queue_test {
@@ -1715,7 +1715,7 @@ mod operational_state_tests {
     }
 
     fn verify_successful_test_qos0_publish(response: &PublishResponse) {
-        assert_eq!(QosResponse::Qos0, response.qos_response);
+        assert_eq!(PublishResponse::Qos0, *response);
     }
 
     fn build_qos0_publish_success_packet() -> PublishPacket {
@@ -1741,7 +1741,7 @@ mod operational_state_tests {
     }
 
     fn verify_successful_test_qos1_publish(response: &PublishResponse) {
-        if let QosResponse::Qos1(puback) = &response.qos_response {
+        if let PublishResponse::Qos1(puback) = &response {
             assert_eq!(PubackReasonCode::Success, puback.reason_code);
             return;
         }
@@ -1772,7 +1772,7 @@ mod operational_state_tests {
     }
 
     fn verify_successful_test_qos2_publish(response: &PublishResponse) {
-        if let QosResponse::Qos2(qos2_response) = &response.qos_response {
+        if let PublishResponse::Qos2(qos2_response) = &response {
             if let Qos2Response::Pubcomp(pubcomp) = qos2_response {
                 assert_eq!(PubcompReasonCode::Success, pubcomp.reason_code);
                 return;
@@ -2062,10 +2062,10 @@ mod operational_state_tests {
 
         assert_eq!(Ok(()), fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0));
 
-        do_publish_success(&mut fixture, QualityOfService::AtLeastOnce, 0, 0, PublishResponse{ qos_response: QosResponse::Qos1(PubackPacket{
+        do_publish_success(&mut fixture, QualityOfService::AtLeastOnce, 0, 0, PublishResponse::Qos1(PubackPacket{
             reason_code: PubackReasonCode::QuotaExceeded,
             ..Default::default()
-        }) });
+        }));
     }
 
     #[test]
@@ -2075,10 +2075,10 @@ mod operational_state_tests {
 
         assert_eq!(Ok(()), fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0));
 
-        do_publish_success(&mut fixture, QualityOfService::ExactlyOnce, 0, 0, PublishResponse{ qos_response: QosResponse::Qos2(Qos2Response::Pubrec(PubrecPacket{
+        do_publish_success(&mut fixture, QualityOfService::ExactlyOnce, 0, 0, PublishResponse::Qos2(Qos2Response::Pubrec(PubrecPacket{
             reason_code: PubrecReasonCode::QuotaExceeded,
             ..Default::default()
-        })) });
+        })));
     }
 
     #[test]
@@ -2088,10 +2088,10 @@ mod operational_state_tests {
 
         assert_eq!(Ok(()), fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0));
 
-        do_publish_success(&mut fixture, QualityOfService::ExactlyOnce, 0, 0, PublishResponse{ qos_response: QosResponse::Qos2(Qos2Response::Pubcomp(PubcompPacket{
+        do_publish_success(&mut fixture, QualityOfService::ExactlyOnce, 0, 0, PublishResponse::Qos2(Qos2Response::Pubcomp(PubcompPacket{
             reason_code: PubcompReasonCode::PacketIdentifierNotFound,
             ..Default::default()
-        })) });
+        })));
     }
 
     macro_rules! define_operation_failure_validation_helper {
@@ -2910,7 +2910,7 @@ mod operational_state_tests {
     }
 
     fn verify_qos1_publish_session_resumption_result(result: PublishResponse) {
-        if let QosResponse::Qos1(puback) = result.qos_response {
+        if let PublishResponse::Qos1(puback) = result {
             assert_eq!(PubackReasonCode::Success, puback.reason_code);
         } else {
             panic!("Expected puback");
@@ -2930,7 +2930,7 @@ mod operational_state_tests {
     }
 
     fn verify_qos2_publish_session_resumption_result(result: PublishResponse) {
-        if let QosResponse::Qos2(Qos2Response::Pubcomp(pubcomp)) = result.qos_response {
+        if let PublishResponse::Qos2(Qos2Response::Pubcomp(pubcomp)) = result {
             assert_eq!(PubcompReasonCode::Success, pubcomp.reason_code);
         } else {
             panic!("Expected pubcomp");
@@ -3389,7 +3389,9 @@ mod operational_state_tests {
             }));
 
         let qos2_publish1_topic = "topic1".to_string();
-        let mut lru_resolver = LruOutboundAliasResolver::new(2);
+
+        let mut lru_resolver  = OutboundAliasResolverFactory::new_lru(2);
+        lru_resolver.reset_for_new_connection(2);
 
         let qos2_publish1 = incoming_packets[0].clone();
 
@@ -4017,7 +4019,10 @@ mod operational_state_tests {
     #[test]
     fn connected_state_outbound_topic_aliasing_used() {
         let mut config = build_standard_test_config();
-        config.outbound_alias_resolver = Some(Box::new(LruOutboundAliasResolver::new(2)));
+
+        let mut lru_resolver  = OutboundAliasResolverFactory::new_lru(2);
+        lru_resolver.reset_for_new_connection(2);
+        config.outbound_alias_resolver = Some(lru_resolver);
 
         let mut fixture = OperationalStateTestFixture::new(config);
         fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_topic_aliasing));
@@ -4102,7 +4107,7 @@ mod operational_state_tests {
         verify_operational_state_empty(&fixture);
 
         let result = receiver.try_recv().unwrap();
-        if let QosResponse::Qos2(Qos2Response::Pubcomp(pubcomp)) = &result.unwrap().qos_response {
+        if let PublishResponse::Qos2(Qos2Response::Pubcomp(pubcomp)) = &result.unwrap() {
             assert_eq!(PubcompReasonCode::Success, pubcomp.reason_code);
         } else {
             panic!("Expected a pubcomp");
