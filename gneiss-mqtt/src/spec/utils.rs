@@ -78,6 +78,7 @@ pub const SUBSCRIPTION_OPTIONS_NO_LOCAL_MASK : u8 = 1u8 << 2;
 pub const SUBSCRIPTION_OPTIONS_RETAIN_AS_PUBLISHED_MASK : u8 = 1u8 << 3;
 pub const SUBSCRIPTION_OPTIONS_RETAIN_HANDLING_SHIFT : u8 = 4;
 
+/// Converts an integer to a modeled QualityOfService value
 pub fn convert_u8_to_quality_of_service(value: u8) -> MqttResult<QualityOfService> {
     match value {
         0 => { Ok(QualityOfService::AtMostOnce) }
@@ -274,6 +275,7 @@ pub(crate) fn connect_reason_code_to_str (reason_code: ConnectReasonCode) -> &'s
     }
 }
 
+/// Converts an integer to a modeled DisconnectReasonCode value
 pub fn convert_u8_to_disconnect_reason_code(value: u8) -> MqttResult<DisconnectReasonCode> {
     match value {
         0 => { Ok(DisconnectReasonCode::NormalDisconnection) }

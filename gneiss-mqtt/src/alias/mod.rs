@@ -59,7 +59,7 @@ impl OutboundAliasResolverFactory {
 
     /// Creates a new outbound topic alias resolver that never uses topic aliases.
     pub fn new_null() -> Box<dyn OutboundAliasResolver + Send> {
-        return Box::new( NullOutboundAliasResolver::new() );
+        Box::new( NullOutboundAliasResolver::new() )
     }
 
     /// An outbound topic alias resolver that only uses aliases supplied by the user in the Publish
@@ -67,7 +67,7 @@ impl OutboundAliasResolverFactory {
     /// usable (too big, not-yet-seen, etc...).  In these cases, the resolver does not use a topic
     /// alias.
     pub fn new_manual() -> Box<dyn OutboundAliasResolver + Send> {
-        return Box::new( ManualOutboundAliasResolver::new() );
+        Box::new( ManualOutboundAliasResolver::new() )
     }
 
     /// An outbound topic alias resolver that uses an LRU cache to automatically make topic
@@ -76,7 +76,7 @@ impl OutboundAliasResolverFactory {
     /// exceeds what the broker is allowing, or if there is a highly skewed distribution where
     /// commonly-used topics are very short and uncommon topics are very long.
     pub fn new_lru(maximum_alias_value : u16) -> Box<dyn OutboundAliasResolver + Send> {
-        return Box::new( LruOutboundAliasResolver::new(maximum_alias_value) );
+        Box::new( LruOutboundAliasResolver::new(maximum_alias_value) )
     }
 }
 

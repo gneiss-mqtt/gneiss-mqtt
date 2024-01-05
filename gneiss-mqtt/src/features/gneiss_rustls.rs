@@ -8,8 +8,6 @@ Functionality for using [`rustls`](https://crates.io/crates/rustls) as an MQTT c
 implementation.
  */
 
-#![warn(missing_docs)]
-
 extern crate rustls;
 extern crate rustls_pemfile;
 

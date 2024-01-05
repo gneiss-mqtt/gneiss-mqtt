@@ -598,7 +598,11 @@ pub enum AuthenticateReasonCode {
 /// [MQTT5 spec](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901013).
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct UserProperty {
+
+    /// User property name
     pub name: String,
+
+    /// User property value
     pub value: String,
 }
 
@@ -635,6 +639,8 @@ pub struct Subscription {
 }
 
 impl Subscription {
+
+    /// Common-case constructor for Subscriptions that don't need specialized configuration
     pub fn new(topic_filter: &str, qos: QualityOfService) -> Self {
         Subscription {
             topic_filter: topic_filter.to_string(),

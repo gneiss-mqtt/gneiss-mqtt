@@ -31,7 +31,7 @@ This crate's public API is expected to be very unstable until v0.5.0.  See the r
 in the README for more details.
 */
 
-//#![warn(missing_docs)]
+#![warn(missing_docs)]
 
 pub mod alias;
 pub mod client;
@@ -77,63 +77,209 @@ pub use spec::unsuback::UnsubackPacket;
 pub use spec::unsubscribe::UnsubscribePacket;
 pub use spec::utils::{
     convert_u8_to_disconnect_reason_code,
-    convert_u8_to_authenticate_reason_code,
     convert_u8_to_quality_of_service,
-    convert_u8_to_retain_handling_type
 };
 
 use std::error::Error;
 use std::fmt;
 use std::time::Instant;
 
+/// Basic error type for the entire gneiss-mqtt crate.  Currently a very simple enum with no
+/// additional context.  May eventually take on additional state in certain variants, but for now
+/// I don't feel comfortable committing to that.
+///
+/// In the meantime, configure logging for additional details recorded at the time of the error
+/// emission.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum MqttError {
+
+    /// An error where no basic cause could be determined.  Generally an indication of
+    /// a bug in an interior system.
     Unknown,
+
+    /// Functionality was invoked that has not yet been implemented.  Should never be seen
+    /// post-GA.
     Unimplemented,
+
+    /// A client encountered an error awaiting on its incoming operation channel.  This is usually
+    /// due to the user dropping the client which in turn drops the channel sender.
+    ///
+    /// TODO: if this does not send the client into a terminal state, it should.
     OperationChannelReceiveError,
+
+    /// There was an error attempting to submit an operation to the client via the operation channel.
+    /// This usually means the client was closed, which dropped the channel receiver.
     OperationChannelSendError,
+
+    /// Error emitted when packet's encoding would produce a VLI value that exceeds the protocol
+    /// maximum (2 ^ 28 - 1)
     VariableLengthIntegerMaximumExceeded,
+
+    /// Error emitted by the client when the encoder buffer does not have capacity to encode at
+    /// least 4 bytes.  Should never be seen.
     EncodeBufferTooSmall,
+
+    /// Error emitted when a packet is received with a variable length integer whose encoding
+    /// does not conform to the MQTT spec
     DecoderInvalidVli,
+
+    /// Error emitted when an invalid packet encoding is received.  This is distinct from
+    /// errors that arise from packets that validate protocol behavior specifications.
+    ///
+    /// MalformedPacket examples include bad header flags, mismatches between remaining length
+    /// fields and overall packet length, etc...
     MalformedPacket,
+
+    /// Generic error emitted when the client encounters broker behavior that violates the MQTT
+    /// specification in a way that cannot be safely ignored or recovered from.
+    ///
+    /// More specific errors exist for a variety of protocol violations.
     ProtocolError,
-    InboundTopicAliasNotAllowed,
+
+    /// Error emitted when an inbound publish arrives with an unknown topic alias.
     InboundTopicAliasNotValid,
-    OutboundTopicAliasNotAllowed,
-    OutboundTopicAliasInvalid,
+
+    /// Error emitted when a (user-submitted) packet is encountered whose user properties violate
+    /// the MQTT specification.  Generally this is due to a maximum length violation.
     UserPropertyValidation,
+
+    /// Error emitted when an Auth packet is submitted or received that violates the MQTT
+    /// specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     AuthPacketValidation,
+
+    /// Error emitted when a Connack packet is received that violates the MQTT specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     ConnackPacketValidation,
+
+    /// Error emitted when a Connect packet is constructed on behalf of the user that violates the MQTT
+    /// specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     ConnectPacketValidation,
+
+    /// Error emitted when a Disconnect packet is submitted or received that violates the MQTT specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     DisconnectPacketValidation,
+
+    /// Error emitted when a Puback packet is received that violates the MQTT specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     PubackPacketValidation,
+
+    /// Error emitted when a Pubcomp packet is received that violates the MQTT specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     PubcompPacketValidation,
+
+    /// Error emitted when a Pubrec packet is received that violates the MQTT specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     PubrecPacketValidation,
+
+    /// Error emitted when a Pubrel packet is received that violates the MQTT specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     PubrelPacketValidation,
+
+    /// Error emitted when a Publish packet is submitted or received that violates the MQTT specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     PublishPacketValidation,
+
+    /// Error emitted when a Suback packet is received that violates the MQTT specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     SubackPacketValidation,
+
+    /// Error emitted when an Unsuback packet is received that violates the MQTT specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     UnsubackPacketValidation,
+
+    /// Error emitted when a Subscribe packet is submitted that violates the MQTT specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     SubscribePacketValidation,
+
+    /// Error emitted when an Unsubscribe packet is submitted that violates the MQTT specification.
+    ///
+    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
     UnsubscribePacketValidation,
+
+    /// Error emitted by the client when something happens that should never happen.  Always indicates
+    /// a bug in the client.
     InternalStateError,
+
+    /// Error emitted when the broker explicitly rejects a connection attempt by sending a Connack
+    /// packet with a failing reason code.  The connect failure client event will contain the
+    /// full Connack packet and can be inspected for further diagnostics.
     ConnectionRejected,
+
+    /// Error emitted by the client when the broker does not respond to a Connect packet within
+    /// the configured timeout interval.
     ConnackTimeout,
+
+    /// Error emitted when the client shuts down a connection due to the broker not responding to
+    /// a Pingreq packet.  Generally indicates that connectivity between the client and broker is
+    /// broken.
     PingTimeout,
+
+    /// Error emitted when the client's connection gets closed for some external reason.  Usually
+    /// this is the broker hanging up on the client, but intermediary network failures may trigger
+    /// this as well.
     ConnectionClosed,
+
+    /// Error applied to MQTT operaations that are failed because the client is offline and the
+    /// configured offline policy rejects the operation.
     OfflineQueuePolicyFailed,
+
+    /// Error emitted when the broker sends a Disconnect packet to indicate the connection is
+    /// being shut down.
     ServerSideDisconnect,
+
+    /// Error applied to user-submitted operations that indicates the operation failed because
+    /// we did not receive an Ack packet within the operation's timeout interval.
     AckTimeout,
+
+    /// Error indicating no more packet ids are available for outbound packets.  Should never
+    /// happen; indicates a bad client bug.
     PacketIdSpaceExhausted,
+
+    /// Error applied to all unfinished client operations when the client is closed by the user.
     OperationalStateReset,
+
+    /// Error emitted by the client after sending a user-submitted Disconnect packet as a part
+    /// of a `stop()` invocation.  Does not indicate an actual failure.
     UserInitiatedDisconnect,
-    ClientClosed,
+
+    /// Error emitted by the client when a connection attempt (the interval between starting
+    /// the connection and it being ready for an MQTT Connect packet) times out
     ConnectionTimeout,
-    UserRequestedStop,
+
+    /// Error emitted by the client when a connection is rejected prior to the Connect <-> Connack
+    /// handshake
     ConnectionEstablishmentFailure,
+
+    /// Error emitted by the client when it fails to write data to the socket.  This is a
+    /// connection-fatal event; it does not represent socket-buffer-full.
     StreamWriteFailure,
+
+    /// Error emitted by the client when it fails to read data from the socket.  This is a
+    /// connection-fatal event; it does not represent no-data-ready.
     StreamReadFailure,
+
+    /// Umm, not sure how this is test-only
     OperationChannelEmpty,
+
+    /// Generic error associated with reading TLS configuration data from the filesystem
     IoError,
+
+    /// Generic error associated with parsing TLS configuration from memory or applying it to a
+    /// TLS context
     TlsError
 }
 
@@ -152,10 +298,7 @@ impl fmt::Display for MqttError {
             MqttError::DecoderInvalidVli => { write!(f, "DecoderInvalidVli") }
             MqttError::MalformedPacket => { write!(f, "MalformedPacket") }
             MqttError::ProtocolError => { write!(f, "ProtocolError") }
-            MqttError::InboundTopicAliasNotAllowed => { write!(f, "InboundTopicAliasNotAllowed") }
             MqttError::InboundTopicAliasNotValid => { write!(f, "InboundTopicAliasNotValid") }
-            MqttError::OutboundTopicAliasNotAllowed => { write!(f, "OutboundTopicAliasNotAllowed") }
-            MqttError::OutboundTopicAliasInvalid => { write!(f, "OutboundTopicAliasInvalid") }
             MqttError::UserPropertyValidation => { write!(f, "UserPropertyValidation") }
             MqttError::AuthPacketValidation => { write!(f, "AuthPacketValidation") }
             MqttError::ConnackPacketValidation => { write!(f, "ConnackPacketValidation") }
@@ -181,9 +324,7 @@ impl fmt::Display for MqttError {
             MqttError::PacketIdSpaceExhausted => { write!(f, "PacketIdSpaceExhausted") }
             MqttError::OperationalStateReset => { write!(f, "OperationalStateReset") }
             MqttError::UserInitiatedDisconnect => { write!(f, "UserInitiatedDisconnect") }
-            MqttError::ClientClosed => { write!(f, "ClientClosed") }
             MqttError::ConnectionTimeout => { write!(f, "ConnectionTimeout") }
-            MqttError::UserRequestedStop => { write!(f, "UserRequestedStop") }
             MqttError::ConnectionEstablishmentFailure => { write!(f, "ConnectionEstablishmentFailure") }
             MqttError::StreamWriteFailure => { write!(f, "StreamWriteFailure") }
             MqttError::StreamReadFailure => { write!(f, "StreamReadFailure") }
@@ -206,6 +347,7 @@ impl From<std::io::Error> for MqttError {
     }
 }
 
+/// Crate-wide result type for functions that can fail
 pub type MqttResult<T> = Result<T, MqttError>;
 
 fn fold_mqtt_result<T>(base: MqttResult<T>, new_result: MqttResult<T>) -> MqttResult<T> {
