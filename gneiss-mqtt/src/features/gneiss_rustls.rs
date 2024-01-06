@@ -10,6 +10,7 @@ implementation.
 
 extern crate rustls;
 extern crate rustls_pemfile;
+extern crate rustls_pki_types;
 
 use crate::config::{TlsData, TlsMode, TlsOptions};
 use crate::config::TlsOptionsBuilder;
@@ -86,7 +87,7 @@ fn build_private_key(key_bytes: &[u8]) -> Result<PrivateKeyDer<'static>, rustls:
     }
 }
 
-fn build_certs(certificate_bytes: &[u8]) -> Vec<pki_types::CertificateDer<'static>> {
+fn build_certs(certificate_bytes: &[u8]) -> Vec<rustls_pki_types::CertificateDer<'static>> {
     let mut reader = std::io::BufReader::new(certificate_bytes);
 
     rustls_pemfile::certs(&mut reader)

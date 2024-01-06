@@ -116,6 +116,32 @@ impl <T> AsyncOperationReceiver<T> {
             Ok(val) => { Ok(val) }
         }
     }
+
+    #[cfg(test)]
+    pub fn try_recv(&mut self) -> MqttResult<T> {
+        match self.receiver.try_recv() {
+            Err(_) => {
+                Err(MqttError::OperationChannelEmpty)
+            }
+            Ok(val) => {
+                Ok(val)
+            }
+
+        }
+    }
+
+    #[cfg(test)]
+    pub fn blocking_recv(self) -> MqttResult<T> {
+        match self.receiver.blocking_recv() {
+            Err(_) => {
+                Err(MqttError::OperationChannelReceiveError)
+            }
+            Ok(val) => {
+                Ok(val)
+            }
+
+        }
+    }
 }
 
 /// tokio-specific client event channel
@@ -268,6 +294,9 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
         let (stream_reader, mut stream_writer) = split(stream);
         tokio::pin!(stream_reader);
 
+        let mut should_flush = false;
+        let mut write_directive : Option<WriteDirective>;
+
         let mut next_state = None;
         while next_state.is_none() {
             let next_service_time_option = client.get_next_connected_service_time();
@@ -279,6 +308,14 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 } else {
                     None
                 };
+
+            if should_flush {
+                write_directive = Some(WriteDirective::Flush);
+            } else if outbound_slice_option.is_some() {
+                write_directive = Some(WriteDirective::Bytes(outbound_slice_option.unwrap()))
+            } else {
+                write_directive = None;
+            }
 
             tokio::select! {
                 // incoming user operations future
@@ -311,15 +348,20 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                     }
                 }
                 // outbound data future (if relevant)
-                Some(bytes_written_result) = conditional_write(outbound_slice_option, &mut stream_writer) => {
+                Some(bytes_written_result) = conditional_write(write_directive, &mut stream_writer) => {
                     match bytes_written_result {
                         Ok(bytes_written) => {
                             cumulative_bytes_written += bytes_written;
                             if cumulative_bytes_written == outbound_data.len() {
                                 outbound_data.clear();
                                 cumulative_bytes_written = 0;
-                                if client.handle_write_completion().is_err() {
-                                    next_state = Some(ClientImplState::PendingReconnect);
+                                if should_flush || self.tokio_config.automatic_flush {
+                                    if client.handle_write_completion().is_err() {
+                                        next_state = Some(ClientImplState::PendingReconnect);
+                                    }
+                                    should_flush = false;
+                                } else {
+                                    should_flush = true;
                                 }
                             }
                         }
@@ -374,10 +416,24 @@ async fn conditional_wait(wait_option: Option<tokio::time::Sleep>) -> Option<()>
     }
 }
 
-async fn conditional_write<T>(bytes_option: Option<&[u8]>, writer: &mut WriteHalf<T>) -> Option<std::io::Result<usize>> where T : AsyncRead + AsyncWrite {
-    match bytes_option {
-        Some(bytes) => Some(writer.write(bytes).await),
-        None => None,
+enum WriteDirective<'a> {
+    Bytes(&'a[u8]),
+    Flush
+}
+
+async fn conditional_write<'a, T>(directive: Option<WriteDirective<'a>>, writer: &mut WriteHalf<T>) -> Option<std::io::Result<usize>> where T : AsyncRead + AsyncWrite {
+    match directive {
+        Some(WriteDirective::Bytes(bytes)) => {
+            Some(writer.write(bytes).await)
+        }
+        Some(WriteDirective::Flush) => {
+            if let Err(error) = writer.flush().await {
+                Some(Err(error))
+            } else {
+                Some(Ok(0))
+            }
+        }
+        _ => { None }
     }
 }
 
@@ -443,14 +499,18 @@ pub(crate) fn spawn_event_callback(event: Arc<ClientEvent>, callback: Arc<Client
 type TokioConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = std::io::Result<T>> + Send + Sync>>;
 
 /// Tokio-specific client configuration
-pub struct TokioClientOptions<T> where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
+pub struct TokioClientOptions<T> where T : AsyncRead + AsyncWrite + Send + Sync {
 
     /// Factory function for creating the final connection object based on all the various
     /// configuration options and features.  It might be a TcpStream, it might be a TlsStream,
-    /// it might be a websocketstream, it might be some scary combination.
+    /// it might be a WebsocketStream, it might be some nested combination.
     ///
     /// Ultimately, the type must implement AsyncRead and AsyncWrite.
-    pub connection_factory: Box<dyn Fn() -> TokioConnectionFactoryReturnType<T> + Send + Sync>
+    pub connection_factory: Box<dyn Fn() -> TokioConnectionFactoryReturnType<T> + Send + Sync>,
+
+    /// Indicates whether the client must manually invoke flush after every write.  So far, this
+    /// is false for websockets-via-tungstenite and true for everything else.
+    pub automatic_flush: bool
 }
 
 impl Mqtt5Client {

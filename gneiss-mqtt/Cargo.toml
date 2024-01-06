@@ -14,12 +14,19 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
+http = { version = "0.2" }
 lru = { version = "0.12" }
 log = { version = "0.4" }
 rand = { version = "0.8" }
 rustls = { version = "0.22", default-features = false }
-tokio-rustls = { version = "0.25" }
 rustls-native-certs = { version = "0.7" }
-pki-types = { package = "rustls-pki-types", version = "1" }
 rustls-pemfile = "2"
+rustls-pki-types = { version = "1" }
+stream-ws = { version = "0.1.1", features = ["tungstenite", "tokio"] }
+tokio = { version = "1", features = ["full"] }
+tokio-rustls = { version = "0.25" }
+tokio-tungstenite = { version = "0.20" }
+tungstenite = { version = "0.20" }
+
+
+
