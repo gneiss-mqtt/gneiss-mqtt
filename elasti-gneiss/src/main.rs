@@ -39,13 +39,14 @@ struct CommandLineArgs {
     #[argh(option)]
     key: Option<String>,
 
-    /// URI of endpoint to connect to.  Supported schemes include `mqtt` and `mqtts`
+    /// URI of endpoint to connect to.  Supported schemes include `ws`, `mqtt` and `mqtts`
     #[argh(positional)]
     endpoint_uri: String,
 
     /// path to a log file that should be written
     #[argh(option)]
     logpath: Option<PathBuf>,
+
 }
 
 fn build_client(connect_options: ConnectOptions, client_config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
@@ -74,14 +75,21 @@ fn build_client(connect_options: ConnectOptions, client_config: Mqtt5ClientOptio
         .with_connect_options(connect_options)
         .with_client_options(client_config);
 
-    if scheme == "mqtts" {
-        let tls_options =
-            if args.cert.is_some() && args.key.is_some() {
-                TlsOptionsBuilder::new_with_mtls_from_path(args.cert.as_ref().unwrap(), args.key.as_ref().unwrap()).unwrap().build_rustls().unwrap()
-            } else {
-                TlsOptionsBuilder::new().build_rustls().unwrap()
-            };
-        builder = builder.with_tls_options(tls_options);
+    match scheme.as_str() {
+        "mqtts" => {
+            let tls_options =
+                if args.cert.is_some() && args.key.is_some() {
+                    TlsOptionsBuilder::new_with_mtls_from_path(args.cert.as_ref().unwrap(), args.key.as_ref().unwrap()).unwrap().build_rustls().unwrap()
+                } else {
+                    TlsOptionsBuilder::new().build_rustls().unwrap()
+                };
+            builder = builder.with_tls_options(tls_options);
+        }
+        "ws" => {
+            let websocket_options = WebsocketOptionsBuilder::new().build();
+            builder = builder.with_websocket_options(websocket_options);
+        }
+        _ => {}
     }
 
     Ok(builder.build(runtime)?)

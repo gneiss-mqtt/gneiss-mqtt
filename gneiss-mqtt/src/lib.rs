@@ -31,7 +31,7 @@ This crate's public API is expected to be very unstable until v0.5.0.  See the r
 in the README for more details.
 */
 
-#![warn(missing_docs)]
+// #![warn(missing_docs)]
 
 pub mod alias;
 pub mod client;
