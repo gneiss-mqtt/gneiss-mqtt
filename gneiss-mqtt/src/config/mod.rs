@@ -41,19 +41,26 @@ use tokio_tungstenite::{client_async, WebSocketStream};
 use stream_ws::{tungstenite::WsMessageHandler, WsMessageHandle, WsByteStream};
 
 
-type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = std::io::Result<String>> + Send + Sync >>;
-type WebsocketHandshakeTransform = Box<dyn Fn(String) -> WebsocketHandshakeTransformReturnType + Send + Sync>;
+/// Return type for a websocket handshake transformation function
+pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = std::io::Result<String>> + Send + Sync >>;
 
+/// Async websocket handshake transformation function type
+pub type WebsocketHandshakeTransform = Box<dyn Fn(String) -> WebsocketHandshakeTransformReturnType + Send + Sync>;
+
+/// Configuration options related to establishing an MQTT over websockets
 #[derive(Default)]
 pub struct WebsocketOptions {
     pub(crate) handshake_transform: Option<WebsocketHandshakeTransform>
 }
 
+/// Builder type for constructing Websockets-related configuration.
 pub struct WebsocketOptionsBuilder {
     options : WebsocketOptions
 }
 
 impl WebsocketOptionsBuilder {
+
+    /// Creates a new builder object with default options.
     pub fn new() -> Self {
         WebsocketOptionsBuilder {
             options: WebsocketOptions {
@@ -62,10 +69,14 @@ impl WebsocketOptionsBuilder {
         }
     }
 
+    /// Configure an async transformation function that operates on the websocket handshake.  Useful
+    /// for brokers that require some kind of signing algorithm to accept the upgrade request.
     pub fn with_handshake_transform(mut self, transform: WebsocketHandshakeTransform) -> Self {
         self.options.handshake_transform = Some(transform);
         self
     }
+
+    /// Creates a new set of Websocket options
     pub fn build(self) -> WebsocketOptions {
         self.options
     }
