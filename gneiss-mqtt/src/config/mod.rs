@@ -20,7 +20,7 @@ extern crate stream_ws;
 use crate::*;
 use crate::alias::OutboundAliasResolver;
 use crate::client::*;
-use crate::features::gneiss_tokio::{AsyncClientEventSender, TokioClientOptions};
+use crate::features::gneiss_tokio::{TokioClientOptions};
 
 use std::fmt::{Debug, Formatter};
 use std::fs::File;
@@ -33,7 +33,6 @@ use tokio::runtime::Handle;
 use tokio_rustls::client::TlsStream;
 use tokio_rustls::{TlsConnector};
 
-
 use std::future::Future;
 use std::pin::Pin;
 use tungstenite::Message;
@@ -42,10 +41,10 @@ use stream_ws::{tungstenite::WsMessageHandler, WsMessageHandle, WsByteStream};
 
 
 /// Return type for a websocket handshake transformation function
-pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = std::io::Result<String>> + Send + Sync >>;
+pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = std::io::Result<http::request::Builder>> + Send + Sync >>;
 
 /// Async websocket handshake transformation function type
-pub type WebsocketHandshakeTransform = Box<dyn Fn(String) -> WebsocketHandshakeTransformReturnType + Send + Sync>;
+pub type WebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -> WebsocketHandshakeTransformReturnType + Send + Sync>;
 
 /// Configuration options related to establishing an MQTT over websockets
 #[derive(Default)]
@@ -216,9 +215,6 @@ pub type ClientEventListenerCallback = dyn Fn(Arc<ClientEvent>) + Send + Sync;
 /// Union type for all of the different ways a client event listener can be configured.
 pub enum ClientEventListener {
 
-    /// A channel on which events should be sent
-    Channel(AsyncClientEventSender),
-
     /// A function that should be invoked with the events.
     ///
     /// Important Note: for async clients, this function is invoked from a spawned task on the
@@ -230,9 +226,6 @@ pub enum ClientEventListener {
 impl Debug for ClientEventListener {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            ClientEventListener::Channel(_) => {
-                write!(f, "ClientEventListener::Channel(...)")
-            }
             ClientEventListener::Callback(_) => {
                 write!(f, "ClientEventListener::Callback(...)")
             }
@@ -860,25 +853,28 @@ use http::{Uri, Version};
 use tungstenite::{client::*, handshake::client::generate_key};
 
 struct HandshakeRequest {
-    uri: String,
+    handshake_builder: http::request::Builder,
 }
 
 impl IntoClientRequest for HandshakeRequest {
     fn into_client_request(self) -> tungstenite::Result<tungstenite::handshake::client::Request> {
-        let uri = Uri::from_str(&self.uri.to_string())?;
-        let req = http::Request::builder()
-            .uri(self.uri.to_string())
-            .version(Version::HTTP_11)
-            .header("Sec-WebSocket-Protocol", "mqtt")
-            .header("Sec-WebSocket-Key", generate_key())
-            .header("Connection", "Upgrade")
-            .header("Upgrade", "websocket")
-            .header("Sec-WebSocket-Version", 13)
-            .header("Host", uri.host().unwrap());
-
-        let final_request = req.body(()).unwrap();
+        let final_request = self.handshake_builder.body(()).unwrap();
         Ok(tungstenite::handshake::client::Request::from(final_request))
     }
+}
+
+fn create_default_websocket_handshake_request(uri: String) -> std::io::Result<http::request::Builder> {
+    let uri = Uri::from_str(uri.as_str()).unwrap();
+
+    Ok(http::Request::builder()
+        .uri(uri.to_string())
+        .version(Version::HTTP_11)
+        .header("Sec-WebSocket-Protocol", "mqtt")
+        .header("Sec-WebSocket-Key", generate_key())
+        .header("Connection", "Upgrade")
+        .header("Upgrade", "websocket")
+        .header("Sec-WebSocket-Version", 13)
+        .header("Host", uri.host().unwrap()))
 }
 
 async fn make_ws_stream(endpoint: String, port: u16, handshake_transform: Arc<Option<WebsocketHandshakeTransform>>) -> std::io::Result<WsByteStream<WebSocketStream<TcpStream>, Message, tungstenite::Error, WsMessageHandler>> {
@@ -886,17 +882,16 @@ async fn make_ws_stream(endpoint: String, port: u16, handshake_transform: Arc<Op
     let addr = to_socket_addrs.next().unwrap();
 
     let uri = format!("ws://{}:{}/mqtt", endpoint, port);
-    let handshake_uri =
+    let handshake_builder = create_default_websocket_handshake_request(uri)?;
+    let transformed_handshake_builder =
         if let Some(transform) = &*handshake_transform {
-            transform(uri).await?
+            transform(handshake_builder).await?
         } else {
-            uri
+            handshake_builder
         };
 
-
-
     let tcp_stream = TcpStream::connect(&addr).await?;
-    let handshake_result = client_async(HandshakeRequest{ uri: handshake_uri }, tcp_stream).await;
+    let handshake_result = client_async(HandshakeRequest{ handshake_builder: transformed_handshake_builder }, tcp_stream).await;
     let (message_stream, _) = handshake_result.map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to perform websocket handshake"))?;
     let byte_stream = WsMessageHandler::wrap_stream(message_stream);
 
@@ -909,11 +904,12 @@ async fn make_wss_stream(endpoint: String, port: u16, connector: TlsConnector, h
     let addr = to_socket_addrs.next().unwrap();
 
     let uri = format!("wss://{}:{}/mqtt", endpoint, port);
-    let handshake_uri =
+    let handshake_builder = create_default_websocket_handshake_request(uri)?;
+    let transformed_handshake_builder =
         if let Some(transform) = &*handshake_transform {
-            transform(uri).await?
+            transform(handshake_builder).await?
         } else {
-            uri
+            handshake_builder
         };
 
     let tcp_stream = TcpStream::connect(&addr).await?;
@@ -924,7 +920,7 @@ async fn make_wss_stream(endpoint: String, port: u16, connector: TlsConnector, h
 
     let tls_stream = connector.connect(domain, tcp_stream).await?;
 
-    let handshake_result = client_async(handshake_uri, tls_stream).await;
+    let handshake_result = client_async( HandshakeRequest { handshake_builder: transformed_handshake_builder }, tls_stream).await;
     let (message_stream, _) = handshake_result.map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to perform websocket handshake"))?;
     let byte_stream = WsMessageHandler::wrap_stream(message_stream);
 
