@@ -283,16 +283,16 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 Some(bytes_written_result) = conditional_write(write_directive, &mut stream_writer) => {
                     match bytes_written_result {
                         Ok(bytes_written) => {
-                            cumulative_bytes_written += bytes_written;
-                            if cumulative_bytes_written == outbound_data.len() {
-                                outbound_data.clear();
-                                cumulative_bytes_written = 0;
-                                if should_flush || self.tokio_config.automatic_flush {
-                                    if client.handle_write_completion().is_err() {
-                                        next_state = Some(ClientImplState::PendingReconnect);
-                                    }
-                                    should_flush = false;
-                                } else {
+                            if should_flush {
+                                should_flush = false;
+                                if client.handle_write_completion().is_err() {
+                                    next_state = Some(ClientImplState::PendingReconnect);
+                                }
+                            } else {
+                                cumulative_bytes_written += bytes_written;
+                                if cumulative_bytes_written == outbound_data.len() {
+                                    outbound_data.clear();
+                                    cumulative_bytes_written = 0;
                                     should_flush = true;
                                 }
                             }
@@ -439,10 +439,6 @@ pub struct TokioClientOptions<T> where T : AsyncRead + AsyncWrite + Send + Sync 
     ///
     /// Ultimately, the type must implement AsyncRead and AsyncWrite.
     pub connection_factory: Box<dyn Fn() -> TokioConnectionFactoryReturnType<T> + Send + Sync>,
-
-    /// Indicates whether the client must manually invoke flush after every write.  So far, this
-    /// is false for websockets-via-tungstenite and true for everything else.
-    pub automatic_flush: bool
 }
 
 impl Mqtt5Client {

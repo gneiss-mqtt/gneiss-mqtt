@@ -16,6 +16,7 @@ use crate::config::{TlsData, TlsMode, TlsOptions};
 use crate::config::TlsOptionsBuilder;
 
 use rustls::pki_types::{PrivateKeyDer};
+use std::sync::Arc;
 
 
 impl TlsOptionsBuilder {
@@ -45,8 +46,10 @@ impl TlsOptionsBuilder {
                 config.alpn_protocols.push(alpn);
             }
 
+            config.enable_sni = self.verify_peer;
+
             return Ok(TlsOptions {
-                options: TlsData::Rustls(self.mode, config)
+                options: TlsData::Rustls(self.mode, Arc::new(config))
             });
         }
 

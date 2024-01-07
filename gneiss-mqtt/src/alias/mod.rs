@@ -18,6 +18,7 @@ use log::*;
 use lru::LruCache;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 /// Captures the outcome of an outbound topic alias resolution attempt.  Outbound topic alias
 /// resolution is performed as the client encodes a Publish packet before writing it to the
@@ -50,6 +51,11 @@ pub trait OutboundAliasResolver : Send {
     fn resolve_and_apply_topic_alias(&mut self, alias: &Option<u16>, topic: &str) -> OutboundAliasResolution;
 }
 
+type OutboundAliasResolverFactoryReturnType = Box<dyn OutboundAliasResolver + Send>;
+
+/// Signature for factory functions that build new outbound alias resolvers
+pub type OutboundAliasResolverFactoryFn = Arc<dyn Fn() -> OutboundAliasResolverFactoryReturnType + Send + Sync>;
+
 /// Static factory for constructing all of the outbound topic alias resolver variants that are
 /// included in the base library.
 pub struct OutboundAliasResolverFactory {
@@ -58,16 +64,16 @@ pub struct OutboundAliasResolverFactory {
 impl OutboundAliasResolverFactory {
 
     /// Creates a new outbound topic alias resolver that never uses topic aliases.
-    pub fn new_null() -> Box<dyn OutboundAliasResolver + Send> {
-        Box::new( NullOutboundAliasResolver::new() )
+    pub fn new_null_factory() -> OutboundAliasResolverFactoryFn {
+        Arc::new(|| { Box::new( NullOutboundAliasResolver::new()) })
     }
 
     /// An outbound topic alias resolver that only uses aliases supplied by the user in the Publish
     /// packet.  Note that there are multiple reasons why a user-supplied alias might not be
     /// usable (too big, not-yet-seen, etc...).  In these cases, the resolver does not use a topic
     /// alias.
-    pub fn new_manual() -> Box<dyn OutboundAliasResolver + Send> {
-        Box::new( ManualOutboundAliasResolver::new() )
+    pub fn new_manual_factory() -> OutboundAliasResolverFactoryFn {
+        Arc::new(|| { Box::new( ManualOutboundAliasResolver::new()) })
     }
 
     /// An outbound topic alias resolver that uses an LRU cache to automatically make topic
@@ -75,8 +81,8 @@ impl OutboundAliasResolverFactory {
     /// use cases.  Sub-optimal performance could occur if the working set of topics substantially
     /// exceeds what the broker is allowing, or if there is a highly skewed distribution where
     /// commonly-used topics are very short and uncommon topics are very long.
-    pub fn new_lru(maximum_alias_value : u16) -> Box<dyn OutboundAliasResolver + Send> {
-        Box::new( LruOutboundAliasResolver::new(maximum_alias_value) )
+    pub fn new_lru_factory(maximum_alias_value : u16) -> OutboundAliasResolverFactoryFn {
+        Arc::new(move || { Box::new( LruOutboundAliasResolver::new(maximum_alias_value)) })
     }
 }
 

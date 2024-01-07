@@ -18,7 +18,7 @@ extern crate stream_ws;
 
 
 use crate::*;
-use crate::alias::OutboundAliasResolver;
+use crate::alias::{OutboundAliasResolverFactoryFn};
 use crate::client::*;
 use crate::features::gneiss_tokio::{TokioClientOptions};
 
@@ -33,12 +33,18 @@ use tokio::runtime::Handle;
 use tokio_rustls::client::TlsStream;
 use tokio_rustls::{TlsConnector};
 
+// websockets feature
 use std::future::Future;
 use std::pin::Pin;
 use tungstenite::Message;
 use tokio_tungstenite::{client_async, WebSocketStream};
 use stream_ws::{tungstenite::WsMessageHandler, WsMessageHandle, WsByteStream};
+use std::str::FromStr;
+use http::{Uri, Version};
+use tokio::io::{AsyncRead, AsyncWrite};
+use tungstenite::{client::*, handshake::client::generate_key};
 
+// proxy feature
 
 /// Return type for a websocket handshake transformation function
 pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = std::io::Result<http::request::Builder>> + Send + Sync >>;
@@ -47,9 +53,9 @@ pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = std
 pub type WebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -> WebsocketHandshakeTransformReturnType + Send + Sync>;
 
 /// Configuration options related to establishing an MQTT over websockets
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct WebsocketOptions {
-    pub(crate) handshake_transform: Option<WebsocketHandshakeTransform>
+    pub(crate) handshake_transform: Arc<Option<WebsocketHandshakeTransform>>
 }
 
 /// Builder type for constructing Websockets-related configuration.
@@ -71,7 +77,7 @@ impl WebsocketOptionsBuilder {
     /// Configure an async transformation function that operates on the websocket handshake.  Useful
     /// for brokers that require some kind of signing algorithm to accept the upgrade request.
     pub fn with_handshake_transform(mut self, transform: WebsocketHandshakeTransform) -> Self {
-        self.options.handshake_transform = Some(transform);
+        self.options.handshake_transform = Arc::new(Some(transform));
         self
     }
 
@@ -81,17 +87,19 @@ impl WebsocketOptionsBuilder {
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone)]
 pub(crate) enum TlsMode {
     Standard,
     Mtls
 }
 
+#[derive(Clone)]
 pub(crate) enum TlsData {
-    Rustls(TlsMode, rustls::ClientConfig),
+    Rustls(TlsMode, Arc<rustls::ClientConfig>),
 }
 
 /// Opaque struct containing TLS configuration data, assuming TLS has been enabled as a feature
+#[derive(Clone)]
 pub struct TlsOptions {
     pub(crate) options: TlsData
 }
@@ -157,7 +165,8 @@ impl TlsOptionsBuilder {
         self
     }
 
-    /// Disables SNI.  This doesn't currently work since I haven't had a need to make it work yet.
+    /// Controls whether or not SNI is used during the TLS handshake.  It is highly recommended
+    /// to set this value to false only in testing environments.
     pub fn with_verify_peer(mut self, verify_peer: bool) -> Self {
         self.verify_peer = verify_peer;
         self
@@ -207,30 +216,6 @@ pub enum RejoinSessionPolicy {
 
     /// The client will never attempt to rejoin a session.
     Never
-}
-
-/// Type for a callback function to be invoked with every emitted client event
-pub type ClientEventListenerCallback = dyn Fn(Arc<ClientEvent>) + Send + Sync;
-
-/// Union type for all of the different ways a client event listener can be configured.
-pub enum ClientEventListener {
-
-    /// A function that should be invoked with the events.
-    ///
-    /// Important Note: for async clients, this function is invoked from a spawned task on the
-    /// client's runtime.  This means you can safely `.await` within the callback without blocking
-    /// the client's forward progress.
-    Callback(Arc<ClientEventListenerCallback>)
-}
-
-impl Debug for ClientEventListener {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            ClientEventListener::Callback(_) => {
-                write!(f, "ClientEventListener::Callback(...)")
-            }
-        }
-    }
 }
 
 pub(crate) const DEFAULT_KEEP_ALIVE_SECONDS : u16 = 1200;
@@ -579,8 +564,33 @@ impl Default for ReconnectOptions {
     }
 }
 
+/// Type for a callback function to be invoked with every emitted client event
+pub type ClientEventListenerCallback = dyn Fn(Arc<ClientEvent>) + Send + Sync;
+
+/// Union type for all of the different ways a client event listener can be configured.
+#[derive(Clone)]
+pub enum ClientEventListener {
+
+    /// A function that should be invoked with the events.
+    ///
+    /// Important Note: for async clients, this function is invoked from a spawned task on the
+    /// client's runtime.  This means you can safely `.await` within the callback without blocking
+    /// the client's forward progress.
+    Callback(Arc<ClientEventListenerCallback>)
+}
+
+impl Debug for ClientEventListener {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ClientEventListener::Callback(_) => {
+                write!(f, "ClientEventListener::Callback(...)")
+            }
+        }
+    }
+}
+
 /// A structure that holds client-level behavioral configuration
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Mqtt5ClientOptions {
     pub(crate) offline_queue_policy: OfflineQueuePolicy,
 
@@ -589,7 +599,7 @@ pub struct Mqtt5ClientOptions {
 
     pub(crate) default_event_listener: Option<ClientEventListener>,
 
-    pub(crate) outbound_alias_resolver: Option<Box<dyn OutboundAliasResolver + Send>>,
+    pub(crate) outbound_alias_resolver_factory: Option<OutboundAliasResolverFactoryFn>,
 
     pub(crate) reconnect_options: ReconnectOptions,
 }
@@ -601,10 +611,10 @@ impl Debug for Mqtt5ClientOptions {
         write!(f, "connack_timeout: {:?}, ", self.connack_timeout)?;
         write!(f, "ping_timeout: {:?}, ", self.ping_timeout)?;
         write!(f, "default_event_listener: {:?}, ", self.default_event_listener)?;
-        if self.outbound_alias_resolver.is_some() {
-            write!(f, "outbound_alias_resolver: Some(...), ")?;
+        if self.outbound_alias_resolver_factory.is_some() {
+            write!(f, "outbound_alias_resolver_factory: Some(...), ")?;
         } else {
-            write!(f, "outbound_alias_resolver: None, ")?;
+            write!(f, "outbound_alias_resolver_factory: None, ")?;
         };
         write!(f, "reconnect_options: {:?}, ", self.reconnect_options)?;
 
@@ -658,8 +668,8 @@ impl Mqtt5ClientOptionsBuilder {
 
     /// Configures an outbound topic alias resolver to be used when sending Publish packets to
     /// the broker.
-    pub fn with_outbound_alias_resolver(mut self, outbound_alias_resolver: Box<dyn OutboundAliasResolver + Send>) -> Self {
-        self.options.outbound_alias_resolver = Some(outbound_alias_resolver);
+    pub fn with_outbound_alias_resolver_factory(mut self, outbound_alias_resolver_factory: OutboundAliasResolverFactoryFn) -> Self {
+        self.options.outbound_alias_resolver_factory = Some(outbound_alias_resolver_factory);
         self
     }
 
@@ -725,7 +735,7 @@ impl GenericClientBuilder {
         }
     }
 
-    /// Configures what TLS options to use when the client creates connections.  If not specified,
+    /// Configures what TLS options to use for the connection to the broker.  If not specified,
     /// then TLS will not be used.
     pub fn with_tls_options(mut self, tls_options: TlsOptions) -> Self {
         self.tls_options = Some(tls_options);
@@ -752,25 +762,30 @@ impl GenericClientBuilder {
     }
 
     /// Builds a new MQTT client according to all the configuration options given to the builder.
-    pub fn build(self, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    /// Does not consume self; can be called multiple times
+    pub fn build(&self, runtime: &Handle) -> MqttResult<Mqtt5Client> {
         let connect_options =
-            if let Some(options) = self.connect_options {
-                options
+            if let Some(options) = &self.connect_options {
+                options.clone()
             } else {
                 ConnectOptionsBuilder::new().build()
             };
 
         let client_options =
-            if let Some(options) = self.client_options {
-                options
+            if let Some(options) = &self.client_options {
+                options.clone()
             } else {
                 Mqtt5ClientOptionsBuilder::new().build()
             };
 
-        if let Some(websocket_options) = self.websocket_options {
-            make_websocket_client(self.endpoint, self.port, websocket_options, self.tls_options, client_options, connect_options, runtime)
+        let tls_options = self.tls_options.clone();
+        let websocket_options = self.websocket_options.clone();
+        let endpoint = self.endpoint.clone();
+
+        if websocket_options.is_some() {
+            make_websocket_client(endpoint, self.port, websocket_options.unwrap(), tls_options, client_options, connect_options, runtime)
         } else {
-            make_direct_client(self.endpoint, self.port, self.tls_options, client_options, connect_options, runtime)
+            make_direct_client(endpoint, self.port, tls_options, client_options, connect_options, runtime)
         }
     }
 }
@@ -784,25 +799,17 @@ fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOption
     let addr = to_socket_addrs.unwrap().next().unwrap();
 
     if let Some(tls_options) = tls_options {
-        let connector =
-            match tls_options.options {
-                TlsData::Rustls(_, config) => { TlsConnector::from(Arc::new(config)) }
-            };
-
-        let endpoint = endpoint.clone();
-
         let tokio_options = TokioClientOptions {
             connection_factory: Box::new(move || {
-                Box::pin(make_tls_stream(addr, endpoint.clone(), connector.clone()))
+                let tcp_stream = Box::pin(make_leaf_stream(addr.clone()));
+                return Box::pin(wrap_stream_with_tls(tcp_stream, endpoint.clone(), tls_options.clone()));
             }),
-            automatic_flush: true
         };
 
         Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
     } else {
         let tokio_options = TokioClientOptions {
-            connection_factory: Box::new(move || { Box::pin(TcpStream::connect(addr)) }),
-            automatic_flush: true
+            connection_factory: Box::new(move || { Box::pin(make_leaf_stream(addr.clone())) }),
         };
 
         Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
@@ -810,47 +817,52 @@ fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOption
 }
 
 fn make_websocket_client(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, runtime: &Handle) -> MqttResult<Mqtt5Client> {
-    let handshake_transform = Arc::new(websocket_options.handshake_transform);
-    if let Some(tls_options) = tls_options {
-        let connector =
-            match tls_options.options {
-                TlsData::Rustls(_, config) => { TlsConnector::from(Arc::new(config)) }
-            };
+    let to_socket_addrs = (endpoint.clone(), port).to_socket_addrs();
+    if to_socket_addrs.is_err()  {
+        return Err(MqttError::Unknown);
+    }
+    let addr = to_socket_addrs.unwrap().next().unwrap();
 
+    if let Some(tls_options) = tls_options {
         let tokio_options = TokioClientOptions {
             connection_factory: Box::new(move || {
-                Box::pin(make_wss_stream(endpoint.clone(), port, connector.clone(), handshake_transform.clone()))
+                let tcp_stream = Box::pin(make_leaf_stream(addr.clone()));
+                let tls_stream = Box::pin(wrap_stream_with_tls(tcp_stream, endpoint.clone(), tls_options.clone()));
+                Box::pin(wrap_stream_with_websockets(tls_stream, endpoint.clone(), websocket_options.clone()))
             }),
-            automatic_flush: false
         };
 
         Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
     } else {
         let tokio_options = TokioClientOptions {
             connection_factory: Box::new(move || {
-                Box::pin(make_ws_stream(endpoint.clone(), port, handshake_transform.clone()))
+                let tcp_stream = Box::pin(make_leaf_stream(addr.clone()));
+                Box::pin(wrap_stream_with_websockets(tcp_stream, endpoint.clone(), websocket_options.clone()))
             }),
-            automatic_flush: false
         };
 
         Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
     }
 }
 
-// should be moved somewhere else
-async fn make_tls_stream(addr: SocketAddr, endpoint: String, connector: TlsConnector) -> std::io::Result<TlsStream<TcpStream>> {
-    let tcp_stream = TcpStream::connect(&addr).await?;
+async fn make_leaf_stream(addr: SocketAddr) -> std::io::Result<TcpStream> {
+    TcpStream::connect(&addr).await
+}
 
+
+async fn wrap_stream_with_tls<S>(stream : Pin<Box<impl Future<Output=std::io::Result<S>>+Sized>>, endpoint: String, tls_options: TlsOptions) -> std::io::Result<TlsStream<S>> where S : AsyncRead + AsyncWrite + Unpin {
     let domain = rustls_pki_types::ServerName::try_from(endpoint)
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid dnsname"))?
         .to_owned();
 
-    connector.connect(domain, tcp_stream).await
-}
+    let connector =
+        match tls_options.options {
+            TlsData::Rustls(_, config) => { TlsConnector::from(config.clone()) }
+        };
 
-use std::str::FromStr;
-use http::{Uri, Version};
-use tungstenite::{client::*, handshake::client::generate_key};
+    let inner_stream= stream.await?;
+    connector.connect(domain, inner_stream).await
+}
 
 struct HandshakeRequest {
     handshake_builder: http::request::Builder,
@@ -877,52 +889,28 @@ fn create_default_websocket_handshake_request(uri: String) -> std::io::Result<ht
         .header("Host", uri.host().unwrap()))
 }
 
-async fn make_ws_stream(endpoint: String, port: u16, handshake_transform: Arc<Option<WebsocketHandshakeTransform>>) -> std::io::Result<WsByteStream<WebSocketStream<TcpStream>, Message, tungstenite::Error, WsMessageHandler>> {
-    let mut to_socket_addrs = (endpoint.clone(), port).to_socket_addrs()?;
-    let addr = to_socket_addrs.next().unwrap();
+async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=std::io::Result<S>>+Sized>>, endpoint: String, websocket_options: WebsocketOptions) -> std::io::Result<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
 
-    let uri = format!("ws://{}:{}/mqtt", endpoint, port);
+    let uri = format!("ws://{}/mqtt", endpoint); // scheme needs to be present but value irrelevant
     let handshake_builder = create_default_websocket_handshake_request(uri)?;
     let transformed_handshake_builder =
-        if let Some(transform) = &*handshake_transform {
+        if let Some(transform) = &*websocket_options.handshake_transform {
             transform(handshake_builder).await?
         } else {
             handshake_builder
         };
 
-    let tcp_stream = TcpStream::connect(&addr).await?;
-    let handshake_result = client_async(HandshakeRequest{ handshake_builder: transformed_handshake_builder }, tcp_stream).await;
+    let inner_stream= stream.await?;
+    let handshake_result = client_async( HandshakeRequest { handshake_builder: transformed_handshake_builder }, inner_stream).await;
     let (message_stream, _) = handshake_result.map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to perform websocket handshake"))?;
     let byte_stream = WsMessageHandler::wrap_stream(message_stream);
 
     Ok(byte_stream)
 }
 
-
-async fn make_wss_stream(endpoint: String, port: u16, connector: TlsConnector, handshake_transform: Arc<Option<WebsocketHandshakeTransform>>) -> std::io::Result<WsByteStream<WebSocketStream<TlsStream<TcpStream>>, Message, tungstenite::Error, WsMessageHandler>> {
-    let mut to_socket_addrs = (endpoint.clone(), port).to_socket_addrs()?;
-    let addr = to_socket_addrs.next().unwrap();
-
-    let uri = format!("wss://{}:{}/mqtt", endpoint, port);
-    let handshake_builder = create_default_websocket_handshake_request(uri)?;
-    let transformed_handshake_builder =
-        if let Some(transform) = &*handshake_transform {
-            transform(handshake_builder).await?
-        } else {
-            handshake_builder
-        };
-
-    let tcp_stream = TcpStream::connect(&addr).await?;
-
-    let domain = rustls_pki_types::ServerName::try_from(endpoint)
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid dnsname"))?
-        .to_owned();
-
-    let tls_stream = connector.connect(domain, tcp_stream).await?;
-
-    let handshake_result = client_async( HandshakeRequest { handshake_builder: transformed_handshake_builder }, tls_stream).await;
-    let (message_stream, _) = handshake_result.map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to perform websocket handshake"))?;
-    let byte_stream = WsMessageHandler::wrap_stream(message_stream);
-
-    Ok(byte_stream)
+/*
+async fn wrap_stream_with_proxy_connect<S>(stream : S, endpoint: String, port: u16) -> std::io::Result<S> where S : AsyncRead + AsyncWrite + Unpin {
+    Ok(stream)
 }
+
+ */
