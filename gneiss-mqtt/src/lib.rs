@@ -93,7 +93,7 @@ use std::time::Instant;
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum MqttError {
 
-    /// An error where no basic cause could be determined.  Generally an indication of
+    /// An error where no root cause could be determined.  Generally an indication of
     /// a bug in an interior system.
     Unknown,
 
@@ -289,48 +289,48 @@ impl Error for MqttError {
 impl fmt::Display for MqttError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MqttError::Unknown => { write!(f, "Unknown") }
-            MqttError::Unimplemented => { write!(f, "Unimplemented") }
-            MqttError::OperationChannelReceiveError => { write!(f, "OperationChannelReceiveError") }
-            MqttError::OperationChannelSendError => { write!(f, "OperationChannelSendError") }
-            MqttError::VariableLengthIntegerMaximumExceeded => { write!(f, "VariableLengthIntegerMaximumExceeded") }
-            MqttError::EncodeBufferTooSmall => { write!(f, "EncodeBufferTooSmall") }
-            MqttError::DecoderInvalidVli => { write!(f, "DecoderInvalidVli") }
-            MqttError::MalformedPacket => { write!(f, "MalformedPacket") }
-            MqttError::ProtocolError => { write!(f, "ProtocolError") }
-            MqttError::InboundTopicAliasNotValid => { write!(f, "InboundTopicAliasNotValid") }
-            MqttError::UserPropertyValidation => { write!(f, "UserPropertyValidation") }
-            MqttError::AuthPacketValidation => { write!(f, "AuthPacketValidation") }
-            MqttError::ConnackPacketValidation => { write!(f, "ConnackPacketValidation") }
-            MqttError::ConnectPacketValidation => { write!(f, "ConnectPacketValidation") }
-            MqttError::DisconnectPacketValidation => { write!(f, "DisconnectPacketValidation") }
-            MqttError::PubackPacketValidation => { write!(f, "PubackPacketValidation") }
-            MqttError::PubcompPacketValidation => { write!(f, "PubcompPacketValidation") }
-            MqttError::PubrecPacketValidation => { write!(f, "PubrecPacketValidation") }
-            MqttError::PubrelPacketValidation => { write!(f, "PubrelPacketValidation") }
-            MqttError::PublishPacketValidation => { write!(f, "PublishPacketValidation") }
-            MqttError::SubackPacketValidation => { write!(f, "SubackPacketValidation") }
-            MqttError::UnsubackPacketValidation => { write!(f, "UnsubackPacketValidation") }
-            MqttError::SubscribePacketValidation => { write!(f, "SubscribePacketValidation") }
-            MqttError::UnsubscribePacketValidation => { write!(f, "UnsubscribePacketValidation") }
-            MqttError::InternalStateError => { write!(f, "InternalStateError") }
-            MqttError::ConnectionRejected => { write!(f, "ConnectionRejected") }
-            MqttError::ConnackTimeout => { write!(f, "ConnackTimeout") }
-            MqttError::PingTimeout => { write!(f, "PingTimeout") }
-            MqttError::ConnectionClosed => { write!(f, "ConnectionClosed") }
-            MqttError::OfflineQueuePolicyFailed => { write!(f, "OfflineQueuePolicyFailed") }
-            MqttError::ServerSideDisconnect => { write!(f, "ServerSideDisconnect") }
-            MqttError::AckTimeout => { write!(f, "AckTimeout") }
-            MqttError::PacketIdSpaceExhausted => { write!(f, "PacketIdSpaceExhausted") }
-            MqttError::OperationalStateReset => { write!(f, "OperationalStateReset") }
-            MqttError::UserInitiatedDisconnect => { write!(f, "UserInitiatedDisconnect") }
-            MqttError::ConnectionTimeout => { write!(f, "ConnectionTimeout") }
-            MqttError::ConnectionEstablishmentFailure => { write!(f, "ConnectionEstablishmentFailure") }
-            MqttError::StreamWriteFailure => { write!(f, "StreamWriteFailure") }
-            MqttError::StreamReadFailure => { write!(f, "StreamReadFailure") }
-            MqttError::OperationChannelEmpty => { write!(f, "OperationChannelEmpty") }
-            MqttError::IoError => { write!(f, "io error") }
-            MqttError::TlsError => { write!(f, "tls error") }
+            MqttError::Unknown => { write!(f, "unknown - no root cause could be determined") }
+            MqttError::Unimplemented => { write!(f, "unimplemented - attempt to invoke functionality that has not been completed") }
+            MqttError::OperationChannelReceiveError => { write!(f, "operation channel receive error - client operation sender has been dropped") }
+            MqttError::OperationChannelSendError => { write!(f, "operation channel send error - client has been closed") }
+            MqttError::VariableLengthIntegerMaximumExceeded => { write!(f, "variable length integer maximum exceeded") }
+            MqttError::EncodeBufferTooSmall => { write!(f, "encode buffer too small - mqtt encoder requires at least 4 bytes") }
+            MqttError::DecoderInvalidVli => { write!(f, "decoder invalid vli - received a packet with an invalid vli encoding") }
+            MqttError::MalformedPacket => { write!(f, "malformed packet - received a packet whose encoding properties violate the mqtt spec") }
+            MqttError::ProtocolError => { write!(f, "protocol error - broker behavior disallowed by the mqtt spec") }
+            MqttError::InboundTopicAliasNotValid => { write!(f, "inbound topic alias not valid - incoming publish contained an invalid topic alias") }
+            MqttError::UserPropertyValidation => { write!(f, "user property validation - mqtt packet contains user properties that violate the mqtt spec") }
+            MqttError::AuthPacketValidation => { write!(f, "auth packet validation - an auth packet failed validation") }
+            MqttError::ConnackPacketValidation => { write!(f, "connack packet validation - a connack packet failed validation") }
+            MqttError::ConnectPacketValidation => { write!(f, "connect packet validation - a connect packet failed validation") }
+            MqttError::DisconnectPacketValidation => { write!(f, "disconnect packet validation - a disconnect packet failed validation") }
+            MqttError::PubackPacketValidation => { write!(f, "puback packet validation - a puback packet failed validation") }
+            MqttError::PubcompPacketValidation => { write!(f, "pubcomp packet validation - a pubcomp packet failed validation") }
+            MqttError::PubrecPacketValidation => { write!(f, "pubrec packet validation - a pubrec packet failed validation") }
+            MqttError::PubrelPacketValidation => { write!(f, "pubrel packet validation - a pubrel packet failed validation") }
+            MqttError::PublishPacketValidation => { write!(f, "publish packet validation - a publish packet failed validation") }
+            MqttError::SubackPacketValidation => { write!(f, "suback packet validation - a suback packet failed validation") }
+            MqttError::UnsubackPacketValidation => { write!(f, "unsuback packet validation - an unsuback packet failed validation") }
+            MqttError::SubscribePacketValidation => { write!(f, "subscribe packet validation - a subscribe packet failed validation") }
+            MqttError::UnsubscribePacketValidation => { write!(f, "unsubscribe packet validation - an unsubscribe packet failed validation") }
+            MqttError::InternalStateError => { write!(f, "internal state error - client reached an invalid internal state, almost certainly a client bug") }
+            MqttError::ConnectionRejected => { write!(f, "connack rejected - the broker explicitly rejected the connect packet") }
+            MqttError::ConnackTimeout => { write!(f, "connack timeout - the broker did not respond in time to the connect packet") }
+            MqttError::PingTimeout => { write!(f, "ping timeout - the broker did not response in time to the pingreq packet; likely the connection was unhealthy") }
+            MqttError::ConnectionClosed => { write!(f, "connection closed - the client's connection was closed due to some external reason") }
+            MqttError::OfflineQueuePolicyFailed => { write!(f, "offline queue policy failed - operation failed due to the offline queue policy and the fact that the client is currently offline") }
+            MqttError::ServerSideDisconnect => { write!(f, "server side disconnect - connection was shut down after receiving a disconnect packet from the broker") }
+            MqttError::AckTimeout => { write!(f, "ack timeout - the operation's timeout triggered prior to receiving an ack from the broker") }
+            MqttError::PacketIdSpaceExhausted => { write!(f, "packet id space exhausted - no packet ids remain; should never happen") }
+            MqttError::OperationalStateReset => { write!(f, "operational state reset - the operation was not complete prior to the client being closed") }
+            MqttError::UserInitiatedDisconnect => { write!(f, "user-initiated disconnect - connection was shut down by user action") }
+            MqttError::ConnectionTimeout => { write!(f, "connection timeout - a transport-level connection to the broker could not be established before timeout") }
+            MqttError::ConnectionEstablishmentFailure => { write!(f, "connection establishment failure - failure to establish a transport-level connection to the broker") }
+            MqttError::StreamWriteFailure => { write!(f, "stream write failure - error attempting to write or flush a connection stream") }
+            MqttError::StreamReadFailure => { write!(f, "stream read failure - error when attempting to read a connection stream") }
+            MqttError::OperationChannelEmpty => { write!(f, "operation channel empty - ??") }
+            MqttError::IoError => { write!(f, "io error - generic error due to an error operating on the connection's network stream") }
+            MqttError::TlsError => { write!(f, "tls error - generic error when setting up a tls context") }
         }
     }
 }
