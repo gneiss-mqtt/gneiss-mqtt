@@ -298,7 +298,7 @@ pub struct AwsClientBuilder {
     connect_options: Option<ConnectOptions>,
     client_options: Option<Mqtt5ClientOptions>,
     tls_options: TlsOptions,
-    inner_builder: GenericClientBuilder
+    endpoint: String
 }
 
 const ALPN_PORT : u16 = 443;
@@ -335,7 +335,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options: tls_options_result.unwrap(),
-            inner_builder: GenericClientBuilder::new(endpoint, DEFAULT_PORT)
+            endpoint: endpoint.to_string()
         };
 
         Ok(builder)
@@ -368,7 +368,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options: tls_options_result.unwrap(),
-            inner_builder: GenericClientBuilder::new(endpoint, DEFAULT_PORT)
+            endpoint: endpoint.to_string()
         };
 
         Ok(builder)
@@ -399,7 +399,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options: tls_options_result.unwrap(),
-            inner_builder: GenericClientBuilder::new(endpoint, DEFAULT_PORT)
+            endpoint: endpoint.to_string()
         };
 
         Ok(builder)
@@ -421,21 +421,30 @@ impl AwsClientBuilder {
 
     /// Creates a new MQTT5 client from all of the configuration options registered with the
     /// builder.
-    pub fn build(mut self, runtime: &Handle) -> MqttResult<Mqtt5Client> {
-        if self.connect_options.is_none() {
-            self.connect_options = Some(ConnectOptionsBuilder::new().build());
-        }
-        if self.client_options.is_none() {
-            self.client_options = Some(Mqtt5ClientOptionsBuilder::new().build());
-        }
+    pub fn build(&self, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+        let mut connect_options =
+            if let Some(options) = &self.connect_options {
+                options.clone()
+            } else {
+                ConnectOptionsBuilder::new().build()
+            };
 
-        let mut connect_options = self.connect_options.take().unwrap();
+        let client_options =
+            if let Some(options) = &self.client_options {
+                options.clone()
+            } else {
+                Mqtt5ClientOptionsBuilder::new().build()
+            };
+
         self.apply_custom_auth_options_to_connect_options(&mut connect_options);
 
-        self.inner_builder = self.inner_builder.with_connect_options(connect_options);
-        self.inner_builder = self.inner_builder.with_client_options(self.client_options.take().unwrap());
-        self.inner_builder = self.inner_builder.with_tls_options(self.tls_options);
-        self.inner_builder.build(runtime)
+        let tls_options = self.tls_options.clone();
+
+        GenericClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT)
+            .with_connect_options(connect_options)
+            .with_client_options(client_options)
+            .with_tls_options(tls_options)
+            .build(runtime)
     }
 
     fn apply_custom_auth_options_to_connect_options(&self, connect_options: &mut ConnectOptions) {
