@@ -134,9 +134,6 @@ impl Mqtt5ClientImpl {
     pub(crate) fn broadcast_event(&self, event: Arc<ClientEvent>) {
         for listener in self.listeners.values() {
             match listener {
-                ClientEventListener::Channel(channel) => {
-                    channel.send(event.clone()).unwrap();
-                }
                 ClientEventListener::Callback(callback) => {
                     spawn_event_callback(event.clone(), callback.clone());
                 }
