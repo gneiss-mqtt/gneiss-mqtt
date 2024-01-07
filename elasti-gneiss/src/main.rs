@@ -47,6 +47,10 @@ struct CommandLineArgs {
     #[argh(option)]
     logpath: Option<PathBuf>,
 
+    /// disables SNI and peer verification; only use for testing
+    #[argh(switch)]
+    no_verify_peer: bool
+
 }
 
 fn build_client(connect_options: ConnectOptions, client_config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
@@ -77,15 +81,34 @@ fn build_client(connect_options: ConnectOptions, client_config: Mqtt5ClientOptio
 
     match scheme.as_str() {
         "mqtts" => {
-            let tls_options =
+            let mut tls_options_builder =
                 if args.cert.is_some() && args.key.is_some() {
-                    TlsOptionsBuilder::new_with_mtls_from_path(args.cert.as_ref().unwrap(), args.key.as_ref().unwrap()).unwrap().build_rustls().unwrap()
+                    TlsOptionsBuilder::new_with_mtls_from_path(args.cert.as_ref().unwrap(), args.key.as_ref().unwrap()).unwrap()
                 } else {
-                    TlsOptionsBuilder::new().build_rustls().unwrap()
+                    TlsOptionsBuilder::new()
                 };
-            builder = builder.with_tls_options(tls_options);
+
+            if let Some(capath) = &args.capath {
+                tls_options_builder = tls_options_builder.with_root_ca_from_path(capath.as_str()).unwrap();
+            }
+
+            tls_options_builder = tls_options_builder.with_verify_peer(!args.no_verify_peer);
+
+            builder = builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
         }
         "ws" => {
+            let websocket_options = WebsocketOptionsBuilder::new().build();
+            builder = builder.with_websocket_options(websocket_options);
+        }
+        "wss" => {
+            let mut tls_options_builder = TlsOptionsBuilder::new().with_verify_peer(!args.no_verify_peer);
+            if let Some(capath) = &args.capath {
+                tls_options_builder = tls_options_builder.with_root_ca_from_path(capath.as_str()).unwrap();
+            }
+
+            let tls_options = tls_options_builder.build_rustls().unwrap();
+            builder = builder.with_tls_options(tls_options);
+
             let websocket_options = WebsocketOptionsBuilder::new().build();
             builder = builder.with_websocket_options(websocket_options);
         }
@@ -117,13 +140,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let connect_options = ConnectOptionsBuilder::new()
         .with_keep_alive_interval_seconds(Some(60))
-        .with_client_id("HelloClient")
+        .with_client_id("HelloClient-wss")
         .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
         .build();
 
     let config = Mqtt5ClientOptionsBuilder::new()
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
-        .with_connack_timeout(Duration::from_secs(60))
+        .with_connack_timeout(Duration::from_secs(3600))
         .with_ping_timeout(Duration::from_secs(60))
         .with_default_event_listener(callback)
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::None)
