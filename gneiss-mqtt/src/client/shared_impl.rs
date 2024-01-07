@@ -90,7 +90,7 @@ impl Mqtt5ClientImpl {
             offline_queue_policy: client_config.offline_queue_policy,
             connack_timeout: client_config.connack_timeout,
             ping_timeout: client_config.ping_timeout,
-            outbound_alias_resolver: client_config.outbound_alias_resolver.take(),
+            outbound_alias_resolver: client_config.outbound_alias_resolver_factory.map(|f| { f() })
         };
 
         let default_listener = client_config.default_event_listener.take();

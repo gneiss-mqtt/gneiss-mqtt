@@ -21,6 +21,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Handle;
 use url::Url;
+use gneiss_mqtt::alias::OutboundAliasResolverFactory;
 
 #[derive(FromArgs, Debug, PartialEq)]
 /// elasti-gneiss - an interactive MQTT5 console
@@ -150,6 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_ping_timeout(Duration::from_secs(60))
         .with_default_event_listener(callback)
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::None)
+        .with_outbound_alias_resolver_factory(OutboundAliasResolverFactory::new_lru_factory(10))
         .build();
 
     let client = build_client(connect_options, config, &Handle::current(), &cli_args).unwrap();

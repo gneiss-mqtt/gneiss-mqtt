@@ -18,7 +18,7 @@ extern crate stream_ws;
 
 
 use crate::*;
-use crate::alias::OutboundAliasResolver;
+use crate::alias::{OutboundAliasResolver, OutboundAliasResolverFactoryFn};
 use crate::client::*;
 use crate::features::gneiss_tokio::{TokioClientOptions};
 
@@ -210,30 +210,6 @@ pub enum RejoinSessionPolicy {
 
     /// The client will never attempt to rejoin a session.
     Never
-}
-
-/// Type for a callback function to be invoked with every emitted client event
-pub type ClientEventListenerCallback = dyn Fn(Arc<ClientEvent>) + Send + Sync;
-
-/// Union type for all of the different ways a client event listener can be configured.
-pub enum ClientEventListener {
-
-    /// A function that should be invoked with the events.
-    ///
-    /// Important Note: for async clients, this function is invoked from a spawned task on the
-    /// client's runtime.  This means you can safely `.await` within the callback without blocking
-    /// the client's forward progress.
-    Callback(Arc<ClientEventListenerCallback>)
-}
-
-impl Debug for ClientEventListener {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            ClientEventListener::Callback(_) => {
-                write!(f, "ClientEventListener::Callback(...)")
-            }
-        }
-    }
 }
 
 pub(crate) const DEFAULT_KEEP_ALIVE_SECONDS : u16 = 1200;
@@ -582,8 +558,33 @@ impl Default for ReconnectOptions {
     }
 }
 
+/// Type for a callback function to be invoked with every emitted client event
+pub type ClientEventListenerCallback = dyn Fn(Arc<ClientEvent>) + Send + Sync;
+
+/// Union type for all of the different ways a client event listener can be configured.
+#[derive(Clone)]
+pub enum ClientEventListener {
+
+    /// A function that should be invoked with the events.
+    ///
+    /// Important Note: for async clients, this function is invoked from a spawned task on the
+    /// client's runtime.  This means you can safely `.await` within the callback without blocking
+    /// the client's forward progress.
+    Callback(Arc<ClientEventListenerCallback>)
+}
+
+impl Debug for ClientEventListener {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ClientEventListener::Callback(_) => {
+                write!(f, "ClientEventListener::Callback(...)")
+            }
+        }
+    }
+}
+
 /// A structure that holds client-level behavioral configuration
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Mqtt5ClientOptions {
     pub(crate) offline_queue_policy: OfflineQueuePolicy,
 
@@ -592,7 +593,7 @@ pub struct Mqtt5ClientOptions {
 
     pub(crate) default_event_listener: Option<ClientEventListener>,
 
-    pub(crate) outbound_alias_resolver: Option<Box<dyn OutboundAliasResolver + Send>>,
+    pub(crate) outbound_alias_resolver_factory: Option<OutboundAliasResolverFactoryFn>,
 
     pub(crate) reconnect_options: ReconnectOptions,
 }
@@ -604,10 +605,10 @@ impl Debug for Mqtt5ClientOptions {
         write!(f, "connack_timeout: {:?}, ", self.connack_timeout)?;
         write!(f, "ping_timeout: {:?}, ", self.ping_timeout)?;
         write!(f, "default_event_listener: {:?}, ", self.default_event_listener)?;
-        if self.outbound_alias_resolver.is_some() {
-            write!(f, "outbound_alias_resolver: Some(...), ")?;
+        if self.outbound_alias_resolver_factory.is_some() {
+            write!(f, "outbound_alias_resolver_factory: Some(...), ")?;
         } else {
-            write!(f, "outbound_alias_resolver: None, ")?;
+            write!(f, "outbound_alias_resolver_factory: None, ")?;
         };
         write!(f, "reconnect_options: {:?}, ", self.reconnect_options)?;
 
@@ -661,8 +662,8 @@ impl Mqtt5ClientOptionsBuilder {
 
     /// Configures an outbound topic alias resolver to be used when sending Publish packets to
     /// the broker.
-    pub fn with_outbound_alias_resolver(mut self, outbound_alias_resolver: Box<dyn OutboundAliasResolver + Send>) -> Self {
-        self.options.outbound_alias_resolver = Some(outbound_alias_resolver);
+    pub fn with_outbound_alias_resolver_factory(mut self, outbound_alias_resolver_factory: OutboundAliasResolverFactoryFn) -> Self {
+        self.options.outbound_alias_resolver_factory = Some(outbound_alias_resolver_factory);
         self
     }
 
@@ -728,7 +729,7 @@ impl GenericClientBuilder {
         }
     }
 
-    /// Configures what TLS options to use when the client creates connections.  If not specified,
+    /// Configures what TLS options to use for the connection to the broker.  If not specified,
     /// then TLS will not be used.
     pub fn with_tls_options(mut self, tls_options: TlsOptions) -> Self {
         self.tls_options = Some(tls_options);
@@ -755,25 +756,30 @@ impl GenericClientBuilder {
     }
 
     /// Builds a new MQTT client according to all the configuration options given to the builder.
-    pub fn build(self, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    /// Does not consume self; can be called multiple times
+    pub fn build(&self, runtime: &Handle) -> MqttResult<Mqtt5Client> {
         let connect_options =
-            if let Some(options) = self.connect_options {
-                options
+            if let Some(options) = &self.connect_options {
+                options.clone()
             } else {
                 ConnectOptionsBuilder::new().build()
             };
 
         let client_options =
-            if let Some(options) = self.client_options {
-                options
+            if let Some(options) = &self.client_options {
+                options.clone()
             } else {
                 Mqtt5ClientOptionsBuilder::new().build()
             };
 
-        if let Some(websocket_options) = self.websocket_options {
-            make_websocket_client(self.endpoint, self.port, websocket_options, self.tls_options, client_options, connect_options, runtime)
+        let tls_options = self.tls_options.clone();
+        let websocket_options = self.websocket_options.clone();
+        let endpoint = self.endpoint.clone();
+
+        if websocket_options.is_some() {
+            make_websocket_client(endpoint, self.port, websocket_options.unwrap(), tls_options, client_options, connect_options, runtime)
         } else {
-            make_direct_client(self.endpoint, self.port, self.tls_options, client_options, connect_options, runtime)
+            make_direct_client(endpoint, self.port, tls_options, client_options, connect_options, runtime)
         }
     }
 }

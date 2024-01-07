@@ -384,7 +384,7 @@ impl OperationalState {
     // Crate-public API
 
     pub(crate) fn new(mut config: OperationalStateConfig) -> OperationalState {
-        let outbound_resolver = config.outbound_alias_resolver.take().unwrap_or(OutboundAliasResolverFactory::new_null());
+        let outbound_resolver = config.outbound_alias_resolver.take().unwrap_or((OutboundAliasResolverFactory::new_null_factory())());
         let inbound_resolver = InboundAliasResolver::new(config.connect_options.topic_alias_maximum.unwrap_or(0));
         let base_time = config.base_timestamp;
 
