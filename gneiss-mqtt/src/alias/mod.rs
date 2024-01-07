@@ -52,6 +52,8 @@ pub trait OutboundAliasResolver : Send {
 }
 
 type OutboundAliasResolverFactoryReturnType = Box<dyn OutboundAliasResolver + Send>;
+
+/// Signature for factory functions that build new outbound alias resolvers
 pub type OutboundAliasResolverFactoryFn = Arc<dyn Fn() -> OutboundAliasResolverFactoryReturnType + Send + Sync>;
 
 /// Static factory for constructing all of the outbound topic alias resolver variants that are

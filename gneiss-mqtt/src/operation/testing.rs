@@ -3390,7 +3390,7 @@ mod operational_state_tests {
 
         let qos2_publish1_topic = "topic1".to_string();
 
-        let mut lru_resolver  = OutboundAliasResolverFactory::new_lru(2);
+        let mut lru_resolver  = OutboundAliasResolverFactory::new_lru_factory(2)();
         lru_resolver.reset_for_new_connection(2);
 
         let qos2_publish1 = incoming_packets[0].clone();
@@ -4020,7 +4020,7 @@ mod operational_state_tests {
     fn connected_state_outbound_topic_aliasing_used() {
         let mut config = build_standard_test_config();
 
-        let mut lru_resolver  = OutboundAliasResolverFactory::new_lru(2);
+        let mut lru_resolver  = OutboundAliasResolverFactory::new_lru_factory(2)();
         lru_resolver.reset_for_new_connection(2);
         config.outbound_alias_resolver = Some(lru_resolver);
 

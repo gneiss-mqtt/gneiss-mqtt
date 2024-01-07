@@ -18,7 +18,7 @@ extern crate stream_ws;
 
 
 use crate::*;
-use crate::alias::{OutboundAliasResolver, OutboundAliasResolverFactoryFn};
+use crate::alias::{OutboundAliasResolverFactoryFn};
 use crate::client::*;
 use crate::features::gneiss_tokio::{TokioClientOptions};
 
@@ -33,12 +33,18 @@ use tokio::runtime::Handle;
 use tokio_rustls::client::TlsStream;
 use tokio_rustls::{TlsConnector};
 
+// websockets feature
 use std::future::Future;
 use std::pin::Pin;
 use tungstenite::Message;
 use tokio_tungstenite::{client_async, WebSocketStream};
 use stream_ws::{tungstenite::WsMessageHandler, WsMessageHandle, WsByteStream};
+use std::str::FromStr;
+use http::{Uri, Version};
+use tokio::io::{AsyncRead, AsyncWrite};
+use tungstenite::{client::*, handshake::client::generate_key};
 
+// proxy feature
 
 /// Return type for a websocket handshake transformation function
 pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = std::io::Result<http::request::Builder>> + Send + Sync >>;
@@ -793,23 +799,17 @@ fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOption
     let addr = to_socket_addrs.unwrap().next().unwrap();
 
     if let Some(tls_options) = tls_options {
-        let connector =
-            match tls_options.options {
-                TlsData::Rustls(_, config) => { TlsConnector::from(config.clone()) }
-            };
-
-        let endpoint = endpoint.clone();
-
         let tokio_options = TokioClientOptions {
             connection_factory: Box::new(move || {
-                Box::pin(make_tls_stream(addr, endpoint.clone(), connector.clone()))
+                let tcp_stream = Box::pin(make_leaf_stream(addr.clone()));
+                return Box::pin(wrap_stream_with_tls(tcp_stream, endpoint.clone(), tls_options.clone()));
             }),
         };
 
         Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
     } else {
         let tokio_options = TokioClientOptions {
-            connection_factory: Box::new(move || { Box::pin(TcpStream::connect(addr)) }),
+            connection_factory: Box::new(move || { Box::pin(make_leaf_stream(addr.clone())) }),
         };
 
         Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
@@ -817,16 +817,18 @@ fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOption
 }
 
 fn make_websocket_client(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, runtime: &Handle) -> MqttResult<Mqtt5Client> {
-    let handshake_transform = websocket_options.handshake_transform.clone();
-    if let Some(tls_options) = tls_options {
-        let connector =
-            match tls_options.options {
-                TlsData::Rustls(_, config) => { TlsConnector::from(config.clone()) }
-            };
+    let to_socket_addrs = (endpoint.clone(), port).to_socket_addrs();
+    if to_socket_addrs.is_err()  {
+        return Err(MqttError::Unknown);
+    }
+    let addr = to_socket_addrs.unwrap().next().unwrap();
 
+    if let Some(tls_options) = tls_options {
         let tokio_options = TokioClientOptions {
             connection_factory: Box::new(move || {
-                Box::pin(make_wss_stream(endpoint.clone(), port, connector.clone(), handshake_transform.clone()))
+                let tcp_stream = Box::pin(make_leaf_stream(addr.clone()));
+                let tls_stream = Box::pin(wrap_stream_with_tls(tcp_stream, endpoint.clone(), tls_options.clone()));
+                Box::pin(wrap_stream_with_websockets(tls_stream, endpoint.clone(), websocket_options.clone()))
             }),
         };
 
@@ -834,7 +836,8 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
     } else {
         let tokio_options = TokioClientOptions {
             connection_factory: Box::new(move || {
-                Box::pin(make_ws_stream(endpoint.clone(), port, handshake_transform.clone()))
+                let tcp_stream = Box::pin(make_leaf_stream(addr.clone()));
+                Box::pin(wrap_stream_with_websockets(tcp_stream, endpoint.clone(), websocket_options.clone()))
             }),
         };
 
@@ -842,26 +845,24 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
     }
 }
 
-// should be moved somewhere else
-async fn make_tls_stream(addr: SocketAddr, endpoint: String, connector: TlsConnector) -> std::io::Result<TlsStream<TcpStream>> {
-    let tcp_stream = TcpStream::connect(&addr).await?;
+async fn make_leaf_stream(addr: SocketAddr) -> std::io::Result<TcpStream> {
+    TcpStream::connect(&addr).await
+}
 
+
+async fn wrap_stream_with_tls<S>(stream : Pin<Box<impl Future<Output=std::io::Result<S>>+Sized>>, endpoint: String, tls_options: TlsOptions) -> std::io::Result<TlsStream<S>> where S : AsyncRead + AsyncWrite + Unpin {
     let domain = rustls_pki_types::ServerName::try_from(endpoint)
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid dnsname"))?
         .to_owned();
 
-    let stream_result = connector.connect(domain, tcp_stream).await;
-    if let Err(error) = &stream_result {
-        println!("Error: {:?}", error);
-    }
+    let connector =
+        match tls_options.options {
+            TlsData::Rustls(_, config) => { TlsConnector::from(config.clone()) }
+        };
 
-    stream_result
+    let inner_stream= stream.await?;
+    connector.connect(domain, inner_stream).await
 }
-
-use std::str::FromStr;
-use http::{Uri, Version};
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
-use tungstenite::{client::*, handshake::client::generate_key};
 
 struct HandshakeRequest {
     handshake_builder: http::request::Builder,
@@ -888,75 +889,9 @@ fn create_default_websocket_handshake_request(uri: String) -> std::io::Result<ht
         .header("Host", uri.host().unwrap()))
 }
 
-async fn make_ws_stream(endpoint: String, port: u16, handshake_transform: Arc<Option<WebsocketHandshakeTransform>>) -> std::io::Result<WsByteStream<WebSocketStream<TcpStream>, Message, tungstenite::Error, WsMessageHandler>> {
-    let mut to_socket_addrs = (endpoint.clone(), port).to_socket_addrs()?;
-    let addr = to_socket_addrs.next().unwrap();
+async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=std::io::Result<S>>+Sized>>, endpoint: String, websocket_options: WebsocketOptions) -> std::io::Result<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
 
-    let uri = format!("ws://{}:{}/mqtt", endpoint, port);
-    let handshake_builder = create_default_websocket_handshake_request(uri)?;
-    let transformed_handshake_builder =
-        if let Some(transform) = &*handshake_transform {
-            transform(handshake_builder).await?
-        } else {
-            handshake_builder
-        };
-
-    let tcp_stream = TcpStream::connect(&addr).await?;
-    let handshake_result = client_async(HandshakeRequest{ handshake_builder: transformed_handshake_builder }, tcp_stream).await;
-    let (message_stream, _) = handshake_result.map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to perform websocket handshake"))?;
-    let byte_stream = WsMessageHandler::wrap_stream(message_stream);
-
-    Ok(byte_stream)
-}
-
-
-async fn make_wss_stream(endpoint: String, port: u16, connector: TlsConnector, handshake_transform: Arc<Option<WebsocketHandshakeTransform>>) -> std::io::Result<WsByteStream<WebSocketStream<TlsStream<TcpStream>>, Message, tungstenite::Error, WsMessageHandler>> {
-    let mut to_socket_addrs = (endpoint.clone(), port).to_socket_addrs()?;
-    let addr = to_socket_addrs.next().unwrap();
-
-    let uri = format!("wss://{}:{}/mqtt", endpoint, port);
-    let handshake_builder = create_default_websocket_handshake_request(uri)?;
-    let transformed_handshake_builder =
-        if let Some(transform) = &*handshake_transform {
-            transform(handshake_builder).await?
-        } else {
-            handshake_builder
-        };
-
-    let tcp_stream = TcpStream::connect(&addr).await?;
-
-    let domain = rustls_pki_types::ServerName::try_from(endpoint)
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid dnsname"))?
-        .to_owned();
-
-    let tls_stream = connector.connect(domain, tcp_stream).await?;
-
-    let handshake_result = client_async( HandshakeRequest { handshake_builder: transformed_handshake_builder }, tls_stream).await;
-    let (message_stream, _) = handshake_result.map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to perform websocket handshake"))?;
-
-    Ok(WsMessageHandler::wrap_stream(message_stream))
-}
-
-async fn make_stream(addr: SocketAddr) -> std::io::Result<TcpStream> {
-    TcpStream::connect(&addr).await
-}
-
-async fn wrap_stream_with_tls<S>(stream : S, endpoint: String, tls_options: TlsOptions) -> std::io::Result<TlsStream<S>> where S : AsyncRead + AsyncWrite + Unpin {
-    let domain = rustls_pki_types::ServerName::try_from(endpoint)
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid dnsname"))?
-        .to_owned();
-
-    let connector =
-        match tls_options.options {
-            TlsData::Rustls(_, config) => { TlsConnector::from(config.clone()) }
-        };
-
-    connector.connect(domain, stream).await
-}
-
-async fn wrap_stream_with_websockets<S>(stream : S, endpoint: String, websocket_options: WebsocketOptions) -> std::io::Result<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
-
-    let uri = format!("{}/mqtt", endpoint);
+    let uri = format!("ws://{}/mqtt", endpoint); // scheme needs to be present but value irrelevant
     let handshake_builder = create_default_websocket_handshake_request(uri)?;
     let transformed_handshake_builder =
         if let Some(transform) = &*websocket_options.handshake_transform {
@@ -965,13 +900,17 @@ async fn wrap_stream_with_websockets<S>(stream : S, endpoint: String, websocket_
             handshake_builder
         };
 
-    let handshake_result = client_async( HandshakeRequest { handshake_builder: transformed_handshake_builder }, stream).await;
+    let inner_stream= stream.await?;
+    let handshake_result = client_async( HandshakeRequest { handshake_builder: transformed_handshake_builder }, inner_stream).await;
     let (message_stream, _) = handshake_result.map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to perform websocket handshake"))?;
     let byte_stream = WsMessageHandler::wrap_stream(message_stream);
 
     Ok(byte_stream)
 }
 
+/*
 async fn wrap_stream_with_proxy_connect<S>(stream : S, endpoint: String, port: u16) -> std::io::Result<S> where S : AsyncRead + AsyncWrite + Unpin {
     Ok(stream)
 }
+
+ */
