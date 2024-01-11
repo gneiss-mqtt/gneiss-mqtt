@@ -22,7 +22,7 @@ use std::sync::Arc;
 impl TlsOptionsBuilder {
 
     /// Builds client TLS options using the `rustls` crate
-    pub fn build_rustls(self) -> Result<TlsOptions, rustls::Error> {
+    pub fn build_rustls(&self) -> Result<TlsOptions, rustls::Error> {
         if let Ok(root_cert_store) = build_root_ca_store(self.root_ca_bytes.as_deref()) {
 
             let mut config =
@@ -42,8 +42,8 @@ impl TlsOptionsBuilder {
                 };
 
             config.alpn_protocols = Vec::new();
-            if let Some(alpn) = self.alpn {
-                config.alpn_protocols.push(alpn);
+            if let Some(alpn) = &self.alpn {
+                config.alpn_protocols.push(alpn.clone());
             }
 
             config.enable_sni = self.verify_peer;
