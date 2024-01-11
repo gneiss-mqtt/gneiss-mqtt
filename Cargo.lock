@@ -365,6 +365,7 @@ name = "gneiss-mqtt"
 version = "0.1.0"
 dependencies = [
  "http",
+ "httparse",
  "log",
  "lru",
  "rand",

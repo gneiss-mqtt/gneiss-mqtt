@@ -50,8 +50,11 @@ struct CommandLineArgs {
 
     /// disables SNI and peer verification; only use for testing
     #[argh(switch)]
-    no_verify_peer: bool
+    no_verify_peer: bool,
 
+    /// http proxy host and port to CONNECT through
+    #[argh(option)]
+    http_proxy_uri: Option<String>
 }
 
 fn build_client(connect_options: ConnectOptions, client_config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
@@ -76,9 +79,30 @@ fn build_client(connect_options: ConnectOptions, client_config: Mqtt5ClientOptio
     let port = uri.port().unwrap();
     let scheme = uri.scheme().to_lowercase();
 
-    let mut builder = GenericClientBuilder::new(&endpoint, port)
-        .with_connect_options(connect_options)
-        .with_client_options(client_config);
+    let mut builder = GenericClientBuilder::new(&endpoint, port);
+    builder.with_connect_options(connect_options);
+    builder.with_client_options(client_config);
+
+    if let Some(http_proxy_uri) = args.http_proxy_uri.clone() {
+        let proxy_url_parse_result = Url::parse(&http_proxy_uri);
+        if proxy_url_parse_result.is_err() {
+            return Err(ElastiError::InvalidUri(http_proxy_uri));
+        }
+
+        let proxy_uri = proxy_url_parse_result.unwrap();
+        if proxy_uri.host_str().is_none() {
+            return Err(ElastiError::InvalidUri(http_proxy_uri));
+        }
+
+        let proxy_endpoint = proxy_uri.host_str().unwrap().to_string();
+
+        if proxy_uri.port().is_none() {
+            return Err(ElastiError::InvalidUri(uri_string));
+        }
+
+        let http_proxy_options = HttpProxyOptionsBuilder::new(proxy_endpoint.as_str(), proxy_uri.port().unwrap()).build();
+        builder.with_http_proxy_options(http_proxy_options);
+    }
 
     match scheme.as_str() {
         "mqtts" => {
@@ -90,28 +114,29 @@ fn build_client(connect_options: ConnectOptions, client_config: Mqtt5ClientOptio
                 };
 
             if let Some(capath) = &args.capath {
-                tls_options_builder = tls_options_builder.with_root_ca_from_path(capath.as_str()).unwrap();
+                tls_options_builder.with_root_ca_from_path(capath.as_str()).unwrap();
             }
 
-            tls_options_builder = tls_options_builder.with_verify_peer(!args.no_verify_peer);
+            tls_options_builder.with_verify_peer(!args.no_verify_peer);
 
-            builder = builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
+            builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
         }
         "ws" => {
             let websocket_options = WebsocketOptionsBuilder::new().build();
-            builder = builder.with_websocket_options(websocket_options);
+            builder.with_websocket_options(websocket_options);
         }
         "wss" => {
-            let mut tls_options_builder = TlsOptionsBuilder::new().with_verify_peer(!args.no_verify_peer);
+            let mut tls_options_builder = TlsOptionsBuilder::new();
+            tls_options_builder.with_verify_peer(!args.no_verify_peer);
             if let Some(capath) = &args.capath {
-                tls_options_builder = tls_options_builder.with_root_ca_from_path(capath.as_str()).unwrap();
+                tls_options_builder.with_root_ca_from_path(capath.as_str()).unwrap();
             }
 
             let tls_options = tls_options_builder.build_rustls().unwrap();
-            builder = builder.with_tls_options(tls_options);
+            builder.with_tls_options(tls_options);
 
             let websocket_options = WebsocketOptionsBuilder::new().build();
-            builder = builder.with_websocket_options(websocket_options);
+            builder.with_websocket_options(websocket_options);
         }
         _ => {}
     }

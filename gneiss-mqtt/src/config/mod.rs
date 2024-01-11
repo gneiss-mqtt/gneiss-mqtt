@@ -8,6 +8,7 @@ Module containing types for configuring an MQTT client.
  */
 
 extern crate http;
+extern crate httparse;
 extern crate rustls;
 extern crate rustls_pki_types;
 extern crate tokio;
@@ -46,6 +47,45 @@ use tungstenite::{client::*, handshake::client::generate_key};
 
 // proxy feature
 
+/// Configuration options related to establishing connections through HTTP proxies
+#[derive(Default, Clone)]
+pub struct HttpProxyOptions {
+    endpoint: String,
+    port: u16,
+    tls_options: Option<TlsOptions>
+}
+
+/// Builder type for constructing HTTP-proxy-related configuration.
+pub struct HttpProxyOptionsBuilder {
+    options: HttpProxyOptions
+}
+
+impl HttpProxyOptionsBuilder {
+
+    /// Creates a new builder object
+    pub fn new(endpoint: &str, port: u16) -> Self {
+        HttpProxyOptionsBuilder {
+            options: HttpProxyOptions {
+                endpoint: endpoint.to_string(),
+                port,
+                tls_options: None
+            }
+        }
+    }
+
+    /// Configures tls settings for the to-proxy connection.  This is independent of any tls
+    /// configuration to the broker.
+    pub fn with_tls_options(mut self, tls_options: TlsOptions) -> Self {
+        self.options.tls_options = Some(tls_options);
+        self
+    }
+
+    /// Creates a new set of HTTP proxy options
+    pub fn build(self) -> HttpProxyOptions {
+        self.options
+    }
+}
+
 /// Return type for a websocket handshake transformation function
 pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = std::io::Result<http::request::Builder>> + Send + Sync >>;
 
@@ -76,18 +116,18 @@ impl WebsocketOptionsBuilder {
 
     /// Configure an async transformation function that operates on the websocket handshake.  Useful
     /// for brokers that require some kind of signing algorithm to accept the upgrade request.
-    pub fn with_handshake_transform(mut self, transform: WebsocketHandshakeTransform) -> Self {
+    pub fn with_handshake_transform(&mut self, transform: WebsocketHandshakeTransform) -> &mut Self {
         self.options.handshake_transform = Arc::new(Some(transform));
         self
     }
 
     /// Creates a new set of Websocket options
-    pub fn build(self) -> WebsocketOptions {
-        self.options
+    pub fn build(&self) -> WebsocketOptions {
+        self.options.clone()
     }
 }
 
-#[derive(Eq, PartialEq, Clone)]
+#[derive(Eq, PartialEq, Clone, Copy)]
 pub(crate) enum TlsMode {
     Standard,
     Mtls
@@ -153,28 +193,28 @@ impl TlsOptionsBuilder {
 
     /// Configures the builder to use a trust store that *only* contains a single root certificate,
     /// supplied by file path.
-    pub fn with_root_ca_from_path(mut self, root_ca_path: &str) -> std::io::Result<Self> {
+    pub fn with_root_ca_from_path(&mut self, root_ca_path: &str) -> std::io::Result<&mut Self> {
         self.root_ca_bytes = Some(load_file(root_ca_path)?);
         Ok(self)
     }
 
     /// Configures the builder to use a trust store that *only* contains a single root certificate,
     /// supplied from memory.
-    pub fn with_root_ca_from_memory(mut self, root_ca_bytes: &[u8]) -> Self {
+    pub fn with_root_ca_from_memory(&mut self, root_ca_bytes: &[u8]) -> &mut Self {
         self.root_ca_bytes = Some(root_ca_bytes.to_vec());
         self
     }
 
     /// Controls whether or not SNI is used during the TLS handshake.  It is highly recommended
     /// to set this value to false only in testing environments.
-    pub fn with_verify_peer(mut self, verify_peer: bool) -> Self {
+    pub fn with_verify_peer(&mut self, verify_peer: bool) -> &mut Self {
         self.verify_peer = verify_peer;
         self
     }
 
     /// Sets an ALPN protocol to negotiate during the TLS handshake.  Should multiple protocols
     /// become a valid use case, new APIs will be added to manipulate the set of protocols.
-    pub fn with_alpn(mut self, alpn: &[u8]) -> Self {
+    pub fn with_alpn(&mut self, alpn: &[u8]) -> &mut Self {
         self.alpn = Some(alpn.to_vec());
         self
     }
@@ -258,6 +298,8 @@ pub struct ConnectOptions {
 }
 
 impl ConnectOptions {
+
+    // TODO: implement as From<ConnectOptions>
     pub(crate) fn to_connect_packet(&self, connected_previously: bool) -> ConnectPacket {
         let clean_start =
             match self.rejoin_session_policy {
@@ -362,13 +404,13 @@ impl ConnectOptionsBuilder {
     /// If the final negotiated value is 0, then that means no keep alive will be used.  Such a
     /// state is not advised due to scenarios where TCP connections can be invisibly dropped by
     /// routers/firewalls within the full connection circuit.
-    pub fn with_keep_alive_interval_seconds(mut self, keep_alive: Option<u16>) -> Self {
+    pub fn with_keep_alive_interval_seconds(&mut self, keep_alive: Option<u16>) -> &mut Self {
         self.options.keep_alive_interval_seconds = keep_alive;
         self
     }
 
     /// Configures how the client will attempt to rejoin sessions
-    pub fn with_rejoin_session_policy(mut self, policy: RejoinSessionPolicy) -> Self {
+    pub fn with_rejoin_session_policy(&mut self, policy: RejoinSessionPolicy) -> &mut Self {
         self.options.rejoin_session_policy = policy;
         self
     }
@@ -379,7 +421,7 @@ impl ConnectOptionsBuilder {
     /// always use the auto-assigned client id.
     ///
     /// See [MQTT5 Client Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901059)
-    pub fn with_client_id(mut self, client_id: &str) -> Self {
+    pub fn with_client_id(&mut self, client_id: &str) -> &mut Self {
         self.options.client_id = Some(client_id.to_string());
         self
     }
@@ -395,7 +437,7 @@ impl ConnectOptionsBuilder {
     /// Sets opaque binary data that the server may use for client authentication and authorization.
     ///
     /// See [MQTT5 Password](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901072)
-    pub fn with_password(mut self, password: &[u8]) -> Self {
+    pub fn with_password(&mut self, password: &[u8]) -> &mut Self {
         self.options.password = Some(password.to_vec());
         self
     }
@@ -408,7 +450,7 @@ impl ConnectOptionsBuilder {
     /// value.  Otherwise, the session expiry sent by the client is the negotiated value.
     ///
     /// See [MQTT5 Session Expiry Interval](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901048)
-    pub fn with_session_expiry_interval_seconds(mut self, session_expiry_interval_seconds: u32) -> Self {
+    pub fn with_session_expiry_interval_seconds(&mut self, session_expiry_interval_seconds: u32) -> &mut Self {
         self.options.session_expiry_interval_seconds = Some(session_expiry_interval_seconds);
         self
     }
@@ -418,7 +460,7 @@ impl ConnectOptionsBuilder {
     /// the scope of the MQTT5 spec and client.
     ///
     /// See [MQTT5 Request Response Information](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901052)
-    pub fn with_request_response_information(mut self, request_response_information: bool) -> Self {
+    pub fn with_request_response_information(&mut self, request_response_information: bool) -> &mut Self {
         self.options.request_response_information = Some(request_response_information);
         self
     }
@@ -427,7 +469,7 @@ impl ConnectOptionsBuilder {
     /// user properties) in DISCONNECT or CONNACK packets from the server.
     ///
     /// See [MQTT5 Request Problem Information](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901053)
-    pub fn with_request_problem_information(mut self, request_problem_information: bool) -> Self {
+    pub fn with_request_problem_information(&mut self, request_problem_information: bool) -> &mut Self {
         self.options.request_problem_information = Some(request_problem_information);
         self
     }
@@ -436,7 +478,7 @@ impl ConnectOptionsBuilder {
     /// messages the client is willing to handle.  If omitted, then no limit is requested.
     ///
     /// See [MQTT5 Receive Maximum](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901049)
-    pub fn with_receive_maximum(mut self, receive_maximum: u16) -> Self {
+    pub fn with_receive_maximum(&mut self, receive_maximum: u16) -> &mut Self {
         self.options.receive_maximum = Some(receive_maximum);
         self
     }
@@ -447,7 +489,7 @@ impl ConnectOptionsBuilder {
     /// support inbound topic aliasing.
     ///
     /// See [MQTT5 Topic Alias Maximum](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901051)
-    pub fn with_topic_alias_maximum(mut self, topic_alias_maximum: u16) -> Self {
+    pub fn with_topic_alias_maximum(&mut self, topic_alias_maximum: u16) -> &mut Self {
         self.options.topic_alias_maximum = Some(topic_alias_maximum);
         self
     }
@@ -456,7 +498,7 @@ impl ConnectOptionsBuilder {
     /// omitted, then no limit beyond the natural limits of MQTT packet size is requested.
     ///
     /// See [MQTT5 Maximum Packet Size](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901050)
-    pub fn with_maximum_packet_size_bytes(mut self, maximum_packet_size_bytes: u32) -> Self {
+    pub fn with_maximum_packet_size_bytes(&mut self, maximum_packet_size_bytes: u32) -> &mut Self {
         self.options.maximum_packet_size_bytes = Some(maximum_packet_size_bytes);
         self
     }
@@ -467,7 +509,7 @@ impl ConnectOptionsBuilder {
     /// the will must be sent at the time of session destruction.
     ///
     /// See [MQTT5 Will Delay Interval](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901062)
-    pub fn with_will_delay_interval_seconds(mut self, will_delay_interval_seconds: u32) -> Self {
+    pub fn with_will_delay_interval_seconds(&mut self, will_delay_interval_seconds: u32) -> &mut Self {
         self.options.will_delay_interval_seconds = Some(will_delay_interval_seconds);
         self
     }
@@ -476,7 +518,7 @@ impl ConnectOptionsBuilder {
     /// the will delay interval has elapsed, whichever comes first.  If undefined, then nothing will be sent.
     ///
     /// See [MQTT5 Will](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901040)
-    pub fn with_will(mut self, will: PublishPacket) -> Self {
+    pub fn with_will(&mut self, will: PublishPacket) -> &mut Self {
         self.options.will = Some(will);
         self
     }
@@ -484,14 +526,14 @@ impl ConnectOptionsBuilder {
     /// Sets the MQTT5 user properties to include with all CONNECT packets.
     ///
     /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901054)
-    pub fn with_user_properties(mut self, user_properties: Vec<UserProperty>) -> Self {
+    pub fn with_user_properties(&mut self, user_properties: Vec<UserProperty>) -> &mut Self {
         self.options.user_properties = Some(user_properties);
         self
     }
 
     /// Builds a new ConnectOptions object for client construction
-    pub fn build(self) -> ConnectOptions {
-        self.options
+    pub fn build(&self) -> ConnectOptions {
+        self.options.clone()
     }
 }
 
@@ -641,41 +683,41 @@ impl Mqtt5ClientOptionsBuilder {
 
     /// Configures how the client should treat queued and newly-submitted operations while
     /// it does not have a connection to the broker.
-    pub fn with_offline_queue_policy(mut self, offline_queue_policy: OfflineQueuePolicy) -> Self {
+    pub fn with_offline_queue_policy(&mut self, offline_queue_policy: OfflineQueuePolicy) -> &mut Self {
         self.options.offline_queue_policy = offline_queue_policy;
         self
     }
 
     /// Configures how long the client will wait for a Connack from the broker before giving up and
     /// failing the connection attempt.
-    pub fn with_connack_timeout(mut self, connack_timeout: Duration) -> Self {
+    pub fn with_connack_timeout(&mut self, connack_timeout: Duration) -> &mut Self {
         self.options.connack_timeout = connack_timeout;
         self
     }
 
     /// Configures how long, after sending a Pingreq, the client will wait for a Pingresp from the
     /// broker before giving up and shutting down the connection.
-    pub fn with_ping_timeout(mut self, ping_timeout: Duration) -> Self {
+    pub fn with_ping_timeout(&mut self, ping_timeout: Duration) -> &mut Self {
         self.options.ping_timeout = ping_timeout;
         self
     }
 
     /// Configures the default event listener for the client.
-    pub fn with_default_event_listener(mut self, default_event_listener: ClientEventListener) -> Self {
+    pub fn with_default_event_listener(&mut self, default_event_listener: ClientEventListener) -> &mut Self {
         self.options.default_event_listener = Some(default_event_listener);
         self
     }
 
     /// Configures an outbound topic alias resolver to be used when sending Publish packets to
     /// the broker.
-    pub fn with_outbound_alias_resolver_factory(mut self, outbound_alias_resolver_factory: OutboundAliasResolverFactoryFn) -> Self {
+    pub fn with_outbound_alias_resolver_factory(&mut self, outbound_alias_resolver_factory: OutboundAliasResolverFactoryFn) -> &mut Self {
         self.options.outbound_alias_resolver_factory = Some(outbound_alias_resolver_factory);
         self
     }
 
     /// Configures what kind of jitter, if any, should be applied to the waiting period between
     /// connection attempts.
-    pub fn with_reconnect_period_jitter(mut self, reconnect_period_jitter: ExponentialBackoffJitterType) -> Self {
+    pub fn with_reconnect_period_jitter(&mut self, reconnect_period_jitter: ExponentialBackoffJitterType) -> &mut Self {
         self.options.reconnect_options.reconnect_period_jitter = reconnect_period_jitter;
         self
     }
@@ -683,14 +725,14 @@ impl Mqtt5ClientOptionsBuilder {
     /// Configures the minimum amount of time to wait between connection attempts.  Depending on
     /// jitter settings, the actual wait period may be shorter.  Defaults to one second if not
     /// specified.
-    pub fn with_base_reconnect_period(mut self, base_reconnect_period: Duration) -> Self {
+    pub fn with_base_reconnect_period(&mut self, base_reconnect_period: Duration) -> &mut Self {
         self.options.reconnect_options.base_reconnect_period = base_reconnect_period;
         self
     }
 
     /// Configures the maximum amount of time to wait between connection attempts.  Defaults to
     /// two minutes if not specified.
-    pub fn with_max_reconnect_period(mut self, max_reconnect_period: Duration) -> Self {
+    pub fn with_max_reconnect_period(&mut self, max_reconnect_period: Duration) -> &mut Self {
         self.options.reconnect_options.max_reconnect_period = max_reconnect_period;
         self
     }
@@ -698,14 +740,14 @@ impl Mqtt5ClientOptionsBuilder {
     /// Configures the interval of time that the client must remain successfully connected before
     /// the exponential backoff for connection attempts is reset.  Defaults to thirty seconds if
     /// not specified.
-    pub fn with_reconnect_stability_reset_period(mut self, reconnect_stability_reset_period: Duration) -> Self {
+    pub fn with_reconnect_stability_reset_period(&mut self, reconnect_stability_reset_period: Duration) -> &mut Self {
         self.options.reconnect_options.reconnect_stability_reset_period = reconnect_stability_reset_period;
         self
     }
 
-    /// Builds a new set of client options, consuming the builder in the process.
-    pub fn build(self) -> Mqtt5ClientOptions {
-        self.options
+    /// Builds a new set of client options
+    pub fn build(&self) -> Mqtt5ClientOptions {
+        self.options.clone()
     }
 }
 
@@ -718,7 +760,8 @@ pub struct GenericClientBuilder {
     tls_options: Option<TlsOptions>,
     connect_options: Option<ConnectOptions>,
     client_options: Option<Mqtt5ClientOptions>,
-    websocket_options: Option<WebsocketOptions>
+    websocket_options: Option<WebsocketOptions>,
+    http_proxy_options: Option<HttpProxyOptions>
 }
 
 impl GenericClientBuilder {
@@ -731,33 +774,40 @@ impl GenericClientBuilder {
             tls_options: None,
             connect_options: None,
             client_options: None,
-            websocket_options: None
+            websocket_options: None,
+            http_proxy_options: None
         }
     }
 
     /// Configures what TLS options to use for the connection to the broker.  If not specified,
     /// then TLS will not be used.
-    pub fn with_tls_options(mut self, tls_options: TlsOptions) -> Self {
+    pub fn with_tls_options(&mut self, tls_options: TlsOptions) -> &mut Self {
         self.tls_options = Some(tls_options);
         self
     }
 
     /// Configures the Connect packet related options for the client.  If not specified, default
     /// values will be used.
-    pub fn with_connect_options(mut self, connect_options: ConnectOptions) -> Self {
+    pub fn with_connect_options(&mut self, connect_options: ConnectOptions) -> &mut Self {
         self.connect_options = Some(connect_options);
         self
     }
 
     /// Configures the client behavioral options.  If not specified, default values will be used.
-    pub fn with_client_options(mut self, client_options: Mqtt5ClientOptions) -> Self {
+    pub fn with_client_options(&mut self, client_options: Mqtt5ClientOptions) -> &mut Self {
         self.client_options = Some(client_options);
         self
     }
 
     /// Configures the client to connect over websockets
-    pub fn with_websocket_options(mut self, websocket_options: WebsocketOptions) -> Self {
+    pub fn with_websocket_options(&mut self, websocket_options: WebsocketOptions) -> &mut Self {
         self.websocket_options = Some(websocket_options);
+        self
+    }
+
+    /// Configures the client to connect through an http proxy
+    pub fn with_http_proxy_options(&mut self, http_proxy_options: HttpProxyOptions) -> &mut Self {
+        self.http_proxy_options = Some(http_proxy_options);
         self
     }
 
@@ -778,55 +828,130 @@ impl GenericClientBuilder {
                 Mqtt5ClientOptionsBuilder::new().build()
             };
 
+        let http_proxy_options = self.http_proxy_options.clone();
         let tls_options = self.tls_options.clone();
         let websocket_options = self.websocket_options.clone();
         let endpoint = self.endpoint.clone();
 
         if websocket_options.is_some() {
-            make_websocket_client(endpoint, self.port, websocket_options.unwrap(), tls_options, client_options, connect_options, runtime)
+            make_websocket_client(endpoint, self.port, websocket_options.unwrap(), tls_options, client_options, connect_options, http_proxy_options, runtime)
         } else {
-            make_direct_client(endpoint, self.port, tls_options, client_options, connect_options, runtime)
+            make_direct_client(endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, runtime)
         }
     }
 }
 
-fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, runtime: &Handle) -> MqttResult<Mqtt5Client> {
-    let to_socket_addrs = (endpoint.clone(), port).to_socket_addrs();
-    if to_socket_addrs.is_err()  {
-        return Err(MqttError::Unknown);
-    }
+#[derive(Clone)]
+struct Endpoint {
+    pub(crate) endpoint: String,
+    pub(crate) port: u16,
+}
 
-    let addr = to_socket_addrs.unwrap().next().unwrap();
-
-    if let Some(tls_options) = tls_options {
-        let tokio_options = TokioClientOptions {
-            connection_factory: Box::new(move || {
-                let tcp_stream = Box::pin(make_leaf_stream(addr.clone()));
-                return Box::pin(wrap_stream_with_tls(tcp_stream, endpoint.clone(), tls_options.clone()));
-            }),
-        };
-
-        Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
-    } else {
-        let tokio_options = TokioClientOptions {
-            connection_factory: Box::new(move || { Box::pin(make_leaf_stream(addr.clone())) }),
-        };
-
-        Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+impl Endpoint {
+    pub(crate) fn new(endpoint: &str, port: u16) -> Self {
+        Endpoint {
+            endpoint: endpoint.to_string(),
+            port
+        }
     }
 }
 
-fn make_websocket_client(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, runtime: &Handle) -> MqttResult<Mqtt5Client> {
-    let to_socket_addrs = (endpoint.clone(), port).to_socket_addrs();
-    if to_socket_addrs.is_err()  {
-        return Err(MqttError::Unknown);
+fn make_addr(endpoint: &str, port: u16) -> std::io::Result<SocketAddr> {
+    let mut to_socket_addrs = (endpoint.to_string(), port).to_socket_addrs()?;
+
+    Ok(to_socket_addrs.next().unwrap())
+}
+
+fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    let broker_endpoint = Endpoint::new(endpoint.as_str(), port);
+    let proxy_endpoint = http_proxy_options.as_ref().map(|val| { Endpoint::new( val.endpoint.as_str(), val.port )});
+
+    let (stream_endpoint, http_connect_endpoint) =
+        if let Some(proxy_endpoint) = proxy_endpoint {
+            (proxy_endpoint, Some(broker_endpoint))
+        } else {
+            (broker_endpoint, None)
+        };
+
+    if let Some(tls_options) = tls_options {
+        if let Some(http_proxy_options) = http_proxy_options {
+            if let Some(proxy_tls_options) = http_proxy_options.tls_options {
+                let tokio_options = TokioClientOptions {
+                    connection_factory: Box::new(move || {
+                        let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                        let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+                        let proxy_tls_stream = Box::pin(wrap_stream_with_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
+                        let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone()));
+                        Box::pin(wrap_stream_with_tls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone()))
+                    }),
+                };
+
+                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            } else {
+                let tokio_options = TokioClientOptions {
+                    connection_factory: Box::new(move || {
+                        let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                        let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+                        let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tcp_stream, http_connect_endpoint.clone()));
+                        Box::pin(wrap_stream_with_tls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone()))
+                    }),
+                };
+
+                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            }
+        } else {
+            let tokio_options = TokioClientOptions {
+                connection_factory: Box::new(move || {
+                    let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+                    Box::pin(wrap_stream_with_tls(tcp_stream, endpoint.clone(), tls_options.clone()))
+                }),
+            };
+
+            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+        }
+    } else {
+        if let Some(http_proxy_options) = http_proxy_options {
+            if let Some(proxy_tls_options) = http_proxy_options.tls_options {
+                let tokio_options = TokioClientOptions {
+                    connection_factory: Box::new(move || {
+                        let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                        let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+                        let proxy_tls_stream = Box::pin(wrap_stream_with_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
+                        Box::pin(apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone()))
+                    }),
+                };
+
+                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            } else {
+                let tokio_options = TokioClientOptions {
+                    connection_factory: Box::new(move || {
+                        let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                        let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+                        Box::pin(apply_proxy_connect_to_stream(tcp_stream, http_connect_endpoint.clone()))
+                    }),
+                };
+
+                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            }
+        } else {
+            let tokio_options = TokioClientOptions {
+                connection_factory: Box::new(move || {
+                    Box::pin(make_leaf_stream(stream_endpoint.clone()))
+                }),
+            };
+
+            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+        }
     }
-    let addr = to_socket_addrs.unwrap().next().unwrap();
+}
+
+fn make_websocket_client(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    let stream_endpoint = Endpoint::new(endpoint.as_str(), port);
 
     if let Some(tls_options) = tls_options {
         let tokio_options = TokioClientOptions {
             connection_factory: Box::new(move || {
-                let tcp_stream = Box::pin(make_leaf_stream(addr.clone()));
+                let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
                 let tls_stream = Box::pin(wrap_stream_with_tls(tcp_stream, endpoint.clone(), tls_options.clone()));
                 Box::pin(wrap_stream_with_websockets(tls_stream, endpoint.clone(), websocket_options.clone()))
             }),
@@ -836,7 +961,7 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
     } else {
         let tokio_options = TokioClientOptions {
             connection_factory: Box::new(move || {
-                let tcp_stream = Box::pin(make_leaf_stream(addr.clone()));
+                let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
                 Box::pin(wrap_stream_with_websockets(tcp_stream, endpoint.clone(), websocket_options.clone()))
             }),
         };
@@ -845,7 +970,8 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
     }
 }
 
-async fn make_leaf_stream(addr: SocketAddr) -> std::io::Result<TcpStream> {
+async fn make_leaf_stream(endpoint: Endpoint) -> std::io::Result<TcpStream> {
+    let addr = make_addr(endpoint.endpoint.as_str(), endpoint.port)?;
     TcpStream::connect(&addr).await
 }
 
@@ -908,9 +1034,54 @@ async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=std:
     Ok(byte_stream)
 }
 
-/*
-async fn wrap_stream_with_proxy_connect<S>(stream : S, endpoint: String, port: u16) -> std::io::Result<S> where S : AsyncRead + AsyncWrite + Unpin {
-    Ok(stream)
+fn build_connect_request(http_connect_endpoint: &Endpoint) -> Vec<u8> {
+    let request_as_string = format!("CONNECT {}:{} HTTP/1.1\r\nHost: {}:{}\r\nConnection: keep-alive\r\n\r\n", http_connect_endpoint.endpoint, http_connect_endpoint.port, http_connect_endpoint.endpoint, http_connect_endpoint.port);
+
+    return request_as_string.as_bytes().to_vec();
 }
 
- */
+use tokio::io::AsyncWriteExt;
+use tokio::io::AsyncReadExt;
+
+async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=std::io::Result<S>>+Sized>>, http_connect_endpoint: Endpoint) -> std::io::Result<S> where S : AsyncRead + AsyncWrite + Unpin {
+    let mut inner_stream = stream.await?;
+
+    let request_bytes = build_connect_request(&http_connect_endpoint);
+    inner_stream.write_all(request_bytes.as_slice()).await?;
+
+    let mut inbound_data: [u8; 4096] = [0; 4096];
+    let mut response_bytes = Vec::new();
+
+    loop {
+        let bytes_read = inner_stream.read(&mut inbound_data).await?;
+        if bytes_read == 0 {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "proxy connect stream closed"));
+        }
+
+        response_bytes.extend_from_slice(&inbound_data[..bytes_read]);
+
+        let mut headers = [httparse::EMPTY_HEADER; 32];
+        let mut response = httparse::Response::new(&mut headers);
+
+        let parse_result = response.parse(response_bytes.as_slice());
+        match parse_result {
+            Err(e) => {
+                return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e));
+            }
+            Ok(httparse::Status::Complete(bytes_parsed)) => {
+                if bytes_parsed < response_bytes.len() {
+                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "proxy connect response too long"));
+                }
+
+                if let Some(response_code) = response.code {
+                    if response_code >= 200 && response_code < 300 {
+                        return Ok(inner_stream);
+                    }
+                }
+
+                return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "proxy connect request unsuccessful"));
+            }
+            Ok(httparse::Status::Partial) => {}
+        }
+    }
+}
