@@ -320,9 +320,9 @@ impl AwsClientBuilder {
     pub fn new_direct_with_mtls_from_fs(endpoint: &str, certificate_path: &str, private_key_path: &str, root_ca_path: Option<&str>) -> MqttResult<Self> {
         let mut tls_options_builder = TlsOptionsBuilder::new_with_mtls_from_path(certificate_path, private_key_path)?;
         if let Some(root_ca) = root_ca_path {
-            tls_options_builder = tls_options_builder.with_root_ca_from_path(root_ca)?;
+            tls_options_builder.with_root_ca_from_path(root_ca)?;
         }
-        tls_options_builder = tls_options_builder.with_alpn(DIRECT_ALPN_PROTOCOL);
+        tls_options_builder.with_alpn(DIRECT_ALPN_PROTOCOL);
 
         let tls_options_result = tls_options_builder.build_rustls();
         if tls_options_result.is_err() {
@@ -353,9 +353,9 @@ impl AwsClientBuilder {
     pub fn new_direct_with_mtls_from_memory(endpoint: &str, certificate_bytes: &[u8], private_key_bytes: &[u8], root_ca_bytes: Option<&[u8]>) -> MqttResult<Self> {
         let mut tls_options_builder = TlsOptionsBuilder::new_with_mtls_from_memory(certificate_bytes, private_key_bytes);
         if let Some(root_ca) = root_ca_bytes {
-            tls_options_builder = tls_options_builder.with_root_ca_from_memory(root_ca);
+            tls_options_builder.with_root_ca_from_memory(root_ca);
         }
-        tls_options_builder = tls_options_builder.with_alpn(DIRECT_ALPN_PROTOCOL);
+        tls_options_builder.with_alpn(DIRECT_ALPN_PROTOCOL);
 
         let tls_options_result = tls_options_builder.build_rustls();
         if tls_options_result.is_err() {
@@ -384,9 +384,9 @@ impl AwsClientBuilder {
     pub fn new_direct_with_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthOptions, root_ca_path: Option<&str>) -> MqttResult<Self> {
         let mut tls_options_builder = TlsOptionsBuilder::new();
         if let Some(root_ca) = root_ca_path {
-            tls_options_builder = tls_options_builder.with_root_ca_from_path(root_ca)?;
+            tls_options_builder.with_root_ca_from_path(root_ca)?;
         }
-        tls_options_builder = tls_options_builder.with_alpn(CUSTOM_AUTH_ALPN_PROTOCOL);
+        tls_options_builder.with_alpn(CUSTOM_AUTH_ALPN_PROTOCOL);
 
         let tls_options_result = tls_options_builder.build_rustls();
         if tls_options_result.is_err() {
