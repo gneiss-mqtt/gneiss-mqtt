@@ -209,10 +209,73 @@ different combinations expected by users.
 extern crate gneiss_mqtt;
 extern crate tokio;
 
+use std::io::ErrorKind;
 use gneiss_mqtt::config::*;
 use gneiss_mqtt::client::Mqtt5Client;
 use gneiss_mqtt::{MqttError, MqttResult};
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+use aws_credential_types::provider::ProvideCredentials;
 use tokio::runtime::Handle;
+
+/// Struct holding all configuration relevant to connecting an MQTT client to AWS IoT Core
+/// over websockets using a Sigv4-signed websocket handshake for authentication
+#[derive(Clone, Debug)]
+pub struct WebsocketSigv4Options {
+    signing_region: String,
+    credentials_provider: Arc<dyn ProvideCredentials>
+}
+
+/// A builder type that configures all relevant AWS signing options for connecting over websockets
+/// using Sigv4 request signing.
+pub struct WebsocketSigv4OptionsBuilder {
+    options: WebsocketSigv4Options
+}
+
+impl WebsocketSigv4OptionsBuilder {
+
+    /// Creates a new builder
+    ///
+    /// AWS credentials will be sourced from the default credentials provider chain as
+    /// implemented by the AWS SDK for Rust.  Construction of this provider chain is asynchronous,
+    /// hence this factory function is also asynchronous.
+    ///
+    /// `signing_region` - the AWS region to sign the websocket handshake with.
+    pub async fn new(signing_region: &str) -> Self {
+        let region = aws_config::Region::new(signing_region.to_string());
+        let mut provider_builder = aws_config::default_provider::credentials::Builder::default();
+        provider_builder.set_region(Some(region));
+
+        let default_provider_chain = Arc::new(provider_builder.build().await);
+
+        WebsocketSigv4OptionsBuilder {
+            options: WebsocketSigv4Options {
+                signing_region: signing_region.to_string(),
+                credentials_provider: default_provider_chain
+            }
+        }
+    }
+
+    /// Creates a new builder
+    ///
+    /// `credentials_provider` - credentials provider to
+    /// source the AWS credentials needed to sign the websocket handshake upgrade request.
+    ///
+    /// `signing_region` - the AWS region to sign the websocket handshake with.
+    pub fn new_with_credentials_provider(credentials_provider: Box<dyn ProvideCredentials>, signing_region: &str) -> Self {
+        WebsocketSigv4OptionsBuilder {
+            options: WebsocketSigv4Options {
+                signing_region: signing_region.to_string(),
+                credentials_provider: Arc::from(credentials_provider)
+            }
+        }
+    }
+
+    /// Creates a new instance of WebsocketSigv4Options based on the builder's configuration.
+    pub fn build(&self) -> WebsocketSigv4Options {
+        self.options.clone()
+    }
+}
 
 const CUSTOM_AUTH_AUTHORIZER_QUERY_PARAM_NAME: &str = "x-amz-customauthorizer-name";
 const CUSTOM_AUTH_SIGNATURE_QUERY_PARAM_NAME: &str = "x-amz-customauthorizer-signature";
@@ -286,7 +349,7 @@ impl AwsCustomAuthOptions {
 #[derive(PartialEq, Eq)]
 enum AuthType {
     Mtls,
-    //Sigv4Websockets,
+    Sigv4Websockets,
     CustomAuth
 }
 
@@ -298,6 +361,7 @@ pub struct AwsClientBuilder {
     connect_options: Option<ConnectOptions>,
     client_options: Option<Mqtt5ClientOptions>,
     tls_options: TlsOptions,
+    websocket_sigv4_options: Option<WebsocketSigv4Options>,
     endpoint: String
 }
 
@@ -335,6 +399,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options: tls_options_result.unwrap(),
+            websocket_sigv4_options: None,
             endpoint: endpoint.to_string()
         };
 
@@ -368,6 +433,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options: tls_options_result.unwrap(),
+            websocket_sigv4_options: None,
             endpoint: endpoint.to_string()
         };
 
@@ -399,7 +465,39 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options: tls_options_result.unwrap(),
+            websocket_sigv4_options: None,
             endpoint: endpoint.to_string()
+        };
+
+        Ok(builder)
+    }
+
+    /// Creates a new builder that will construct an MQTT client that will connect to AWS IoT Core
+    /// over websockets using AWS Sigv4 request signing for authentication.
+    ///
+    /// `sigv4_options` - sigv4 signing options to use while connecting
+    ///
+    /// `root_ca_path` - path to a root CA to use in the TLS context of the connection.  Generally
+    /// not needed unless a custom domain is involved.
+    pub fn new_websockets_with_sigv4(endpoint: &str, sigv4_options: WebsocketSigv4Options, root_ca_path: Option<&str>) -> MqttResult<Self> {
+        let mut tls_options_builder = TlsOptionsBuilder::new();
+        if let Some(root_ca) = root_ca_path {
+            tls_options_builder.with_root_ca_from_path(root_ca)?;
+        }
+
+        let tls_options_result = tls_options_builder.build_rustls();
+        if tls_options_result.is_err() {
+            return Err(MqttError::TlsError);
+        }
+
+        let builder =  AwsClientBuilder {
+            auth_type: AuthType::Sigv4Websockets,
+            custom_auth_options: None,
+            connect_options: None,
+            client_options: None,
+            tls_options: tls_options_result.unwrap(),
+            websocket_sigv4_options: Some(sigv4_options),
+            endpoint: endpoint.to_string(),
         };
 
         Ok(builder)
@@ -440,11 +538,28 @@ impl AwsClientBuilder {
 
         let tls_options = self.tls_options.clone();
 
-        GenericClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT)
-            .with_connect_options(connect_options)
+        let mut builder = GenericClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
+        builder.with_connect_options(connect_options)
             .with_client_options(client_options)
-            .with_tls_options(tls_options)
-            .build(runtime)
+            .with_tls_options(tls_options);
+
+        if self.auth_type == AuthType::Sigv4Websockets {
+            let sigv4_options = self.websocket_sigv4_options.as_ref().unwrap().clone();
+
+            let signing_region = sigv4_options.signing_region.clone();
+            let credentials_provider = sigv4_options.credentials_provider.clone();
+
+            let mut websocket_options_builder = WebsocketOptionsBuilder::new();
+            websocket_options_builder.with_handshake_transform(Box::new(move |request_builder| {
+                Box::pin(sign_websocket_upgrade_sigv4(request_builder, signing_region.clone(), credentials_provider.clone()))
+            }));
+
+            let websocket_options = websocket_options_builder.build();
+
+            builder.with_websocket_options(websocket_options);
+        }
+
+        builder.build(runtime)
     }
 
     fn apply_custom_auth_options_to_connect_options(&self, connect_options: &mut ConnectOptions) {
@@ -457,4 +572,46 @@ impl AwsClientBuilder {
             connect_options.set_password(options.get_password());
         }
     }
+}
+
+use aws_sigv4::http_request::{SessionTokenMode, sign, SignableBody, SignableRequest, SignatureLocation};
+use aws_sigv4::sign::v4;
+use aws_smithy_runtime_api::client::identity::Identity;
+
+async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, signing_region: String, credentials_provider: Arc<dyn ProvideCredentials>) -> std::io::Result<http::request::Builder> {
+    let credentials = credentials_provider.provide_credentials().await.map_err(|e| { std::io::Error::new(ErrorKind::Other, e)})?;
+    let identity = Identity::from(credentials);
+
+    let mut signing_settings = aws_sigv4::http_request::SigningSettings::default();
+    signing_settings.session_token_mode = SessionTokenMode::Exclude;
+    signing_settings.signature_location = SignatureLocation::QueryParams;
+    signing_settings.expires_in = Some(Duration::from_secs(3600));
+
+    let signing_params = v4::SigningParams::builder()
+        .identity(&identity)
+        .region(signing_region.as_str())
+        .name("iotdevicegateway")
+        .time(SystemTime::now())
+        .settings(signing_settings)
+        .build()
+        .unwrap()
+        .into();
+
+    let uri = request_builder.uri_ref().unwrap().clone();
+    let uri_string = uri.to_string();
+
+    let headers = vec!(("host", uri.host().unwrap()));
+    let signable_request = SignableRequest::new(
+        "GET",
+        uri_string,
+        headers.into_iter(),
+        SignableBody::Bytes(&[])
+    ).expect("signable request");
+
+    let (signing_instructions, _signature) = sign(signable_request, &signing_params)
+        .map_err(|e| { std::io::Error::new(ErrorKind::Other, e)})?
+        .into_parts();
+
+
+    Ok(request_builder)
 }

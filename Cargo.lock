@@ -733,7 +733,10 @@ version = "0.1.0"
 dependencies = [
  "aws-config",
  "aws-credential-types",
+ "aws-sigv4",
+ "aws-smithy-runtime-api",
  "gneiss-mqtt",
+ "http",
  "tokio",
 ]
 

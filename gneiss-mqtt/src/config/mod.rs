@@ -87,7 +87,7 @@ impl HttpProxyOptionsBuilder {
 }
 
 /// Return type for a websocket handshake transformation function
-pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = std::io::Result<http::request::Builder>> + Send + Sync >>;
+pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = std::io::Result<http::request::Builder>> + Send >>;
 
 /// Async websocket handshake transformation function type
 pub type WebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -> WebsocketHandshakeTransformReturnType + Send + Sync>;
@@ -953,7 +953,7 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
             connection_factory: Box::new(move || {
                 let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
                 let tls_stream = Box::pin(wrap_stream_with_tls(tcp_stream, endpoint.clone(), tls_options.clone()));
-                Box::pin(wrap_stream_with_websockets(tls_stream, endpoint.clone(), websocket_options.clone()))
+                Box::pin(wrap_stream_with_websockets(tls_stream, endpoint.clone(), "wss", websocket_options.clone()))
             }),
         };
 
@@ -962,7 +962,7 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
         let tokio_options = TokioClientOptions {
             connection_factory: Box::new(move || {
                 let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                Box::pin(wrap_stream_with_websockets(tcp_stream, endpoint.clone(), websocket_options.clone()))
+                Box::pin(wrap_stream_with_websockets(tcp_stream, endpoint.clone(), "ws", websocket_options.clone()))
             }),
         };
 
@@ -1015,9 +1015,9 @@ fn create_default_websocket_handshake_request(uri: String) -> std::io::Result<ht
         .header("Host", uri.host().unwrap()))
 }
 
-async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=std::io::Result<S>>+Sized>>, endpoint: String, websocket_options: WebsocketOptions) -> std::io::Result<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
+async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=std::io::Result<S>>+Sized>>, endpoint: String, scheme: &str, websocket_options: WebsocketOptions) -> std::io::Result<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
 
-    let uri = format!("ws://{}/mqtt", endpoint); // scheme needs to be present but value irrelevant
+    let uri = format!("{}://{}/mqtt", scheme, endpoint); // scheme needs to be present but value irrelevant
     let handshake_builder = create_default_websocket_handshake_request(uri)?;
     let transformed_handshake_builder =
         if let Some(transform) = &*websocket_options.handshake_transform {
