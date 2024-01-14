@@ -72,7 +72,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 # Example: Connect to AWS IoT Core via Websockets
-Not yet implemented
+You'll need to configure your runtime environment to source AWS credentials whose IAM policy allows
+IoT usage.  This crate uses the AWS SDK for Rust to source the credentials necessary
+to sign the websocket upgrade request.  Consult
+[AWS documentation](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credentials.html) for more
+details.
+
+To create a client and connect:
+
+```no_run
+use gneiss_mqtt_aws::{AwsClientBuilder, WebsocketSigv4OptionsBuilder};
+use tokio::runtime::Handle;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use gneiss_mqtt_aws::WebsocketSigv4Options;let endpoint = "<your AWS IoT Core endpoint>";
+    let signing_region = "<AWS region for endpoint>";
+
+    // Creating a default credentials provider chain is an async operation
+    let sigv4_options = WebsocketSigv4OptionsBuilder::new(signing_region).await.build();
+
+    // In the common case, you will not need a root CA certificate
+    let client =
+        AwsClientBuilder::new_websockets_with_sigv4(endpoint, sigv4_options, None)?
+            .build(&Handle::current())?;
+
+    // Once started, the client will recurrently maintain a connection to the endpoint until
+    // stop() is invoked
+    client.start()?;
+
+    // <do stuff with the client>
+
+    Ok(())
+}
+```
 
 # Example: Connect to AWS IoT Core via AWS IoT Custom Authentication (with tokio runtime)
 
