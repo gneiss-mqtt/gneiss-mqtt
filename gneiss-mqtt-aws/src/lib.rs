@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-# Example: Connect to AWS IoT Core via Websockets
+# Example: Connect to AWS IoT Core via Websockets (with tokio runtime)
 You'll need to configure your runtime environment to source AWS credentials whose IAM policy allows
 IoT usage.  This crate uses the AWS SDK for Rust to source the credentials necessary
 to sign the websocket upgrade request.  Consult
