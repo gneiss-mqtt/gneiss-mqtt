@@ -215,8 +215,13 @@ use gneiss_mqtt::client::Mqtt5Client;
 use gneiss_mqtt::{MqttError, MqttResult};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use aws_credential_types::provider::ProvideCredentials;
 use tokio::runtime::Handle;
+
+use aws_credential_types::provider::ProvideCredentials;
+use aws_sigv4::http_request::{SessionTokenMode, sign, SignableBody, SignableRequest, SignatureLocation};
+use aws_sigv4::sign::v4;
+use aws_smithy_runtime_api::client::identity::Identity;
+use urlencoding::encode;
 
 /// Struct holding all configuration relevant to connecting an MQTT client to AWS IoT Core
 /// over websockets using a Sigv4-signed websocket handshake for authentication
@@ -574,10 +579,6 @@ impl AwsClientBuilder {
     }
 }
 
-use aws_sigv4::http_request::{SessionTokenMode, sign, SignableBody, SignableRequest, SignatureLocation};
-use aws_sigv4::sign::v4;
-use aws_smithy_runtime_api::client::identity::Identity;
-
 async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, signing_region: String, credentials_provider: Arc<dyn ProvideCredentials>) -> std::io::Result<http::request::Builder> {
     let credentials = credentials_provider.provide_credentials().await.map_err(|e| { std::io::Error::new(ErrorKind::Other, e)})?;
     let session_token = credentials.session_token().clone().map(|st| { st.to_string() });
@@ -624,15 +625,14 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     let mut query_param_list = signing_instructions
         .params()
         .iter()
-        .map(|(key, value)| { format!("{}={}", *key, value)})
+        .map(|(key, value)| { format!("{}={}", encode(*key), encode(value))})
         .collect::<Vec<String>>();
 
     if let Some(session_token) = session_token {
-        query_param_list.push(format!("X-Amz-Security-Token={}", session_token));
+        query_param_list.push(format!("X-Amz-Security-Token={}", encode(session_token.as_str())));
     }
 
     let query_params = query_param_list.join("&");
-    let encoded_params = str::replace(query_params.as_str(), "/", "%2F");
     let final_uri = format!("{}?{}", uri_string, query_params);
 
     signed_request_builder = signed_request_builder.uri(final_uri);

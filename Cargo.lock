@@ -738,6 +738,7 @@ dependencies = [
  "gneiss-mqtt",
  "http",
  "tokio",
+ "urlencoding",
 ]
 
 [[package]]
