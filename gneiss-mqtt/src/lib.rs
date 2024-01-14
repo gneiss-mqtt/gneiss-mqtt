@@ -12,9 +12,64 @@ and will eventually be supported in an upcoming release.
 
 # Usage
 
+To use this crate, you'll first need to add it to your project's Cargo.toml:
+
+```toml
+[dependencies]
+gneiss-mqtt = "0.2"
+```
+
+(Temporary) If your project does not include [`tokio`](https://crates.io/crates/tokio), you will need to add it too:
+
+```toml
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+```
+
+Future releases will support other async runtimes as well as a client that runs in a background
+thread and does not need an async runtime.  For now, [`tokio`](https://crates.io/crates/tokio) is required.
+
+This crate contains all the building blocks necessary to connect to most MQTT brokers, but
+the configuration to do so can be confusing and delicate.  For complex cases, we recommend
+using broker-specific crates that implement all the low-level connector details needed to
+successfully establish an MQTT connection to a specific broker.  The documentation for these
+specialized crates contains samples and information on how to connect in all of the ways
+each broker supports.
+
+Currently, these crates include:
+* *[gneiss-mqtt-aws](https://crates.io/crates/gneiss-mqtt-aws)* - A crate with a builder that
+supports all connection methods allowed by the AWS MQTT broker implementation,
+[AWS IoT Core](https://docs.aws.amazon.com/iot/latest/developerguide/iot-gs.html).
+
 # Example: Connect to a local Mosquitto server
 
+Assuming a default Mosquitto installation, you can connect locally by plaintext on port 1883:
+
+```no_run
+use gneiss_mqtt::config::GenericClientBuilder;
+use tokio::runtime::Handle;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+
+    // In the common case, you will not need a root CA certificate
+    let client =
+        GenericClientBuilder::new("127.0.0.1", 1883)
+            .build(&Handle::current())?;
+
+    // Once started, the client will recurrently maintain a connection to the endpoint until
+    // stop() is invoked
+    client.start()?;
+
+    // <do stuff with the client>
+
+    Ok(())
+}
+```
+
 # Example: React to client events
+
+TODO
 
 # Additional Notes
 

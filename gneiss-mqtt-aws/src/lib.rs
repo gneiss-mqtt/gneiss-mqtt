@@ -71,8 +71,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-# Example: Connect to AWS IoT Core via Websockets
-Not yet implemented
+# Example: Connect to AWS IoT Core via Websockets (with tokio runtime)
+You'll need to configure your runtime environment to source AWS credentials whose IAM policy allows
+IoT usage.  This crate uses the AWS SDK for Rust to source the credentials necessary
+to sign the websocket upgrade request.  Consult
+[AWS documentation](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credentials.html) for more
+details.
+
+To create a client and connect:
+
+```no_run
+use gneiss_mqtt_aws::{AwsClientBuilder, WebsocketSigv4OptionsBuilder};
+use tokio::runtime::Handle;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use gneiss_mqtt_aws::WebsocketSigv4Options;let endpoint = "<your AWS IoT Core endpoint>";
+    let signing_region = "<AWS region for endpoint>";
+
+    // Creating a default credentials provider chain is an async operation
+    let sigv4_options = WebsocketSigv4OptionsBuilder::new(signing_region).await.build();
+
+    // In the common case, you will not need a root CA certificate
+    let client =
+        AwsClientBuilder::new_websockets_with_sigv4(endpoint, sigv4_options, None)?
+            .build(&Handle::current())?;
+
+    // Once started, the client will recurrently maintain a connection to the endpoint until
+    // stop() is invoked
+    client.start()?;
+
+    // <do stuff with the client>
+
+    Ok(())
+}
+```
 
 # Example: Connect to AWS IoT Core via AWS IoT Custom Authentication (with tokio runtime)
 
@@ -288,8 +321,8 @@ const CUSTOM_AUTH_SIGNATURE_QUERY_PARAM_NAME: &str = "x-amz-customauthorizer-sig
 ///  A struct that holds all relevant details needed to perform custom authentication with
 /// AWS IoT Core.  Use an appropriate `new_*()` function to create.
 pub struct AwsCustomAuthOptions {
-    username: String,
-    password: Option<Vec<u8>>
+    pub(crate) username: String,
+    pub(crate) password: Option<Vec<u8>>
 }
 
 impl AwsCustomAuthOptions {
@@ -340,14 +373,6 @@ impl AwsCustomAuthOptions {
                 authorizer_token_key_value),
             password: password.map(|p| p.to_vec())
         }
-    }
-
-    pub(crate) fn get_username(&self) -> &str {
-        self.username.as_str()
-    }
-
-    pub(crate) fn get_password(&self) -> Option<&[u8]> {
-        self.password.as_deref()
     }
 }
 
@@ -525,12 +550,14 @@ impl AwsClientBuilder {
     /// Creates a new MQTT5 client from all of the configuration options registered with the
     /// builder.
     pub fn build(&self, runtime: &Handle) -> MqttResult<Mqtt5Client> {
-        let mut connect_options =
+        let user_connect_options =
             if let Some(options) = &self.connect_options {
                 options.clone()
             } else {
                 ConnectOptionsBuilder::new().build()
             };
+
+        let final_connect_options = self.build_final_connect_options(user_connect_options);
 
         let client_options =
             if let Some(options) = &self.client_options {
@@ -539,12 +566,10 @@ impl AwsClientBuilder {
                 Mqtt5ClientOptionsBuilder::new().build()
             };
 
-        self.apply_custom_auth_options_to_connect_options(&mut connect_options);
-
         let tls_options = self.tls_options.clone();
 
         let mut builder = GenericClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
-        builder.with_connect_options(connect_options)
+        builder.with_connect_options(final_connect_options)
             .with_client_options(client_options)
             .with_tls_options(tls_options);
 
@@ -567,21 +592,32 @@ impl AwsClientBuilder {
         builder.build(runtime)
     }
 
-    fn apply_custom_auth_options_to_connect_options(&self, connect_options: &mut ConnectOptions) {
-        if self.auth_type != AuthType::CustomAuth {
-            return;
-        }
+    fn build_final_connect_options(&self, connect_options: ConnectOptions) -> ConnectOptions {
+        let is_auto_assigned_client_id = connect_options.client_id().is_none();
+        let mut final_connect_options_builder = ConnectOptionsBuilder::new_from_existing(connect_options);
 
         if let Some(options) = &self.custom_auth_options {
-            connect_options.set_username(Some(options.get_username()));
-            connect_options.set_password(options.get_password());
+            final_connect_options_builder.with_username(options.username.as_str());
+            if let Some(password) = &options.password {
+                final_connect_options_builder.with_password(password.as_slice());
+            }
         }
+
+        // Until IotCore fixes their client id generation process to make client ids that
+        // are valid on reconnect, you cannot use auto-assigned client ids safely.  So if
+        // the configuration indicates that, just generate a UUID instead of leaving it empty.
+        if is_auto_assigned_client_id {
+            let uuid = uuid::Uuid::new_v4();
+            final_connect_options_builder.with_client_id(uuid.to_string().as_str());
+        }
+
+        final_connect_options_builder.build()
     }
 }
 
 async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, signing_region: String, credentials_provider: Arc<dyn ProvideCredentials>) -> std::io::Result<http::request::Builder> {
     let credentials = credentials_provider.provide_credentials().await.map_err(|e| { std::io::Error::new(ErrorKind::Other, e)})?;
-    let session_token = credentials.session_token().clone().map(|st| { st.to_string() });
+    let session_token = credentials.session_token().map(|st| { st.to_string() });
 
     let identity = Identity::from(credentials);
 
@@ -625,7 +661,7 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     let mut query_param_list = signing_instructions
         .params()
         .iter()
-        .map(|(key, value)| { format!("{}={}", encode(*key), encode(value))})
+        .map(|(key, value)| { format!("{}={}", encode(key), encode(value))})
         .collect::<Vec<String>>();
 
     if let Some(session_token) = session_token {

@@ -99,6 +99,7 @@ pub struct WebsocketOptions {
 }
 
 /// Builder type for constructing Websockets-related configuration.
+#[derive(Default)]
 pub struct WebsocketOptionsBuilder {
     options : WebsocketOptions
 }
@@ -334,17 +335,8 @@ impl ConnectOptions {
         }
     }
 
-    /// Sets the username value to be used in the client's Connect packets.  Public because
-    /// external builder crates need this.
-    pub fn set_username(&mut self, username: Option<&str>) {
-        self.username = username.map(str::to_string);
-    }
-
-    /// Sets the password value to be used in the client's Connect packets.  Public because
-    /// external builder crates need this.
-    pub fn set_password(&mut self, password: Option<&[u8]>) {
-        self.password = password.map(|p| p.to_vec());
-    }
+    /// Returns the MQTT client id currently configured in these options
+    pub fn client_id(&self) -> &Option<String> { &self.client_id }
 }
 
 impl Default for ConnectOptions {
@@ -392,6 +384,14 @@ impl ConnectOptionsBuilder {
         }
     }
 
+    /// Creates a new builder object for ConnectOptions using existing an existing ConnectOptions
+    /// value as a starting point.  Useful for internally tweaking user-supplied configuration.
+    pub fn new_from_existing(options: ConnectOptions) -> Self {
+        ConnectOptionsBuilder {
+            options
+        }
+    }
+
     /// Sets the maximum time interval, in seconds, that is permitted to elapse between the point at which the client
     /// finishes transmitting one MQTT packet and the point it starts sending the next.  The client will use
     /// PINGREQ packets to maintain this property.
@@ -429,7 +429,7 @@ impl ConnectOptionsBuilder {
     /// Sets a string value that the server may use for client authentication and authorization.
     ///
     /// See [MQTT5 User Name](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901071)
-    pub fn with_username(mut self, username: &str) -> Self {
+    pub fn with_username(&mut self, username: &str) -> &mut Self {
         self.options.username = Some(username.to_string());
         self
     }
@@ -833,8 +833,8 @@ impl GenericClientBuilder {
         let websocket_options = self.websocket_options.clone();
         let endpoint = self.endpoint.clone();
 
-        if websocket_options.is_some() {
-            make_websocket_client(endpoint, self.port, websocket_options.unwrap(), tls_options, client_options, connect_options, http_proxy_options, runtime)
+        if let Some(websocket_options) = websocket_options {
+            make_websocket_client(endpoint, self.port, websocket_options, tls_options, client_options, connect_options, http_proxy_options, runtime)
         } else {
             make_direct_client(endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, runtime)
         }
@@ -909,42 +909,42 @@ fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOption
 
             Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         }
-    } else {
-        if let Some(http_proxy_options) = http_proxy_options {
-            if let Some(proxy_tls_options) = http_proxy_options.tls_options {
-                let tokio_options = TokioClientOptions {
-                    connection_factory: Box::new(move || {
-                        let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
-                        let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                        let proxy_tls_stream = Box::pin(wrap_stream_with_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
-                        Box::pin(apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone()))
-                    }),
-                };
+    } else if let Some(http_proxy_options) = http_proxy_options {
+        if let Some(proxy_tls_options) = http_proxy_options.tls_options {
+            let tokio_options = TokioClientOptions {
+                connection_factory: Box::new(move || {
+                    let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                    let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+                    let proxy_tls_stream = Box::pin(wrap_stream_with_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
+                    Box::pin(apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone()))
+                }),
+            };
 
-                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
-            } else {
-                let tokio_options = TokioClientOptions {
-                    connection_factory: Box::new(move || {
-                        let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
-                        let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                        Box::pin(apply_proxy_connect_to_stream(tcp_stream, http_connect_endpoint.clone()))
-                    }),
-                };
-
-                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
-            }
+            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         } else {
             let tokio_options = TokioClientOptions {
                 connection_factory: Box::new(move || {
-                    Box::pin(make_leaf_stream(stream_endpoint.clone()))
+                    let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                    let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+                    Box::pin(apply_proxy_connect_to_stream(tcp_stream, http_connect_endpoint.clone()))
                 }),
             };
 
             Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         }
+    } else {
+        let tokio_options = TokioClientOptions {
+            connection_factory: Box::new(move || {
+                Box::pin(make_leaf_stream(stream_endpoint.clone()))
+            }),
+        };
+
+        Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
     }
 }
 
+// you're not the boss of me, clippy
+#[allow(clippy::too_many_arguments)]
 fn make_websocket_client(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
     let broker_endpoint = Endpoint::new(endpoint.as_str(), port);
     let proxy_endpoint = http_proxy_options.as_ref().map(|val| { Endpoint::new( val.endpoint.as_str(), val.port )});
@@ -995,42 +995,40 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
 
             Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         }
-    } else {
-        if let Some(http_proxy_options) = http_proxy_options {
-            if let Some(proxy_tls_options) = http_proxy_options.tls_options {
-                let tokio_options = TokioClientOptions {
-                    connection_factory: Box::new(move || {
-                        let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
-                        let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                        let proxy_tls_stream = Box::pin(wrap_stream_with_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
-                        let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone()));
-                        Box::pin(wrap_stream_with_websockets(connect_stream, http_connect_endpoint.endpoint.clone(), "ws", websocket_options.clone()))
-                    }),
-                };
+    } else if let Some(http_proxy_options) = http_proxy_options {
+        if let Some(proxy_tls_options) = http_proxy_options.tls_options {
+            let tokio_options = TokioClientOptions {
+                connection_factory: Box::new(move || {
+                    let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                    let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+                    let proxy_tls_stream = Box::pin(wrap_stream_with_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
+                    let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone()));
+                    Box::pin(wrap_stream_with_websockets(connect_stream, http_connect_endpoint.endpoint.clone(), "ws", websocket_options.clone()))
+                }),
+            };
 
-                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
-            } else {
-                let tokio_options = TokioClientOptions {
-                    connection_factory: Box::new(move || {
-                        let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
-                        let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                        let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tcp_stream, http_connect_endpoint.clone()));
-                        Box::pin(wrap_stream_with_websockets(connect_stream, http_connect_endpoint.endpoint.clone(), "ws", websocket_options.clone()))
-                    }),
-                };
-
-                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
-            }
+            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         } else {
             let tokio_options = TokioClientOptions {
                 connection_factory: Box::new(move || {
-                    let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                    Box::pin(wrap_stream_with_websockets(tcp_stream, stream_endpoint.endpoint.clone(), "ws", websocket_options.clone()))
+                    let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                    let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+                    let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tcp_stream, http_connect_endpoint.clone()));
+                    Box::pin(wrap_stream_with_websockets(connect_stream, http_connect_endpoint.endpoint.clone(), "ws", websocket_options.clone()))
                 }),
             };
 
             Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         }
+    } else {
+        let tokio_options = TokioClientOptions {
+            connection_factory: Box::new(move || {
+                let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+                Box::pin(wrap_stream_with_websockets(tcp_stream, stream_endpoint.endpoint.clone(), "ws", websocket_options.clone()))
+            }),
+        };
+
+        Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
     }
 }
 
@@ -1138,7 +1136,7 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=st
                 }
 
                 if let Some(response_code) = response.code {
-                    if response_code >= 200 && response_code < 300 {
+                    if (200..300).contains(&response_code) {
                         return Ok(inner_stream);
                     }
                 }
