@@ -632,6 +632,7 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     }
 
     let query_params = query_param_list.join("&");
+    let encoded_params = str::replace(query_params.as_str(), "/", "%2F");
     let final_uri = format!("{}?{}", uri_string, query_params);
 
     signed_request_builder = signed_request_builder.uri(final_uri);

@@ -72,6 +72,10 @@ struct CommandLineArgs {
     /// authorizer token key value
     #[argh(option)]
     authorizer_token_key_value: Option<String>,
+
+    /// signing region for websocket connections
+    #[argh(option)]
+    signing_region: Option<String>
 }
 
 async fn build_client(connect_config: ConnectOptions, client_config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
@@ -139,7 +143,8 @@ async fn build_client(connect_config: ConnectOptions, client_config: Mqtt5Client
             }
         }
         "aws-wss" => {
-            let sigv4_builder = WebsocketSigv4OptionsBuilder::new("us-east-1").await;
+            let signing_region = args.signing_region.clone().unwrap_or("us-east-1".to_string());
+            let sigv4_builder = WebsocketSigv4OptionsBuilder::new(signing_region.as_str()).await;
             let sigv4_options = sigv4_builder.build();
 
             Ok(AwsClientBuilder::new_websockets_with_sigv4(&endpoint, sigv4_options, capath)?
