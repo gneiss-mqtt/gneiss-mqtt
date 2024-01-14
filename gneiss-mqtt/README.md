@@ -1,6 +1,6 @@
 ## gneiss-mqtt
 
-Rust implementation of an MQTT 5 client.  
+Rust MQTT5 client implementation.
 
 This project is currently in pre-dev-preview.  You can use it, but there's a lot of friction and missing documentation/examples.
 
@@ -41,7 +41,7 @@ Gneiss-mqtt supports all aspects of the MQTT5 specification with the following e
 * * Persistence support
 
 ### Additional post GA ideas
-* Client crates for known MQTT services (AWS Shadow, Jobs, Fleet Provisioning, etc...)
+* Request-response client crates for known MQTT services (AWS Shadow, Jobs, Fleet Provisioning, etc...)
 * gneiss-mqtt-embedded: Embedded implementation targeting highly-constrained environments
 
 ### Release History

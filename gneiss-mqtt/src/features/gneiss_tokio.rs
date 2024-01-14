@@ -428,7 +428,7 @@ pub(crate) fn spawn_event_callback(event: Arc<ClientEvent>, callback: Arc<Client
     });
 }
 
-type TokioConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = std::io::Result<T>> + Send + Sync>>;
+type TokioConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = std::io::Result<T>> + Send>>;
 
 /// Tokio-specific client configuration
 pub struct TokioClientOptions<T> where T : AsyncRead + AsyncWrite + Send + Sync {

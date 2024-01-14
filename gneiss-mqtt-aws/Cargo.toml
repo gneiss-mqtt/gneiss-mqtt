@@ -2,9 +2,20 @@
 name = "gneiss-mqtt-aws"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+keywords = ["mqtt", "mqtt5", "iot", "aws", "iotcore"]
+categories = [ "asynchronous", "network-programming", "web-programming::websocket"]
+description = "AWS IoT Core specific builders for asynchronous and threaded MQTT clients"
+homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+documentation = "https://docs.rs/gneiss-mqtt-aws"
+repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+readme = "README.md"
 
 [dependencies]
+aws-config = { version = "1" }
+aws-credential-types = { version = "1" }
+aws-sigv4 = { version = "1" }
+aws-smithy-runtime-api = { version = "1" }
 gneiss-mqtt = { path = "../gneiss-mqtt" }
+http = { version = "0.2" }
 tokio = { version = "1", features = ["full"] }
+urlencoding = { version = "2" }

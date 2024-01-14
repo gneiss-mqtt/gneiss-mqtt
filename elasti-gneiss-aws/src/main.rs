@@ -16,7 +16,7 @@ use argh::FromArgs;
 use elasti_gneiss_core::{client_event_callback, ElastiError, ElastiResult, main_loop};
 use gneiss_mqtt::client::Mqtt5Client;
 use gneiss_mqtt::config::*;
-use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
+use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions, WebsocketSigv4OptionsBuilder};
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -72,9 +72,13 @@ struct CommandLineArgs {
     /// authorizer token key value
     #[argh(option)]
     authorizer_token_key_value: Option<String>,
+
+    /// signing region for websocket connections
+    #[argh(option)]
+    signing_region: Option<String>
 }
 
-fn build_client(connect_config: ConnectOptions, client_config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
+async fn build_client(connect_config: ConnectOptions, client_config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&uri_string);
@@ -138,6 +142,16 @@ fn build_client(connect_config: ConnectOptions, client_config: Mqtt5ClientOption
                 Err(ElastiError::MissingArguments("--authorizer"))
             }
         }
+        "aws-wss" => {
+            let signing_region = args.signing_region.clone().unwrap_or("us-east-1".to_string());
+            let sigv4_builder = WebsocketSigv4OptionsBuilder::new(signing_region.as_str()).await;
+            let sigv4_options = sigv4_builder.build();
+
+            Ok(AwsClientBuilder::new_websockets_with_sigv4(&endpoint, sigv4_options, capath)?
+                .with_connect_options(connect_config)
+                .with_client_options(client_config)
+                .build(runtime)?)
+        }
         _ => {
             Err(ElastiError::UnsupportedUriScheme(scheme))
         }
@@ -174,7 +188,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::Uniform)
         .build();
 
-    let client = build_client(connect_options, config, &Handle::current(), &cli_args).unwrap();
+    let client = build_client(connect_options, config, &Handle::current(), &cli_args).await.unwrap();
 
     println!("elasti-gneiss - an interactive MQTT5 console application\n");
     println!(" `help` for command assistance\n");
