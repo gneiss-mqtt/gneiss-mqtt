@@ -580,6 +580,8 @@ use aws_smithy_runtime_api::client::identity::Identity;
 
 async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, signing_region: String, credentials_provider: Arc<dyn ProvideCredentials>) -> std::io::Result<http::request::Builder> {
     let credentials = credentials_provider.provide_credentials().await.map_err(|e| { std::io::Error::new(ErrorKind::Other, e)})?;
+    let session_token = credentials.session_token().clone().map(|st| { st.to_string() });
+
     let identity = Identity::from(credentials);
 
     let mut signing_settings = aws_sigv4::http_request::SigningSettings::default();
@@ -603,7 +605,7 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     let headers = vec!(("host", uri.host().unwrap()));
     let signable_request = SignableRequest::new(
         "GET",
-        uri_string,
+        uri_string.clone(),
         headers.into_iter(),
         SignableBody::Bytes(&[])
     ).expect("signable request");
@@ -612,6 +614,27 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
         .map_err(|e| { std::io::Error::new(ErrorKind::Other, e)})?
         .into_parts();
 
+    let mut signed_request_builder = http::request::Builder::default()
+        .method(request_builder.method_ref().unwrap());
 
-    Ok(request_builder)
+    for (header_name, header_value) in request_builder.headers_ref().unwrap().iter() {
+        signed_request_builder = signed_request_builder.header(header_name, header_value);
+    }
+
+    let mut query_param_list = signing_instructions
+        .params()
+        .iter()
+        .map(|(key, value)| { format!("{}={}", *key, value)})
+        .collect::<Vec<String>>();
+
+    if let Some(session_token) = session_token {
+        query_param_list.push(format!("X-Amz-Security-Token={}", session_token));
+    }
+
+    let query_params = query_param_list.join("&");
+    let final_uri = format!("{}?{}", uri_string, query_params);
+
+    signed_request_builder = signed_request_builder.uri(final_uri);
+
+    Ok(signed_request_builder)
 }
