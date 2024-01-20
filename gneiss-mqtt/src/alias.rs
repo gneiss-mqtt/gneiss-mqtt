@@ -15,7 +15,7 @@ extern crate lru;
 #[cfg(test)]
 use assert_matches::assert_matches;
 
-use crate::*;
+use crate::error::{MqttError, MqttResult};
 
 use log::*;
 use lru::LruCache;
@@ -283,12 +283,12 @@ impl InboundAliasResolver {
                 }
 
                 error!("Topic Alias Resolution - zero length topic");
-                return Err(MqttError::new_inbound_topic_alias_not_valid("test"));
+                return Err(MqttError::new_inbound_topic_alias_not_valid("No alias binding exists for topic-less publish"));
             }
 
             if *alias_value == 0 || *alias_value > self.maximum_alias_value {
                 error!("Topic Alias Resolution - inbound alias out of range");
-                return Err(MqttError::new_inbound_topic_alias_not_valid("test"));
+                return Err(MqttError::new_inbound_topic_alias_not_valid("Publish alias value out of negotiated range"));
             }
 
             self.current_aliases.insert(*alias_value, topic.clone());
@@ -301,7 +301,6 @@ impl InboundAliasResolver {
 #[cfg(test)]
 mod tests {
     use crate::alias::*;
-    use crate::MqttError;
 
     #[test]
     fn outbound_topic_alias_null() {

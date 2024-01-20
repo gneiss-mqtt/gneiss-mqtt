@@ -7,9 +7,9 @@ pub(crate) mod utils;
 
 extern crate log;
 
-use crate::*;
 use crate::alias::*;
 use crate::encode::utils::*;
+use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::spec::*;
 use crate::spec::auth::*;

@@ -5,6 +5,7 @@
 
 extern crate log;
 
+use crate::error::{MqttError, MqttResult};
 use crate::validate::*;
 
 use log::*;

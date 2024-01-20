@@ -15,6 +15,7 @@ use crate::*;
 use crate::client::*;
 use crate::client::shared_impl::*;
 use crate::config::*;
+use crate::error::{MqttError, MqttResult};
 use log::*;
 use std::future::Future;
 use std::pin::Pin;

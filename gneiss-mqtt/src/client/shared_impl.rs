@@ -382,7 +382,7 @@ impl Mqtt5ClientImpl {
 
     fn emit_connection_failure_event(&mut self) {
         let mut connection_failure_event = ConnectionFailureEvent {
-            error: self.last_error.take().unwrap_or(MqttError::Unknown),
+            error: self.last_error.take().unwrap_or(MqttError::ConnectionEstablishmentFailure),
             connack: None,
         };
 
@@ -395,7 +395,7 @@ impl Mqtt5ClientImpl {
 
     fn emit_disconnection_event(&mut self) {
         let mut disconnection_event = DisconnectionEvent {
-            error: self.last_error.take().unwrap_or(MqttError::Unknown),
+            error: self.last_error.take().unwrap_or(MqttError::ConnectionClosed),
             disconnect: None,
         };
 

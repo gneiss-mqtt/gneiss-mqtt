@@ -5,7 +5,7 @@
 
 extern crate log;
 
-use crate::{MqttError, MqttResult};
+use crate::error::{MqttError, MqttResult};
 use crate::spec::UserProperty;
 
 use log::*;

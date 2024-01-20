@@ -245,7 +245,7 @@ extern crate tokio;
 use std::io::ErrorKind;
 use gneiss_mqtt::config::*;
 use gneiss_mqtt::client::Mqtt5Client;
-use gneiss_mqtt::{MqttError, MqttResult};
+use gneiss_mqtt::error::{MqttError, MqttResult};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::runtime::Handle;

@@ -5,9 +5,9 @@
 
 extern crate log;
 
-use crate::*;
 use crate::encode::*;
 use crate::encode::utils::*;
+use crate::error::{MqttError, MqttResult};
 use crate::spec::*;
 use crate::spec::utils::*;
 

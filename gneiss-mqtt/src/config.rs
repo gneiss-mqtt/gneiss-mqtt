@@ -20,6 +20,7 @@ extern crate stream_ws;
 
 use crate::*;
 use crate::alias::{OutboundAliasResolverFactoryFn};
+use crate::error::*;
 use crate::client::*;
 use crate::features::gneiss_tokio::{TokioClientOptions};
 
