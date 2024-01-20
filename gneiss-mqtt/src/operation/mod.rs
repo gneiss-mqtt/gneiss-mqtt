@@ -753,12 +753,12 @@ impl OperationalState {
         complete_operation_with_error(&mut operation.options.unwrap(), error)
     }
 
-    fn complete_operation_sequence_as_failure<T>(&mut self, iterator: T, error: MqttError) -> MqttResult<()> where T : Iterator<Item = u64> {
+    fn complete_operation_sequence_as_failure<T>(&mut self, iterator: T, error_fn: fn() -> MqttError ) -> MqttResult<()> where T : Iterator<Item = u64> {
         #[allow(clippy::manual_try_fold)]
         iterator.fold(
             Ok(()),
             |res, item| {
-                fold_mqtt_result(res, self.complete_operation_as_failure(item, error))
+                fold_mqtt_result(res, self.complete_operation_as_failure(item, error_fn()))
             }
         )
     }
@@ -864,7 +864,7 @@ impl OperationalState {
         mem::swap(&mut completions, &mut self.high_priority_operation_queue);
         let (_, failures) = self.partition_high_priority_queue_for_disconnect(completions.into_iter());
 
-        result = fold_mqtt_result(result, self.complete_operation_sequence_as_failure(failures.into_iter(), MqttError::ConnectionClosed));
+        result = fold_mqtt_result(result, self.complete_operation_sequence_as_failure(failures.into_iter(), generate_connection_closed_error));
 
         /*
          * write completion pending operations can be processed immediately and either failed
@@ -879,7 +879,7 @@ impl OperationalState {
         self.user_operation_queue.append(&mut retained);
 
         /* fail everything else */
-        result = fold_mqtt_result(result, self.complete_operation_sequence_as_failure(rejected.into_iter(), MqttError::OfflineQueuePolicyFailed));
+        result = fold_mqtt_result(result, self.complete_operation_sequence_as_failure(rejected.into_iter(), generate_offline_queue_policy_failed_error));
 
         /*
          * unacked operations are processed as follows:
@@ -920,7 +920,7 @@ impl OperationalState {
         mem::swap(&mut user_move, &mut self.user_operation_queue);
 
         let (mut retained_user, rejected_user) = self.partition_operation_queue_by_queue_policy(&user_move, &self.config.offline_queue_policy);
-        result = fold_mqtt_result(result, self.complete_operation_sequence_as_failure(rejected_user.into_iter(), MqttError::OfflineQueuePolicyFailed));
+        result = fold_mqtt_result(result, self.complete_operation_sequence_as_failure(rejected_user.into_iter(), generate_offline_queue_policy_failed_error));
 
         self.user_operation_queue.append(&mut retained_user);
 
@@ -1457,7 +1457,7 @@ impl OperationalState {
             self.user_operation_queue.append(&mut retained);
 
             /* fail everything else */
-            result = self.complete_operation_sequence_as_failure(rejected.into_iter(), MqttError::OfflineQueuePolicyFailed);
+            result = self.complete_operation_sequence_as_failure(rejected.into_iter(), generate_offline_queue_policy_failed_error);
 
             self.qos2_incomplete_incoming_publishes.clear();
             self.allocated_packet_ids.clear();
@@ -1952,6 +1952,14 @@ impl OperationalState {
     }
 }
 
+fn generate_connection_closed_error() -> MqttError {
+    MqttError::ConnectionClosed
+}
+
+fn generate_offline_queue_policy_failed_error() -> MqttError {
+    MqttError::OfflineQueuePolicyFailed
+}
+
 fn build_negotiated_settings(config: &OperationalStateConfig, packet: &ConnackPacket, existing_settings: &Option<NegotiatedSettings>) -> NegotiatedSettings {
     let connect = &config.connect_options;
 
@@ -2080,6 +2088,7 @@ fn sort_operation_deque(operations: &mut VecDeque<u64>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
 
     fn build_operational_state_config_for_settings_test(connect_options: ConnectOptions) -> OperationalStateConfig {
         OperationalStateConfig {
@@ -2369,9 +2378,9 @@ mod tests {
     fn acquire_free_packet_id_start() {
         let mut operational_state = build_operational_state_for_acquire_packet_id_test();
 
-        assert_eq!(Ok(1), operational_state.acquire_free_packet_id(1));
-        assert_eq!(Ok(2), operational_state.acquire_free_packet_id(2));
-        assert_eq!(Ok(3), operational_state.acquire_free_packet_id(3));
+        assert_matches!(operational_state.acquire_free_packet_id(1), Ok(1));
+        assert_matches!(operational_state.acquire_free_packet_id(2), Ok(2));
+        assert_matches!(operational_state.acquire_free_packet_id(3), Ok(3));
     }
 
     #[test]
@@ -2385,9 +2394,9 @@ mod tests {
         operational_state.allocated_packet_ids.insert(9, 18);
         operational_state.allocated_packet_ids.insert(11, 22);
 
-        assert_eq!(Ok(8), operational_state.acquire_free_packet_id(1));
-        assert_eq!(Ok(10), operational_state.acquire_free_packet_id(2));
-        assert_eq!(Ok(12), operational_state.acquire_free_packet_id(3));
+        assert_matches!(operational_state.acquire_free_packet_id(1), Ok(8));
+        assert_matches!(operational_state.acquire_free_packet_id(2), Ok(10));
+        assert_matches!(operational_state.acquire_free_packet_id(3), Ok(12));
     }
 
     #[test]
@@ -2396,10 +2405,10 @@ mod tests {
 
         operational_state.next_packet_id = 65534;
 
-        assert_eq!(Ok(65534), operational_state.acquire_free_packet_id(1));
-        assert_eq!(Ok(65535), operational_state.acquire_free_packet_id(2));
-        assert_eq!(Ok(1), operational_state.acquire_free_packet_id(3));
-        assert_eq!(Ok(2), operational_state.acquire_free_packet_id(4));
+        assert_matches!(operational_state.acquire_free_packet_id(1), Ok(65534));
+        assert_matches!(operational_state.acquire_free_packet_id(2), Ok(65535));
+        assert_matches!(operational_state.acquire_free_packet_id(3), Ok(1));
+        assert_matches!(operational_state.acquire_free_packet_id(4), Ok(2));
     }
 
     #[test]
@@ -2413,8 +2422,8 @@ mod tests {
         operational_state.allocated_packet_ids.insert(2, 18);
         operational_state.allocated_packet_ids.insert(4, 22);
 
-        assert_eq!(Ok(3), operational_state.acquire_free_packet_id(1));
-        assert_eq!(Ok(5), operational_state.acquire_free_packet_id(2));
+        assert_matches!(operational_state.acquire_free_packet_id(1), Ok(3));
+        assert_matches!(operational_state.acquire_free_packet_id(2), Ok(5));
     }
 
     #[test]
@@ -2424,6 +2433,6 @@ mod tests {
             operational_state.allocated_packet_ids.insert(i + 1, i as u64);
         }
 
-        assert_eq!(Err(MqttError::PacketIdSpaceExhausted), operational_state.acquire_free_packet_id(1));
+        assert_matches!(operational_state.acquire_free_packet_id(1), Err(MqttError::PacketIdSpaceExhausted));
     }
 }

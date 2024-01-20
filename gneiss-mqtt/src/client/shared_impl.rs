@@ -203,7 +203,7 @@ impl Mqtt5ClientImpl {
         }
     }
 
-    fn handle_packet_events(&mut self) {
+    fn dispatch_packet_events(&mut self) {
         let mut events = VecDeque::new();
         mem::swap(&mut events, &mut self.packet_events);
 
@@ -242,13 +242,15 @@ impl Mqtt5ClientImpl {
         };
 
         let result = self.operational_state.handle_network_event(&mut context);
-        if let Err(error) = result {
-            self.apply_error(error);
+        self.dispatch_packet_events();
+
+        match result {
+            Err(error) => {
+                self.apply_error(error); // this error propagates
+                Err(MqttError::InternalStateError) // this error does not propagate
+            }
+            _ => { Ok(()) }
         }
-
-        self.handle_packet_events();
-
-        result
     }
 
     pub(crate) fn handle_write_completion(&mut self) -> MqttResult<()> {
@@ -259,11 +261,14 @@ impl Mqtt5ClientImpl {
         };
 
         let result = self.operational_state.handle_network_event(&mut context);
-        if let Err(error) = result {
-            self.apply_error(error);
-        }
 
-        result
+        match result {
+            Err(error) => {
+                self.apply_error(error); // this error propagates
+                Err(MqttError::InternalStateError) // this error does not propagate
+            }
+            _ => { Ok(()) }
+        }
     }
 
     pub(crate) fn handle_service(&mut self, outbound_data: &mut Vec<u8>) -> MqttResult<()> {
@@ -273,11 +278,14 @@ impl Mqtt5ClientImpl {
         };
 
         let result = self.operational_state.service(&mut context);
-        if let Err(error) = result {
-            self.apply_error(error);
-        }
 
-        result
+        match result {
+            Err(error) => {
+                self.apply_error(error); // this error propagates
+                Err(MqttError::InternalStateError) // this error does not propagate
+            }
+            _ => { Ok(()) }
+        }
     }
 
     fn clamp_reconnect_period(&self, mut reconnect_period: Duration) -> Duration {
@@ -372,9 +380,9 @@ impl Mqtt5ClientImpl {
         self.broadcast_event(Arc::new(ClientEvent::ConnectionSuccess(connection_success_event)));
     }
 
-    fn emit_connection_failure_event(&self) {
+    fn emit_connection_failure_event(&mut self) {
         let mut connection_failure_event = ConnectionFailureEvent {
-            error: self.last_error.unwrap_or(MqttError::Unknown),
+            error: self.last_error.take().unwrap_or(MqttError::Unknown),
             connack: None,
         };
 
@@ -385,9 +393,9 @@ impl Mqtt5ClientImpl {
         self.broadcast_event(Arc::new(ClientEvent::ConnectionFailure(connection_failure_event)));
     }
 
-    fn emit_disconnection_event(&self) {
+    fn emit_disconnection_event(&mut self) {
         let mut disconnection_event = DisconnectionEvent {
-            error: self.last_error.unwrap_or(MqttError::Unknown),
+            error: self.last_error.take().unwrap_or(MqttError::Unknown),
             disconnect: None,
         };
 

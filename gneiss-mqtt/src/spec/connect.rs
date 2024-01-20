@@ -537,28 +537,28 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
 
 pub(crate) fn validate_connect_packet_outbound(packet: &ConnectPacket) -> MqttResult<()> {
 
-    validate_optional_string_length(&packet.client_id, MqttError::ConnectPacketValidation, "Connect", "client_id")?;
-    validate_optional_integer_non_zero!(receive_maximum, packet.receive_maximum, ConnectPacketValidation, "Connect", "receive_maximum");
-    validate_optional_integer_non_zero!(maximum_packet_size, packet.maximum_packet_size_bytes, ConnectPacketValidation, "Connect", "maximum_packet_size");
+    validate_optional_string_length(&packet.client_id, PacketType::Connect, "Connect", "client_id")?;
+    validate_optional_integer_non_zero!(receive_maximum, packet.receive_maximum, PacketType::Connect, "Connect", "receive_maximum");
+    validate_optional_integer_non_zero!(maximum_packet_size, packet.maximum_packet_size_bytes, PacketType::Connect, "Connect", "maximum_packet_size");
 
     if packet.authentication_data.is_some() && packet.authentication_method.is_none() {
         error!("ConnectPacket Validation - authentication data without authentication method");
-        return Err(MqttError::ConnectPacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Connect));
     }
 
-    validate_optional_string_length(&packet.authentication_method, MqttError::ConnectPacketValidation, "Connect", "authentication_method")?;
-    validate_optional_binary_length(&packet.authentication_data, MqttError::ConnectPacketValidation, "Connect", "authentication_data")?;
-    validate_optional_string_length(&packet.username, MqttError::ConnectPacketValidation, "Connect", "username")?;
-    validate_optional_binary_length(&packet.password, MqttError::ConnectPacketValidation, "Connect", "password")?;
-    validate_user_properties(&packet.user_properties, MqttError::ConnectPacketValidation, "Connect")?;
+    validate_optional_string_length(&packet.authentication_method, PacketType::Connect, "Connect", "authentication_method")?;
+    validate_optional_binary_length(&packet.authentication_data, PacketType::Connect, "Connect", "authentication_data")?;
+    validate_optional_string_length(&packet.username, PacketType::Connect, "Connect", "username")?;
+    validate_optional_binary_length(&packet.password, PacketType::Connect, "Connect", "password")?;
+    validate_user_properties(&packet.user_properties, PacketType::Connect, "Connect")?;
 
     if let Some(will) = &packet.will {
-        validate_optional_string_length(&will.content_type, MqttError::ConnectPacketValidation, "Connect", "content_type")?;
-        validate_optional_string_length(&will.response_topic, MqttError::ConnectPacketValidation, "Connect", "response_topic")?;
-        validate_optional_binary_length(&will.correlation_data, MqttError::ConnectPacketValidation, "Connect", "correlation_data")?;
-        validate_user_properties(&will.user_properties, MqttError::ConnectPacketValidation, "ConnectWill")?;
-        validate_string_length(&will.topic, MqttError::ConnectPacketValidation, "ConnectWill", "topic")?;
-        validate_optional_binary_length(&will.payload, MqttError::ConnectPacketValidation, "ConnectWill", "payload")?;
+        validate_optional_string_length(&will.content_type, PacketType::Connect, "Connect", "content_type")?;
+        validate_optional_string_length(&will.response_topic, PacketType::Connect, "Connect", "response_topic")?;
+        validate_optional_binary_length(&will.correlation_data, PacketType::Connect, "Connect", "correlation_data")?;
+        validate_user_properties(&will.user_properties, PacketType::Connect, "ConnectWill")?;
+        validate_string_length(&will.topic, PacketType::Connect, "ConnectWill", "topic")?;
+        validate_optional_binary_length(&will.payload, PacketType::Connect, "ConnectWill", "payload")?;
     }
 
     Ok(())
@@ -1296,17 +1296,18 @@ mod tests {
     }
 
     use crate::validate::testing::*;
+    use assert_matches::assert_matches;
 
     #[test]
     fn connect_validate_success_all_properties() {
         let packet = MqttPacket::Connect(create_connect_packet_all_properties());
 
-        assert_eq!(validate_packet_outbound(&packet), Ok(()));
+        assert!(validate_packet_outbound(&packet).is_ok());
 
         let test_validation_context = create_pinned_validation_context();
         let validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &validation_context), Ok(()));
+        assert!(validate_packet_outbound_internal(&packet, &validation_context).is_ok());
     }
 
     #[test]
@@ -1314,7 +1315,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.client_id = Some("noooooo".repeat(10000));
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1322,7 +1323,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.receive_maximum = Some(0);
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1330,7 +1331,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.maximum_packet_size_bytes = Some(0);
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1338,7 +1339,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.authentication_method = None;
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1346,7 +1347,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.authentication_method = Some("hello".repeat(20000));
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1354,7 +1355,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.authentication_data = Some(vec![0; 70 * 1024]);
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1362,7 +1363,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.username = Some("ladeeda".repeat(20000));
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1370,7 +1371,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.password = Some(vec![0; 80 * 1024]);
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1378,7 +1379,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.user_properties = Some(create_invalid_user_properties());
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1387,7 +1388,7 @@ mod tests {
         let will = packet.will.as_mut();
         will.unwrap().content_type = Some("NotJson".repeat(10000));
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1396,7 +1397,7 @@ mod tests {
         let will = packet.will.as_mut();
         will.unwrap().response_topic = Some("NotJson".repeat(10000));
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1405,7 +1406,7 @@ mod tests {
         let will = packet.will.as_mut();
         will.unwrap().correlation_data = Some(vec![0; 80 * 1024]);
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1414,7 +1415,7 @@ mod tests {
         let will = packet.will.as_mut();
         will.unwrap().user_properties = Some(create_invalid_user_properties());
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1423,7 +1424,7 @@ mod tests {
         let will = packet.will.as_mut();
         will.unwrap().topic = "Terrible".repeat(10000);
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 
     #[test]
@@ -1432,6 +1433,6 @@ mod tests {
         let will = packet.will.as_mut();
         will.unwrap().payload = Some(vec![0; 80 * 1024]);
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::ConnectPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Connect(packet)), Err(MqttError::PacketValidation(PacketType::Connect)));
     }
 }

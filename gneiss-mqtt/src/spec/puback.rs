@@ -53,9 +53,9 @@ define_ack_packet_encoding_impl!(write_puback_encoding_steps, PubackPacket, Puba
 define_ack_packet_decode_properties_function!(decode_puback_properties, PubackPacket, "Puback");
 define_ack_packet_decode_function!(decode_puback_packet, Puback, PubackPacket, "Puback", PUBACK_FIRST_BYTE, convert_u8_to_puback_reason_code, decode_puback_properties);
 
-validate_ack_outbound!(validate_puback_packet_outbound, PubackPacket, MqttError::PubackPacketValidation, "Puback");
-validate_ack_outbound_internal!(validate_puback_packet_outbound_internal, PubackPacket, PubackPacketValidation, compute_puback_packet_length_properties, "Puback");
-validate_ack_inbound_internal!(validate_puback_packet_inbound_internal, PubackPacket, PubackPacketValidation, "Puback");
+validate_ack_outbound!(validate_puback_packet_outbound, PubackPacket, PacketType::Puback, "Puback");
+validate_ack_outbound_internal!(validate_puback_packet_outbound_internal, PubackPacket, PacketType::Puback, compute_puback_packet_length_properties, "Puback");
+validate_ack_inbound_internal!(validate_puback_packet_inbound_internal, PubackPacket, PacketType::Puback, "Puback");
 
 define_ack_packet_display_trait!(PubackPacket, "PubackPacket", puback_reason_code_to_str);
 
@@ -190,9 +190,11 @@ mod tests {
         do_inbound_size_decode_failure_test(&MqttPacket::Puback(packet));
     }
 
+    use assert_matches::assert_matches;
+
     test_ack_validate_success!(puback_validate_success, Puback, create_puback_with_all_properties);
-    test_ack_validate_failure_reason_string_length!(puback_validate_failure_reason_string_length, Puback, create_puback_with_all_properties, PubackPacketValidation);
-    test_ack_validate_failure_invalid_user_properties!(puback_validate_failure_invalid_user_properties, Puback, create_puback_with_all_properties, PubackPacketValidation);
-    test_ack_validate_failure_outbound_size!(puback_validate_failure_outbound_size, Puback, create_puback_with_all_properties, PubackPacketValidation);
-    test_ack_validate_failure_packet_id_zero!(puback_validate_failure_packet_id_zero, Puback, create_puback_with_all_properties, PubackPacketValidation);
+    test_ack_validate_failure_reason_string_length!(puback_validate_failure_reason_string_length, Puback, create_puback_with_all_properties, PacketType::Puback);
+    test_ack_validate_failure_invalid_user_properties!(puback_validate_failure_invalid_user_properties, Puback, create_puback_with_all_properties, PacketType::Puback);
+    test_ack_validate_failure_outbound_size!(puback_validate_failure_outbound_size, Puback, create_puback_with_all_properties, PacketType::Puback);
+    test_ack_validate_failure_packet_id_zero!(puback_validate_failure_packet_id_zero, Puback, create_puback_with_all_properties, PacketType::Puback);
 }

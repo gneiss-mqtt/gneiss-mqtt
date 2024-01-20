@@ -53,9 +53,9 @@ define_ack_packet_encoding_impl!(write_pubcomp_encoding_steps, PubcompPacket, Pu
 define_ack_packet_decode_properties_function!(decode_pubcomp_properties, PubcompPacket, "Pubcomp");
 define_ack_packet_decode_function!(decode_pubcomp_packet, Pubcomp, PubcompPacket, "Pubcomp", PUBCOMP_FIRST_BYTE, convert_u8_to_pubcomp_reason_code, decode_pubcomp_properties);
 
-validate_ack_outbound!(validate_pubcomp_packet_outbound, PubcompPacket, MqttError::PubcompPacketValidation, "Pubcomp");
-validate_ack_outbound_internal!(validate_pubcomp_packet_outbound_internal, PubcompPacket, PubcompPacketValidation, compute_pubcomp_packet_length_properties, "Puback");
-validate_ack_inbound_internal!(validate_pubcomp_packet_inbound_internal, PubcompPacket, PubcompPacketValidation, "Pubcomp");
+validate_ack_outbound!(validate_pubcomp_packet_outbound, PubcompPacket, PacketType::Pubcomp, "Pubcomp");
+validate_ack_outbound_internal!(validate_pubcomp_packet_outbound_internal, PubcompPacket, PacketType::Pubcomp, compute_pubcomp_packet_length_properties, "Puback");
+validate_ack_inbound_internal!(validate_pubcomp_packet_inbound_internal, PubcompPacket, PacketType::Pubcomp, "Pubcomp");
 
 define_ack_packet_display_trait!(PubcompPacket, "PubcompPacket", pubcomp_reason_code_to_str);
 
@@ -193,10 +193,11 @@ mod tests {
 
     use crate::validate::testing::*;
     use crate::validate::utils::testing::*;
+    use assert_matches::assert_matches;
 
     test_ack_validate_success!(pubcomp_validate_success, Pubcomp, create_pubcomp_with_all_properties);
-    test_ack_validate_failure_reason_string_length!(pubcomp_validate_failure_reason_string_length, Pubcomp, create_pubcomp_with_all_properties, PubcompPacketValidation);
-    test_ack_validate_failure_invalid_user_properties!(pubcomp_validate_failure_invalid_user_properties, Pubcomp, create_pubcomp_with_all_properties, PubcompPacketValidation);
-    test_ack_validate_failure_outbound_size!(pubcomp_validate_failure_outbound_size, Pubcomp, create_pubcomp_with_all_properties, PubcompPacketValidation);
-    test_ack_validate_failure_packet_id_zero!(pubcomp_validate_failure_packet_id_zero, Pubcomp, create_pubcomp_with_all_properties, PubcompPacketValidation);
+    test_ack_validate_failure_reason_string_length!(pubcomp_validate_failure_reason_string_length, Pubcomp, create_pubcomp_with_all_properties, PacketType::Pubcomp);
+    test_ack_validate_failure_invalid_user_properties!(pubcomp_validate_failure_invalid_user_properties, Pubcomp, create_pubcomp_with_all_properties, PacketType::Pubcomp);
+    test_ack_validate_failure_outbound_size!(pubcomp_validate_failure_outbound_size, Pubcomp, create_pubcomp_with_all_properties, PacketType::Pubcomp);
+    test_ack_validate_failure_packet_id_zero!(pubcomp_validate_failure_packet_id_zero, Pubcomp, create_pubcomp_with_all_properties, PacketType::Pubcomp);
 }

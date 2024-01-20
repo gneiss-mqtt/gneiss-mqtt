@@ -139,13 +139,85 @@ use std::error::Error;
 use std::fmt;
 use std::time::Instant;
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+/// An enum indicating the kind of MQTT packet
+pub enum PacketType {
+    /// A [Connect](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901033) packet
+    Connect,
+
+    /// A [Connack](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901074) packet
+    Connack,
+
+    /// A [Publish](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901100) packet
+    Publish,
+
+    /// A [Puback](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901121) packet
+    Puback,
+
+    /// A [Pubrec](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901131) packet
+    Pubrec,
+
+    /// A [Pubrel](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901141) packet
+    Pubrel,
+
+    /// A [Pubcomp](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901151) packet
+    Pubcomp,
+
+    /// A [Subscribe](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901161) packet
+    Subscribe,
+
+    /// A [Suback](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901171) packet
+    Suback,
+
+    /// An [Unsubscribe](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901179) packet
+    Unsubscribe,
+
+    /// An [Unsuback](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901187) packet
+    Unsuback,
+
+    /// A [Pingreq](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901195) packet
+    Pingreq,
+
+    /// A [Pingresp](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901200) packet
+    Pingresp,
+
+    /// A [Disconnect](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901205) packet
+    Disconnect,
+
+    /// An [Auth](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901217) packet
+    Auth,
+}
+
+impl fmt::Display for PacketType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PacketType::Connect => { write!(f, "ConnectPacket") }
+            PacketType::Connack => { write!(f, "ConnackPacket") }
+            PacketType::Publish => { write!(f, "PublishPacket") }
+            PacketType::Puback => { write!(f, "PubackPacket") }
+            PacketType::Pubrec => { write!(f, "PubrecPacket") }
+            PacketType::Pubrel => { write!(f, "PubrelPacket") }
+            PacketType::Pubcomp => { write!(f, "PubcompPacket") }
+            PacketType::Subscribe => { write!(f, "SubscribePacket") }
+            PacketType::Suback => { write!(f, "SubackPacket") }
+            PacketType::Unsubscribe => { write!(f, "UnsubscribePacket") }
+            PacketType::Unsuback => { write!(f, "UnsubackPacket") }
+            PacketType::Pingreq => { write!(f, "PingreqPacket") }
+            PacketType::Pingresp => { write!(f, "PingrespPacket") }
+            PacketType::Disconnect => { write!(f, "DisconnectPacket") }
+            PacketType::Auth => { write!(f, "AuthPacket") }
+        }
+    }
+}
+
 /// Basic error type for the entire gneiss-mqtt crate.  Currently a very simple enum with no
 /// additional context.  May eventually take on additional state in certain variants, but for now
 /// I don't feel comfortable committing to that.
 ///
 /// In the meantime, configure logging for additional details recorded at the time of the error
 /// emission.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Debug)]
+#[non_exhaustive]
 pub enum MqttError {
 
     /// An error where no root cause could be determined.  Generally an indication of
@@ -194,76 +266,9 @@ pub enum MqttError {
     /// Error emitted when an inbound publish arrives with an unknown topic alias.
     InboundTopicAliasNotValid,
 
-    /// Error emitted when a (user-submitted) packet is encountered whose user properties violate
-    /// the MQTT specification.  Generally this is due to a maximum length violation.
-    UserPropertyValidation,
-
     /// Error emitted when an Auth packet is submitted or received that violates the MQTT
     /// specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    AuthPacketValidation,
-
-    /// Error emitted when a Connack packet is received that violates the MQTT specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    ConnackPacketValidation,
-
-    /// Error emitted when a Connect packet is constructed on behalf of the user that violates the MQTT
-    /// specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    ConnectPacketValidation,
-
-    /// Error emitted when a Disconnect packet is submitted or received that violates the MQTT specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    DisconnectPacketValidation,
-
-    /// Error emitted when a Puback packet is received that violates the MQTT specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    PubackPacketValidation,
-
-    /// Error emitted when a Pubcomp packet is received that violates the MQTT specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    PubcompPacketValidation,
-
-    /// Error emitted when a Pubrec packet is received that violates the MQTT specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    PubrecPacketValidation,
-
-    /// Error emitted when a Pubrel packet is received that violates the MQTT specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    PubrelPacketValidation,
-
-    /// Error emitted when a Publish packet is submitted or received that violates the MQTT specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    PublishPacketValidation,
-
-    /// Error emitted when a Suback packet is received that violates the MQTT specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    SubackPacketValidation,
-
-    /// Error emitted when an Unsuback packet is received that violates the MQTT specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    UnsubackPacketValidation,
-
-    /// Error emitted when a Subscribe packet is submitted that violates the MQTT specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    SubscribePacketValidation,
-
-    /// Error emitted when an Unsubscribe packet is submitted that violates the MQTT specification.
-    ///
-    /// TODO: consider consolidating into a PacketValidation variant that includes the packet type as a parameter
-    UnsubscribePacketValidation,
+    PacketValidation(PacketType),
 
     /// Error emitted by the client when something happens that should never happen.  Always indicates
     /// a bug in the client.
@@ -354,20 +359,7 @@ impl fmt::Display for MqttError {
             MqttError::MalformedPacket => { write!(f, "malformed packet - received a packet whose encoding properties violate the mqtt spec") }
             MqttError::ProtocolError => { write!(f, "protocol error - broker behavior disallowed by the mqtt spec") }
             MqttError::InboundTopicAliasNotValid => { write!(f, "inbound topic alias not valid - incoming publish contained an invalid topic alias") }
-            MqttError::UserPropertyValidation => { write!(f, "user property validation - mqtt packet contains user properties that violate the mqtt spec") }
-            MqttError::AuthPacketValidation => { write!(f, "auth packet validation - an auth packet failed validation") }
-            MqttError::ConnackPacketValidation => { write!(f, "connack packet validation - a connack packet failed validation") }
-            MqttError::ConnectPacketValidation => { write!(f, "connect packet validation - a connect packet failed validation") }
-            MqttError::DisconnectPacketValidation => { write!(f, "disconnect packet validation - a disconnect packet failed validation") }
-            MqttError::PubackPacketValidation => { write!(f, "puback packet validation - a puback packet failed validation") }
-            MqttError::PubcompPacketValidation => { write!(f, "pubcomp packet validation - a pubcomp packet failed validation") }
-            MqttError::PubrecPacketValidation => { write!(f, "pubrec packet validation - a pubrec packet failed validation") }
-            MqttError::PubrelPacketValidation => { write!(f, "pubrel packet validation - a pubrel packet failed validation") }
-            MqttError::PublishPacketValidation => { write!(f, "publish packet validation - a publish packet failed validation") }
-            MqttError::SubackPacketValidation => { write!(f, "suback packet validation - a suback packet failed validation") }
-            MqttError::UnsubackPacketValidation => { write!(f, "unsuback packet validation - an unsuback packet failed validation") }
-            MqttError::SubscribePacketValidation => { write!(f, "subscribe packet validation - a subscribe packet failed validation") }
-            MqttError::UnsubscribePacketValidation => { write!(f, "unsubscribe packet validation - an unsubscribe packet failed validation") }
+            MqttError::PacketValidation(packet_type) => { write!(f, "{} contains a property that violates the mqtt spec", packet_type) }
             MqttError::InternalStateError => { write!(f, "internal state error - client reached an invalid internal state, almost certainly a client bug") }
             MqttError::ConnectionRejected => { write!(f, "connack rejected - the broker explicitly rejected the connect packet") }
             MqttError::ConnackTimeout => { write!(f, "connack timeout - the broker did not respond in time to the connect packet") }
@@ -390,12 +382,6 @@ impl fmt::Display for MqttError {
     }
 }
 
-impl From<&MqttError> for MqttError {
-    fn from(value: &MqttError) -> Self {
-        *value
-    }
-}
-
 impl From<std::io::Error> for MqttError {
     fn from(_: std::io::Error) -> Self {
         MqttError::IoError
@@ -406,7 +392,7 @@ impl From<std::io::Error> for MqttError {
 pub type MqttResult<T> = Result<T, MqttError>;
 
 fn fold_mqtt_result<T>(base: MqttResult<T>, new_result: MqttResult<T>) -> MqttResult<T> {
-    new_result.as_ref()?;
+    new_result?;
     base
 }
 

@@ -321,19 +321,19 @@ pub(crate) fn validate_connack_packet_inbound_internal(packet: &ConnackPacket) -
 
     if packet.session_present && packet.reason_code != ConnectReasonCode::Success {
         error!("ConnackPacket Inbound Validation - session present on unsuccessful connect");
-        return Err(MqttError::ConnackPacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Connack));
     }
 
-    validate_optional_integer_non_zero!(receive_maximum, packet.receive_maximum, ConnackPacketValidation, "Connack", "receive_maximum");
+    validate_optional_integer_non_zero!(receive_maximum, packet.receive_maximum, PacketType::Connack, "Connack", "receive_maximum");
 
     if let Some(maximum_qos) = packet.maximum_qos {
         if maximum_qos == QualityOfService::ExactlyOnce {
             error!("ConnackPacket Inbound Validation - maximum qos should never be Qos2");
-            return Err(MqttError::ConnackPacketValidation);
+            return Err(MqttError::PacketValidation(PacketType::Connack));
         }
     }
 
-    validate_optional_integer_non_zero!(maximum_packet_size, packet.maximum_packet_size, ConnackPacketValidation, "Connack", "maximum_packet_size");
+    validate_optional_integer_non_zero!(maximum_packet_size, packet.maximum_packet_size, PacketType::Connack, "Connack", "maximum_packet_size");
 
     Ok(())
 }
@@ -1073,12 +1073,13 @@ mod tests {
     }
 
     use crate::validate::testing::*;
+    use assert_matches::assert_matches;
 
     fn do_connack_validate_failure_test(packet: ConnackPacket) {
         let test_validation_context = create_pinned_validation_context();
         let validation_context = create_inbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_inbound_internal(&MqttPacket::Connack(packet), &validation_context), Err(MqttError::ConnackPacketValidation));
+        assert_matches!(validate_packet_inbound_internal(&MqttPacket::Connack(packet), &validation_context), Err(MqttError::PacketValidation(PacketType::Connack)));
     }
 
     #[test]
@@ -1088,7 +1089,7 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
         let validation_context = create_inbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_inbound_internal(&MqttPacket::Connack(packet), &validation_context), Ok(()));
+        assert!(validate_packet_inbound_internal(&MqttPacket::Connack(packet), &validation_context).is_ok());
     }
 
     #[test]

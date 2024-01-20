@@ -179,13 +179,13 @@ pub(crate) fn validate_auth_packet_outbound(packet: &AuthPacket) -> MqttResult<(
         error!("AuthPacket Outbound Validation - authentication method must be set");
         // while optional from an encode/decode perspective, method is required from a protocol
         // perspective
-        return Err(MqttError::AuthPacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Auth));
     }
 
-    validate_optional_string_length(&packet.authentication_method, MqttError::AuthPacketValidation, "Auth", "authentication_method")?;
-    validate_optional_binary_length(&packet.authentication_data, MqttError::AuthPacketValidation, "Auth", "authentication_data")?;
-    validate_optional_string_length(&packet.reason_string, MqttError::AuthPacketValidation, "Auth", "reason_string")?;
-    validate_user_properties(&packet.user_properties, MqttError::AuthPacketValidation, "Auth")?;
+    validate_optional_string_length(&packet.authentication_method, PacketType::Auth, "Auth", "authentication_method")?;
+    validate_optional_binary_length(&packet.authentication_data, PacketType::Auth, "Auth", "authentication_data")?;
+    validate_optional_string_length(&packet.reason_string, PacketType::Auth, "Auth", "reason_string")?;
+    validate_user_properties(&packet.user_properties, PacketType::Auth, "Auth")?;
 
     Ok(())
 }
@@ -196,7 +196,7 @@ pub(crate) fn validate_auth_packet_outbound_internal(packet: &AuthPacket, contex
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
         error!("AuthPacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(MqttError::AuthPacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Auth));
     }
 
     Ok(())
@@ -208,7 +208,7 @@ pub(crate) fn validate_auth_packet_inbound_internal(packet: &AuthPacket, _: &Inb
         // while optional from an encode/decode perspective, method is required from a protocol
         // perspective
         error!("AuthPacket Inbound Validation - authentication method must be set");
-        return Err(MqttError::AuthPacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Auth));
     }
 
     /* TODO: validation based on in-progress auth exchange */
@@ -401,20 +401,21 @@ mod tests {
     }
 
     use crate::validate::testing::*;
+    use assert_matches::assert_matches;
 
     #[test]
     fn auth_validate_success_all_properties() {
         let packet = MqttPacket::Auth(create_all_properties_auth_packet());
 
-        assert_eq!(validate_packet_outbound(&packet), Ok(()));
+        assert!(validate_packet_outbound(&packet).is_ok());
 
         let test_validation_context = create_pinned_validation_context();
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Ok(()));
+        assert!(validate_packet_outbound_internal(&packet, &outbound_validation_context).is_ok());
 
         let inbound_validation_context = create_inbound_validation_context_from_pinned(&test_validation_context);
-        assert_eq!(validate_packet_inbound_internal(&packet, &inbound_validation_context), Ok(()));
+        assert!(validate_packet_inbound_internal(&packet, &inbound_validation_context).is_ok());
     }
 
     #[test]
@@ -422,7 +423,7 @@ mod tests {
         let mut packet = create_all_properties_auth_packet();
         packet.authentication_method = Some("a".repeat(65537));
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Auth(packet)), Err(MqttError::AuthPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Auth(packet)), Err(MqttError::PacketValidation(PacketType::Auth)));
     }
 
     #[test]
@@ -430,7 +431,7 @@ mod tests {
         let mut packet = create_all_properties_auth_packet();
         packet.authentication_method = None;
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Auth(packet)), Err(MqttError::AuthPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Auth(packet)), Err(MqttError::PacketValidation(PacketType::Auth)));
     }
 
     #[test]
@@ -440,7 +441,7 @@ mod tests {
 
         let test_validation_context = create_pinned_validation_context();
         let inbound_validation_context = create_inbound_validation_context_from_pinned(&test_validation_context);
-        assert_eq!(validate_packet_inbound_internal(&MqttPacket::Auth(packet), &inbound_validation_context), Err(MqttError::AuthPacketValidation));
+        assert_matches!(validate_packet_inbound_internal(&MqttPacket::Auth(packet), &inbound_validation_context), Err(MqttError::PacketValidation(PacketType::Auth)));
     }
 
     #[test]
@@ -448,7 +449,7 @@ mod tests {
         let mut packet = create_all_properties_auth_packet();
         packet.authentication_data = Some(vec![0; 128 * 1024]);
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Auth(packet)), Err(MqttError::AuthPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Auth(packet)), Err(MqttError::PacketValidation(PacketType::Auth)));
     }
 
     #[test]
@@ -456,7 +457,7 @@ mod tests {
         let mut packet = create_all_properties_auth_packet();
         packet.reason_string = Some("a".repeat(199000));
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Auth(packet)), Err(MqttError::AuthPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Auth(packet)), Err(MqttError::PacketValidation(PacketType::Auth)));
     }
 
     #[test]
@@ -464,13 +465,13 @@ mod tests {
         let mut packet = create_all_properties_auth_packet();
         packet.user_properties = Some(create_invalid_user_properties());
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Auth(packet)), Err(MqttError::AuthPacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Auth(packet)), Err(MqttError::PacketValidation(PacketType::Auth)));
     }
 
     #[test]
     fn auth_validate_failure_context_specific_outbound_size() {
         let packet = create_all_properties_auth_packet();
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Auth(packet), MqttError::AuthPacketValidation);
+        do_outbound_size_validate_failure_test(&MqttPacket::Auth(packet), PacketType::Auth);
     }
 }

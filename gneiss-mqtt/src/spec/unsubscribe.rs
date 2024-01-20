@@ -150,17 +150,17 @@ pub(crate) fn decode_unsubscribe_packet(first_byte: u8, packet_body: &[u8]) -> M
 pub(crate) fn validate_unsubscribe_packet_outbound(packet: &UnsubscribePacket) -> MqttResult<()> {
     if packet.packet_id != 0 {
         error!("UnsubscribePacket Outbound Validation - packet id may not be set");
-        return Err(MqttError::UnsubscribePacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Unsubscribe));
     }
 
     if packet.topic_filters.is_empty() {
         error!("UnsubscribePacket Outbound Validation - empty topic filters list");
-        return Err(MqttError::UnsubscribePacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Unsubscribe));
     }
 
     // topic filters are checked in detail in the internal validator
 
-    validate_user_properties(&packet.user_properties, MqttError::UnsubscribePacketValidation, "Unsubscribe")?;
+    validate_user_properties(&packet.user_properties, PacketType::Unsubscribe, "Unsubscribe")?;
 
     Ok(())
 }
@@ -171,18 +171,18 @@ pub(crate) fn validate_unsubscribe_packet_outbound_internal(packet: &Unsubscribe
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
         error!("UnsubscribePacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(MqttError::UnsubscribePacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Unsubscribe));
     }
 
     if packet.packet_id == 0 {
         error!("UnsubscribePacket Outbound Validation - packet id is zero");
-        return Err(MqttError::UnsubscribePacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Unsubscribe));
     }
 
     for filter in &packet.topic_filters {
         if !is_valid_topic_filter_internal(filter, context, None) {
             error!("UnsubscribePacket Outbound Validation - invalid topic filter");
-            return Err(MqttError::UnsubscribePacketValidation);
+            return Err(MqttError::PacketValidation(PacketType::Unsubscribe));
         }
     }
 
@@ -276,7 +276,7 @@ mod tests {
 
         let outbound_packet = MqttPacket::Unsubscribe(packet);
 
-        assert_eq!(validate_packet_outbound(&outbound_packet), Ok(()));
+        assert!(validate_packet_outbound(&outbound_packet).is_ok());
 
         let mut packet2 = create_unsubscribe_all_properties();
         packet2.packet_id = 1;
@@ -286,15 +286,17 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
-        assert_eq!(validate_packet_outbound_internal(&outbound_internal_packet, &outbound_validation_context), Ok(()));
+        assert!(validate_packet_outbound_internal(&outbound_internal_packet, &outbound_validation_context).is_ok());
     }
+
+    use assert_matches::assert_matches;
 
     #[test]
     fn unsubscribe_validate_failure_outbound_packet_id_non_zero() {
         let mut packet = create_unsubscribe_all_properties();
         packet.packet_id = 1;
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Unsubscribe(packet)), Err(MqttError::UnsubscribePacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Unsubscribe(packet)), Err(MqttError::PacketValidation(PacketType::Unsubscribe)));
     }
 
     #[test]
@@ -302,7 +304,7 @@ mod tests {
         let mut packet = create_unsubscribe_all_properties();
         packet.topic_filters = vec![];
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Unsubscribe(packet)), Err(MqttError::UnsubscribePacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Unsubscribe(packet)), Err(MqttError::PacketValidation(PacketType::Unsubscribe)));
     }
 
     #[test]
@@ -310,14 +312,14 @@ mod tests {
         let mut packet = create_unsubscribe_all_properties();
         packet.user_properties = Some(create_invalid_user_properties());
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Unsubscribe(packet)), Err(MqttError::UnsubscribePacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Unsubscribe(packet)), Err(MqttError::PacketValidation(PacketType::Unsubscribe)));
     }
 
     #[test]
     fn unsubscribe_validate_failure_outbound_size() {
         let packet = create_unsubscribe_all_properties();
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Unsubscribe(packet), MqttError::UnsubscribePacketValidation);
+        do_outbound_size_validate_failure_test(&MqttPacket::Unsubscribe(packet), PacketType::Unsubscribe);
     }
 
     #[test]
@@ -330,7 +332,7 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::UnsubscribePacketValidation));
+        assert_matches!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PacketValidation(PacketType::Unsubscribe)));
     }
 
     #[test]
@@ -343,7 +345,7 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::UnsubscribePacketValidation));
+        assert_matches!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PacketValidation(PacketType::Unsubscribe)));
     }
 
     #[test]
@@ -358,7 +360,7 @@ mod tests {
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::UnsubscribePacketValidation));
+        assert_matches!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PacketValidation(PacketType::Unsubscribe)));
     }
 
     #[test]
@@ -373,6 +375,6 @@ mod tests {
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::UnsubscribePacketValidation));
+        assert_matches!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PacketValidation(PacketType::Unsubscribe)));
     }
 }

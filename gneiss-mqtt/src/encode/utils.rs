@@ -539,18 +539,20 @@ mod tests {
 
             for i in 1..dest.len() {
                 let insufficient_data_result = decode_vli(&dest[..i]);
+                assert!(insufficient_data_result.is_ok());
                 assert_eq!(
-                    Ok(DecodeVliResult::InsufficientData),
-                    insufficient_data_result
+                    DecodeVliResult::InsufficientData,
+                    insufficient_data_result.unwrap()
                 );
             }
 
             let final_result = decode_vli(&dest);
             let expected_bytes =
                 compute_variable_length_integer_encode_size($value as usize).unwrap();
+            assert!(final_result.is_ok());
             assert_eq!(
-                Ok(DecodeVliResult::Value($value, &dest[expected_bytes..])),
-                final_result
+                DecodeVliResult::Value($value, &dest[expected_bytes..]),
+                final_result.unwrap()
             );
         }};
     }

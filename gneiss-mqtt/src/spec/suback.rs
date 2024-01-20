@@ -148,7 +148,7 @@ pub(crate) fn decode_suback_packet(first_byte: u8, packet_body: &[u8]) -> MqttRe
     panic!("SubackPacket Decode - Internal error");
 }
 
-validate_ack_inbound_internal!(validate_suback_packet_inbound_internal, SubackPacket, SubackPacketValidation, "Suback");
+validate_ack_inbound_internal!(validate_suback_packet_inbound_internal, SubackPacket, PacketType::Suback, "Suback");
 
 impl fmt::Display for SubackPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -295,6 +295,7 @@ mod tests {
 
     use crate::validate::testing::*;
     use crate::validate::utils::testing::*;
+    use assert_matches::assert_matches;
 
-    test_ack_validate_failure_inbound_packet_id_zero!(suback_validate_failure_internal_packet_id_zero, Suback, create_suback_all_properties, SubackPacketValidation);
+    test_ack_validate_failure_inbound_packet_id_zero!(suback_validate_failure_internal_packet_id_zero, Suback, create_suback_all_properties, PacketType::Suback);
 }

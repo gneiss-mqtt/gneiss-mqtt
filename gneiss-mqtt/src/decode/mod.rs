@@ -230,6 +230,7 @@ pub(crate) mod testing {
     use super::*;
     use crate::alias::*;
     use crate::encode::*;
+    use assert_matches::assert_matches;
 
     pub(crate) fn do_single_encode_decode_test(packet : &MqttPacket, encode_size : usize, decode_size : usize, encode_repetitions : u32) -> bool {
 
@@ -332,7 +333,7 @@ pub(crate) mod testing {
         assert!(!encoder.reset(&packet, &mut encoding_context).is_err());
 
         let encode_result = encoder.encode(packet, &mut encoded_buffer);
-        assert_eq!(encode_result, Ok(EncodeResult::Complete));
+        assert_matches!(encode_result, Ok(EncodeResult::Complete));
 
         encoded_buffer
     }
@@ -356,7 +357,7 @@ pub(crate) mod testing {
         };
 
         let decode_result = decoder.decode_bytes(good_encoded_bytes.as_slice(), &mut decoding_context);
-        assert_eq!(decode_result, Ok(()));
+        assert!(decode_result.is_ok());
         assert_eq!(1, decoded_packets.len());
 
         let receive_result = &decoded_packets[0];
@@ -376,7 +377,7 @@ pub(crate) mod testing {
         };
 
         let decode_result = decoder.decode_bytes(bad_encoded_bytes.as_slice(), &mut decoding_context);
-        assert_eq!(decode_result, Err(MqttError::MalformedPacket));
+        assert_matches!(decode_result, Err(MqttError::MalformedPacket));
         assert_eq!(0, decoded_packets.len());
     }
 
@@ -394,7 +395,7 @@ pub(crate) mod testing {
         };
 
         let decode_result = decoder.decode_bytes(encoded_bytes.as_slice(), &mut decoding_context);
-        assert_eq!(decode_result, Ok(()));
+        assert!(decode_result.is_ok());
         assert_eq!(1, decoded_packets.len());
 
         let receive_result = &decoded_packets[0];
@@ -411,7 +412,7 @@ pub(crate) mod testing {
         };
 
         let decode_result = decoder.decode_bytes(encoded_bytes.as_slice(), &mut decoding_context);
-        assert_eq!(decode_result, Err(MqttError::MalformedPacket));
+        assert_matches!(decode_result, Err(MqttError::MalformedPacket));
         assert_eq!(0, decoded_packets.len());
     }
 

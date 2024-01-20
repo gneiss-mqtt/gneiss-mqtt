@@ -149,7 +149,7 @@ pub(crate) fn decode_unsuback_packet(first_byte: u8, packet_body: &[u8]) -> Mqtt
     panic!("UnsubackPacket Decode - Internal error");
 }
 
-validate_ack_inbound_internal!(validate_unsuback_packet_inbound_internal, UnsubackPacket, UnsubackPacketValidation, "Unsuback");
+validate_ack_inbound_internal!(validate_unsuback_packet_inbound_internal, UnsubackPacket, PacketType::Unsuback, "Unsuback");
 
 impl fmt::Display for UnsubackPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -298,6 +298,7 @@ mod tests {
 
     use crate::validate::testing::*;
     use crate::validate::utils::testing::*;
+    use assert_matches::assert_matches;
 
-    test_ack_validate_failure_inbound_packet_id_zero!(unsuback_validate_failure_internal_packet_id_zero, Unsuback, create_unsuback_all_properties, UnsubackPacketValidation);
+    test_ack_validate_failure_inbound_packet_id_zero!(unsuback_validate_failure_internal_packet_id_zero, Unsuback, create_unsuback_all_properties, PacketType::Unsuback);
 }

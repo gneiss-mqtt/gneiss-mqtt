@@ -12,6 +12,9 @@ that allows for custom resolution implementations to be injected into a client.
 extern crate log;
 extern crate lru;
 
+#[cfg(test)]
+use assert_matches::assert_matches;
+
 use crate::*;
 
 use log::*;
@@ -468,19 +471,19 @@ mod tests {
         let mut topic1 = "topic1".to_string();
         let mut topic2 = "topic2".to_string();
 
-        assert_eq!(resolver.resolve_topic_alias(&Some(1), &mut topic1), Ok(()));
+        assert!(resolver.resolve_topic_alias(&Some(1), &mut topic1).is_ok());
         assert_eq!(topic1, "topic1");
 
-        assert_eq!(resolver.resolve_topic_alias(&Some(10), &mut topic2), Ok(()));
+        assert!(resolver.resolve_topic_alias(&Some(10), &mut topic2).is_ok());
         assert_eq!(topic2, "topic2");
 
         let mut unresolved_topic1 = "".to_string();
         let mut unresolved_topic2 = "".to_string();
 
-        assert_eq!(resolver.resolve_topic_alias(&Some(1), &mut unresolved_topic1), Ok(()));
+        assert!(resolver.resolve_topic_alias(&Some(1), &mut unresolved_topic1).is_ok());
         assert_eq!(unresolved_topic1, "topic1");
 
-        assert_eq!(resolver.resolve_topic_alias(&Some(10), &mut unresolved_topic2), Ok(()));
+        assert!(resolver.resolve_topic_alias(&Some(10), &mut unresolved_topic2).is_ok());
         assert_eq!(unresolved_topic2, "topic2");
     }
 
@@ -491,15 +494,15 @@ mod tests {
         let mut topic1 = "topic1".to_string();
         let mut topic3 = "topic3".to_string();
 
-        assert_eq!(resolver.resolve_topic_alias(&Some(1), &mut topic1), Ok(()));
+        assert!(resolver.resolve_topic_alias(&Some(1), &mut topic1).is_ok());
         assert_eq!(topic1, "topic1");
 
-        assert_eq!(resolver.resolve_topic_alias(&Some(1), &mut topic3), Ok(()));
+        assert!(resolver.resolve_topic_alias(&Some(1), &mut topic3).is_ok());
         assert_eq!(topic3, "topic3");
 
         let mut unresolved_topic3 = "".to_string();
 
-        assert_eq!(resolver.resolve_topic_alias(&Some(1), &mut unresolved_topic3), Ok(()));
+        assert!(resolver.resolve_topic_alias(&Some(1), &mut unresolved_topic3).is_ok());
         assert_eq!(unresolved_topic3, "topic3");
     }
 
@@ -510,11 +513,11 @@ mod tests {
 
         let mut topic1 = "topic1".to_string();
 
-        assert_eq!(resolver.resolve_topic_alias(&Some(0), &mut topic1), Err(MqttError::InboundTopicAliasNotValid));
-        assert_eq!(resolver.resolve_topic_alias(&Some(11), &mut topic1), Err(MqttError::InboundTopicAliasNotValid));
+        assert_matches!(resolver.resolve_topic_alias(&Some(0), &mut topic1), Err(MqttError::InboundTopicAliasNotValid));
+        assert_matches!(resolver.resolve_topic_alias(&Some(11), &mut topic1), Err(MqttError::InboundTopicAliasNotValid));
 
         let mut empty_topic = "".to_string();
-        assert_eq!(resolver.resolve_topic_alias(&Some(2), &mut empty_topic), Err(MqttError::InboundTopicAliasNotValid));
+        assert_matches!(resolver.resolve_topic_alias(&Some(2), &mut empty_topic), Err(MqttError::InboundTopicAliasNotValid));
     }
 
     #[test]
@@ -523,15 +526,15 @@ mod tests {
 
         let mut topic1 = "topic1".to_string();
 
-        assert_eq!(resolver.resolve_topic_alias(&Some(1), &mut topic1), Ok(()));
+        assert!(resolver.resolve_topic_alias(&Some(1), &mut topic1).is_ok());
 
         let mut empty_topic = "".to_string();
-        assert_eq!(resolver.resolve_topic_alias(&Some(1), &mut empty_topic), Ok(()));
+        assert!(resolver.resolve_topic_alias(&Some(1), &mut empty_topic).is_ok());
         assert_eq!(empty_topic, "topic1");
 
         resolver.reset_for_new_connection();
         empty_topic = "".to_string();
-        assert_eq!(resolver.resolve_topic_alias(&Some(1), &mut empty_topic), Err(MqttError::InboundTopicAliasNotValid));
+        assert_matches!(resolver.resolve_topic_alias(&Some(1), &mut empty_topic), Err(MqttError::InboundTopicAliasNotValid));
     }
 }
 

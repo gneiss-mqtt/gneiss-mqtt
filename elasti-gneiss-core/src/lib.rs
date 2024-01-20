@@ -106,7 +106,7 @@ struct CommandArgs {
     nested: SubCommandEnum,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum ElastiError {
     Unimplemented,
     ClientError(MqttError),

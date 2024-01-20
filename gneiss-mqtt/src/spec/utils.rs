@@ -454,25 +454,6 @@ pub(crate) fn retain_handling_type_to_str (rht: RetainHandlingType) -> &'static 
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) enum PacketType {
-    Connect,
-    Connack,
-    Publish,
-    Puback,
-    Pubrec,
-    Pubrel,
-    Pubcomp,
-    Subscribe,
-    Suback,
-    Unsubscribe,
-    Unsuback,
-    Pingreq,
-    Pingresp,
-    Disconnect,
-    Auth,
-}
-
 pub(crate) fn mqtt_packet_to_packet_type(packet: &MqttPacket) -> PacketType {
     match packet {
         MqttPacket::Connect(_) => { PacketType::Connect }

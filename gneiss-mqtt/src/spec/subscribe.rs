@@ -202,15 +202,15 @@ pub(crate) fn validate_subscribe_packet_outbound(packet: &SubscribePacket) -> Mq
 
     if packet.packet_id != 0 {
         error!("SubscribePacket Outbound Validation - packet id may not be set");
-        return Err(MqttError::SubscribePacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Subscribe));
     }
 
     if packet.subscriptions.is_empty() {
         error!("SubscribePacket Outbound Validation - empty subscription set");
-        return Err(MqttError::SubscribePacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Subscribe));
     }
 
-    validate_user_properties(&packet.user_properties, MqttError::SubscribePacketValidation, "Subscribe")?;
+    validate_user_properties(&packet.user_properties, PacketType::Subscribe, "Subscribe")?;
 
     Ok(())
 }
@@ -221,18 +221,18 @@ pub(crate) fn validate_subscribe_packet_outbound_internal(packet: &SubscribePack
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
         error!("SubscribePacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(MqttError::SubscribePacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Subscribe));
     }
 
     if packet.packet_id == 0 {
         error!("SubscribePacket Outbound Validation - packet id is zero");
-        return Err(MqttError::SubscribePacketValidation);
+        return Err(MqttError::PacketValidation(PacketType::Subscribe));
     }
 
     for subscription in &packet.subscriptions {
         if !is_valid_topic_filter_internal(&subscription.topic_filter, context, Some(subscription.no_local)) {
             error!("SubscribePacket Outbound Validation - invalid topic filter");
-            return Err(MqttError::SubscribePacketValidation);
+            return Err(MqttError::PacketValidation(PacketType::Subscribe));
         }
     }
 
@@ -409,7 +409,7 @@ mod tests {
 
         let outbound_packet = MqttPacket::Subscribe(packet);
 
-        assert_eq!(validate_packet_outbound(&outbound_packet), Ok(()));
+        assert!(validate_packet_outbound(&outbound_packet).is_ok());
 
         let mut packet2 = create_subscribe_all_properties();
         packet2.packet_id = 1;
@@ -419,15 +419,17 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
-        assert_eq!(validate_packet_outbound_internal(&outbound_internal_packet, &outbound_validation_context), Ok(()));
+        assert!(validate_packet_outbound_internal(&outbound_internal_packet, &outbound_validation_context).is_ok());
     }
+
+    use assert_matches::assert_matches;
 
     #[test]
     fn subscribe_validate_failure_outbound_packet_id_non_zero() {
         let mut packet = create_subscribe_all_properties();
         packet.packet_id = 1;
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), Err(MqttError::SubscribePacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), Err(MqttError::PacketValidation(PacketType::Subscribe)));
     }
 
     #[test]
@@ -435,7 +437,7 @@ mod tests {
         let mut packet = create_subscribe_all_properties();
         packet.subscriptions = vec![];
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), Err(MqttError::SubscribePacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), Err(MqttError::PacketValidation(PacketType::Subscribe)));
     }
 
     #[test]
@@ -443,14 +445,14 @@ mod tests {
         let mut packet = create_subscribe_all_properties();
         packet.user_properties = Some(create_invalid_user_properties());
 
-        assert_eq!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), Err(MqttError::SubscribePacketValidation));
+        assert_matches!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), Err(MqttError::PacketValidation(PacketType::Subscribe)));
     }
 
     #[test]
     fn subscribe_validate_failure_outbound_size() {
         let packet = create_subscribe_all_properties();
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Subscribe(packet), MqttError::SubscribePacketValidation);
+        do_outbound_size_validate_failure_test(&MqttPacket::Subscribe(packet), PacketType::Subscribe);
     }
 
     #[test]
@@ -463,7 +465,7 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::SubscribePacketValidation));
+        assert_matches!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PacketValidation(PacketType::Subscribe)));
     }
 
     #[test]
@@ -476,7 +478,7 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::SubscribePacketValidation));
+        assert_matches!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PacketValidation(PacketType::Subscribe)));
     }
 
     #[test]
@@ -492,7 +494,7 @@ mod tests {
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::SubscribePacketValidation));
+        assert_matches!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PacketValidation(PacketType::Subscribe)));
     }
 
     #[test]
@@ -506,7 +508,7 @@ mod tests {
         let test_validation_context = create_pinned_validation_context();
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::SubscribePacketValidation));
+        assert_matches!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PacketValidation(PacketType::Subscribe)));
     }
 
     #[test]
@@ -521,6 +523,6 @@ mod tests {
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::SubscribePacketValidation));
+        assert_matches!(validate_packet_outbound_internal(&packet, &outbound_validation_context), Err(MqttError::PacketValidation(PacketType::Subscribe)));
     }
 }
