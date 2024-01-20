@@ -210,32 +210,35 @@ impl fmt::Display for PacketType {
     }
 }
 
-/// Basic error type for the entire gneiss-mqtt crate.  Currently a very simple enum with no
-/// additional context.  May eventually take on additional state in certain variants, but for now
-/// I don't feel comfortable committing to that.
-///
-/// In the meantime, configure logging for additional details recorded at the time of the error
-/// emission.
+#[derive(Debug)]
+pub struct TestContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
+/// Basic error type for the entire gneiss-mqtt crate.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum MqttError {
 
     /// An error where no root cause could be determined.  Generally an indication of
-    /// a bug in an interior system.
+    /// a bug in an interior system.  Emitted when the client encounters a state transition
+    /// where its internal error field should have been set (earlier) but instead it
+    /// is clear.
     Unknown,
 
-    /// Functionality was invoked that has not yet been implemented.  Should never be seen
-    /// post-GA.
+    /// Functionality was invoked that has not yet been implemented.
     Unimplemented,
 
     /// A client encountered an error awaiting on its incoming operation channel.  This is usually
     /// due to the user dropping the client which in turn drops the channel sender.
     ///
     /// TODO: if this does not send the client into a terminal state, it should.
+    /// TODO: add underlying error as source
     OperationChannelReceiveError,
 
     /// There was an error attempting to submit an operation to the client via the operation channel.
     /// This usually means the client was closed, which dropped the channel receiver.
+    /// TODO: add underlying error as source
     OperationChannelSendError,
 
     /// Error emitted when packet's encoding would produce a VLI value that exceeds the protocol
@@ -264,7 +267,7 @@ pub enum MqttError {
     ProtocolError,
 
     /// Error emitted when an inbound publish arrives with an unknown topic alias.
-    InboundTopicAliasNotValid,
+    InboundTopicAliasNotValid(TestContext),
 
     /// Error emitted when an Auth packet is submitted or received that violates the MQTT
     /// specification.
@@ -281,20 +284,24 @@ pub enum MqttError {
 
     /// Error emitted by the client when the broker does not respond to a Connect packet within
     /// the configured timeout interval.
+    /// TODO: Add duration?
     ConnackTimeout,
 
     /// Error emitted when the client shuts down a connection due to the broker not responding to
     /// a Pingreq packet.  Generally indicates that connectivity between the client and broker is
     /// broken.
+    /// TODO: Add duration?
     PingTimeout,
 
     /// Error emitted when the client's connection gets closed for some external reason.  Usually
     /// this is the broker hanging up on the client, but intermediary network failures may trigger
     /// this as well.
+    /// TODO: applied to multiple, cannot add context
     ConnectionClosed,
 
     /// Error applied to MQTT operaations that are failed because the client is offline and the
     /// configured offline policy rejects the operation.
+    /// TODO: applied to multiple, cannot add context
     OfflineQueuePolicyFailed,
 
     /// Error emitted when the broker sends a Disconnect packet to indicate the connection is
@@ -303,6 +310,7 @@ pub enum MqttError {
 
     /// Error applied to user-submitted operations that indicates the operation failed because
     /// we did not receive an Ack packet within the operation's timeout interval.
+    /// TODO: Add duration?
     AckTimeout,
 
     /// Error indicating no more packet ids are available for outbound packets.  Should never
@@ -318,29 +326,47 @@ pub enum MqttError {
 
     /// Error emitted by the client when a connection attempt (the interval between starting
     /// the connection and it being ready for an MQTT Connect packet) times out
+    /// TODO: Add duration?
     ConnectionTimeout,
 
     /// Error emitted by the client when a connection is rejected prior to the Connect <-> Connack
     /// handshake
+    /// TODO: add underlying error as source
     ConnectionEstablishmentFailure,
 
     /// Error emitted by the client when it fails to write data to the socket.  This is a
     /// connection-fatal event; it does not represent socket-buffer-full.
+    /// TODO: add underlying error as source
     StreamWriteFailure,
 
     /// Error emitted by the client when it fails to read data from the socket.  This is a
     /// connection-fatal event; it does not represent no-data-ready.
+    /// TODO: add underlying error as source
     StreamReadFailure,
 
-    /// Umm, not sure how this is test-only
+    /// Test Only - an operation's result should have been in the output channel for the
+    /// operation and was not
+    #[cfg(test)]
     OperationChannelEmpty,
 
     /// Generic error associated with reading TLS configuration data from the filesystem
+    /// TODO: add underlying error as source, make more specific if desc is accurate
     IoError,
 
     /// Generic error associated with parsing TLS configuration from memory or applying it to a
     /// TLS context
+    /// TODO: add underlying error as source
     TlsError
+}
+
+impl MqttError {
+    pub fn new_inbound_topic_alias_not_valid(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::InboundTopicAliasNotValid(
+            TestContext{
+                source : source.into()
+            }
+        )
+    }
 }
 
 impl Error for MqttError {
@@ -358,7 +384,7 @@ impl fmt::Display for MqttError {
             MqttError::DecoderInvalidVli => { write!(f, "decoder invalid vli - received a packet with an invalid vli encoding") }
             MqttError::MalformedPacket => { write!(f, "malformed packet - received a packet whose encoding properties violate the mqtt spec") }
             MqttError::ProtocolError => { write!(f, "protocol error - broker behavior disallowed by the mqtt spec") }
-            MqttError::InboundTopicAliasNotValid => { write!(f, "inbound topic alias not valid - incoming publish contained an invalid topic alias") }
+            MqttError::InboundTopicAliasNotValid(_) => { write!(f, "inbound topic alias not valid - incoming publish contained an invalid topic alias") }
             MqttError::PacketValidation(packet_type) => { write!(f, "{} contains a property that violates the mqtt spec", packet_type) }
             MqttError::InternalStateError => { write!(f, "internal state error - client reached an invalid internal state, almost certainly a client bug") }
             MqttError::ConnectionRejected => { write!(f, "connack rejected - the broker explicitly rejected the connect packet") }
@@ -375,7 +401,8 @@ impl fmt::Display for MqttError {
             MqttError::ConnectionEstablishmentFailure => { write!(f, "connection establishment failure - failure to establish a transport-level connection to the broker") }
             MqttError::StreamWriteFailure => { write!(f, "stream write failure - error attempting to write or flush a connection stream") }
             MqttError::StreamReadFailure => { write!(f, "stream read failure - error when attempting to read a connection stream") }
-            MqttError::OperationChannelEmpty => { write!(f, "operation channel empty - ??") }
+            #[cfg(test)]
+            MqttError::OperationChannelEmpty => { write!(f, "operation channel empty - testing encountered a situation where an operation result was expected to be in the output channel and was not") }
             MqttError::IoError => { write!(f, "io error - generic error due to an error operating on the connection's network stream") }
             MqttError::TlsError => { write!(f, "tls error - generic error when setting up a tls context") }
         }
