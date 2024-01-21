@@ -84,7 +84,7 @@ pub(crate) fn validate_packet_outbound(packet: &MqttPacket) -> MqttResult<()> {
         MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound(unsubscribe) }
         _ => {
             error!("Packet Outbound Validation - unexpected packet type");
-            Err(MqttError::ProtocolError)
+            Err(MqttError::new_protocol_error("unexpected outbound packet type"))
         }
     }
 }
@@ -106,7 +106,7 @@ pub(crate) fn validate_packet_outbound_internal(packet: &MqttPacket, context: &O
         MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound_internal(unsubscribe, context) }
         _ => {
             error!("Packet Outbound Internal Validation - unexpected packet type");
-            Err(MqttError::ProtocolError)
+            Err(MqttError::new_protocol_error("unexpected outbound packet type"))
         }
     }
 }
@@ -129,7 +129,7 @@ pub(crate) fn validate_packet_inbound_internal(packet: &MqttPacket, context: &In
         MqttPacket::Unsuback(unsuback) => { validate_unsuback_packet_inbound_internal(unsuback, context) }
         _ => {
             error!("Packet Inbound Validation - unexpected packet type");
-            Err(MqttError::ProtocolError)
+            Err(MqttError::new_protocol_error("unexpected inbound packet type"))
         }
     }
 }

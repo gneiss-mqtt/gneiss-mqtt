@@ -978,7 +978,7 @@ impl OperationalState {
         if self.state == OperationalStateType::PendingConnack && self.is_connect_in_queue() {
             error!("[{} ms] handle_network_event_incoming_data - data received before CONNECT sent", self.elapsed_time_ms);
             self.change_state(OperationalStateType::Halted);
-            return Err(MqttError::ProtocolError);
+            return Err(MqttError::new_protocol_error("data received before CONNECT sent"));
         }
 
         debug!("[{} ms] handle_network_event_incoming_data received {} bytes", self.elapsed_time_ms, data.len());
@@ -997,9 +997,9 @@ impl OperationalState {
 
         for mut packet in decoded_packets {
             if let MqttPacket::Publish(publish) = &mut(*packet) {
-                if self.inbound_alias_resolver.resolve_topic_alias(&publish.topic_alias, &mut publish.topic).is_err() {
+                if let Err(error) = self.inbound_alias_resolver.resolve_topic_alias(&publish.topic_alias, &mut publish.topic) {
                     error!("[{} ms] handle_network_event_incoming_data - topic alias resolution failure", self.elapsed_time_ms);
-                    return Err(MqttError::ProtocolError);
+                    return Err(error);
                 }
             }
 
@@ -1497,7 +1497,7 @@ impl OperationalState {
 
             if self.state != OperationalStateType::PendingConnack {
                 error!("[{} ms] handle_connack - invalid state to receive a connack", self.elapsed_time_ms);
-                return Err(MqttError::ProtocolError);
+                return Err(MqttError::new_protocol_error("invalid state for connack receipt"));
             }
 
             if connack.reason_code != ConnectReasonCode::Success {
@@ -1534,8 +1534,7 @@ impl OperationalState {
             return Ok(());
         }
 
-        error!("[{} ms] handle_connack - invalid input", self.elapsed_time_ms);
-        Err(MqttError::InternalStateError)
+        panic!("handle_connack - invalid input");
     }
 
     fn handle_pingresp(&mut self) -> MqttResult<()> {
@@ -1547,12 +1546,12 @@ impl OperationalState {
                     Ok(())
                 } else {
                     error!("[{} ms] handle_pingresp - no matching PINGREQ", self.elapsed_time_ms);
-                    Err(MqttError::ProtocolError)
+                    Err(MqttError::new_protocol_error("pingresp received without an outstanding pingreq"))
                 }
             }
             _ => {
                 error!("[{} ms] handle_pingresp - invalid state to receive a PINGRESP", self.elapsed_time_ms);
-                Err(MqttError::ProtocolError)
+                Err(MqttError::new_protocol_error("invalid state to receive a pingresp"))
             }
         }
     }
@@ -1562,7 +1561,7 @@ impl OperationalState {
         match self.state {
             OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
                 error!("[{} ms] handle_suback - invalid state to receive a SUBACK", self.elapsed_time_ms);
-                return Err(MqttError::ProtocolError);
+                return Err(MqttError::new_protocol_error("invalid state to receive a suback"));
             }
             _ => {}
         }
@@ -1575,11 +1574,10 @@ impl OperationalState {
             }
 
             error!("[{} ms] handle_suback - no matching operation corresponding to SUBACK packet id {}", self.elapsed_time_ms, packet_id);
-            return Err(MqttError::ProtocolError);
+            return Err(MqttError::new_protocol_error("no pending subscribe exists for incoming suback"));
         }
 
-        error!("[{} ms] handle_suback - invalid input", self.elapsed_time_ms);
-        Err(MqttError::InternalStateError)
+        panic!("handle_suback - invalid input");
     }
 
     fn handle_unsuback(&mut self, packet: Box<MqttPacket>) -> MqttResult<()> {
@@ -1587,7 +1585,7 @@ impl OperationalState {
         match self.state {
             OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
                 error!("[{} ms] handle_unsuback - invalid state to receive an UNSUBACK", self.elapsed_time_ms);
-                return Err(MqttError::ProtocolError);
+                return Err(MqttError::new_protocol_error("invalid state to receive an unsuback"));
             }
             _ => {}
         }
@@ -1600,11 +1598,10 @@ impl OperationalState {
             }
 
             error!("[{} ms] handle_unsuback - no matching operation corresponding to UNSUBACK packet id {}", self.elapsed_time_ms, packet_id);
-            return Err(MqttError::ProtocolError);
+            return Err(MqttError::new_protocol_error("no pending unsubscribe exists for incoming unsuback"));
         }
 
-        error!("[{} ms] handle_unsuback - invalid input", self.elapsed_time_ms);
-        Err(MqttError::InternalStateError)
+        panic!("handle_unsuback - invalid input");
     }
 
     fn handle_puback(&mut self, packet: Box<MqttPacket>) -> MqttResult<()> {
@@ -1612,7 +1609,7 @@ impl OperationalState {
         match self.state {
             OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
                 error!("[{} ms] handle_puback - invalid state to receive a PUBACK", self.elapsed_time_ms);
-                return Err(MqttError::ProtocolError);
+                return Err(MqttError::new_protocol_error("invalid state to receive a puback"));
             }
             _ => {}
         }
@@ -1625,11 +1622,10 @@ impl OperationalState {
             }
 
             error!("[{} ms] handle_puback - no matching operation corresponding to PUBACK packet id {}", self.elapsed_time_ms, packet_id);
-            return Err(MqttError::ProtocolError);
+            return Err(MqttError::new_protocol_error("no pending qos1 publish exists for incoming puback"));
         }
 
-        error!("[{} ms] handle_puback - invalid input", self.elapsed_time_ms);
-        Err(MqttError::InternalStateError)
+        panic!("handle_puback - invalid input");
     }
 
     fn handle_pubrec(&mut self, packet: Box<MqttPacket>) -> MqttResult<()> {
@@ -1637,7 +1633,7 @@ impl OperationalState {
         match self.state {
             OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
                 error!("[{} ms] handle_pubrec - invalid state to receive a PUBREC", self.elapsed_time_ms);
-                return Err(MqttError::ProtocolError);
+                return Err(MqttError::new_protocol_error("invalid state to receive a pubrec"));
             }
             _ => {}
         }
@@ -1664,7 +1660,7 @@ impl OperationalState {
                         }
 
                         error!("[{} ms] handle_pubrec - operation {} corresponding to packet id {} is not a QoS 2 publish", self.elapsed_time_ms, operation_id, packet_id);
-                        return Err(MqttError::ProtocolError);
+                        return Err(MqttError::new_protocol_error("pubrec received for a pending operation that is not a qos2 publish"));
                     }
 
                     warn!("[{} ms] handle_pubrec - operation {} corresponding to packet id {} does not exist", self.elapsed_time_ms, operation_id, packet_id);
@@ -1673,11 +1669,10 @@ impl OperationalState {
             }
 
             error!("[{} ms] handle_pubrec - no matching operation corresponding to PUBREC packet id {}", self.elapsed_time_ms, packet_id);
-            return Err(MqttError::ProtocolError);
+            return Err(MqttError::new_protocol_error("no pending operation exists for incoming pubrec"));
         }
 
-        error!("[{} ms] handle_pubrec - invalid input", self.elapsed_time_ms);
-        Err(MqttError::InternalStateError)
+        panic!("handle_pubrec - invalid input");
     }
 
     fn handle_pubrel(&mut self, packet: Box<MqttPacket>) -> MqttResult<()> {
@@ -1685,7 +1680,7 @@ impl OperationalState {
         match self.state {
             OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
                 error!("[{} ms] handle_pubrel - invalid state to receive a PUBREL", self.elapsed_time_ms);
-                return Err(MqttError::ProtocolError);
+                return Err(MqttError::new_protocol_error("invalid state to receive a pubrel"));
             }
             _ => {}
         }
@@ -1704,8 +1699,7 @@ impl OperationalState {
             return Ok(());
         }
 
-        error!("[{} ms] handle_pubrel - invalid input", self.elapsed_time_ms);
-        Err(MqttError::InternalStateError)
+        panic!("handle_pubrel - invalid input");
     }
 
     fn handle_pubcomp(&mut self, packet: Box<MqttPacket>) -> MqttResult<()> {
@@ -1713,7 +1707,7 @@ impl OperationalState {
         match self.state {
             OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
                 error!("[{} ms] handle_pubcomp - invalid state to receive a PUBCOMP", self.elapsed_time_ms);
-                return Err(MqttError::ProtocolError);
+                return Err(MqttError::new_protocol_error("invalid state to receive a pubcomp"));
             }
             _ => {}
         }
@@ -1726,11 +1720,10 @@ impl OperationalState {
             }
 
             error!("[{} ms] handle_pubcomp - no matching operation corresponding to PUBCOMP packet id {}", self.elapsed_time_ms, packet_id);
-            return Err(MqttError::ProtocolError);
+            return Err(MqttError::new_protocol_error("no pending operation exists for incoming pubcomp"));
         }
 
-        error!("[{} ms] handle_pubcomp - invalid input", self.elapsed_time_ms);
-        Err(MqttError::ProtocolError)
+        panic!("handle_pubcomp - invalid input");
     }
 
     fn handle_publish(&mut self, packet: Box<MqttPacket>, context: &mut NetworkEventContext) -> MqttResult<()> {
@@ -1738,7 +1731,7 @@ impl OperationalState {
         match self.state {
             OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
                 error!("[{} ms] handle_publish - invalid state to receive a PUBLISH", self.elapsed_time_ms);
-                return Err(MqttError::ProtocolError);
+                return Err(MqttError::new_protocol_error("invalid state to receive a publish"));
             }
             _ => {}
         }
@@ -1785,8 +1778,7 @@ impl OperationalState {
             }
         }
 
-        error!("[{} ms] handle_publish - invalid input", self.elapsed_time_ms);
-        Err(MqttError::InternalStateError)
+        panic!("handle_publish - invalid input");
     }
 
     fn handle_disconnect(&mut self, packet: Box<MqttPacket>, context: &mut NetworkEventContext) -> MqttResult<()> {
@@ -1795,7 +1787,7 @@ impl OperationalState {
             OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
                 // per spec, the server must always send a CONNACK before a DISCONNECT is valid
                 error!("[{} ms] handle_disconnect - invalid state to receive a DISCONNECT", self.elapsed_time_ms);
-                return Err(MqttError::ProtocolError);
+                return Err(MqttError::new_protocol_error("invalid state receive a disconnect"));
             }
             _ => {}
         }
@@ -1806,8 +1798,7 @@ impl OperationalState {
             return Err(MqttError::ServerSideDisconnect);
         }
 
-        error!("[{} ms] handle_disconnect - invalid input", self.elapsed_time_ms);
-        Err(MqttError::InternalStateError)
+        panic!("handle_disconnect - invalid input");
     }
 
     fn handle_auth(&mut self, _: Box<MqttPacket>, _: &mut NetworkEventContext) -> MqttResult<()> {
@@ -1830,7 +1821,7 @@ impl OperationalState {
             MqttPacket::Auth(_) => { self.handle_auth(packet, context) }
             _ => {
                 error!("[{} ms] handle_packet - invalid packet type for client received", self.elapsed_time_ms);
-                Err(MqttError::ProtocolError)
+                Err(MqttError::new_protocol_error("invalid packet type received"))
             }
         }
     }

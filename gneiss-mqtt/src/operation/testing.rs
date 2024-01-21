@@ -40,7 +40,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_connect_with_session_resumption(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -60,7 +60,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_connect_with_low_receive_maximum(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -80,7 +80,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_connect_with_topic_aliasing(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -100,7 +100,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn create_connack_rejection() -> ConnackPacket {
@@ -118,7 +118,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_connect_with_tiny_maximum_packet_size(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -132,7 +132,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_pingreq_with_pingresp(_: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -165,7 +165,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_publish_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -193,7 +193,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_pubrec_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -207,7 +207,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_pubrel_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -221,7 +221,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_pubrel_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -236,7 +236,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_subscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -260,7 +260,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_subscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -280,7 +280,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_unsubscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -300,7 +300,7 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_unsubscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -320,11 +320,11 @@ mod operational_state_tests {
             return Ok(());
         }
 
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_with_protocol_error(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
-        Err(MqttError::ProtocolError)
+        panic!("Invalid packet handler state")
     }
 
     fn handle_with_nothing(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
@@ -953,7 +953,7 @@ mod operational_state_tests {
 
         assert!(encode_packet_to_buffer(packet, &mut server_bytes).is_ok());
 
-        assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::ProtocolError));
+        assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::ProtocolError(_)));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
         verify_operational_state_empty(&fixture);
@@ -1026,7 +1026,7 @@ mod operational_state_tests {
             ..Default::default()
         }), &mut server_bytes).is_ok());
 
-        assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::ProtocolError));
+        assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::ProtocolError(_)));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
     }
@@ -1115,7 +1115,7 @@ mod operational_state_tests {
         let mut buffer = Vec::new();
         assert!(encode_packet_to_buffer(packet, &mut buffer).is_ok());
 
-        assert_matches!(fixture.on_incoming_bytes(0, buffer.as_slice()), Err(MqttError::ProtocolError));
+        assert_matches!(fixture.on_incoming_bytes(0, buffer.as_slice()), Err(MqttError::ProtocolError(_)));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         verify_operational_state_empty(&fixture);
     }
@@ -1186,7 +1186,7 @@ mod operational_state_tests {
         );
 
         for packet in packets {
-            assert_matches!(do_connected_state_invalid_ack_packet_id_test(packet), Err(MqttError::ProtocolError));
+            assert_matches!(do_connected_state_invalid_ack_packet_id_test(packet), Err(MqttError::ProtocolError(_)));
         }
     }
 

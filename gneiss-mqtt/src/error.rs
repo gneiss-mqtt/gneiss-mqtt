@@ -19,17 +19,22 @@ pub struct OperationChannelFailureContext {
 }
 
 #[derive(Debug)]
-pub struct InboundTopicAliasNotValidContext {
-    source: Box<dyn Error + Send + Sync + 'static>
-}
-
-#[derive(Debug)]
 pub struct EncodingFailureContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
 #[derive(Debug)]
 pub struct DecodingFailureContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
+#[derive(Debug)]
+pub struct ProtocolErrorContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
+#[derive(Debug)]
+pub struct InboundTopicAliasNotValidContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
@@ -55,7 +60,7 @@ pub enum MqttError {
 
     /// Generic error emitted when the client encounters broker behavior that violates the MQTT
     /// specification in a way that cannot be safely ignored or recovered from.
-    ProtocolError,
+    ProtocolError(ProtocolErrorContext),
 
     /// Error emitted when an inbound publish arrives with an unknown topic alias.
     InboundTopicAliasNotValid(InboundTopicAliasNotValidContext),
@@ -178,6 +183,14 @@ impl MqttError {
         )
     }
 
+    pub(crate) fn new_protocol_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::ProtocolError(
+            ProtocolErrorContext {
+                source : source.into()
+            }
+        )
+    }
+
     pub(crate) fn new_inbound_topic_alias_not_valid(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         MqttError::InboundTopicAliasNotValid(
             InboundTopicAliasNotValidContext{
@@ -200,6 +213,9 @@ impl Error for MqttError {
                 Some(context.source.as_ref())
             }
             MqttError::EncodingFailure(context) => {
+                Some(context.source.as_ref())
+            }
+            MqttError::ProtocolError(context) => {
                 Some(context.source.as_ref())
             }
             MqttError::InboundTopicAliasNotValid(context) => {
@@ -225,8 +241,9 @@ impl fmt::Display for MqttError {
             MqttError::EncodingFailure(_) => {
                 write!(f, "failure encountered while encoding an outbound MQTT packet")
             }
-
-            MqttError::ProtocolError => { write!(f, "protocol error - broker behavior disallowed by the mqtt spec") }
+            MqttError::ProtocolError(_) => {
+                write!(f, "protocol error - broker behavior disallowed by the mqtt spec")
+            }
             MqttError::InboundTopicAliasNotValid(_) => {
                 write!(f, "topic alias value on incoming publish is not valid")
             }
