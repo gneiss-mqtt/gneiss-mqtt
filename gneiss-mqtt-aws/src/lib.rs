@@ -239,9 +239,6 @@ different combinations expected by users.
 
 #![warn(missing_docs)]
 
-extern crate gneiss_mqtt;
-extern crate tokio;
-
 use std::io::ErrorKind;
 use gneiss_mqtt::config::*;
 use gneiss_mqtt::client::Mqtt5Client;

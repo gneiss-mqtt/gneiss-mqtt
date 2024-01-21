@@ -4,10 +4,6 @@
  */
 
 
-extern crate argh;
-extern crate gneiss_mqtt;
-extern crate tokio;
-
 use argh::FromArgs;
 use gneiss_mqtt::*;
 use gneiss_mqtt::error::{MqttError};

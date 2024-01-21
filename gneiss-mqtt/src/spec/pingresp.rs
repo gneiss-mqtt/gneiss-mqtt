@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-extern crate log;
-
 use crate::encode::*;
 use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};

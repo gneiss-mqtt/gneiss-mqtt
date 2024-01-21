@@ -7,7 +7,6 @@
 
 pub(crate) mod testing;
 
-extern crate log;
 
 use crate::*;
 use crate::alias::*;

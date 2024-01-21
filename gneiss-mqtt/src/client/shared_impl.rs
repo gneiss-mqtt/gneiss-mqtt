@@ -4,9 +4,6 @@
  */
 
 
-extern crate log;
-extern crate rand;
-
 use crate::*;
 use crate::client::*;
 use crate::config::*;

@@ -7,17 +7,6 @@
 Module containing types for configuring an MQTT client.
  */
 
-extern crate http;
-extern crate httparse;
-extern crate rustls;
-extern crate rustls_pki_types;
-extern crate tokio;
-extern crate tokio_rustls;
-extern crate tokio_tungstenite;
-extern crate tungstenite;
-extern crate stream_ws;
-
-
 use crate::*;
 use crate::alias::{OutboundAliasResolverFactoryFn};
 use crate::error::*;

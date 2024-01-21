@@ -9,9 +9,6 @@ outbound resolvers should be sufficient for most use cases, but this module also
 that allows for custom resolution implementations to be injected into a client.
 */
 
-extern crate log;
-extern crate lru;
-
 #[cfg(test)]
 use assert_matches::assert_matches;
 

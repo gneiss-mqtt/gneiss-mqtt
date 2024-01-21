@@ -5,8 +5,6 @@
 
 pub(crate) mod utils;
 
-extern crate log;
-
 use crate::decode::utils::*;
 use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};

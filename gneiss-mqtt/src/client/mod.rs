@@ -25,7 +25,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 // async choice conditional
-extern crate tokio;
 use crate::features::gneiss_tokio::*;
 
 /// Additional client options applicable to an MQTT Publish operation

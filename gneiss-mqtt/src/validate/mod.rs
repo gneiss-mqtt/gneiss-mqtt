@@ -5,8 +5,6 @@
 
 pub(crate) mod utils;
 
-extern crate log;
-
 use crate::*;
 use crate::alias::*;
 use crate::client::*;

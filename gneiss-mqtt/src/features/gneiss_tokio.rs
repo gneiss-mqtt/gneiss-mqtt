@@ -8,8 +8,6 @@ Functionality for using [`tokio`](https://crates.io/crates/tokio) as an MQTT cli
 runtime implementation.
  */
 
-extern crate log;
-extern crate tokio;
 
 use crate::*;
 use crate::client::*;
