@@ -44,11 +44,11 @@ enum DecoderState {
     TerminalError
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+//#[derive(Copy, Clone, Eq, PartialEq)]
 enum DecoderDirective {
     OutOfData,
     Continue,
-    TerminalError
+    TerminalError(MqttError)
 }
 
 pub(crate) struct DecodingContext<'a> {
@@ -141,10 +141,10 @@ impl Decoder {
                 self.scratch.clear();
                 (DecoderDirective::Continue, remaining_bytes)
             } else {
-                (DecoderDirective::TerminalError, remaining_bytes)
+                (DecoderDirective::TerminalError(MqttError::new_decoding_failure("packet size exceeds negotiated maximum")), remaining_bytes)
             }
         } else if self.scratch.len() >= 4 {
-            (DecoderDirective::TerminalError, remaining_bytes)
+            (DecoderDirective::TerminalError(MqttError::new_decoding_failure("invalid remaining length vli value")), remaining_bytes)
         } else if !remaining_bytes.is_empty() {
             (DecoderDirective::Continue, remaining_bytes)
         } else {
@@ -168,22 +168,25 @@ impl Decoder {
                 &bytes[..bytes_needed]
             };
 
-        if let Ok(packet) = decode_packet(self.first_byte.unwrap(), packet_slice) {
-            log_packet("Successfully decoded incoming packet: ", &packet);
-            context.decoded_packets.push_back(packet);
+        match decode_packet(self.first_byte.unwrap(), packet_slice) {
+            Ok(packet) => {
+                log_packet("Successfully decoded incoming packet: ", &packet);
+                context.decoded_packets.push_back(packet);
 
-            self.reset_for_new_packet();
-            return (DecoderDirective::Continue, &bytes[bytes_needed..]);
+                self.reset_for_new_packet();
+                (DecoderDirective::Continue, &bytes[bytes_needed..])
+            }
+            Err(error) => {
+                (DecoderDirective::TerminalError(error), &[])
+            }
         }
-
-        (DecoderDirective::TerminalError, &[])
     }
 
     pub fn decode_bytes(&mut self, bytes: &[u8], context: &mut DecodingContext) -> MqttResult<()> {
         let mut current_slice = bytes;
 
         let mut decode_result = DecoderDirective::Continue;
-        while decode_result == DecoderDirective::Continue {
+        while let DecoderDirective::Continue = decode_result {
             match self.state {
                 DecoderState::ReadPacketType => {
                     (decode_result, current_slice) = self.process_read_packet_type(current_slice);
@@ -198,14 +201,14 @@ impl Decoder {
                 }
 
                 _ => {
-                    decode_result = DecoderDirective::TerminalError;
+                    decode_result = DecoderDirective::TerminalError(MqttError::new_decoding_failure("decoder already in a terminal failure state"));
                 }
             }
         }
 
-        if decode_result == DecoderDirective::TerminalError {
+        if let DecoderDirective::TerminalError(error) = decode_result {
             self.state = DecoderState::TerminalError;
-            return Err(MqttError::MalformedPacket);
+            return Err(error);
         }
 
         Ok(())
