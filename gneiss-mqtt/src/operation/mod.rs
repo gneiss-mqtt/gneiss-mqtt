@@ -496,7 +496,7 @@ impl OperationalState {
         if let Some(check_operation) = self.operations.get(&op_id) {
             if !self.operation_packet_passes_offline_queue_policy(&check_operation.packet) {
                 debug!("[{} ms] handle_user_event - operation {} failed by offline queue policy", self.elapsed_time_ms, op_id);
-                let _ = self.complete_operation_as_failure(op_id, MqttError::OfflineQueuePolicyFailed);
+                let _ = self.complete_operation_as_failure(op_id, MqttError::new_offline_queue_policy_failed());
                 return;
             }
         }
@@ -537,7 +537,7 @@ impl OperationalState {
 
         let operations : Vec<u64> = self.operations.keys().copied().collect();
         for id in operations {
-            let _ = self.complete_operation_as_failure(id, MqttError::OperationalStateReset);
+            let _ = self.complete_operation_as_failure(id, MqttError::new_client_closed());
         }
 
         self.pending_write_completion = false;
@@ -693,7 +693,7 @@ impl OperationalState {
                 self.state = OperationalStateType::Halted;
             }
             info!("[{} ms] apply_disconnect_completion - user-requested disconnect operation {} completed", self.elapsed_time_ms, operation.id);
-            return Err(MqttError::UserInitiatedDisconnect);
+            return Err(MqttError::new_user_initiated_disconnect());
         }
 
         Ok(())
@@ -808,7 +808,7 @@ impl OperationalState {
                         if does_packet_pass_offline_queue_policy(&operation.packet, &self.config.offline_queue_policy) {
                             self.user_operation_queue.push_front(id);
                         } else {
-                            self.complete_operation_as_failure(id, MqttError::OfflineQueuePolicyFailed)?;
+                            self.complete_operation_as_failure(id, MqttError::new_offline_queue_policy_failed())?;
                         }
                     }
                     MqttPacket::Publish(publish) => {
@@ -819,7 +819,7 @@ impl OperationalState {
                         } else if does_packet_pass_offline_queue_policy(&operation.packet, &self.config.offline_queue_policy) {
                             self.user_operation_queue.push_front(id);
                         } else {
-                            self.complete_operation_as_failure(id, MqttError::OfflineQueuePolicyFailed)?;
+                            self.complete_operation_as_failure(id, MqttError::new_offline_queue_policy_failed())?;
                         }
                     }
                     _ => {
@@ -1102,7 +1102,7 @@ impl OperationalState {
 
         while let Some(id) = self.get_next_ack_timeout() {
             self.operation_ack_timeouts.pop();
-            result = fold_mqtt_result(result, self.complete_operation_as_failure(id, MqttError::AckTimeout));
+            result = fold_mqtt_result(result, self.complete_operation_as_failure(id, MqttError::new_ack_timeout()));
         }
 
         result
@@ -1948,7 +1948,7 @@ fn generate_connection_closed_error() -> MqttError {
 }
 
 fn generate_offline_queue_policy_failed_error() -> MqttError {
-    MqttError::OfflineQueuePolicyFailed
+    MqttError::new_offline_queue_policy_failed()
 }
 
 fn build_negotiated_settings(config: &OperationalStateConfig, packet: &ConnackPacket, existing_settings: &Option<NegotiatedSettings>) -> NegotiatedSettings {
@@ -2424,6 +2424,6 @@ mod tests {
             operational_state.allocated_packet_ids.insert(i + 1, i as u64);
         }
 
-        assert_matches!(operational_state.acquire_free_packet_id(1), Err(MqttError::PacketIdSpaceExhausted));
+        assert_matches!(operational_state.acquire_free_packet_id(1), Err(MqttError::InternalStateError(_)));
     }
 }

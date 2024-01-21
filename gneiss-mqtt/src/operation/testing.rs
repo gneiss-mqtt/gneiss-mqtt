@@ -726,14 +726,14 @@ mod operational_state_tests {
         let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
         assert_eq!(OperationalStateType::Disconnected, fixture.client_state.state);
 
-        assert_matches!(fixture.on_connection_closed(0).err().unwrap(), MqttError::InternalStateError);
+        assert_matches!(fixture.on_connection_closed(0).err().unwrap(), MqttError::InternalStateError(_));
         assert!(fixture.client_packet_events.is_empty());
 
-        assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError);
+        assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError(_));
         assert!(fixture.client_packet_events.is_empty());
 
         let bytes : Vec<u8> = vec!(0, 1, 2, 3, 4, 5);
-        assert_matches!(fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap(), MqttError::InternalStateError);
+        assert_matches!(fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap(), MqttError::InternalStateError(_));
         assert!(fixture.client_packet_events.is_empty());
     }
 
@@ -783,16 +783,16 @@ mod operational_state_tests {
         let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
         assert!(fixture.advance_disconnected_to_state(OperationalStateType::Halted, 0).is_ok());
 
-        assert_matches!(fixture.on_connection_opened(0).err().unwrap(), MqttError::InternalStateError);
+        assert_matches!(fixture.on_connection_opened(0).err().unwrap(), MqttError::InternalStateError(_));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
 
-        assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError);
+        assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError(_));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
 
         let bytes : Vec<u8> = vec!(0, 1, 2, 3, 4, 5);
-        assert_matches!(fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap(), MqttError::InternalStateError);
+        assert_matches!(fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap(), MqttError::InternalStateError(_));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
     }
@@ -829,7 +829,7 @@ mod operational_state_tests {
         assert!(fixture.on_connection_opened(0).is_ok());
         assert_eq!(OperationalStateType::PendingConnack, fixture.client_state.state);
 
-        assert_matches!(fixture.on_connection_opened(0).err().unwrap(), MqttError::InternalStateError);
+        assert_matches!(fixture.on_connection_opened(0).err().unwrap(), MqttError::InternalStateError(_));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
     }
@@ -841,7 +841,7 @@ mod operational_state_tests {
         assert!(fixture.on_connection_opened(0).is_ok());
         assert_eq!(OperationalStateType::PendingConnack, fixture.client_state.state);
 
-        assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError);
+        assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError(_));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
     }
@@ -862,7 +862,7 @@ mod operational_state_tests {
         assert_eq!(Some(1 + connack_timeout_millis as u64), fixture.get_next_service_time(1));
 
         // service post-timeout
-        assert_matches!(fixture.service_with_drain(1 + connack_timeout_millis as u64, 4096), Err(MqttError::ConnackTimeout));
+        assert_matches!(fixture.service_with_drain(1 + connack_timeout_millis as u64, 4096), Err(MqttError::ConnectionEstablishmentFailure(_)));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
         verify_operational_state_empty(&fixture);
@@ -878,7 +878,7 @@ mod operational_state_tests {
 
         let server_bytes = fixture.service_with_drain(0, 4096).unwrap();
 
-        assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::ConnectionRejected));
+        assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::ConnectionEstablishmentFailure(_)));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
 
         let expected_events = VecDeque::from(vec!(PacketEvent::Connack(create_connack_rejection())));
@@ -1066,7 +1066,7 @@ mod operational_state_tests {
 
         let client_event_count = fixture.client_packet_events.len();
 
-        assert_matches!(fixture.on_connection_opened(0).err().unwrap(), MqttError::InternalStateError);
+        assert_matches!(fixture.on_connection_opened(0).err().unwrap(), MqttError::InternalStateError(_));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert_eq!(client_event_count, fixture.client_packet_events.len());
         verify_operational_state_empty(&fixture);
@@ -1078,7 +1078,7 @@ mod operational_state_tests {
 
         assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
 
-        assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError);
+        assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError(_));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         verify_operational_state_empty(&fixture);
     }
@@ -1558,7 +1558,7 @@ mod operational_state_tests {
         assert_eq!(outbound_packet_count, fixture.to_broker_packet_stream.len());
 
         // invoke service after timeout, verify failure and halt
-        assert_matches!(fixture.service_once(ping_timeout_timepoint, 4096), Err(MqttError::PingTimeout));
+        assert_matches!(fixture.service_once(ping_timeout_timepoint, 4096), Err(MqttError::ConnectionClosed(_)));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert_eq!(outbound_packet_count, fixture.to_broker_packet_stream.len());
         verify_operational_state_empty(&fixture);
@@ -2270,7 +2270,7 @@ mod operational_state_tests {
 
                 assert!(fixture.service_round_trip(30000, 30000, 4096).is_ok());
                 let result = operation_result_receiver.blocking_recv();
-                assert_matches!(result.unwrap().unwrap_err(), MqttError::AckTimeout);
+                assert_matches!(result.unwrap().unwrap_err(), MqttError::AckTimeout(_));
                 verify_operational_state_empty(&fixture);
             }
         };
@@ -2358,7 +2358,7 @@ mod operational_state_tests {
 
         assert!(fixture.service_round_trip(30000, 30000, 4096).is_ok());
         let result = operation_result_receiver.blocking_recv();
-        assert_matches!(result.unwrap().unwrap_err(), MqttError::AckTimeout);
+        assert_matches!(result.unwrap().unwrap_err(), MqttError::AckTimeout(_));
         assert!(fixture.service_round_trip(30010, 30010, 4096).is_ok());
         verify_operational_state_empty(&fixture);
     }
@@ -2381,7 +2381,7 @@ mod operational_state_tests {
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed);
+                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
                 verify_operational_state_empty(&fixture);
             }
         };
@@ -2477,7 +2477,7 @@ mod operational_state_tests {
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed);
+                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
                 verify_operational_state_empty(&fixture);
             }
         };
@@ -2579,7 +2579,7 @@ mod operational_state_tests {
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed);
+                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
                 verify_operational_state_empty(&fixture);
             }
         };
@@ -2685,7 +2685,7 @@ mod operational_state_tests {
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed);
+                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
                 verify_operational_state_empty(&fixture);
             }
         };
@@ -2779,7 +2779,7 @@ mod operational_state_tests {
                 assert!(!result.is_err());
 
                 let operation_result = result.unwrap();
-                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed);
+                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
             }
         };
     }
@@ -2992,7 +2992,7 @@ mod operational_state_tests {
         assert_eq!(1, fixture.client_state.pending_write_completion_operations.len());
 
         // write complete and verify final state
-        assert_matches!(fixture.on_write_completion(20), Err(MqttError::UserInitiatedDisconnect));
+        assert_matches!(fixture.on_write_completion(20), Err(MqttError::UserInitiatedDisconnect(_)));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         verify_operational_state_empty(&fixture);
     }
@@ -3093,7 +3093,7 @@ mod operational_state_tests {
 
         // (8) do a complete service
         let disconnect_service_result = fixture.service_round_trip(70, 80, 4096);
-        assert_matches!(disconnect_service_result, Err(MqttError::UserInitiatedDisconnect));
+        assert_matches!(disconnect_service_result, Err(MqttError::UserInitiatedDisconnect(_)));
 
         // (9) verify the current operation got sent, the disconnect was sent and nothing else happened
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
@@ -3143,7 +3143,7 @@ mod operational_state_tests {
 
         assert!(fixture.disconnect(10, disconnect).is_ok());
 
-        assert_matches!(fixture.service_round_trip(0, 0, 4096), Err(MqttError::UserInitiatedDisconnect));
+        assert_matches!(fixture.service_round_trip(0, 0, 4096), Err(MqttError::UserInitiatedDisconnect(_)));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
 
         verify_operational_state_empty(&fixture);
@@ -3177,7 +3177,7 @@ mod operational_state_tests {
         let encode_result = fixture.broker_encoder.encode(&packet, &mut encoded_buffer).unwrap();
         assert_eq!(EncodeResult::Complete, encode_result);
 
-        assert_matches!(fixture.on_incoming_bytes(10, encoded_buffer.as_slice()), Err(MqttError::ServerSideDisconnect));
+        assert_matches!(fixture.on_incoming_bytes(10, encoded_buffer.as_slice()), Err(MqttError::ConnectionClosed(_)));
         verify_operational_state_empty(&fixture);
 
         assert_eq!(2, fixture.client_packet_events.len());
@@ -3501,7 +3501,7 @@ mod operational_state_tests {
             _ => {}
         }
 
-        Err(MqttError::InternalStateError)
+        Err(MqttError::new_internal_state_error("unexpected packet type"))
     }
 
     struct MultiOperationContext {
@@ -3726,7 +3726,7 @@ mod operational_state_tests {
             if result_value.is_ok() {
                 successful_sequence_ids.push(*sequence_id);
             } else {
-                assert_matches!(result_value, Err(MqttError::OfflineQueuePolicyFailed));
+                assert_matches!(result_value, Err(MqttError::OfflineQueuePolicyFailed(_)));
                 failing_sequence_ids.push(*sequence_id);
             }
         }
@@ -3736,7 +3736,7 @@ mod operational_state_tests {
             if result_value.is_ok() {
                 successful_sequence_ids.push(*sequence_id);
             } else {
-                assert_matches!(result_value, Err(MqttError::OfflineQueuePolicyFailed));
+                assert_matches!(result_value, Err(MqttError::OfflineQueuePolicyFailed(_)));
                 failing_sequence_ids.push(*sequence_id);
             }
         }
@@ -3746,7 +3746,7 @@ mod operational_state_tests {
             if result_value.is_ok() {
                 successful_sequence_ids.push(*sequence_id);
             } else {
-                assert_matches!(result_value, Err(MqttError::OfflineQueuePolicyFailed));
+                assert_matches!(result_value, Err(MqttError::OfflineQueuePolicyFailed(_)));
                 failing_sequence_ids.push(*sequence_id);
             }
         }

@@ -472,7 +472,7 @@ impl Mqtt5Client {
     }
 
     /// Signals the client that it should clean up all internal resources (connection, channels,
-    /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.  Useful for doing
+    /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.  Useful to ensure
     /// a full resource wipe.  If just `stop()` is used then the client will continue to track
     /// MQTT session state internally.
     pub fn close(&self) -> MqttResult<()> {

@@ -5,6 +5,7 @@
 
 use std::error::Error;
 use std::fmt;
+use crate::config::OfflineQueuePolicy;
 use crate::PacketType;
 
 
@@ -53,6 +54,21 @@ pub struct ConnectionClosedContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+#[derive(Debug)]
+pub struct OfflineQueuePolicyFailedContext {
+}
+
+#[derive(Debug)]
+pub struct AckTimeoutContext {
+}
+
+#[derive(Debug)]
+pub struct ClientClosedContext {
+}
+
+#[derive(Debug)]
+pub struct UserInitiatedDisconnectContext {
+}
 
 /// Basic error type for the entire gneiss-mqtt crate.
 #[derive(Debug)]
@@ -92,20 +108,18 @@ pub enum MqttError {
 
     /// Error applied to MQTT operaations that are failed because the client is offline and the
     /// configured offline policy rejects the operation.
-    /// TODO: applied to multiple, cannot add context
-    OfflineQueuePolicyFailed,
+    OfflineQueuePolicyFailed(OfflineQueuePolicyFailedContext),
 
     /// Error applied to user-submitted operations that indicates the operation failed because
     /// we did not receive an Ack packet within the operation's timeout interval.
-    /// TODO: Add duration?
-    AckTimeout,
+    AckTimeout(AckTimeoutContext),
 
     /// Error applied to all unfinished client operations when the client is closed by the user.
-    OperationalStateReset,
+    ClientClosed(ClientClosedContext),
 
     /// Error emitted by the client after sending a user-submitted Disconnect packet as a part
     /// of a `stop()` invocation.  Does not indicate an actual failure.
-    UserInitiatedDisconnect,
+    UserInitiatedDisconnect(UserInitiatedDisconnectContext),
 
     /// Error emitted by the client when a connection attempt fails.  Failure is defined as
     /// "the attempt is finished for any reason prior to receipt of a successful Connack packet."
@@ -208,6 +222,34 @@ impl MqttError {
             }
         )
     }
+
+    pub(crate) fn new_offline_queue_policy_failed() -> Self {
+        MqttError::OfflineQueuePolicyFailed(
+            OfflineQueuePolicyFailedContext {
+            }
+        )
+    }
+
+    pub(crate) fn new_ack_timeout() -> Self {
+        MqttError::AckTimeout(
+            AckTimeoutContext {
+            }
+        )
+    }
+
+    pub(crate) fn new_client_closed() -> Self {
+        MqttError::ClientClosed(
+            ClientClosedContext {
+            }
+        )
+    }
+
+    pub(crate) fn new_user_initiated_disconnect() -> Self {
+        MqttError::UserInitiatedDisconnect(
+            UserInitiatedDisconnectContext {
+            }
+        )
+    }
 }
 
 impl Error for MqttError {
@@ -272,10 +314,18 @@ impl fmt::Display for MqttError {
             MqttError::ConnectionClosed(_) => {
                 write!(f, "client connection was closed; source contains further details")
             }
-            MqttError::OfflineQueuePolicyFailed => { write!(f, "offline queue policy failed - operation failed due to the offline queue policy and the fact that the client is currently offline") }
-            MqttError::AckTimeout => { write!(f, "ack timeout - the operation's timeout triggered prior to receiving an ack from the broker") }
-            MqttError::OperationalStateReset => { write!(f, "operational state reset - the operation was not complete prior to the client being closed") }
-            MqttError::UserInitiatedDisconnect => { write!(f, "user-initiated disconnect - connection was shut down by user action") }
+            MqttError::OfflineQueuePolicyFailed(_) => {
+                write!(f, "offline queue policy failed - operation failed due to the offline queue policy and the fact that the client is currently offline")
+            }
+            MqttError::AckTimeout(_) => {
+                write!(f, "ack timeout - the operation's timeout triggered prior to receiving an ack from the broker")
+            }
+            MqttError::ClientClosed(_) => {
+                write!(f, "operational state reset - the operation was not complete prior to the client being closed")
+            }
+            MqttError::UserInitiatedDisconnect(_) => {
+                write!(f, "user-initiated disconnect - connection was shut down by user action")
+            }
             MqttError::ConnectionEstablishmentFailure(_) => {
                 write!(f, "failed to establish an MQTT connection to the broker")
             }
