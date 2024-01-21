@@ -69,6 +69,11 @@ pub struct ClientClosedContext {
 pub struct UserInitiatedDisconnectContext {
 }
 
+#[derive(Debug)]
+pub struct StdIoErrorContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
 /// Basic error type for the entire gneiss-mqtt crate.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -124,9 +129,8 @@ pub enum MqttError {
     /// "the attempt is finished for any reason prior to receipt of a successful Connack packet."
     ConnectionEstablishmentFailure(ConnectionEstablishmentFailureContext),
 
-    /// Generic error associated with reading TLS configuration data from the filesystem
-    /// TODO: add underlying error as source, make more specific if desc is accurate
-    IoError,
+    /// Generic error wrapping std::io::Error
+    StdIoError(StdIoErrorContext),
 
     /// Generic error associated with parsing TLS configuration from memory or applying it to a
     /// TLS context
@@ -239,6 +243,14 @@ impl MqttError {
             }
         )
     }
+
+    pub(crate) fn new_std_io_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::StdIoError(
+            StdIoErrorContext {
+                source : source.into()
+            }
+        )
+    }
 }
 
 impl Error for MqttError {
@@ -271,6 +283,9 @@ impl Error for MqttError {
             MqttError::ConnectionClosed(context) => {
                 Some(context.source.as_ref())
             }
+            MqttError::StdIoError(context) => {
+                Some(context.source.as_ref())
+            }
             _ => { None }
         }
     }
@@ -292,7 +307,7 @@ impl fmt::Display for MqttError {
                 write!(f, "failure encountered while encoding an outbound MQTT packet")
             }
             MqttError::ProtocolError(_) => {
-                write!(f, "protocol error - broker behavior disallowed by the mqtt spec")
+                write!(f, "broker behavior disallowed by the mqtt spec")
             }
             MqttError::InboundTopicAliasNotValid(_) => {
                 write!(f, "topic alias value on incoming publish is not valid")
@@ -304,21 +319,23 @@ impl fmt::Display for MqttError {
                 write!(f, "client connection was closed; source contains further details")
             }
             MqttError::OfflineQueuePolicyFailed(_) => {
-                write!(f, "offline queue policy failed - operation failed due to the offline queue policy and the fact that the client is currently offline")
+                write!(f, "operation failed due to the offline queue policy and the fact that the client is currently offline")
             }
             MqttError::AckTimeout(_) => {
-                write!(f, "ack timeout - the operation's timeout triggered prior to receiving an ack from the broker")
+                write!(f, "the operation's timeout triggered prior to receiving an ack from the broker")
             }
             MqttError::ClientClosed(_) => {
-                write!(f, "operational state reset - the operation was not complete prior to the client being closed")
+                write!(f, "the operation was incomplete prior to the client being closed")
             }
             MqttError::UserInitiatedDisconnect(_) => {
-                write!(f, "user-initiated disconnect - connection was shut down by user action")
+                write!(f, "connection was shut down by user action")
             }
             MqttError::ConnectionEstablishmentFailure(_) => {
                 write!(f, "failed to establish an MQTT connection to the broker")
             }
-            MqttError::IoError => { write!(f, "io error - generic error due to an error operating on the connection's network stream") }
+            MqttError::StdIoError(_) => {
+                write!(f, "generic error wrapper for std::io::Error when no more specialized error is appropriate; source contains further details")
+            }
             MqttError::TlsError => { write!(f, "tls error - generic error when setting up a tls context") }
             MqttError::PacketValidation(packet_type) => { write!(f, "{} contains a property that violates the mqtt spec", packet_type) }
         }
@@ -326,8 +343,8 @@ impl fmt::Display for MqttError {
 }
 
 impl From<std::io::Error> for MqttError {
-    fn from(_: std::io::Error) -> Self {
-        MqttError::IoError
+    fn from(error: std::io::Error) -> Self {
+        MqttError::new_std_io_error(error)
     }
 }
 
@@ -337,8 +354,15 @@ impl From<core::str::Utf8Error> for MqttError {
     }
 }
 
+impl From<rustls_pki_types::InvalidDnsNameError> for MqttError {
+    fn from(err: rustls_pki_types::InvalidDnsNameError) -> Self {
+        MqttError::new_connection_establishment_failure(err)
+    }
+}
+
 /// Crate-wide result type for functions that can fail
 pub type MqttResult<T> = Result<T, MqttError>;
+
 
 pub(crate) fn fold_mqtt_result<T>(base: MqttResult<T>, new_result: MqttResult<T>) -> MqttResult<T> {
     new_result?;

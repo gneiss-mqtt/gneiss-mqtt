@@ -1022,15 +1022,16 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
     }
 }
 
-async fn make_leaf_stream(endpoint: Endpoint) -> std::io::Result<TcpStream> {
+async fn make_leaf_stream(endpoint: Endpoint) -> MqttResult<TcpStream> {
     let addr = make_addr(endpoint.endpoint.as_str(), endpoint.port)?;
-    TcpStream::connect(&addr).await
+    let stream = TcpStream::connect(&addr).await?;
+
+    Ok(stream)
 }
 
 
-async fn wrap_stream_with_tls<S>(stream : Pin<Box<impl Future<Output=std::io::Result<S>>+Sized>>, endpoint: String, tls_options: TlsOptions) -> std::io::Result<TlsStream<S>> where S : AsyncRead + AsyncWrite + Unpin {
-    let domain = rustls_pki_types::ServerName::try_from(endpoint)
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid dnsname"))?
+async fn wrap_stream_with_tls<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, tls_options: TlsOptions) -> MqttResult<TlsStream<S>> where S : AsyncRead + AsyncWrite + Unpin {
+    let domain = rustls_pki_types::ServerName::try_from(endpoint)?
         .to_owned();
 
     let connector =
@@ -1039,7 +1040,9 @@ async fn wrap_stream_with_tls<S>(stream : Pin<Box<impl Future<Output=std::io::Re
         };
 
     let inner_stream= stream.await?;
-    connector.connect(domain, inner_stream).await
+    let stream = connector.connect(domain, inner_stream).await?;
+
+    Ok(stream)
 }
 
 struct HandshakeRequest {
@@ -1053,7 +1056,8 @@ impl IntoClientRequest for HandshakeRequest {
     }
 }
 
-fn create_default_websocket_handshake_request(uri: String) -> std::io::Result<http::request::Builder> {
+// TODO: error handling seems suspect
+fn create_default_websocket_handshake_request(uri: String) -> MqttResult<http::request::Builder> {
     let uri = Uri::from_str(uri.as_str()).unwrap();
 
     Ok(http::Request::builder()
@@ -1067,7 +1071,7 @@ fn create_default_websocket_handshake_request(uri: String) -> std::io::Result<ht
         .header("Host", uri.host().unwrap()))
 }
 
-async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=std::io::Result<S>>+Sized>>, endpoint: String, scheme: &str, websocket_options: WebsocketOptions) -> std::io::Result<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
+async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, scheme: &str, websocket_options: WebsocketOptions) -> MqttResult<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
 
     let uri = format!("{}://{}/mqtt", scheme, endpoint); // scheme needs to be present but value irrelevant
     let handshake_builder = create_default_websocket_handshake_request(uri)?;
@@ -1095,7 +1099,7 @@ fn build_connect_request(http_connect_endpoint: &Endpoint) -> Vec<u8> {
 use tokio::io::AsyncWriteExt;
 use tokio::io::AsyncReadExt;
 
-async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=std::io::Result<S>>+Sized>>, http_connect_endpoint: Endpoint) -> std::io::Result<S> where S : AsyncRead + AsyncWrite + Unpin {
+async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, http_connect_endpoint: Endpoint) -> MqttResult<S> where S : AsyncRead + AsyncWrite + Unpin {
     let mut inner_stream = stream.await?;
 
     let request_bytes = build_connect_request(&http_connect_endpoint);
@@ -1107,7 +1111,7 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=st
     loop {
         let bytes_read = inner_stream.read(&mut inbound_data).await?;
         if bytes_read == 0 {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "proxy connect stream closed"));
+            return Err(MqttError::new_connection_establishment_failure("proxy connect stream closed"));
         }
 
         response_bytes.extend_from_slice(&inbound_data[..bytes_read]);
@@ -1118,11 +1122,11 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=st
         let parse_result = response.parse(response_bytes.as_slice());
         match parse_result {
             Err(e) => {
-                return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e));
+                return Err(MqttError::new_connection_establishment_failure(e));
             }
             Ok(httparse::Status::Complete(bytes_parsed)) => {
                 if bytes_parsed < response_bytes.len() {
-                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "proxy connect response too long"));
+                    return Err(MqttError::new_connection_establishment_failure("proxy connect response too long"));
                 }
 
                 if let Some(response_code) = response.code {
@@ -1131,7 +1135,7 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=st
                     }
                 }
 
-                return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "proxy connect request unsuccessful"));
+                return Err(MqttError::new_connection_establishment_failure("proxy connect request unsuccessful"));
             }
             Ok(httparse::Status::Partial) => {}
         }
