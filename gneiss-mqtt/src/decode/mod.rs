@@ -89,7 +89,7 @@ fn decode_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacke
         PACKET_TYPE_DISCONNECT => { decode_disconnect_packet(first_byte, packet_body) }
         PACKET_TYPE_AUTH => { decode_auth_packet(first_byte, packet_body) }
         _ => {
-            Err(MqttError::MalformedPacket)
+            Err(MqttError::new_decoding_failure("invalid packet type value"))
         }
     }
 }
@@ -377,7 +377,7 @@ pub(crate) mod testing {
         };
 
         let decode_result = decoder.decode_bytes(bad_encoded_bytes.as_slice(), &mut decoding_context);
-        assert_matches!(decode_result, Err(MqttError::MalformedPacket));
+        assert_matches!(decode_result, Err(MqttError::DecodingFailure(_)));
         assert_eq!(0, decoded_packets.len());
     }
 
@@ -412,7 +412,7 @@ pub(crate) mod testing {
         };
 
         let decode_result = decoder.decode_bytes(encoded_bytes.as_slice(), &mut decoding_context);
-        assert_matches!(decode_result, Err(MqttError::MalformedPacket));
+        assert_matches!(decode_result, Err(MqttError::DecodingFailure(_)));
         assert_eq!(0, decoded_packets.len());
     }
 

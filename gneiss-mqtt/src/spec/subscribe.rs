@@ -130,7 +130,7 @@ fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePac
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
                 error!("SubscribePacket Decode - Invalid property type ({})", property_key);
-                return Err(MqttError::MalformedPacket);
+                return Err(MqttError::new_decoding_failure("invalid property type for subscribe packet"));
             }
         }
     }
@@ -144,7 +144,7 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Mqt
 
     if first_byte != SUBSCRIBE_FIRST_BYTE {
         error!("SubscribePacket Decode - invalid first byte");
-        return Err(MqttError::MalformedPacket);
+        return Err(MqttError::new_decoding_failure("invalid first byte for subscribe packet"));
     }
 
     let mut box_packet = Box::new(MqttPacket::Subscribe(SubscribePacket { ..Default::default() }));
@@ -156,7 +156,7 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Mqt
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
             error!("SubscribePacket Decode - property length exceeds overall packet length");
-            return Err(MqttError::MalformedPacket);
+            return Err(MqttError::new_decoding_failure("property length exceeds overall packet length for subscribe packet"));
         }
 
         let properties_bytes = &mutable_body[..properties_length];
@@ -175,7 +175,7 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Mqt
             payload_bytes = decode_u8(payload_bytes, &mut subscription_options)?;
 
             if (subscription_options & SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK) != 0 {
-                return Err(MqttError::MalformedPacket);
+                return Err(MqttError::new_decoding_failure("invalid subscription reserved bit flags for subscribe packet"));
             }
 
             subscription.qos = convert_u8_to_quality_of_service(subscription_options & 0x03)?;

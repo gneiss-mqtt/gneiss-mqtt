@@ -7,13 +7,29 @@ use std::error::Error;
 use std::fmt;
 use crate::PacketType;
 
+
+#[derive(Debug)]
+pub struct UnimplementedContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
+#[derive(Debug)]
+pub struct OperationChannelFailureContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
 #[derive(Debug)]
 pub struct InboundTopicAliasNotValidContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
 #[derive(Debug)]
-pub struct UnknownContext {
+pub struct EncodingFailureContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
+#[derive(Debug)]
+pub struct DecodingFailureContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
@@ -23,43 +39,22 @@ pub struct UnknownContext {
 pub enum MqttError {
 
     /// Functionality was invoked that has not yet been implemented.
-    Unimplemented,
+    Unimplemented(UnimplementedContext),
 
-    /// A client encountered an error awaiting on its incoming operation channel.  This is usually
-    /// due to the user dropping the client which in turn drops the channel sender.
-    ///
-    /// TODO: if this does not send the client into a terminal state, it should.
-    /// TODO: add underlying error as source
-    OperationChannelReceiveError,
+    /// Failure encountered while using MQTT operation channel functionality
+    OperationChannelFailure(OperationChannelFailureContext),
 
-    /// There was an error attempting to submit an operation to the client via the operation channel.
-    /// This usually means the client was closed, which dropped the channel receiver.
-    /// TODO: add underlying error as source
-    OperationChannelSendError,
+    /// Error encountered while attempting to encode an MQTT packet
+    EncodingFailure(EncodingFailureContext),
 
-    /// Error emitted when packet's encoding would produce a VLI value that exceeds the protocol
-    /// maximum (2 ^ 28 - 1)
-    VariableLengthIntegerMaximumExceeded,
-
-    /// Error emitted by the client when the encoder buffer does not have capacity to encode at
-    /// least 4 bytes.  Should never be seen.
-    EncodeBufferTooSmall,
-
-    /// Error emitted when a packet is received with a variable length integer whose encoding
-    /// does not conform to the MQTT spec
-    DecoderInvalidVli,
-
-    /// Error emitted when an invalid packet encoding is received.  This is distinct from
+    /// Error encountered while attempting to decode an MQTT packet.  This is distinct from
     /// errors that arise from packets that validate protocol behavior specifications.
-    ///
-    /// MalformedPacket examples include bad header flags, mismatches between remaining length
+    /// Examples include bad header flags, mismatches between remaining length
     /// fields and overall packet length, etc...
-    MalformedPacket,
+    DecodingFailure(DecodingFailureContext),
 
     /// Generic error emitted when the client encounters broker behavior that violates the MQTT
     /// specification in a way that cannot be safely ignored or recovered from.
-    ///
-    /// More specific errors exist for a variety of protocol violations.
     ProtocolError,
 
     /// Error emitted when an inbound publish arrives with an unknown topic alias.
@@ -125,8 +120,7 @@ pub enum MqttError {
     /// TODO: Add duration?
     ConnectionTimeout,
 
-    /// Error emitted by the client when a connection is rejected prior to the Connect <-> Connack
-    /// handshake
+    /// Error emitted by the client when a connection attempt fails
     /// TODO: add underlying error as source
     ConnectionEstablishmentFailure,
 
@@ -140,11 +134,6 @@ pub enum MqttError {
     /// TODO: add underlying error as source
     StreamReadFailure,
 
-    /// Test Only - an operation's result should have been in the output channel for the
-    /// operation and was not
-    #[cfg(test)]
-    OperationChannelEmpty,
-
     /// Generic error associated with reading TLS configuration data from the filesystem
     /// TODO: add underlying error as source, make more specific if desc is accurate
     IoError,
@@ -156,6 +145,39 @@ pub enum MqttError {
 }
 
 impl MqttError {
+
+    pub(crate) fn new_unimplemented(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::Unimplemented(
+            UnimplementedContext {
+                source : source.into()
+            }
+        )
+    }
+
+    pub(crate) fn new_operation_channel_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::OperationChannelFailure(
+            OperationChannelFailureContext {
+                source : source.into()
+            }
+        )
+    }
+
+    pub(crate) fn new_decoding_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::DecodingFailure(
+            DecodingFailureContext {
+                source : source.into()
+            }
+        )
+    }
+
+    pub(crate) fn new_encoding_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::EncodingFailure(
+            EncodingFailureContext {
+                source : source.into()
+            }
+        )
+    }
+
     pub(crate) fn new_inbound_topic_alias_not_valid(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         MqttError::InboundTopicAliasNotValid(
             InboundTopicAliasNotValidContext{
@@ -168,6 +190,18 @@ impl MqttError {
 impl Error for MqttError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            MqttError::Unimplemented(context) => {
+                Some(context.source.as_ref())
+            }
+            MqttError::OperationChannelFailure(context) => {
+                Some(context.source.as_ref())
+            }
+            MqttError::DecodingFailure(context) => {
+                Some(context.source.as_ref())
+            }
+            MqttError::EncodingFailure(context) => {
+                Some(context.source.as_ref())
+            }
             MqttError::InboundTopicAliasNotValid(context) => {
                 Some(context.source.as_ref())
             }
@@ -179,13 +213,19 @@ impl Error for MqttError {
 impl fmt::Display for MqttError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MqttError::Unimplemented => { write!(f, "attempt to invoke stubbed functionality that has not been completed") }
-            MqttError::OperationChannelReceiveError => { write!(f, "operation channel receive error - client operation sender has been dropped") }
-            MqttError::OperationChannelSendError => { write!(f, "operation channel send error - client has been closed") }
-            MqttError::VariableLengthIntegerMaximumExceeded => { write!(f, "variable length integer maximum exceeded") }
-            MqttError::EncodeBufferTooSmall => { write!(f, "encode buffer too small - mqtt encoder requires at least 4 bytes") }
-            MqttError::DecoderInvalidVli => { write!(f, "decoder invalid vli - received a packet with an invalid vli encoding") }
-            MqttError::MalformedPacket => { write!(f, "malformed packet - received a packet whose encoding properties violate the mqtt spec") }
+            MqttError::Unimplemented(_) => {
+                write!(f, "attempt to invoke stubbed functionality that has not been completed")
+            }
+            MqttError::OperationChannelFailure(_) => {
+                write!(f, "failure encountered while sending/receiving on an MQTT operation-related channel")
+            }
+            MqttError::DecodingFailure(_) => {
+                write!(f, "failure encountered while decoding an incoming MQTT packet")
+            }
+            MqttError::EncodingFailure(_) => {
+                write!(f, "failure encountered while encoding an outbound MQTT packet")
+            }
+
             MqttError::ProtocolError => { write!(f, "protocol error - broker behavior disallowed by the mqtt spec") }
             MqttError::InboundTopicAliasNotValid(_) => {
                 write!(f, "topic alias value on incoming publish is not valid")
@@ -206,8 +246,6 @@ impl fmt::Display for MqttError {
             MqttError::ConnectionEstablishmentFailure => { write!(f, "connection establishment failure - failure to establish a transport-level connection to the broker") }
             MqttError::StreamWriteFailure => { write!(f, "stream write failure - error attempting to write or flush a connection stream") }
             MqttError::StreamReadFailure => { write!(f, "stream read failure - error when attempting to read a connection stream") }
-            #[cfg(test)]
-            MqttError::OperationChannelEmpty => { write!(f, "operation channel empty - testing encountered a situation where an operation result was expected to be in the output channel and was not") }
             MqttError::IoError => { write!(f, "io error - generic error due to an error operating on the connection's network stream") }
             MqttError::TlsError => { write!(f, "tls error - generic error when setting up a tls context") }
         }
@@ -217,6 +255,12 @@ impl fmt::Display for MqttError {
 impl From<std::io::Error> for MqttError {
     fn from(_: std::io::Error) -> Self {
         MqttError::IoError
+    }
+}
+
+impl From<core::str::Utf8Error> for MqttError {
+    fn from(err: core::str::Utf8Error) -> Self {
+        MqttError::new_decoding_failure(err)
     }
 }
 

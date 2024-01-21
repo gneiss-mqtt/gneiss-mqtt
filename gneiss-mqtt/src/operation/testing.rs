@@ -912,7 +912,7 @@ mod operational_state_tests {
         let mut garbage = vec!(1, 2, 3, 4, 5, 6, 7, 8);
         server_bytes.append(&mut garbage);
 
-        assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::MalformedPacket));
+        assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::DecodingFailure(_)));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
         verify_operational_state_empty(&fixture);
@@ -1102,7 +1102,7 @@ mod operational_state_tests {
 
         let garbage = vec!(1, 2, 3, 4, 5, 6, 7, 8);
 
-        assert_matches!(fixture.on_incoming_bytes(0, garbage.as_slice()), Err(MqttError::MalformedPacket));
+        assert_matches!(fixture.on_incoming_bytes(0, garbage.as_slice()), Err(MqttError::DecodingFailure(_)));
         assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
         verify_operational_state_empty(&fixture);
     }
@@ -2265,7 +2265,7 @@ mod operational_state_tests {
                     let elapsed_millis = i * 1000;
                     assert_eq!(Some(30000), fixture.get_next_service_time(elapsed_millis));
                     assert!(fixture.service_round_trip(elapsed_millis, elapsed_millis, 4096).is_ok());
-                    assert_matches!(operation_result_receiver.try_recv(), Err(MqttError::OperationChannelEmpty));
+                    assert_matches!(operation_result_receiver.try_recv(), Err(MqttError::OperationChannelFailure(_)));
                 }
 
                 assert!(fixture.service_round_trip(30000, 30000, 4096).is_ok());
@@ -2353,7 +2353,7 @@ mod operational_state_tests {
             let elapsed_millis = i * 1000;
             assert_eq!(Some(30000), fixture.get_next_service_time(elapsed_millis));
             assert!(fixture.service_round_trip(elapsed_millis, elapsed_millis, 4096).is_ok());
-            assert_matches!(operation_result_receiver.try_recv(), Err(MqttError::OperationChannelEmpty));
+            assert_matches!(operation_result_receiver.try_recv(), Err(MqttError::OperationChannelFailure(_)));
         }
 
         assert!(fixture.service_round_trip(30000, 30000, 4096).is_ok());

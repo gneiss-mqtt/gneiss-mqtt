@@ -28,8 +28,8 @@ use tokio::time::{sleep};
 
 
 impl From<oneshot::error::RecvError> for MqttError {
-    fn from(_: oneshot::error::RecvError) -> Self {
-        MqttError::OperationChannelReceiveError
+    fn from(err: oneshot::error::RecvError) -> Self {
+        MqttError::new_operation_channel_failure(err)
     }
 }
 
@@ -90,7 +90,7 @@ impl <T> AsyncOperationSender<T> {
 
     pub(crate) fn send(self, operation_options: T) -> MqttResult<()> {
         if self.sender.send(operation_options).is_err() {
-            return Err(MqttError::OperationChannelSendError);
+            return Err(MqttError::new_operation_channel_failure("failed to submit MQTT operation result to operation result channel"));
         }
 
         Ok(())
@@ -113,7 +113,7 @@ impl <T> AsyncOperationReceiver<T> {
     /// Async function that waits for the next client event sent to this receiver
     pub async fn recv(self) -> MqttResult<T> {
         match self.receiver.await {
-            Err(_) => { Err(MqttError::OperationChannelReceiveError) }
+            Err(_) => { Err(MqttError::new_operation_channel_failure("no result pending on operation result channel")) }
             Ok(val) => { Ok(val) }
         }
     }
@@ -122,7 +122,7 @@ impl <T> AsyncOperationReceiver<T> {
     pub fn try_recv(&mut self) -> MqttResult<T> {
         match self.receiver.try_recv() {
             Err(_) => {
-                Err(MqttError::OperationChannelEmpty)
+                Err(MqttError::new_operation_channel_failure("no operation result pending on operation result channel"))
             }
             Ok(val) => {
                 Ok(val)
@@ -135,7 +135,7 @@ impl <T> AsyncOperationReceiver<T> {
     pub fn blocking_recv(self) -> MqttResult<T> {
         match self.receiver.blocking_recv() {
             Err(_) => {
-                Err(MqttError::OperationChannelReceiveError)
+                Err(MqttError::new_operation_channel_failure("no operation result pending on operation result channel"))
             }
             Ok(val) => {
                 Ok(val)
@@ -153,7 +153,7 @@ pub(crate) struct UserRuntimeState {
 impl UserRuntimeState {
     pub(crate) fn try_send(&self, operation_options: OperationOptions) -> MqttResult<()> {
         if self.operation_sender.try_send(operation_options).is_err() {
-            return Err(MqttError::OperationChannelSendError);
+            return Err(MqttError::new_operation_channel_failure("failed to submit MQTT operation to client operation channel"));
         }
 
         Ok(())

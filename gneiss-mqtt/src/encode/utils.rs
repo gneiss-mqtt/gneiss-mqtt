@@ -411,13 +411,13 @@ pub fn compute_variable_length_integer_encode_size(value: usize) -> MqttResult<u
     } else if value < 1usize << 28 {
         Ok(4)
     } else {
-        Err(MqttError::VariableLengthIntegerMaximumExceeded)
+        Err(MqttError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"))
     }
 }
 
 fn encode_vli(value: u32, dest: &mut Vec<u8>) -> MqttResult<()> {
     if value > MAXIMUM_VARIABLE_LENGTH_INTEGER as u32 {
-        return Err(MqttError::VariableLengthIntegerMaximumExceeded);
+        return Err(MqttError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
     }
 
     let mut done = false;

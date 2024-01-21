@@ -1812,7 +1812,7 @@ impl OperationalState {
 
     fn handle_auth(&mut self, _: Box<MqttPacket>, _: &mut NetworkEventContext) -> MqttResult<()> {
         info!("[{} ms] handle_auth - processing AUTH packet", self.elapsed_time_ms);
-        Err(MqttError::Unimplemented)
+        Err(MqttError::new_unimplemented("auth exchanges are not implemented"))
     }
 
     fn handle_packet(&mut self, packet: Box<MqttPacket>, context: &mut NetworkEventContext) -> MqttResult<()> {

@@ -302,7 +302,7 @@ fn decode_publish_properties(property_bytes: &[u8], packet : &mut PublishPacket)
             PROPERTY_KEY_CONTENT_TYPE => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.content_type)?; }
             _ => {
                 error!("PublishPacket Decode - Invalid property type ({})", property_key);
-                return Err(MqttError::MalformedPacket);
+                return Err(MqttError::new_decoding_failure("invalid property type for publish packet"));
             }
         }
     }
@@ -337,7 +337,7 @@ pub(crate) fn decode_publish_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
             error!("PublishPacket Decode - property length exceeds overall packet length");
-            return Err(MqttError::MalformedPacket);
+            return Err(MqttError::new_decoding_failure("property length exceeds overall packet length in publish packet"));
         }
 
         let properties_bytes = &mutable_body[..properties_length];

@@ -104,7 +104,7 @@ fn decode_suback_properties(property_bytes: &[u8], packet : &mut SubackPacket) -
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
                 error!("SubackPacket Decode - Invalid property type ({})", property_key);
-                return Err(MqttError::MalformedPacket);
+                return Err(MqttError::new_decoding_failure("invalid property type for suback packet"));
             }
         }
     }
@@ -115,7 +115,7 @@ fn decode_suback_properties(property_bytes: &[u8], packet : &mut SubackPacket) -
 pub(crate) fn decode_suback_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
     if first_byte != SUBACK_FIRST_BYTE {
         error!("SubackPacket Decode - invalid first byte");
-        return Err(MqttError::MalformedPacket);
+        return Err(MqttError::new_decoding_failure("invalid first byte for suback packet"));
     }
 
     let mut box_packet = Box::new(MqttPacket::Suback(SubackPacket { ..Default::default() }));
@@ -128,7 +128,7 @@ pub(crate) fn decode_suback_packet(first_byte: u8, packet_body: &[u8]) -> MqttRe
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
             error!("SubackPacket Decode - property length exceeds overall packet length");
-            return Err(MqttError::MalformedPacket);
+            return Err(MqttError::new_decoding_failure("property length exceeds overall packet length for suback packet"));
         }
 
         let properties_bytes = &mutable_body[..properties_length];

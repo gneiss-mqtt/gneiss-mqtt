@@ -267,7 +267,7 @@ fn decode_connack_properties(property_bytes: &[u8], packet : &mut ConnackPacket)
             PROPERTY_KEY_AUTHENTICATION_DATA => { mutable_property_bytes = decode_optional_length_prefixed_bytes(mutable_property_bytes, &mut packet.authentication_data)?; }
             _ => {
                 error!("ConnackPacket Decode - Invalid property type ({})", property_key);
-                return Err(MqttError::MalformedPacket);
+                return Err(MqttError::new_decoding_failure("invalid property type for connack packet"));
             }
         }
     }
@@ -279,7 +279,7 @@ pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
 
     if first_byte != (PACKET_TYPE_CONNACK << 4) {
         error!("ConnackPacket Decode - invalid first byte");
-        return Err(MqttError::MalformedPacket);
+        return Err(MqttError::new_decoding_failure("invalid first byte for connack packet"));
     }
 
     let mut box_packet = Box::new(MqttPacket::Connack(ConnackPacket { ..Default::default() }));
@@ -288,7 +288,7 @@ pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
         let mut mutable_body = packet_body;
         if mutable_body.is_empty() {
             error!("ConnackPacket Decode - packet too short");
-            return Err(MqttError::MalformedPacket);
+            return Err(MqttError::new_decoding_failure("connack packet too short"));
         }
 
         let flags: u8 = mutable_body[0];
@@ -297,8 +297,8 @@ pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
         if flags == 1 {
             packet.session_present = true;
         } else if flags != 0 {
-            error!("ConnackPacket Decode - invalid value for session_present field");
-            return Err(MqttError::MalformedPacket);
+            error!("ConnackPacket Decode - invalid value for flags field");
+            return Err(MqttError::new_decoding_failure("invalid flags for connack packet"));
         }
 
         mutable_body = decode_u8_as_enum(mutable_body, &mut packet.reason_code, convert_u8_to_connect_reason_code)?;
@@ -307,7 +307,7 @@ pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length != mutable_body.len() {
             error!("ConnackPacket Decode - property length does not match expected overall packet length");
-            return Err(MqttError::MalformedPacket);
+            return Err(MqttError::new_decoding_failure("mismatch between property length and overall packet length for connack packet"));
         }
 
         decode_connack_properties(mutable_body, packet)?;

@@ -315,7 +315,7 @@ fn compute_connect_packet_length_properties(packet: &ConnectPacket) -> MqttResul
     let total_remaining_length : usize = payload_length + variable_header_length;
 
     if total_remaining_length > MAXIMUM_VARIABLE_LENGTH_INTEGER {
-        return Err(MqttError::VariableLengthIntegerMaximumExceeded);
+        return Err(MqttError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
     }
 
     Ok((total_remaining_length as u32, connect_property_section_length as u32, will_property_length as u32))
@@ -388,7 +388,7 @@ fn decode_connect_properties(property_bytes: &[u8], packet : &mut ConnectPacket)
             PROPERTY_KEY_AUTHENTICATION_DATA => { mutable_property_bytes = decode_optional_length_prefixed_bytes(mutable_property_bytes, &mut packet.authentication_data)?; }
             _ => {
                 error!("ConnectPacket Decode - Invalid property type ({})", property_key);
-                return Err(MqttError::MalformedPacket);
+                return Err(MqttError::new_decoding_failure("invalid property type for connect packet"));
             }
         }
     }
@@ -413,7 +413,7 @@ fn decode_will_properties(property_bytes: &[u8], will: &mut PublishPacket, conne
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut will.user_properties)?; }
             _ => {
                 error!("ConnectPacket Decode - Invalid will property type ({})", property_key);
-                return Err(MqttError::MalformedPacket);
+                return Err(MqttError::new_decoding_failure("invalid property type for connect packet will"));
             }
         }
     }
@@ -426,7 +426,7 @@ const CONNECT_HEADER_PROTOCOL_LENGTH : usize = 7;
 pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
     if first_byte != (PACKET_TYPE_CONNECT << 4)  {
         error!("ConnectPacket Decode - invalid first byte");
-        return Err(MqttError::MalformedPacket);
+        return Err(MqttError::new_decoding_failure("invalid first byte for connect packet"));
     }
 
     let mut box_packet = Box::new(MqttPacket::Connect(ConnectPacket { ..Default::default() }));
@@ -435,7 +435,7 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
         let mut mutable_body = packet_body;
         if mutable_body.len() < CONNECT_HEADER_PROTOCOL_LENGTH {
             error!("ConnectPacket Decode - packet too short");
-            return Err(MqttError::MalformedPacket);
+            return Err(MqttError::new_decoding_failure("connect packet too short"));
         }
 
         let protocol_bytes = &mutable_body[..CONNECT_HEADER_PROTOCOL_LENGTH];
@@ -445,7 +445,7 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
             [0u8, 4u8, 77u8, 81u8, 84u8, 84u8, 5u8] => { }
             _ => {
                 error!("ConnectPacket Decode - invalid protocol");
-                return Err(MqttError::MalformedPacket);
+                return Err(MqttError::new_decoding_failure("invalid protocol field for connect packet"));
             }
         }
 
@@ -455,7 +455,7 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
         // if the reserved bit is set, that's fatal
         if (connect_flags & 0x01) != 0 {
             error!("ConnectPacket Decode - invalid flags");
-            return Err(MqttError::MalformedPacket);
+            return Err(MqttError::new_decoding_failure("invalid flags for connect packet"));
         }
 
         packet.clean_start = (connect_flags & CONNECT_PACKET_CLEAN_START_FLAG_MASK) != 0;
@@ -467,7 +467,7 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
             /* indirectly check bits of connect flags vs. spec */
             if will_retain || will_qos != QualityOfService::AtMostOnce {
                 error!("ConnectPacket Decode - no will but has will flags set");
-                return Err(MqttError::MalformedPacket);
+                return Err(MqttError::new_decoding_failure("invalid will flags for connect packet"));
             }
         }
 
@@ -481,7 +481,7 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
 
         if mutable_body.len() < connect_property_length {
             error!("ConnectPacket Decode - property length exceeds overall packet length");
-            return Err(MqttError::MalformedPacket);
+            return Err(MqttError::new_decoding_failure("mismatch between property length and overall packet length for connect packet"));
         }
 
         let property_body = &mutable_body[..connect_property_length];
@@ -497,7 +497,7 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
 
             if mutable_body.len() < will_property_length {
                 error!("ConnectPacket Decode - will property length exceeds overall packet length");
-                return Err(MqttError::MalformedPacket);
+                return Err(MqttError::new_decoding_failure("connect packet will property length exceeds overall packet length"));
             }
 
             let will_property_body = &mutable_body[..will_property_length];
@@ -527,7 +527,7 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
 
         if !mutable_body.is_empty() {
             error!("ConnectPacket Decode - body length does not match expected overall packet length");
-            return Err(MqttError::MalformedPacket);
+            return Err(MqttError::new_decoding_failure("body length does not match overall packet length for connect packet"));
         }
 
         return Ok(box_packet);
