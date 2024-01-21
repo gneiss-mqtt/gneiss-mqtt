@@ -169,12 +169,16 @@ pub(crate) struct ServiceContext<'a> {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-enum OperationalStateType {
+pub(crate) enum OperationalStateType {
     Disconnected,
     PendingConnack,
     Connected,
     PendingDisconnect,
     Halted
+}
+
+pub(crate) fn is_connection_established(state: OperationalStateType) -> bool {
+    state == OperationalStateType::Connected
 }
 
 impl Display for OperationalStateType {
@@ -417,6 +421,10 @@ impl OperationalState {
             outbound_alias_resolver: RefCell::new(outbound_resolver),
             inbound_alias_resolver: inbound_resolver
         }
+    }
+
+    pub(crate) fn state(&self) -> OperationalStateType {
+        self.state
     }
 
     pub(crate) fn handle_network_event(&mut self, context: &mut NetworkEventContext) -> MqttResult<()> {

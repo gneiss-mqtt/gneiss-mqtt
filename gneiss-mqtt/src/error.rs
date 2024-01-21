@@ -5,7 +5,6 @@
 
 use std::error::Error;
 use std::fmt;
-use crate::config::OfflineQueuePolicy;
 use crate::PacketType;
 
 
@@ -124,16 +123,6 @@ pub enum MqttError {
     /// Error emitted by the client when a connection attempt fails.  Failure is defined as
     /// "the attempt is finished for any reason prior to receipt of a successful Connack packet."
     ConnectionEstablishmentFailure(ConnectionEstablishmentFailureContext),
-
-    /// Error emitted by the client when it fails to write data to the socket.  This is a
-    /// connection-fatal event; it does not represent socket-buffer-full.
-    /// TODO: add underlying error as source
-    StreamWriteFailure,
-
-    /// Error emitted by the client when it fails to read data from the socket.  This is a
-    /// connection-fatal event; it does not represent no-data-ready.
-    /// TODO: add underlying error as source
-    StreamReadFailure,
 
     /// Generic error associated with reading TLS configuration data from the filesystem
     /// TODO: add underlying error as source, make more specific if desc is accurate
@@ -329,8 +318,6 @@ impl fmt::Display for MqttError {
             MqttError::ConnectionEstablishmentFailure(_) => {
                 write!(f, "failed to establish an MQTT connection to the broker")
             }
-            MqttError::StreamWriteFailure => { write!(f, "stream write failure - error attempting to write or flush a connection stream") }
-            MqttError::StreamReadFailure => { write!(f, "stream read failure - error when attempting to read a connection stream") }
             MqttError::IoError => { write!(f, "io error - generic error due to an error operating on the connection's network stream") }
             MqttError::TlsError => { write!(f, "tls error - generic error when setting up a tls context") }
             MqttError::PacketValidation(packet_type) => { write!(f, "{} contains a property that violates the mqtt spec", packet_type) }

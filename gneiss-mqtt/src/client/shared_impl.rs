@@ -120,6 +120,10 @@ impl Mqtt5ClientImpl {
         self.current_state
     }
 
+    pub(crate) fn get_protocol_state(&self) -> OperationalStateType {
+        self.operational_state.state()
+    }
+
     pub(crate) fn add_listener(&mut self, id: u64, listener: ClientEventListener) {
         self.listeners.insert(id, listener);
     }

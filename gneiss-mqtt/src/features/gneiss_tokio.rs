@@ -54,6 +54,7 @@ macro_rules! submit_async_client_operation {
 }
 
 pub(crate) use submit_async_client_operation;
+use crate::operation::is_connection_established;
 
 pub(crate) struct AsyncOperationChannel<T> {
     sender: AsyncOperationSender<T>,
@@ -269,8 +270,12 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                                 next_state = Some(ClientImplState::PendingReconnect);
                             }
                         }
-                        Err(_) => {
-                            client.apply_error(MqttError::StreamReadFailure);
+                        Err(error) => {
+                            if is_connection_established(client.get_protocol_state()) {
+                                client.apply_error(MqttError::new_connection_closed(error));
+                            } else {
+                                client.apply_error(MqttError::new_connection_establishment_failure(error));
+                            }
                             next_state = Some(ClientImplState::PendingReconnect);
                         }
                     }
@@ -299,8 +304,12 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                                 }
                             }
                         }
-                        Err(_) => {
-                            client.apply_error(MqttError::StreamWriteFailure);
+                        Err(error) => {
+                            if is_connection_established(client.get_protocol_state()) {
+                                client.apply_error(MqttError::new_connection_closed(error));
+                            } else {
+                                client.apply_error(MqttError::new_connection_establishment_failure(error));
+                            }
                             next_state = Some(ClientImplState::PendingReconnect);
                         }
                     }
