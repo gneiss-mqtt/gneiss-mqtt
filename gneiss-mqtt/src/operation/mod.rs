@@ -455,7 +455,7 @@ impl OperationalState {
                 OperationalStateType::PendingConnack => { self.service_pending_connack(context) }
                 OperationalStateType::Connected => { self.service_connected(context) }
                 OperationalStateType::PendingDisconnect => { self.service_pending_disconnect(context) }
-                OperationalStateType::Halted => { Err(MqttError::InternalStateError) }
+                OperationalStateType::Halted => { Err(MqttError::new_internal_state_error("protocol state previously halted")) }
             };
 
         self.log_operational_state();
@@ -703,7 +703,7 @@ impl OperationalState {
         let operation_option = self.operations.remove(&id);
         if operation_option.is_none() {
             error!("[{} ms] complete_operation_as_success - operation id {} does not exist", self.elapsed_time_ms, id);
-            return Err(MqttError::InternalStateError);
+            return Err(MqttError::new_internal_state_error("cannot complete an operation that does not exist"));
         }
 
         let operation = operation_option.unwrap();
@@ -777,7 +777,7 @@ impl OperationalState {
         if self.state != OperationalStateType::Disconnected {
             error!("[{} ms] handle_network_event_connection_opened - called in invalid state", self.elapsed_time_ms);
             self.change_state(OperationalStateType::Halted);
-            return Err(MqttError::InternalStateError);
+            return Err(MqttError::new_internal_state_error("connection opened in an invalid state"));
         }
 
         info!("[{} ms] handle_network_event_connection_opened", self.elapsed_time_ms);
@@ -823,7 +823,7 @@ impl OperationalState {
                         }
                     }
                     _ => {
-                        self.complete_operation_as_failure(id, MqttError::ConnectionClosed)?;
+                        self.complete_operation_as_failure(id, MqttError::new_connection_closed("internal operation failed on connection close"))?;
                     }
                 }
             }
@@ -837,7 +837,7 @@ impl OperationalState {
     fn handle_network_event_connection_closed(&mut self, _: &mut NetworkEventContext) -> MqttResult<()> {
         if self.state == OperationalStateType::Disconnected {
             error!("[{} ms] handle_network_event_connection_closed - called in invalid state", self.elapsed_time_ms);
-            return Err(MqttError::InternalStateError);
+            return Err(MqttError::new_internal_state_error("connection closed in an invalid state"));
         }
 
         info!("[{} ms] handle_network_event_connection_closed", self.elapsed_time_ms);
@@ -930,14 +930,14 @@ impl OperationalState {
     fn handle_network_event_write_completion(&mut self, _: &NetworkEventContext) -> MqttResult<()> {
         if self.state == OperationalStateType::Halted || self.state == OperationalStateType::Disconnected {
             error!("[{} ms] handle_network_event_write_completion - called in invalid state", self.elapsed_time_ms);
-            return Err(MqttError::InternalStateError);
+            return Err(MqttError::new_internal_state_error("write completion in an invalid state"));
         }
 
         if !self.pending_write_completion {
             error!("[{} ms] handle_network_event_write_completion - called with no pending completion", self.elapsed_time_ms);
             self.change_state(OperationalStateType::Halted);
 
-            return Err(MqttError::InternalStateError);
+            return Err(MqttError::new_internal_state_error("write completion called with no pending completion"));
         }
 
         debug!("[{} ms] handle_network_event - write completion", self.elapsed_time_ms);
@@ -971,7 +971,7 @@ impl OperationalState {
     fn handle_network_event_incoming_data(&mut self, context: &mut NetworkEventContext, data: &[u8]) -> MqttResult<()> {
         if self.state == OperationalStateType::Disconnected || self.state == OperationalStateType::Halted {
             error!("[{} ms] handle_network_event_incoming_data - called in invalid state", self.elapsed_time_ms);
-            return Err(MqttError::InternalStateError);
+            return Err(MqttError::new_internal_state_error("incoming network data while in an invalid state"));
         }
 
         if self.state == OperationalStateType::PendingConnack && self.is_connect_in_queue() {
@@ -1290,7 +1290,7 @@ impl OperationalState {
 
         if context.current_time >= self.connack_timeout_timepoint.unwrap() {
             error!("[{} ms] service_pending_connack - connack timeout exceeded", self.elapsed_time_ms);
-            return Err(MqttError::ConnackTimeout);
+            return Err(MqttError::new_connection_establishment_failure("connack response timeout reached"));
         }
 
         self.service_queue(context, OperationalQueueServiceMode::HighPriorityOnly)?;
@@ -1302,7 +1302,7 @@ impl OperationalState {
         if let Some(ping_timeout) = &self.ping_timeout_timepoint {
             if &context.current_time >= ping_timeout {
                 error!("[{} ms] service_keep_alive - keep alive timeout exceeded", self.elapsed_time_ms);
-                return Err(MqttError::PingTimeout);
+                return Err(MqttError::new_connection_closed("keep alive timeout exceeded"));
             }
         } else if let Some(next_ping) = &self.next_ping_timepoint {
             if &context.current_time >= next_ping {
@@ -1502,7 +1502,7 @@ impl OperationalState {
             if connack.reason_code != ConnectReasonCode::Success {
                 error!("[{} ms] handle_connack - connection rejected with reason code {}", self.elapsed_time_ms, connect_reason_code_to_str(connack.reason_code));
                 context.packet_events.push_back(PacketEvent::Connack(connack));
-                return Err(MqttError::ConnectionRejected);
+                return Err(MqttError::new_connection_establishment_failure("broker rejected connection attempt with failing connack"));
             }
 
             validate_connack_packet_inbound_internal(&connack)?;
@@ -1794,7 +1794,7 @@ impl OperationalState {
         if let MqttPacket::Disconnect(disconnect) = *packet {
             context.packet_events.push_back(PacketEvent::Disconnect(disconnect));
 
-            return Err(MqttError::ServerSideDisconnect);
+            return Err(MqttError::new_connection_closed("server-side disconnect received"));
         }
 
         panic!("handle_disconnect - invalid input");
@@ -1904,7 +1904,7 @@ impl OperationalState {
 
             if self.next_packet_id == start_id {
                 error!("[{} ms] acquire_packet_id_for_operation - operation {} could not find an unbound packet id", self.elapsed_time_ms, operation_id);
-                return Err(MqttError::PacketIdSpaceExhausted);
+                return Err(MqttError::new_internal_state_error("packet id space exhausted"));
             }
 
             check_id = self.next_packet_id;
@@ -1944,7 +1944,7 @@ impl OperationalState {
 }
 
 fn generate_connection_closed_error() -> MqttError {
-    MqttError::ConnectionClosed
+    MqttError::new_connection_closed("internal operation failed due to connection close event")
 }
 
 fn generate_offline_queue_policy_failed_error() -> MqttError {
@@ -1989,7 +1989,7 @@ fn complete_operation_with_result(operation_options: &mut MqttOperationOptions, 
                 if let Some(OperationResponse::Publish(publish_result)) = completion_result {
                     publish_response = publish_result;
                 } else {
-                    return Err(MqttError::InternalStateError);
+                    return Err(MqttError::new_internal_state_error("invalid publish result"));
                 }
             }
 
@@ -2016,7 +2016,7 @@ fn complete_operation_with_result(operation_options: &mut MqttOperationOptions, 
         }
     }
 
-    Err(MqttError::InternalStateError)
+    Err(MqttError::new_internal_state_error("operation result does not match operation type"))
 }
 
 fn complete_operation_with_error(operation_options: &mut MqttOperationOptions, error: MqttError) -> MqttResult<()> {

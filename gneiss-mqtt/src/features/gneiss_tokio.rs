@@ -195,16 +195,19 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                     }
                 }
                 () = &mut timeout => {
-                    client.apply_error(MqttError::ConnectionTimeout);
+                    client.apply_error(MqttError::new_connection_establishment_failure("connection establishment timeout reached"));
                     return Ok(ClientImplState::PendingReconnect);
                 }
                 connection_result = &mut connect => {
-                    if let Ok(stream) = connection_result {
-                        self.stream = Some(stream);
-                        return Ok(ClientImplState::Connected);
-                    } else {
-                        client.apply_error(MqttError::ConnectionEstablishmentFailure);
-                        return Ok(ClientImplState::PendingReconnect);
+                    match connection_result {
+                        Ok(stream) => {
+                            self.stream = Some(stream);
+                            return Ok(ClientImplState::Connected);
+                        }
+                        Err(error) => {
+                            client.apply_error(MqttError::new_connection_establishment_failure(error));
+                            return Ok(ClientImplState::PendingReconnect);
+                        }
                     }
                 }
             }
@@ -260,7 +263,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                     match read_result {
                         Ok(bytes_read) => {
                             if bytes_read == 0 {
-                                client.apply_error(MqttError::ConnectionClosed);
+                                client.apply_error(MqttError::new_connection_closed("network stream closed"));
                                 next_state = Some(ClientImplState::PendingReconnect);
                             } else if client.handle_incoming_bytes(&inbound_data[..bytes_read]).is_err() {
                                 next_state = Some(ClientImplState::PendingReconnect);

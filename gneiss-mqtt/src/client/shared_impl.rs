@@ -244,7 +244,7 @@ impl Mqtt5ClientImpl {
         match result {
             Err(error) => {
                 self.apply_error(error); // this error propagates
-                Err(MqttError::InternalStateError) // this error does not propagate
+                Err(MqttError::new_internal_state_error("unseen")) // this error does not propagate
             }
             _ => { Ok(()) }
         }
@@ -262,7 +262,7 @@ impl Mqtt5ClientImpl {
         match result {
             Err(error) => {
                 self.apply_error(error); // this error propagates
-                Err(MqttError::InternalStateError) // this error does not propagate
+                Err(MqttError::new_internal_state_error("unseen")) // this error does not propagate
             }
             _ => { Ok(()) }
         }
@@ -279,7 +279,7 @@ impl Mqtt5ClientImpl {
         match result {
             Err(error) => {
                 self.apply_error(error); // this error propagates
-                Err(MqttError::InternalStateError) // this error does not propagate
+                Err(MqttError::new_internal_state_error("unseen")) // this error does not propagate
             }
             _ => { Ok(()) }
         }
@@ -379,7 +379,7 @@ impl Mqtt5ClientImpl {
 
     fn emit_connection_failure_event(&mut self) {
         let mut connection_failure_event = ConnectionFailureEvent {
-            error: self.last_error.take().unwrap_or(MqttError::ConnectionEstablishmentFailure),
+            error: self.last_error.take().unwrap_or(MqttError::new_connection_establishment_failure("unknown failure source")),
             connack: None,
         };
 
@@ -392,7 +392,7 @@ impl Mqtt5ClientImpl {
 
     fn emit_disconnection_event(&mut self) {
         let mut disconnection_event = DisconnectionEvent {
-            error: self.last_error.take().unwrap_or(MqttError::ConnectionClosed),
+            error: self.last_error.take().unwrap_or(MqttError::new_connection_closed("disconnection with no source error")),
             disconnect: None,
         };
 

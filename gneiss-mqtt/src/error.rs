@@ -38,6 +38,22 @@ pub struct InboundTopicAliasNotValidContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+#[derive(Debug)]
+pub struct ConnectionEstablishmentFailureContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
+#[derive(Debug)]
+pub struct InternalStateErrorContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
+#[derive(Debug)]
+pub struct ConnectionClosedContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
+
 /// Basic error type for the entire gneiss-mqtt crate.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -65,53 +81,24 @@ pub enum MqttError {
     /// Error emitted when an inbound publish arrives with an unknown topic alias.
     InboundTopicAliasNotValid(InboundTopicAliasNotValidContext),
 
-    /// Error emitted when an Auth packet is submitted or received that violates the MQTT
-    /// specification.
-    PacketValidation(PacketType),
-
     /// Error emitted by the client when something happens that should never happen.  Always indicates
     /// a bug in the client.
-    InternalStateError,
+    InternalStateError(InternalStateErrorContext),
 
-    /// Error emitted when the broker explicitly rejects a connection attempt by sending a Connack
-    /// packet with a failing reason code.  The connect failure client event will contain the
-    /// full Connack packet and can be inspected for further diagnostics.
-    ConnectionRejected,
-
-    /// Error emitted by the client when the broker does not respond to a Connect packet within
-    /// the configured timeout interval.
-    /// TODO: Add duration?
-    ConnackTimeout,
-
-    /// Error emitted when the client shuts down a connection due to the broker not responding to
-    /// a Pingreq packet.  Generally indicates that connectivity between the client and broker is
-    /// broken.
-    /// TODO: Add duration?
-    PingTimeout,
-
-    /// Error emitted when the client's connection gets closed for some external reason.  Usually
-    /// this is the broker hanging up on the client, but intermediary network failures may trigger
-    /// this as well.
-    /// TODO: applied to multiple, cannot add context
-    ConnectionClosed,
+    /// Error emitted when a successfully established connection subsequently gets closed for
+    /// some reason.  This general error may be superseded by a more specific error (user initiated
+    /// disconnect) under certain conditions.
+    ConnectionClosed(ConnectionClosedContext),
 
     /// Error applied to MQTT operaations that are failed because the client is offline and the
     /// configured offline policy rejects the operation.
     /// TODO: applied to multiple, cannot add context
     OfflineQueuePolicyFailed,
 
-    /// Error emitted when the broker sends a Disconnect packet to indicate the connection is
-    /// being shut down.
-    ServerSideDisconnect,
-
     /// Error applied to user-submitted operations that indicates the operation failed because
     /// we did not receive an Ack packet within the operation's timeout interval.
     /// TODO: Add duration?
     AckTimeout,
-
-    /// Error indicating no more packet ids are available for outbound packets.  Should never
-    /// happen; indicates a bad client bug.
-    PacketIdSpaceExhausted,
 
     /// Error applied to all unfinished client operations when the client is closed by the user.
     OperationalStateReset,
@@ -120,14 +107,9 @@ pub enum MqttError {
     /// of a `stop()` invocation.  Does not indicate an actual failure.
     UserInitiatedDisconnect,
 
-    /// Error emitted by the client when a connection attempt (the interval between starting
-    /// the connection and it being ready for an MQTT Connect packet) times out
-    /// TODO: Add duration?
-    ConnectionTimeout,
-
-    /// Error emitted by the client when a connection attempt fails
-    /// TODO: add underlying error as source
-    ConnectionEstablishmentFailure,
+    /// Error emitted by the client when a connection attempt fails.  Failure is defined as
+    /// "the attempt is finished for any reason prior to receipt of a successful Connack packet."
+    ConnectionEstablishmentFailure(ConnectionEstablishmentFailureContext),
 
     /// Error emitted by the client when it fails to write data to the socket.  This is a
     /// connection-fatal event; it does not represent socket-buffer-full.
@@ -146,7 +128,11 @@ pub enum MqttError {
     /// Generic error associated with parsing TLS configuration from memory or applying it to a
     /// TLS context
     /// TODO: add underlying error as source
-    TlsError
+    TlsError,
+
+    /// Error emitted when an Auth packet is submitted or received that violates the MQTT
+    /// specification.
+    PacketValidation(PacketType),
 }
 
 impl MqttError {
@@ -198,6 +184,30 @@ impl MqttError {
             }
         )
     }
+
+    pub(crate) fn new_connection_establishment_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::ConnectionEstablishmentFailure(
+            ConnectionEstablishmentFailureContext{
+                source : source.into()
+            }
+        )
+    }
+
+    pub(crate) fn new_internal_state_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::InternalStateError(
+            InternalStateErrorContext {
+                source : source.into()
+            }
+        )
+    }
+
+    pub(crate) fn new_connection_closed(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::ConnectionClosed(
+            ConnectionClosedContext {
+                source : source.into()
+            }
+        )
+    }
 }
 
 impl Error for MqttError {
@@ -219,6 +229,15 @@ impl Error for MqttError {
                 Some(context.source.as_ref())
             }
             MqttError::InboundTopicAliasNotValid(context) => {
+                Some(context.source.as_ref())
+            }
+            MqttError::ConnectionEstablishmentFailure(context) => {
+                Some(context.source.as_ref())
+            }
+            MqttError::InternalStateError(context) => {
+                Some(context.source.as_ref())
+            }
+            MqttError::ConnectionClosed(context) => {
                 Some(context.source.as_ref())
             }
             _ => { None }
@@ -247,24 +266,24 @@ impl fmt::Display for MqttError {
             MqttError::InboundTopicAliasNotValid(_) => {
                 write!(f, "topic alias value on incoming publish is not valid")
             }
-            MqttError::PacketValidation(packet_type) => { write!(f, "{} contains a property that violates the mqtt spec", packet_type) }
-            MqttError::InternalStateError => { write!(f, "internal state error - client reached an invalid internal state, almost certainly a client bug") }
-            MqttError::ConnectionRejected => { write!(f, "connack rejected - the broker explicitly rejected the connect packet") }
-            MqttError::ConnackTimeout => { write!(f, "connack timeout - the broker did not respond in time to the connect packet") }
-            MqttError::PingTimeout => { write!(f, "ping timeout - the broker did not response in time to the pingreq packet; likely the connection was unhealthy") }
-            MqttError::ConnectionClosed => { write!(f, "connection closed - the client's connection was closed due to some external reason") }
+            MqttError::InternalStateError(_) => {
+                write!(f, "client reached an invalid internal state; almost certainly a client bug")
+            }
+            MqttError::ConnectionClosed(_) => {
+                write!(f, "client connection was closed; source contains further details")
+            }
             MqttError::OfflineQueuePolicyFailed => { write!(f, "offline queue policy failed - operation failed due to the offline queue policy and the fact that the client is currently offline") }
-            MqttError::ServerSideDisconnect => { write!(f, "server side disconnect - connection was shut down after receiving a disconnect packet from the broker") }
             MqttError::AckTimeout => { write!(f, "ack timeout - the operation's timeout triggered prior to receiving an ack from the broker") }
-            MqttError::PacketIdSpaceExhausted => { write!(f, "packet id space exhausted - no packet ids remain; should never happen") }
             MqttError::OperationalStateReset => { write!(f, "operational state reset - the operation was not complete prior to the client being closed") }
             MqttError::UserInitiatedDisconnect => { write!(f, "user-initiated disconnect - connection was shut down by user action") }
-            MqttError::ConnectionTimeout => { write!(f, "connection timeout - a transport-level connection to the broker could not be established before timeout") }
-            MqttError::ConnectionEstablishmentFailure => { write!(f, "connection establishment failure - failure to establish a transport-level connection to the broker") }
+            MqttError::ConnectionEstablishmentFailure(_) => {
+                write!(f, "failed to establish an MQTT connection to the broker")
+            }
             MqttError::StreamWriteFailure => { write!(f, "stream write failure - error attempting to write or flush a connection stream") }
             MqttError::StreamReadFailure => { write!(f, "stream read failure - error when attempting to read a connection stream") }
             MqttError::IoError => { write!(f, "io error - generic error due to an error operating on the connection's network stream") }
             MqttError::TlsError => { write!(f, "tls error - generic error when setting up a tls context") }
+            MqttError::PacketValidation(packet_type) => { write!(f, "{} contains a property that violates the mqtt spec", packet_type) }
         }
     }
 }
