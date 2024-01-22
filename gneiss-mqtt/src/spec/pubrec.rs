@@ -192,7 +192,6 @@ mod tests {
 
     use crate::validate::testing::*;
     use crate::validate::utils::testing::*;
-    use assert_matches::assert_matches;
 
     test_ack_validate_success!(pubrec_validate_success, Pubrec, create_pubrec_with_all_properties);
     test_ack_validate_failure_reason_string_length!(pubrec_validate_failure_reason_string_length, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);

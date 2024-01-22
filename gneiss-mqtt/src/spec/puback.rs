@@ -189,8 +189,6 @@ mod tests {
         do_inbound_size_decode_failure_test(&MqttPacket::Puback(packet));
     }
 
-    use assert_matches::assert_matches;
-
     test_ack_validate_success!(puback_validate_success, Puback, create_puback_with_all_properties);
     test_ack_validate_failure_reason_string_length!(puback_validate_failure_reason_string_length, Puback, create_puback_with_all_properties, PacketType::Puback);
     test_ack_validate_failure_invalid_user_properties!(puback_validate_failure_invalid_user_properties, Puback, create_puback_with_all_properties, PacketType::Puback);

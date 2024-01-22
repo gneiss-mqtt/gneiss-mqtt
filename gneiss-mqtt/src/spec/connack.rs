@@ -321,7 +321,7 @@ pub(crate) fn validate_connack_packet_inbound_internal(packet: &ConnackPacket) -
 
     if packet.session_present && packet.reason_code != ConnectReasonCode::Success {
         error!("ConnackPacket Inbound Validation - session present on unsuccessful connect");
-        return Err(MqttError::PacketValidation(PacketType::Connack));
+        return Err(MqttError::new_packet_validation(PacketType::Connack, "session present set on unsuccessful connect"));
     }
 
     validate_optional_integer_non_zero!(receive_maximum, packet.receive_maximum, PacketType::Connack, "Connack", "receive_maximum");
@@ -329,7 +329,7 @@ pub(crate) fn validate_connack_packet_inbound_internal(packet: &ConnackPacket) -
     if let Some(maximum_qos) = packet.maximum_qos {
         if maximum_qos == QualityOfService::ExactlyOnce {
             error!("ConnackPacket Inbound Validation - maximum qos should never be Qos2");
-            return Err(MqttError::PacketValidation(PacketType::Connack));
+            return Err(MqttError::new_packet_validation(PacketType::Connack, "maximum_qos may not be qos2"));
         }
     }
 
@@ -1073,13 +1073,13 @@ mod tests {
     }
 
     use crate::validate::testing::*;
-    use assert_matches::assert_matches;
+    use crate::validate::utils::testing::verify_validation_failure;
 
     fn do_connack_validate_failure_test(packet: ConnackPacket) {
         let test_validation_context = create_pinned_validation_context();
         let validation_context = create_inbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_matches!(validate_packet_inbound_internal(&MqttPacket::Connack(packet), &validation_context), Err(MqttError::PacketValidation(PacketType::Connack)));
+        verify_validation_failure!(validate_packet_inbound_internal(&MqttPacket::Connack(packet), &validation_context), PacketType::Connack);
     }
 
     #[test]

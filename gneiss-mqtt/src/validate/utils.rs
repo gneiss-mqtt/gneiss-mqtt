@@ -11,7 +11,7 @@ use log::*;
 pub(crate) fn validate_string_length(value: &String, packet_type: PacketType, packet_name: &str, field_name: &str) -> MqttResult<()> {
     if value.len() > MAXIMUM_STRING_PROPERTY_LENGTH {
         error!("{}Packet Validation - {} string field too long", packet_name, field_name);
-        return Err(MqttError::PacketValidation(packet_type));
+        return Err(MqttError::new_packet_validation(packet_type, field_name));
     }
 
     Ok(())
@@ -21,7 +21,7 @@ pub(crate) fn validate_optional_string_length(optional_string: &Option<String>, 
     if let Some(value) = &optional_string {
         if value.len() > MAXIMUM_STRING_PROPERTY_LENGTH {
             error!("{}Packet Validation - {} string field too long", packet_name, field_name);
-            return Err(MqttError::PacketValidation(packet_type));
+            return Err(MqttError::new_packet_validation(packet_type, field_name));
         }
     }
 
@@ -32,7 +32,7 @@ pub(crate) fn validate_optional_binary_length(optional_data: &Option<Vec<u8>>, p
     if let Some(value) = &optional_data {
         if value.len() > MAXIMUM_BINARY_PROPERTY_LENGTH {
             error!("{}Packet Validation - {} binary field too long", packet_name, field_name);
-            return Err(MqttError::PacketValidation(packet_type));
+            return Err(MqttError::new_packet_validation(packet_type, field_name));
         }
     }
 
@@ -44,7 +44,7 @@ macro_rules! validate_optional_integer_non_zero {
         if let Some($value_name) = $optional_integer_expr {
             if $value_name == 0 {
                 error!("{}Packet Validation - {} integer field is zero", $packet_name, $field_name);
-                return Err(MqttError::PacketValidation($packet_type));
+                return Err(MqttError::new_packet_validation($packet_type, $field_name));
             }
         }
     };
@@ -74,12 +74,12 @@ macro_rules! validate_ack_outbound_internal {
             let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
             if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
                 error!("{}Packet Validation - packet length exceeds allowed maximum to server", $packet_type_string);
-                return Err(MqttError::PacketValidation($packet_type));
+                return Err(MqttError::new_packet_validation($packet_type, "packet length exceeds maximum allowed"));
             }
 
             if packet.packet_id == 0 {
                 error!("{}Packet Validation - packet id is zero", $packet_type_string);
-                return Err(MqttError::PacketValidation($packet_type));
+                return Err(MqttError::new_packet_validation($packet_type, "packet id is zero"));
             }
 
             Ok(())
@@ -95,7 +95,7 @@ macro_rules! validate_ack_inbound_internal {
 
             if packet.packet_id == 0 {
                 error!("{}Packet Validation - packet id is zero", $packet_type_string);
-                return Err(MqttError::PacketValidation($packet_type));
+                return Err(MqttError::new_packet_validation($packet_type, "packet id is zero"));
             }
 
             Ok(())
@@ -204,6 +204,19 @@ pub(crate) mod testing {
 
     use super::*;
 
+    macro_rules! verify_validation_failure {
+        ($validation_expr: expr, $packet_type: expr) => {
+            let validation_result = $validation_expr;
+            if let Err(MqttError::PacketValidation(packet_validation_context)) = validation_result {
+                assert_eq!(packet_validation_context.packet_type, $packet_type)
+            } else {
+                panic!("expected validation error")
+            }
+        }
+    }
+
+    pub(crate) use verify_validation_failure;
+
     macro_rules! test_ack_validate_success {
         ($function_name: ident, $packet_type: ident, $packet_factory_function: ident) => {
             #[test]
@@ -226,13 +239,13 @@ pub(crate) mod testing {
     pub(crate) use test_ack_validate_success;
 
     macro_rules! test_ack_validate_failure_reason_string_length {
-        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: pat) => {
+        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: expr) => {
             #[test]
             fn $function_name() {
                 let mut packet = $packet_factory_function();
                 packet.reason_string = Some("A".repeat(128 * 1024).to_string());
 
-                assert_matches!(validate_packet_outbound(&MqttPacket::$packet_type_name(packet)), Err(MqttError::PacketValidation($packet_type)));
+                verify_validation_failure!(validate_packet_outbound(&MqttPacket::$packet_type_name(packet)), $packet_type);
             }
         };
     }
@@ -240,13 +253,13 @@ pub(crate) mod testing {
     pub(crate) use test_ack_validate_failure_reason_string_length;
 
     macro_rules! test_ack_validate_failure_invalid_user_properties {
-        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: pat) => {
+        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: expr) => {
             #[test]
             fn $function_name() {
                 let mut packet = $packet_factory_function();
                 packet.user_properties = Some(create_invalid_user_properties());
 
-                assert_matches!(validate_packet_outbound(&MqttPacket::$packet_type_name(packet)), Err(MqttError::PacketValidation($packet_type)));
+                verify_validation_failure!(validate_packet_outbound(&MqttPacket::$packet_type_name(packet)), $packet_type);
             }
         };
     }
@@ -267,7 +280,7 @@ pub(crate) mod testing {
     pub(crate) use test_ack_validate_failure_outbound_size;
 
     macro_rules! test_ack_validate_failure_packet_id_zero {
-        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: pat) => {
+        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: expr) => {
             #[test]
             fn $function_name() {
                 let mut ack = $packet_factory_function();
@@ -278,10 +291,10 @@ pub(crate) mod testing {
                 let test_validation_context = create_pinned_validation_context();
 
                 let outbound_context = create_outbound_validation_context_from_pinned(&test_validation_context);
-                assert_matches!(validate_packet_outbound_internal(&packet, &outbound_context), Err(MqttError::PacketValidation($packet_type)));
+                verify_validation_failure!(validate_packet_outbound_internal(&packet, &outbound_context), $packet_type);
 
                 let inbound_context = create_inbound_validation_context_from_pinned(&test_validation_context);
-                assert_matches!(validate_packet_inbound_internal(&packet, &inbound_context), Err(MqttError::PacketValidation($packet_type)));
+                verify_validation_failure!(validate_packet_inbound_internal(&packet, &inbound_context), $packet_type);
             }
         };
     }
@@ -289,7 +302,7 @@ pub(crate) mod testing {
     pub(crate) use test_ack_validate_failure_packet_id_zero;
 
     macro_rules! test_ack_validate_failure_inbound_packet_id_zero {
-        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: pat) => {
+        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: expr) => {
             #[test]
             fn $function_name() {
                 let mut ack = $packet_factory_function();
@@ -299,7 +312,7 @@ pub(crate) mod testing {
 
                 let test_validation_context = create_pinned_validation_context();
                 let inbound_context = create_inbound_validation_context_from_pinned(&test_validation_context);
-                assert_matches!(validate_packet_inbound_internal(&packet, &inbound_context), Err(MqttError::PacketValidation($packet_type)));
+                verify_validation_failure!(validate_packet_inbound_internal(&packet, &inbound_context), $packet_type);
             }
         };
     }

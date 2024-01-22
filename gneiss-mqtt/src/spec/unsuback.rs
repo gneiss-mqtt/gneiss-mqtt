@@ -297,7 +297,6 @@ mod tests {
 
     use crate::validate::testing::*;
     use crate::validate::utils::testing::*;
-    use assert_matches::assert_matches;
 
     test_ack_validate_failure_inbound_packet_id_zero!(unsuback_validate_failure_internal_packet_id_zero, Unsuback, create_unsuback_all_properties, PacketType::Unsuback);
 }

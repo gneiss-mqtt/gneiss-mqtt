@@ -10,6 +10,7 @@ mod operational_state_tests {
     use crate::features::gneiss_tokio::*;
     use crate::operation::*;
     use assert_matches::assert_matches;
+    use crate::validate::utils::testing::verify_validation_failure;
 
     fn build_standard_test_config() -> OperationalStateConfig {
         OperationalStateConfig {
@@ -1218,8 +1219,8 @@ mod operational_state_tests {
             let result = do_connected_state_invalid_ack_packet_id_test(packet);
             assert!(result.is_err());
             assert_matches!(result, Err(MqttError::PacketValidation(_)));
-            if let Err(MqttError::PacketValidation(packet_type)) = result {
-                assert_eq!(validation_error_packet_type, packet_type);
+            if let Err(MqttError::PacketValidation(packet_validation_context)) = result {
+                assert_eq!(validation_error_packet_type, packet_validation_context.packet_type);
             }
         }
     }
@@ -2105,7 +2106,7 @@ mod operational_state_tests {
     }
 
     macro_rules! define_operation_failure_validation_helper {
-        ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type: ident, $expected_error_type: pat) => {
+        ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type: ident, $expected_packet_validation_error_packet_type: expr) => {
             fn $test_helper_name() {
                 let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
                 fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_tiny_maximum_packet_size));
@@ -2123,7 +2124,7 @@ mod operational_state_tests {
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_matches!(operation_result.unwrap_err(), $expected_error_type);
+                verify_validation_failure!(operation_result, $expected_packet_validation_error_packet_type);
                 verify_operational_state_empty(&fixture);
             }
         };
@@ -2147,7 +2148,7 @@ mod operational_state_tests {
         build_subscribe_failure_validation_packet,
         subscribe,
         SubscribeOptions,
-        MqttError::PacketValidation(PacketType::Subscribe)
+        PacketType::Subscribe
     );
 
     #[test]
@@ -2169,7 +2170,7 @@ mod operational_state_tests {
         build_unsubscribe_failure_validation_packet,
         unsubscribe,
         UnsubscribeOptions,
-        MqttError::PacketValidation(PacketType::Unsubscribe)
+        PacketType::Unsubscribe
     );
 
     #[test]
@@ -2191,7 +2192,7 @@ mod operational_state_tests {
         build_qos0_publish_failure_validation_packet,
         publish,
         PublishOptions,
-        MqttError::PacketValidation(PacketType::Publish)
+        PacketType::Publish
     );
 
     #[test]
@@ -2213,7 +2214,7 @@ mod operational_state_tests {
         build_qos1_publish_failure_validation_packet,
         publish,
         PublishOptions,
-        MqttError::PacketValidation(PacketType::Publish)
+        PacketType::Publish
     );
 
     #[test]
@@ -2235,7 +2236,7 @@ mod operational_state_tests {
         build_qos2_publish_failure_validation_packet,
         publish,
         PublishOptions,
-        MqttError::PacketValidation(PacketType::Publish)
+        PacketType::Publish
     );
 
     #[test]

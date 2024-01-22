@@ -197,8 +197,8 @@ pub(crate) mod testing {
         let validate_result = validate_packet_outbound_internal(packet, &outbound_context2);
         assert!(validate_result.is_err());
         assert_matches!(validate_result, Err(MqttError::PacketValidation(_)));
-        if let Err(MqttError::PacketValidation(packet_type)) = validate_result {
-            assert_eq!(expected_packet_type, packet_type);
+        if let Err(MqttError::PacketValidation(packet_validation_context)) = validate_result {
+            assert_eq!(expected_packet_type, packet_validation_context.packet_type);
         }
     }
 }

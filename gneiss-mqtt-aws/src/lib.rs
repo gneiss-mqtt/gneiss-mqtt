@@ -416,8 +416,8 @@ impl AwsClientBuilder {
         tls_options_builder.with_alpn(DIRECT_ALPN_PROTOCOL);
 
         let tls_options_result = tls_options_builder.build_rustls();
-        if tls_options_result.is_err() {
-            return Err(MqttError::TlsError);
+        if let Err(error) = tls_options_result {
+            return Err(MqttError::new_tls_error(error));
         }
 
         let builder =  AwsClientBuilder {
@@ -450,8 +450,8 @@ impl AwsClientBuilder {
         tls_options_builder.with_alpn(DIRECT_ALPN_PROTOCOL);
 
         let tls_options_result = tls_options_builder.build_rustls();
-        if tls_options_result.is_err() {
-            return Err(MqttError::TlsError);
+        if let Err(error) = tls_options_result {
+            return Err(MqttError::new_tls_error(error));
         }
 
         let builder =  AwsClientBuilder {
@@ -482,8 +482,8 @@ impl AwsClientBuilder {
         tls_options_builder.with_alpn(CUSTOM_AUTH_ALPN_PROTOCOL);
 
         let tls_options_result = tls_options_builder.build_rustls();
-        if tls_options_result.is_err() {
-            return Err(MqttError::TlsError);
+        if let Err(error) = tls_options_result {
+            return Err(MqttError::new_tls_error(error));
         }
 
         let builder =  AwsClientBuilder {
@@ -513,8 +513,8 @@ impl AwsClientBuilder {
         }
 
         let tls_options_result = tls_options_builder.build_rustls();
-        if tls_options_result.is_err() {
-            return Err(MqttError::TlsError);
+        if let Err(error) = tls_options_result {
+            return Err(MqttError::new_tls_error(error));
         }
 
         let builder =  AwsClientBuilder {

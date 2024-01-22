@@ -1083,8 +1083,7 @@ async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=Mqtt
         };
 
     let inner_stream= stream.await?;
-    let handshake_result = client_async( HandshakeRequest { handshake_builder: transformed_handshake_builder }, inner_stream).await;
-    let (message_stream, _) = handshake_result.map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to perform websocket handshake"))?;
+    let (message_stream, _) = client_async( HandshakeRequest { handshake_builder: transformed_handshake_builder }, inner_stream).await?;
     let byte_stream = WsMessageHandler::wrap_stream(message_stream);
 
     Ok(byte_stream)

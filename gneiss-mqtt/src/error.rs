@@ -74,6 +74,24 @@ pub struct StdIoErrorContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+#[derive(Debug)]
+pub struct TlsErrorContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
+#[derive(Debug)]
+pub struct TransportErrorContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
+#[derive(Debug)]
+pub struct PacketValidationContext {
+    pub packet_type: PacketType,
+
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
+
 /// Basic error type for the entire gneiss-mqtt crate.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -134,17 +152,20 @@ pub enum MqttError {
 
     /// Generic error associated with parsing TLS configuration from memory or applying it to a
     /// TLS context
-    /// TODO: add underlying error as source
-    TlsError,
+    TlsError(TlsErrorContext),
+
+    /// Generic error associated with feature-selected transport options.  For now, this mostly
+    /// wraps websocket implementation specific errors
+    TransportError(TransportErrorContext),
 
     /// Error emitted when an Auth packet is submitted or received that violates the MQTT
     /// specification.
-    PacketValidation(PacketType),
+    PacketValidation(PacketValidationContext),
 }
 
 impl MqttError {
 
-    pub(crate) fn new_unimplemented(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+    pub fn new_unimplemented(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         MqttError::Unimplemented(
             UnimplementedContext {
                 source : source.into()
@@ -244,9 +265,34 @@ impl MqttError {
         )
     }
 
-    pub(crate) fn new_std_io_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+    pub fn new_std_io_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         MqttError::StdIoError(
             StdIoErrorContext {
+                source : source.into()
+            }
+        )
+    }
+
+    pub fn new_tls_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::TlsError(
+            TlsErrorContext {
+                source : source.into()
+            }
+        )
+    }
+
+    pub fn new_transport_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::TransportError(
+            TransportErrorContext {
+                source : source.into()
+            }
+        )
+    }
+
+    pub fn new_packet_validation(packet_type: PacketType, source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::PacketValidation(
+            PacketValidationContext {
+                packet_type,
                 source : source.into()
             }
         )
@@ -284,6 +330,15 @@ impl Error for MqttError {
                 Some(context.source.as_ref())
             }
             MqttError::StdIoError(context) => {
+                Some(context.source.as_ref())
+            }
+            MqttError::TlsError(context) => {
+                Some(context.source.as_ref())
+            }
+            MqttError::TransportError(context) => {
+                Some(context.source.as_ref())
+            }
+            MqttError::PacketValidation(context) => {
                 Some(context.source.as_ref())
             }
             _ => { None }
@@ -336,8 +391,15 @@ impl fmt::Display for MqttError {
             MqttError::StdIoError(_) => {
                 write!(f, "generic error wrapper for std::io::Error when no more specialized error is appropriate; source contains further details")
             }
-            MqttError::TlsError => { write!(f, "tls error - generic error when setting up a tls context") }
-            MqttError::PacketValidation(packet_type) => { write!(f, "{} contains a property that violates the mqtt spec", packet_type) }
+            MqttError::TlsError(_) => {
+                write!(f, "generic error when setting up a tls context")
+            }
+            MqttError::TransportError(_) => {
+                write!(f, "transport error - probably websocket related")
+            }
+            MqttError::PacketValidation(context) => {
+                write!(f, "{} contains a property that violates the mqtt spec", context.packet_type)
+            }
         }
     }
 }
@@ -357,6 +419,12 @@ impl From<core::str::Utf8Error> for MqttError {
 impl From<rustls_pki_types::InvalidDnsNameError> for MqttError {
     fn from(err: rustls_pki_types::InvalidDnsNameError) -> Self {
         MqttError::new_connection_establishment_failure(err)
+    }
+}
+
+impl From<tungstenite::error::Error> for MqttError {
+    fn from(err: tungstenite::error::Error) -> Self {
+        MqttError::new_transport_error(err)
     }
 }
 
