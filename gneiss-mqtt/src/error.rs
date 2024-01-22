@@ -3,94 +3,118 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+/*!
+A module containing the core crate error enumeration, context structures, and conversion
+definitions.
+ */
+
 use std::error::Error;
 use std::fmt;
 use crate::PacketType;
 
-
+/// Additional details about an Unimplemented error variant
 #[derive(Debug)]
 pub struct UnimplementedContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about an OperationChannelFailure error variant
 #[derive(Debug)]
 pub struct OperationChannelFailureContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about an EncodingFailure error variant
 #[derive(Debug)]
 pub struct EncodingFailureContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about a DecodingFailure error variant
 #[derive(Debug)]
 pub struct DecodingFailureContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about a ProtocolError error variant
 #[derive(Debug)]
 pub struct ProtocolErrorContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about an InboundTopicAliasNotValid error variant
 #[derive(Debug)]
 pub struct InboundTopicAliasNotValidContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about a ConnectionEstablishmentFailure error variant
 #[derive(Debug)]
 pub struct ConnectionEstablishmentFailureContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about an InternalStateError error variant
 #[derive(Debug)]
 pub struct InternalStateErrorContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about a ConnectionClosed error variant
 #[derive(Debug)]
 pub struct ConnectionClosedContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about an OfflineQueuePolicyFailed error variant
 #[derive(Debug)]
 pub struct OfflineQueuePolicyFailedContext {
 }
 
+/// Additional details about an AckTimeout error variant
 #[derive(Debug)]
 pub struct AckTimeoutContext {
 }
 
+/// Additional details about a ClientClosed error variant
 #[derive(Debug)]
 pub struct ClientClosedContext {
 }
 
+/// Additional details about a UserInitiatedDisconnection error variant
 #[derive(Debug)]
 pub struct UserInitiatedDisconnectContext {
 }
 
+/// Additional details about a StdIoError error variant
 #[derive(Debug)]
 pub struct StdIoErrorContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about a TlsError error variant
 #[derive(Debug)]
 pub struct TlsErrorContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about a TransportError error variant
 #[derive(Debug)]
 pub struct TransportErrorContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about a PacketValidation error variant
 #[derive(Debug)]
 pub struct PacketValidationContext {
+
+    /// type of packet that failed validation
     pub packet_type: PacketType,
 
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about an OtherError error variant
 #[derive(Debug)]
 pub struct OtherErrorContext {
     source: Box<dyn Error + Send + Sync + 'static>
@@ -175,7 +199,7 @@ pub enum MqttError {
 
 impl MqttError {
 
-    pub fn new_unimplemented(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+    pub(crate) fn new_unimplemented(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         MqttError::Unimplemented(
             UnimplementedContext {
                 source : source.into()
@@ -275,6 +299,8 @@ impl MqttError {
         )
     }
 
+    /// Constructs a StdIoError variant from an existing error.  Typically this should be a
+    /// std::io::Error
     pub fn new_std_io_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         MqttError::StdIoError(
             StdIoErrorContext {
@@ -283,6 +309,9 @@ impl MqttError {
         )
     }
 
+    /// Constructs a new TlsError variant from an existing error.  Typically this should be
+    /// an error surfacing from a third-party TLS library or an attempt to initialize configuration
+    /// for one.
     pub fn new_tls_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         MqttError::TlsError(
             TlsErrorContext {
@@ -291,6 +320,8 @@ impl MqttError {
         )
     }
 
+    /// Constructs a new TransportError variant from an existing error.  Typically this should be
+    /// an error surfacing from a third-party transport library.
     pub fn new_transport_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         MqttError::TransportError(
             TransportErrorContext {
@@ -299,7 +330,7 @@ impl MqttError {
         )
     }
 
-    pub fn new_packet_validation(packet_type: PacketType, source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+    pub(crate) fn new_packet_validation(packet_type: PacketType, source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         MqttError::PacketValidation(
             PacketValidationContext {
                 packet_type,
@@ -308,6 +339,8 @@ impl MqttError {
         )
     }
 
+    /// Constructs a new OtherError variant from an existing error.  Use this to wrap errors that
+    /// do not fall into any appropriate existing category.
     pub fn new_other_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         MqttError::OtherError (
             OtherErrorContext {
@@ -421,7 +454,7 @@ impl fmt::Display for MqttError {
             MqttError::PacketValidation(context) => {
                 write!(f, "{} contains a property that violates the mqtt spec", context.packet_type)
             }
-            MqttError::OtherError(context) => {
+            MqttError::OtherError(_) => {
                 write!(f, "fallback error type; source contains further details")
             }
         }
