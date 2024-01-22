@@ -8,10 +8,6 @@ Functionality for using [`rustls`](https://crates.io/crates/rustls) as an MQTT c
 implementation.
  */
 
-extern crate rustls;
-extern crate rustls_pemfile;
-extern crate rustls_pki_types;
-
 use crate::config::{TlsData, TlsMode, TlsOptions};
 use crate::config::TlsOptionsBuilder;
 

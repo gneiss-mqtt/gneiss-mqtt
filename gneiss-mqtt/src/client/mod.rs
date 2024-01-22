@@ -12,6 +12,7 @@ pub(crate) mod shared_impl;
 use crate::*;
 use crate::client::shared_impl::*;
 use crate::config::*;
+use crate::error::{MqttError, MqttResult};
 use crate::spec::*;
 use crate::spec::disconnect::validate_disconnect_packet_outbound;
 use crate::spec::utils::*;
@@ -24,7 +25,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 // async choice conditional
-extern crate tokio;
 use crate::features::gneiss_tokio::*;
 
 /// Additional client options applicable to an MQTT Publish operation
@@ -322,12 +322,12 @@ impl fmt::Display for NegotiatedSettings {
 
 /// An event emitted by the client every time it attempts to establish a new network connection
 /// to the broker.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct ConnectionAttemptEvent {}
 
 /// An event emitted by the client after successfully performing a Connect <-> Connack handshake
 /// with the broker over a new network connection.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct ConnectionSuccessEvent {
 
     /// Connack packet sent by the broker as the final step of successful MQTT connection
@@ -340,7 +340,7 @@ pub struct ConnectionSuccessEvent {
 
 /// An event emitted by the client every time a connection attempt does not succeed.  The reason
 /// for failure may be transport-related, protocol-related, or client-configuration-related.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct ConnectionFailureEvent {
 
     /// Error describing why the connection attempt failed
@@ -353,7 +353,7 @@ pub struct ConnectionFailureEvent {
 
 /// An event emitted by the client when a previously successfully-established connection is
 /// shut down, for any reason.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct DisconnectionEvent {
 
     /// High-level reason for why the connection was shut down
@@ -366,12 +366,12 @@ pub struct DisconnectionEvent {
 
 /// An event emitted by the client when it enters the Stopped state, causing it to no longer
 /// attempt to reconnect to the broker.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct StoppedEvent {}
 
 /// An event emitted by the client whenever it receives a Publish packet from the broker.
 /// This structure may expand in the future (pre-1.0.0) to support MQTT bridging.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct PublishReceivedEvent {
 
     /// Publish that was received from the broker.  Currently, the appropriate Ack is always
@@ -381,7 +381,7 @@ pub struct PublishReceivedEvent {
 }
 
 /// Union of all the different events emitted by the client.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum ClientEvent {
 
     /// An event emitted by the client every time it attempts to establish a new network connection
@@ -472,7 +472,7 @@ impl Mqtt5Client {
     }
 
     /// Signals the client that it should clean up all internal resources (connection, channels,
-    /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.  Useful for doing
+    /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.  Useful to ensure
     /// a full resource wipe.  If just `stop()` is used then the client will continue to track
     /// MQTT session state internally.
     pub fn close(&self) -> MqttResult<()> {

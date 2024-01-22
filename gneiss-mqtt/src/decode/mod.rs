@@ -5,11 +5,9 @@
 
 pub(crate) mod utils;
 
-extern crate log;
-
-use crate::*;
 use crate::decode::utils::*;
 use crate::encode::utils::*;
+use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::spec::*;
 use crate::spec::utils::*;
@@ -44,11 +42,11 @@ enum DecoderState {
     TerminalError
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+//#[derive(Copy, Clone, Eq, PartialEq)]
 enum DecoderDirective {
     OutOfData,
     Continue,
-    TerminalError
+    TerminalError(MqttError)
 }
 
 pub(crate) struct DecodingContext<'a> {
@@ -89,7 +87,7 @@ fn decode_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacke
         PACKET_TYPE_DISCONNECT => { decode_disconnect_packet(first_byte, packet_body) }
         PACKET_TYPE_AUTH => { decode_auth_packet(first_byte, packet_body) }
         _ => {
-            Err(MqttError::MalformedPacket)
+            Err(MqttError::new_decoding_failure("invalid packet type value"))
         }
     }
 }
@@ -141,10 +139,10 @@ impl Decoder {
                 self.scratch.clear();
                 (DecoderDirective::Continue, remaining_bytes)
             } else {
-                (DecoderDirective::TerminalError, remaining_bytes)
+                (DecoderDirective::TerminalError(MqttError::new_decoding_failure("packet size exceeds negotiated maximum")), remaining_bytes)
             }
         } else if self.scratch.len() >= 4 {
-            (DecoderDirective::TerminalError, remaining_bytes)
+            (DecoderDirective::TerminalError(MqttError::new_decoding_failure("invalid remaining length vli value")), remaining_bytes)
         } else if !remaining_bytes.is_empty() {
             (DecoderDirective::Continue, remaining_bytes)
         } else {
@@ -168,22 +166,25 @@ impl Decoder {
                 &bytes[..bytes_needed]
             };
 
-        if let Ok(packet) = decode_packet(self.first_byte.unwrap(), packet_slice) {
-            log_packet("Successfully decoded incoming packet: ", &packet);
-            context.decoded_packets.push_back(packet);
+        match decode_packet(self.first_byte.unwrap(), packet_slice) {
+            Ok(packet) => {
+                log_packet("Successfully decoded incoming packet: ", &packet);
+                context.decoded_packets.push_back(packet);
 
-            self.reset_for_new_packet();
-            return (DecoderDirective::Continue, &bytes[bytes_needed..]);
+                self.reset_for_new_packet();
+                (DecoderDirective::Continue, &bytes[bytes_needed..])
+            }
+            Err(error) => {
+                (DecoderDirective::TerminalError(error), &[])
+            }
         }
-
-        (DecoderDirective::TerminalError, &[])
     }
 
     pub fn decode_bytes(&mut self, bytes: &[u8], context: &mut DecodingContext) -> MqttResult<()> {
         let mut current_slice = bytes;
 
         let mut decode_result = DecoderDirective::Continue;
-        while decode_result == DecoderDirective::Continue {
+        while let DecoderDirective::Continue = decode_result {
             match self.state {
                 DecoderState::ReadPacketType => {
                     (decode_result, current_slice) = self.process_read_packet_type(current_slice);
@@ -198,14 +199,14 @@ impl Decoder {
                 }
 
                 _ => {
-                    decode_result = DecoderDirective::TerminalError;
+                    decode_result = DecoderDirective::TerminalError(MqttError::new_decoding_failure("decoder already in a terminal failure state"));
                 }
             }
         }
 
-        if decode_result == DecoderDirective::TerminalError {
+        if let DecoderDirective::TerminalError(error) = decode_result {
             self.state = DecoderState::TerminalError;
-            return Err(MqttError::MalformedPacket);
+            return Err(error);
         }
 
         Ok(())
@@ -230,6 +231,7 @@ pub(crate) mod testing {
     use super::*;
     use crate::alias::*;
     use crate::encode::*;
+    use assert_matches::assert_matches;
 
     pub(crate) fn do_single_encode_decode_test(packet : &MqttPacket, encode_size : usize, decode_size : usize, encode_repetitions : u32) -> bool {
 
@@ -332,7 +334,7 @@ pub(crate) mod testing {
         assert!(!encoder.reset(&packet, &mut encoding_context).is_err());
 
         let encode_result = encoder.encode(packet, &mut encoded_buffer);
-        assert_eq!(encode_result, Ok(EncodeResult::Complete));
+        assert_matches!(encode_result, Ok(EncodeResult::Complete));
 
         encoded_buffer
     }
@@ -356,7 +358,7 @@ pub(crate) mod testing {
         };
 
         let decode_result = decoder.decode_bytes(good_encoded_bytes.as_slice(), &mut decoding_context);
-        assert_eq!(decode_result, Ok(()));
+        assert!(decode_result.is_ok());
         assert_eq!(1, decoded_packets.len());
 
         let receive_result = &decoded_packets[0];
@@ -376,7 +378,7 @@ pub(crate) mod testing {
         };
 
         let decode_result = decoder.decode_bytes(bad_encoded_bytes.as_slice(), &mut decoding_context);
-        assert_eq!(decode_result, Err(MqttError::MalformedPacket));
+        assert_matches!(decode_result, Err(MqttError::DecodingFailure(_)));
         assert_eq!(0, decoded_packets.len());
     }
 
@@ -394,7 +396,7 @@ pub(crate) mod testing {
         };
 
         let decode_result = decoder.decode_bytes(encoded_bytes.as_slice(), &mut decoding_context);
-        assert_eq!(decode_result, Ok(()));
+        assert!(decode_result.is_ok());
         assert_eq!(1, decoded_packets.len());
 
         let receive_result = &decoded_packets[0];
@@ -411,7 +413,7 @@ pub(crate) mod testing {
         };
 
         let decode_result = decoder.decode_bytes(encoded_bytes.as_slice(), &mut decoding_context);
-        assert_eq!(decode_result, Err(MqttError::MalformedPacket));
+        assert_matches!(decode_result, Err(MqttError::DecodingFailure(_)));
         assert_eq!(0, decoded_packets.len());
     }
 

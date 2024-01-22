@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-extern crate log;
-
 use crate::*;
 use crate::decode::utils::*;
 use crate::encode::*;
 use crate::encode::utils::*;
+use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::spec::*;
 use crate::spec::utils::*;
@@ -53,9 +52,9 @@ define_ack_packet_encoding_impl!(write_pubrec_encoding_steps, PubrecPacket, Pubr
 define_ack_packet_decode_properties_function!(decode_pubrec_properties, PubrecPacket, "Pubrec");
 define_ack_packet_decode_function!(decode_pubrec_packet, Pubrec, PubrecPacket, "Pubrec", PUBREC_FIRST_BYTE, convert_u8_to_pubrec_reason_code, decode_pubrec_properties);
 
-validate_ack_outbound!(validate_pubrec_packet_outbound, PubrecPacket, MqttError::PubrecPacketValidation, "Pubrec");
-validate_ack_outbound_internal!(validate_pubrec_packet_outbound_internal, PubrecPacket, PubrecPacketValidation, compute_pubrec_packet_length_properties, "Pubrec");
-validate_ack_inbound_internal!(validate_pubrec_packet_inbound_internal, PubrecPacket, PubrecPacketValidation, "Pubrec");
+validate_ack_outbound!(validate_pubrec_packet_outbound, PubrecPacket, PacketType::Pubrec, "Pubrec");
+validate_ack_outbound_internal!(validate_pubrec_packet_outbound_internal, PubrecPacket, PacketType::Pubrec, compute_pubrec_packet_length_properties, "Pubrec");
+validate_ack_inbound_internal!(validate_pubrec_packet_inbound_internal, PubrecPacket, PacketType::Pubrec, "Pubrec");
 
 define_ack_packet_display_trait!(PubrecPacket, "PubrecPacket", pubrec_reason_code_to_str);
 
@@ -195,8 +194,8 @@ mod tests {
     use crate::validate::utils::testing::*;
 
     test_ack_validate_success!(pubrec_validate_success, Pubrec, create_pubrec_with_all_properties);
-    test_ack_validate_failure_reason_string_length!(pubrec_validate_failure_reason_string_length, Pubrec, create_pubrec_with_all_properties, PubrecPacketValidation);
-    test_ack_validate_failure_invalid_user_properties!(pubrec_validate_failure_invalid_user_properties, Pubrec, create_pubrec_with_all_properties, PubrecPacketValidation);
-    test_ack_validate_failure_outbound_size!(pubrec_validate_failure_outbound_size, Pubrec, create_pubrec_with_all_properties, PubrecPacketValidation);
-    test_ack_validate_failure_packet_id_zero!(pubrec_validate_failure_packet_id_zero, Pubrec, create_pubrec_with_all_properties, PubrecPacketValidation);
+    test_ack_validate_failure_reason_string_length!(pubrec_validate_failure_reason_string_length, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);
+    test_ack_validate_failure_invalid_user_properties!(pubrec_validate_failure_invalid_user_properties, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);
+    test_ack_validate_failure_outbound_size!(pubrec_validate_failure_outbound_size, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);
+    test_ack_validate_failure_packet_id_zero!(pubrec_validate_failure_packet_id_zero, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);
 }

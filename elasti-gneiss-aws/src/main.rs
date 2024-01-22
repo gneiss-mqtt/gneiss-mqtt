@@ -3,14 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-extern crate argh;
-extern crate elasti_gneiss_core;
-extern crate gneiss_mqtt;
-extern crate gneiss_mqtt_aws;
-extern crate simplelog;
-extern crate tokio;
-extern crate url;
-
 use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{client_event_callback, ElastiError, ElastiResult, main_loop};

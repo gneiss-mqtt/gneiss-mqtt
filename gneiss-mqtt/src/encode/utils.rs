@@ -7,8 +7,8 @@
 /// Internal utilities to encode MQTT5 packets, based on the MQTT5 spec
 use std::collections::VecDeque;
 
+use crate::error::{MqttError, MqttResult};
 use crate::spec::*;
-use crate::*;
 
 pub(crate) enum EncodingStep {
     Uint8(u8),
@@ -411,13 +411,13 @@ pub fn compute_variable_length_integer_encode_size(value: usize) -> MqttResult<u
     } else if value < 1usize << 28 {
         Ok(4)
     } else {
-        Err(MqttError::VariableLengthIntegerMaximumExceeded)
+        Err(MqttError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"))
     }
 }
 
 fn encode_vli(value: u32, dest: &mut Vec<u8>) -> MqttResult<()> {
     if value > MAXIMUM_VARIABLE_LENGTH_INTEGER as u32 {
-        return Err(MqttError::VariableLengthIntegerMaximumExceeded);
+        return Err(MqttError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
     }
 
     let mut done = false;
@@ -539,18 +539,20 @@ mod tests {
 
             for i in 1..dest.len() {
                 let insufficient_data_result = decode_vli(&dest[..i]);
+                assert!(insufficient_data_result.is_ok());
                 assert_eq!(
-                    Ok(DecodeVliResult::InsufficientData),
-                    insufficient_data_result
+                    DecodeVliResult::InsufficientData,
+                    insufficient_data_result.unwrap()
                 );
             }
 
             let final_result = decode_vli(&dest);
             let expected_bytes =
                 compute_variable_length_integer_encode_size($value as usize).unwrap();
+            assert!(final_result.is_ok());
             assert_eq!(
-                Ok(DecodeVliResult::Value($value, &dest[expected_bytes..])),
-                final_result
+                DecodeVliResult::Value($value, &dest[expected_bytes..]),
+                final_result.unwrap()
             );
         }};
     }

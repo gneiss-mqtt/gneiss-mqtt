@@ -5,12 +5,11 @@
 
 pub(crate) mod utils;
 
-extern crate log;
-
 use crate::*;
 use crate::alias::*;
 use crate::client::*;
 use crate::config::*;
+use crate::error::{MqttError, MqttResult};
 use crate::spec::*;
 use crate::spec::auth::*;
 use crate::spec::connack::*;
@@ -49,17 +48,11 @@ pub(crate) struct InboundValidationContext<'a> {
     pub negotiated_settings : Option<&'a NegotiatedSettings>,
 }
 
-fn validate_user_property(property: &UserProperty, error: MqttError, packet_type: &str) -> MqttResult<()> {
-    validate_string_length(&property.name, error, packet_type, "UserProperty Name")?;
-    validate_string_length(&property.name, error, packet_type, "UserProperty Value")?;
-
-    Ok(())
-}
-
-pub(crate) fn validate_user_properties(properties: &Option<Vec<UserProperty>>, error: MqttError, packet_type: &str) -> MqttResult<()> {
+pub(crate) fn validate_user_properties(properties: &Option<Vec<UserProperty>>, packet_type: PacketType, packet_name: &str) -> MqttResult<()> {
     if let Some(props) = properties {
         for property in props {
-            validate_user_property(property, error, packet_type)?;
+            validate_string_length(&property.name, packet_type, packet_name, "UserProperty Name")?;
+            validate_string_length(&property.name, packet_type, packet_name, "UserProperty Value")?;
         }
     }
 
@@ -89,7 +82,7 @@ pub(crate) fn validate_packet_outbound(packet: &MqttPacket) -> MqttResult<()> {
         MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound(unsubscribe) }
         _ => {
             error!("Packet Outbound Validation - unexpected packet type");
-            Err(MqttError::ProtocolError)
+            Err(MqttError::new_protocol_error("unexpected outbound packet type"))
         }
     }
 }
@@ -111,7 +104,7 @@ pub(crate) fn validate_packet_outbound_internal(packet: &MqttPacket, context: &O
         MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound_internal(unsubscribe, context) }
         _ => {
             error!("Packet Outbound Internal Validation - unexpected packet type");
-            Err(MqttError::ProtocolError)
+            Err(MqttError::new_protocol_error("unexpected outbound packet type"))
         }
     }
 }
@@ -134,7 +127,7 @@ pub(crate) fn validate_packet_inbound_internal(packet: &MqttPacket, context: &In
         MqttPacket::Unsuback(unsuback) => { validate_unsuback_packet_inbound_internal(unsuback, context) }
         _ => {
             error!("Packet Inbound Validation - unexpected packet type");
-            Err(MqttError::ProtocolError)
+            Err(MqttError::new_protocol_error("unexpected inbound packet type"))
         }
     }
 }
@@ -185,8 +178,9 @@ pub(crate) mod testing {
     }
 
     use crate::decode::testing::*;
+    use assert_matches::assert_matches;
 
-    pub(crate) fn do_outbound_size_validate_failure_test(packet: &MqttPacket, error: MqttError) {
+    pub(crate) fn do_outbound_size_validate_failure_test(packet: &MqttPacket, expected_packet_type: PacketType) {
         let encoded_bytes = encode_packet_for_test(packet);
 
         let mut test_validation_context = create_pinned_validation_context();
@@ -194,12 +188,17 @@ pub(crate) mod testing {
 
         let outbound_context1 = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(packet, &outbound_context1), Ok(()));
+        assert!(validate_packet_outbound_internal(packet, &outbound_context1).is_ok());
 
         test_validation_context.settings.maximum_packet_size_to_server = (encoded_bytes.len() - 1) as u32;
 
         let outbound_context2 = create_outbound_validation_context_from_pinned(&test_validation_context);
 
-        assert_eq!(validate_packet_outbound_internal(packet, &outbound_context2), Err(error));
+        let validate_result = validate_packet_outbound_internal(packet, &outbound_context2);
+        assert!(validate_result.is_err());
+        assert_matches!(validate_result, Err(MqttError::PacketValidation(_)));
+        if let Err(MqttError::PacketValidation(packet_validation_context)) = validate_result {
+            assert_eq!(expected_packet_type, packet_validation_context.packet_type);
+        }
     }
 }

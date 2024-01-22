@@ -1,7 +1,7 @@
 [package]
 name = "gneiss-mqtt"
 license = "Apache-2.0"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 keywords = ["mqtt", "mqtt5", "iot", "aws", "iotcore"]
 categories = [ "asynchronous", "network-programming", "web-programming::websocket"]
@@ -12,6 +12,9 @@ repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dev-dependencies]
+assert_matches = "1.5.0"
 
 [dependencies]
 http = { version = "0.2" }

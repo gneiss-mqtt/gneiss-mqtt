@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-extern crate log;
-
 use crate::*;
 use crate::decode::utils::*;
 use crate::encode::*;
 use crate::encode::utils::*;
+use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::spec::*;
 use crate::spec::utils::*;
@@ -103,7 +102,7 @@ fn decode_suback_properties(property_bytes: &[u8], packet : &mut SubackPacket) -
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
                 error!("SubackPacket Decode - Invalid property type ({})", property_key);
-                return Err(MqttError::MalformedPacket);
+                return Err(MqttError::new_decoding_failure("invalid property type for suback packet"));
             }
         }
     }
@@ -114,7 +113,7 @@ fn decode_suback_properties(property_bytes: &[u8], packet : &mut SubackPacket) -
 pub(crate) fn decode_suback_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
     if first_byte != SUBACK_FIRST_BYTE {
         error!("SubackPacket Decode - invalid first byte");
-        return Err(MqttError::MalformedPacket);
+        return Err(MqttError::new_decoding_failure("invalid first byte for suback packet"));
     }
 
     let mut box_packet = Box::new(MqttPacket::Suback(SubackPacket { ..Default::default() }));
@@ -127,7 +126,7 @@ pub(crate) fn decode_suback_packet(first_byte: u8, packet_body: &[u8]) -> MqttRe
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
             error!("SubackPacket Decode - property length exceeds overall packet length");
-            return Err(MqttError::MalformedPacket);
+            return Err(MqttError::new_decoding_failure("property length exceeds overall packet length for suback packet"));
         }
 
         let properties_bytes = &mutable_body[..properties_length];
@@ -148,7 +147,7 @@ pub(crate) fn decode_suback_packet(first_byte: u8, packet_body: &[u8]) -> MqttRe
     panic!("SubackPacket Decode - Internal error");
 }
 
-validate_ack_inbound_internal!(validate_suback_packet_inbound_internal, SubackPacket, SubackPacketValidation, "Suback");
+validate_ack_inbound_internal!(validate_suback_packet_inbound_internal, SubackPacket, PacketType::Suback, "Suback");
 
 impl fmt::Display for SubackPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -296,5 +295,5 @@ mod tests {
     use crate::validate::testing::*;
     use crate::validate::utils::testing::*;
 
-    test_ack_validate_failure_inbound_packet_id_zero!(suback_validate_failure_internal_packet_id_zero, Suback, create_suback_all_properties, SubackPacketValidation);
+    test_ack_validate_failure_inbound_packet_id_zero!(suback_validate_failure_internal_packet_id_zero, Suback, create_suback_all_properties, PacketType::Suback);
 }

@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-extern crate log;
-
 use crate::*;
 use crate::decode::utils::*;
 use crate::encode::*;
 use crate::encode::utils::*;
+use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::spec::*;
 use crate::spec::utils::*;
@@ -53,9 +52,9 @@ define_ack_packet_encoding_impl!(write_pubrel_encoding_steps, PubrelPacket, Pubr
 define_ack_packet_decode_properties_function!(decode_pubrel_properties, PubrelPacket, "Pubrel");
 define_ack_packet_decode_function!(decode_pubrel_packet, Pubrel, PubrelPacket, "Pubrel", PUBREL_FIRST_BYTE, convert_u8_to_pubrel_reason_code, decode_pubrel_properties);
 
-validate_ack_outbound!(validate_pubrel_packet_outbound, PubrelPacket, MqttError::PubrelPacketValidation, "Pubrel");
-validate_ack_outbound_internal!(validate_pubrel_packet_outbound_internal, PubrelPacket, PubrelPacketValidation, compute_pubrel_packet_length_properties, "Pubrel");
-validate_ack_inbound_internal!(validate_pubrel_packet_inbound_internal, PubrelPacket, PubrelPacketValidation, "Pubrel");
+validate_ack_outbound!(validate_pubrel_packet_outbound, PubrelPacket, PacketType::Pubrel, "Pubrel");
+validate_ack_outbound_internal!(validate_pubrel_packet_outbound_internal, PubrelPacket, PacketType::Pubrel, compute_pubrel_packet_length_properties, "Pubrel");
+validate_ack_inbound_internal!(validate_pubrel_packet_inbound_internal, PubrelPacket, PacketType::Pubrel, "Pubrel");
 
 define_ack_packet_display_trait!(PubrelPacket, "PubrelPacket", pubrel_reason_code_to_str);
 
@@ -195,8 +194,8 @@ mod tests {
     use crate::validate::utils::testing::*;
 
     test_ack_validate_success!(pubrel_validate_success, Pubrel, create_pubrel_with_all_properties);
-    test_ack_validate_failure_reason_string_length!(pubrel_validate_failure_reason_string_length, Pubrel, create_pubrel_with_all_properties, PubrelPacketValidation);
-    test_ack_validate_failure_invalid_user_properties!(pubrel_validate_failure_invalid_user_properties, Pubrel, create_pubrel_with_all_properties, PubrelPacketValidation);
-    test_ack_validate_failure_outbound_size!(pubrel_validate_failure_outbound_size, Pubrel, create_pubrel_with_all_properties, PubrelPacketValidation);
-    test_ack_validate_failure_packet_id_zero!(pubrel_validate_failure_packet_id_zero, Pubrel, create_pubrel_with_all_properties, PubrelPacketValidation);
+    test_ack_validate_failure_reason_string_length!(pubrel_validate_failure_reason_string_length, Pubrel, create_pubrel_with_all_properties, PacketType::Pubrel);
+    test_ack_validate_failure_invalid_user_properties!(pubrel_validate_failure_invalid_user_properties, Pubrel, create_pubrel_with_all_properties, PacketType::Pubrel);
+    test_ack_validate_failure_outbound_size!(pubrel_validate_failure_outbound_size, Pubrel, create_pubrel_with_all_properties, PacketType::Pubrel);
+    test_ack_validate_failure_packet_id_zero!(pubrel_validate_failure_packet_id_zero, Pubrel, create_pubrel_with_all_properties, PacketType::Pubrel);
 }

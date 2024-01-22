@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-extern crate log;
-
 use crate::*;
 use crate::decode::utils::*;
 use crate::encode::*;
 use crate::encode::utils::*;
+use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::spec::*;
 use crate::spec::utils::*;
@@ -103,7 +102,7 @@ fn decode_unsuback_properties(property_bytes: &[u8], packet : &mut UnsubackPacke
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
                 error!("UnsubackPacket Decode - Invalid property type ({})", property_key);
-                return Err(MqttError::MalformedPacket);
+                return Err(MqttError::new_decoding_failure("invalid property for unsuback packet"));
             }
         }
     }
@@ -115,7 +114,7 @@ pub(crate) fn decode_unsuback_packet(first_byte: u8, packet_body: &[u8]) -> Mqtt
 
     if first_byte != UNSUBACK_FIRST_BYTE {
         error!("UnsubackPacket Decode - invalid first byte");
-        return Err(MqttError::MalformedPacket);
+        return Err(MqttError::new_decoding_failure("invalid first byte for unsuback packet"));
     }
 
     let mut box_packet = Box::new(MqttPacket::Unsuback(UnsubackPacket { ..Default::default() }));
@@ -128,7 +127,7 @@ pub(crate) fn decode_unsuback_packet(first_byte: u8, packet_body: &[u8]) -> Mqtt
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
             error!("UnsubackPacket Decode - property length exceeds overall packet length");
-            return Err(MqttError::MalformedPacket);
+            return Err(MqttError::new_decoding_failure("property length exceeds overall packet length for unsuback packet"));
         }
 
         let properties_bytes = &mutable_body[..properties_length];
@@ -149,7 +148,7 @@ pub(crate) fn decode_unsuback_packet(first_byte: u8, packet_body: &[u8]) -> Mqtt
     panic!("UnsubackPacket Decode - Internal error");
 }
 
-validate_ack_inbound_internal!(validate_unsuback_packet_inbound_internal, UnsubackPacket, UnsubackPacketValidation, "Unsuback");
+validate_ack_inbound_internal!(validate_unsuback_packet_inbound_internal, UnsubackPacket, PacketType::Unsuback, "Unsuback");
 
 impl fmt::Display for UnsubackPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -299,5 +298,5 @@ mod tests {
     use crate::validate::testing::*;
     use crate::validate::utils::testing::*;
 
-    test_ack_validate_failure_inbound_packet_id_zero!(unsuback_validate_failure_internal_packet_id_zero, Unsuback, create_unsuback_all_properties, UnsubackPacketValidation);
+    test_ack_validate_failure_inbound_packet_id_zero!(unsuback_validate_failure_internal_packet_id_zero, Unsuback, create_unsuback_all_properties, PacketType::Unsuback);
 }

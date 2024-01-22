@@ -8,13 +8,12 @@ Functionality for using [`tokio`](https://crates.io/crates/tokio) as an MQTT cli
 runtime implementation.
  */
 
-extern crate log;
-extern crate tokio;
 
 use crate::*;
 use crate::client::*;
 use crate::client::shared_impl::*;
 use crate::config::*;
+use crate::error::{MqttError, MqttResult};
 use log::*;
 use std::future::Future;
 use std::pin::Pin;
@@ -27,8 +26,8 @@ use tokio::time::{sleep};
 
 
 impl From<oneshot::error::RecvError> for MqttError {
-    fn from(_: oneshot::error::RecvError) -> Self {
-        MqttError::OperationChannelReceiveError
+    fn from(err: oneshot::error::RecvError) -> Self {
+        MqttError::new_operation_channel_failure(err)
     }
 }
 
@@ -55,6 +54,7 @@ macro_rules! submit_async_client_operation {
 }
 
 pub(crate) use submit_async_client_operation;
+use crate::operation::is_connection_established;
 
 pub(crate) struct AsyncOperationChannel<T> {
     sender: AsyncOperationSender<T>,
@@ -89,7 +89,7 @@ impl <T> AsyncOperationSender<T> {
 
     pub(crate) fn send(self, operation_options: T) -> MqttResult<()> {
         if self.sender.send(operation_options).is_err() {
-            return Err(MqttError::OperationChannelSendError);
+            return Err(MqttError::new_operation_channel_failure("failed to submit MQTT operation result to operation result channel"));
         }
 
         Ok(())
@@ -112,7 +112,7 @@ impl <T> AsyncOperationReceiver<T> {
     /// Async function that waits for the next client event sent to this receiver
     pub async fn recv(self) -> MqttResult<T> {
         match self.receiver.await {
-            Err(_) => { Err(MqttError::OperationChannelReceiveError) }
+            Err(_) => { Err(MqttError::new_operation_channel_failure("no result pending on operation result channel")) }
             Ok(val) => { Ok(val) }
         }
     }
@@ -121,7 +121,7 @@ impl <T> AsyncOperationReceiver<T> {
     pub fn try_recv(&mut self) -> MqttResult<T> {
         match self.receiver.try_recv() {
             Err(_) => {
-                Err(MqttError::OperationChannelEmpty)
+                Err(MqttError::new_operation_channel_failure("no operation result pending on operation result channel"))
             }
             Ok(val) => {
                 Ok(val)
@@ -134,7 +134,7 @@ impl <T> AsyncOperationReceiver<T> {
     pub fn blocking_recv(self) -> MqttResult<T> {
         match self.receiver.blocking_recv() {
             Err(_) => {
-                Err(MqttError::OperationChannelReceiveError)
+                Err(MqttError::new_operation_channel_failure("no operation result pending on operation result channel"))
             }
             Ok(val) => {
                 Ok(val)
@@ -152,7 +152,7 @@ pub(crate) struct UserRuntimeState {
 impl UserRuntimeState {
     pub(crate) fn try_send(&self, operation_options: OperationOptions) -> MqttResult<()> {
         if self.operation_sender.try_send(operation_options).is_err() {
-            return Err(MqttError::OperationChannelSendError);
+            return Err(MqttError::new_operation_channel_failure("failed to submit MQTT operation to client operation channel"));
         }
 
         Ok(())
@@ -196,16 +196,19 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                     }
                 }
                 () = &mut timeout => {
-                    client.apply_error(MqttError::ConnectionTimeout);
+                    client.apply_error(MqttError::new_connection_establishment_failure("connection establishment timeout reached"));
                     return Ok(ClientImplState::PendingReconnect);
                 }
                 connection_result = &mut connect => {
-                    if let Ok(stream) = connection_result {
-                        self.stream = Some(stream);
-                        return Ok(ClientImplState::Connected);
-                    } else {
-                        client.apply_error(MqttError::ConnectionEstablishmentFailure);
-                        return Ok(ClientImplState::PendingReconnect);
+                    match connection_result {
+                        Ok(stream) => {
+                            self.stream = Some(stream);
+                            return Ok(ClientImplState::Connected);
+                        }
+                        Err(error) => {
+                            client.apply_error(MqttError::new_connection_establishment_failure(error));
+                            return Ok(ClientImplState::PendingReconnect);
+                        }
                     }
                 }
             }
@@ -261,14 +264,18 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                     match read_result {
                         Ok(bytes_read) => {
                             if bytes_read == 0 {
-                                client.apply_error(MqttError::ConnectionClosed);
+                                client.apply_error(MqttError::new_connection_closed("network stream closed"));
                                 next_state = Some(ClientImplState::PendingReconnect);
                             } else if client.handle_incoming_bytes(&inbound_data[..bytes_read]).is_err() {
                                 next_state = Some(ClientImplState::PendingReconnect);
                             }
                         }
-                        Err(_) => {
-                            client.apply_error(MqttError::StreamReadFailure);
+                        Err(error) => {
+                            if is_connection_established(client.get_protocol_state()) {
+                                client.apply_error(MqttError::new_connection_closed(error));
+                            } else {
+                                client.apply_error(MqttError::new_connection_establishment_failure(error));
+                            }
                             next_state = Some(ClientImplState::PendingReconnect);
                         }
                     }
@@ -297,8 +304,12 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                                 }
                             }
                         }
-                        Err(_) => {
-                            client.apply_error(MqttError::StreamWriteFailure);
+                        Err(error) => {
+                            if is_connection_established(client.get_protocol_state()) {
+                                client.apply_error(MqttError::new_connection_closed(error));
+                            } else {
+                                client.apply_error(MqttError::new_connection_establishment_failure(error));
+                            }
                             next_state = Some(ClientImplState::PendingReconnect);
                         }
                     }
@@ -428,7 +439,7 @@ pub(crate) fn spawn_event_callback(event: Arc<ClientEvent>, callback: Arc<Client
     });
 }
 
-type TokioConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = std::io::Result<T>> + Send>>;
+type TokioConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = MqttResult<T>> + Send>>;
 
 /// Tokio-specific client configuration
 pub struct TokioClientOptions<T> where T : AsyncRead + AsyncWrite + Send + Sync {

@@ -11,12 +11,6 @@ Feedback is always welcome.
 * **elasti-gneiss-aws** - (Unpublished, Workspace only) Interactive client test application using gneiss-mqtt-aws to connect to AWS IoT Core
 
 ### Tentative User-Facing Roadmap (dates non-binding)
-* 0.2.0 Release (January 2024)
-* * MQTT-over-websockets support
-* * Builders for common transport options (mqtt/mqtts/ws/wss)
-* * Builders for AWS IoT Core (mtls, websockets via sig4 signing, custom auth)
-* * Http proxy support
-* * Complete API documentation
 * 0.3.0 Release (April 2024)
 * * Internal refactoring and unit/integration tests that were delayed once "it worked"
 * * Background thread client for no-async support
