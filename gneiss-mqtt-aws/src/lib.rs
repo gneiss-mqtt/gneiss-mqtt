@@ -239,7 +239,6 @@ different combinations expected by users.
 
 #![warn(missing_docs)]
 
-use std::io::ErrorKind;
 use gneiss_mqtt::config::*;
 use gneiss_mqtt::client::Mqtt5Client;
 use gneiss_mqtt::error::{MqttError, MqttResult};
@@ -612,8 +611,8 @@ impl AwsClientBuilder {
     }
 }
 
-async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, signing_region: String, credentials_provider: Arc<dyn ProvideCredentials>) -> std::io::Result<http::request::Builder> {
-    let credentials = credentials_provider.provide_credentials().await.map_err(|e| { std::io::Error::new(ErrorKind::Other, e)})?;
+async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, signing_region: String, credentials_provider: Arc<dyn ProvideCredentials>) -> MqttResult<http::request::Builder> {
+    let credentials = credentials_provider.provide_credentials().await.map_err(|e| { MqttError::new_other_error(e) })?;
     let session_token = credentials.session_token().map(|st| { st.to_string() });
 
     let identity = Identity::from(credentials);
@@ -645,7 +644,7 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     ).expect("signable request");
 
     let (signing_instructions, _signature) = sign(signable_request, &signing_params)
-        .map_err(|e| { std::io::Error::new(ErrorKind::Other, e)})?
+        .map_err(|e| { MqttError::new_other_error(e) })?
         .into_parts();
 
     let mut signed_request_builder = http::request::Builder::default()

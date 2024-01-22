@@ -77,7 +77,7 @@ impl HttpProxyOptionsBuilder {
 }
 
 /// Return type for a websocket handshake transformation function
-pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = std::io::Result<http::request::Builder>> + Send >>;
+pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = MqttResult<http::request::Builder>> + Send >>;
 
 /// Async websocket handshake transformation function type
 pub type WebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -> WebsocketHandshakeTransformReturnType + Send + Sync>;
@@ -155,7 +155,7 @@ impl TlsOptionsBuilder {
 
     /// Configures the builder to create a mutual TLS context using an X509 certificate and a
     /// private key, by file path.
-    pub fn new_with_mtls_from_path(certificate_path: &str, private_key_path: &str) -> std::io::Result<Self> {
+    pub fn new_with_mtls_from_path(certificate_path: &str, private_key_path: &str) -> MqttResult<Self> {
         let certificate_bytes = load_file(certificate_path)?;
         let private_key_bytes = load_file(private_key_path)?;
 
@@ -184,7 +184,7 @@ impl TlsOptionsBuilder {
 
     /// Configures the builder to use a trust store that *only* contains a single root certificate,
     /// supplied by file path.
-    pub fn with_root_ca_from_path(&mut self, root_ca_path: &str) -> std::io::Result<&mut Self> {
+    pub fn with_root_ca_from_path(&mut self, root_ca_path: &str) -> MqttResult<&mut Self> {
         self.root_ca_bytes = Some(load_file(root_ca_path)?);
         Ok(self)
     }

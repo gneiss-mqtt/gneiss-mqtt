@@ -91,6 +91,11 @@ pub struct PacketValidationContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+#[derive(Debug)]
+pub struct OtherErrorContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
+
 
 /// Basic error type for the entire gneiss-mqtt crate.
 #[derive(Debug)]
@@ -161,6 +166,11 @@ pub enum MqttError {
     /// Error emitted when an Auth packet is submitted or received that violates the MQTT
     /// specification.
     PacketValidation(PacketValidationContext),
+
+    /// Error to be used when no other error variant is appropriate.  Generally used by
+    /// auxiliary crates whose error category doesn't match anything but that want to restrict
+    /// results to MqttError.
+    OtherError(OtherErrorContext),
 }
 
 impl MqttError {
@@ -297,6 +307,14 @@ impl MqttError {
             }
         )
     }
+
+    pub fn new_other_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        MqttError::OtherError (
+            OtherErrorContext {
+                source : source.into()
+            }
+        )
+    }
 }
 
 impl Error for MqttError {
@@ -339,6 +357,9 @@ impl Error for MqttError {
                 Some(context.source.as_ref())
             }
             MqttError::PacketValidation(context) => {
+                Some(context.source.as_ref())
+            }
+            MqttError::OtherError(context) => {
                 Some(context.source.as_ref())
             }
             _ => { None }
@@ -395,10 +416,13 @@ impl fmt::Display for MqttError {
                 write!(f, "generic error when setting up a tls context")
             }
             MqttError::TransportError(_) => {
-                write!(f, "transport error - probably websocket related")
+                write!(f, "transport error; source contains further details")
             }
             MqttError::PacketValidation(context) => {
                 write!(f, "{} contains a property that violates the mqtt spec", context.packet_type)
+            }
+            MqttError::OtherError(context) => {
+                write!(f, "fallback error type; source contains further details")
             }
         }
     }
