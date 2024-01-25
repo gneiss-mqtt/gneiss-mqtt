@@ -579,63 +579,63 @@ impl OperationalState {
     }
 
     fn log_debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "OperationalState: {{")?;
-        writeln!(f, "  state: {}", self.state)?;
-        writeln!(f, "  elapsed_time_ms: {}", self.elapsed_time_ms)?;
-        writeln!(f, "  pending_write_completion: {}", self.pending_write_completion)?;
-        writeln!(f, "  operations: {} items", self.operations.len())?;
-        writeln!(f, "  operation_ack_timeouts: {} timeouts pending", self.operation_ack_timeouts.len())?;
-        writeln!(f, "  user_operation_queue: {} items", self.user_operation_queue.len())?;
-        writeln!(f, "  resubmit_operation_queue: {} items", self.resubmit_operation_queue.len())?;
-        writeln!(f, "  high_priority_operation_queue: {} items", self.high_priority_operation_queue.len())?;
-        writeln!(f, "  current_operation: {:?}", self.current_operation)?;
-        writeln!(f, "  qos2_incomplete_incoming_publishes: {} operations", self.qos2_incomplete_incoming_publishes.len())?;
-        writeln!(f, "  allocated_packet_ids: {} ids", self.allocated_packet_ids.len())?;
-        writeln!(f, "  pending_publish_operations: {} operations", self.pending_publish_operations.len())?;
-        writeln!(f, "  pending_non_publish_operations: {} operations", self.pending_non_publish_operations.len())?;
-        writeln!(f, "  pending_write_completion_operations: {} operations", self.pending_write_completion_operations.len())?;
-        writeln!(f, "  next_operation_id: {}", self.next_operation_id)?;
-        writeln!(f, "  next_packet_id: {}", self.next_packet_id)?;
-        write!(f, "}}")?;
+        write!(f, "OperationalState: {{")?;
+        write!(f, " state:{},", self.state)?;
+        write!(f, " elapsed_time_ms:{},", self.elapsed_time_ms)?;
+        write!(f, " pending_write_completion:{},", self.pending_write_completion)?;
+        write!(f, " operations:{} items,", self.operations.len())?;
+        write!(f, " operation_ack_timeouts:{} timeouts pending,", self.operation_ack_timeouts.len())?;
+        write!(f, " user_operation_queue:{} items,", self.user_operation_queue.len())?;
+        write!(f, " resubmit_operation_queue:{} items,", self.resubmit_operation_queue.len())?;
+        write!(f, " high_priority_operation_queue:{} items,", self.high_priority_operation_queue.len())?;
+        write!(f, " current_operation:{:?},", self.current_operation)?;
+        write!(f, " qos2_incomplete_incoming_publishes:{} operations,", self.qos2_incomplete_incoming_publishes.len())?;
+        write!(f, " allocated_packet_ids:{} ids,", self.allocated_packet_ids.len())?;
+        write!(f, " pending_publish_operations:{} operations,", self.pending_publish_operations.len())?;
+        write!(f, " pending_non_publish_operations:{} operations,", self.pending_non_publish_operations.len())?;
+        write!(f, " pending_write_completion_operations:{} operations,", self.pending_write_completion_operations.len())?;
+        write!(f, " next_operation_id:{},", self.next_operation_id)?;
+        write!(f, " next_packet_id:{}", self.next_packet_id)?;
+        write!(f, " }}")?;
 
         Ok(())
     }
 
     fn log_trace(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "OperationalState: {{")?;
-        writeln!(f, "  state: {}", self.state)?;
-        writeln!(f, "  elapsed_time_ms: {}", self.elapsed_time_ms)?;
-        writeln!(f, "  pending_write_completion: {}", self.pending_write_completion)?;
-        writeln!(f, "  operations: {{")?;
+        write!(f, "OperationalState: {{")?;
+        write!(f, " state:{},", self.state)?;
+        write!(f, " elapsed_time_ms:{},", self.elapsed_time_ms)?;
+        write!(f, " pending_write_completion:{},", self.pending_write_completion)?;
+        write!(f, " operations:{{")?;
         self.operations.iter().for_each(|(id, operation)| {
-            let _ = writeln!(f, "    ({}, {})", *id, mqtt_packet_to_str(&operation.packet));
+            let _ = write!(f, " ({},{})", *id, mqtt_packet_to_str(&operation.packet));
         });
-        writeln!(f, "  }}")?;
-        writeln!(f, "  operation_ack_timeouts: {} timeouts pending", self.operation_ack_timeouts.len())?;
-        writeln!(f, "  user_operation_queue: {:?}", self.user_operation_queue)?;
-        writeln!(f, "  resubmit_operation_queue: {:?}", self.resubmit_operation_queue)?;
-        writeln!(f, "  high_priority_operation_queue: {:?}", self.high_priority_operation_queue)?;
-        writeln!(f, "  current_operation: {:?}", self.current_operation)?;
-        writeln!(f, "  qos2_incomplete_incoming_publishes: {:?}", self.qos2_incomplete_incoming_publishes)?;
-        writeln!(f, "  allocated_packet_ids: {{")?;
+        write!(f, " }},")?;
+        write!(f, " operation_ack_timeouts:{} timeouts pending,", self.operation_ack_timeouts.len())?;
+        write!(f, " user_operation_queue:{:?},", self.user_operation_queue)?;
+        write!(f, " resubmit_operation_queue: {:?},", self.resubmit_operation_queue)?;
+        write!(f, " high_priority_operation_queue: {:?},", self.high_priority_operation_queue)?;
+        write!(f, " current_operation: {:?},", self.current_operation)?;
+        write!(f, " qos2_incomplete_incoming_publishes: {:?},", self.qos2_incomplete_incoming_publishes)?;
+        write!(f, " allocated_packet_ids: {{")?;
         self.allocated_packet_ids.iter().for_each(|(packet_id, operation_id)| {
-            let _ = writeln!(f, "    ({}, {})", *packet_id, *operation_id);
+            let _ = write!(f, " ({}, {})", *packet_id, *operation_id);
         });
-        writeln!(f, "  }}")?;
-        writeln!(f, "  pending_publish_operations: {{")?;
+        write!(f, " }},")?;
+        write!(f, " pending_publish_operations: {{")?;
         self.pending_publish_operations.iter().for_each(|(packet_id, operation_id)| {
-            let _ = writeln!(f, "    ({}, {})", *packet_id, *operation_id);
+            let _ = write!(f, " ({}, {})", *packet_id, *operation_id);
         });
-        writeln!(f, "  }}")?;
-        writeln!(f, "  pending_non_publish_operations: {{")?;
+        write!(f, " }},")?;
+        write!(f, " pending_non_publish_operations: {{")?;
         self.pending_non_publish_operations.iter().for_each(|(packet_id, operation_id)| {
-            let _ = writeln!(f, "    ({}, {})", *packet_id, *operation_id);
+            let _ = write!(f, " ({}, {})", *packet_id, *operation_id);
         });
-        writeln!(f, "  }}")?;
-        writeln!(f, "  pending_write_completion_operations: {:?}", self.pending_write_completion_operations)?;
-        writeln!(f, "  next_operation_id: {}", self.next_operation_id)?;
-        writeln!(f, "  next_packet_id: {}", self.next_packet_id)?;
-        write!(f, "}}")?;
+        write!(f, " }},")?;
+        write!(f, " pending_write_completion_operations: {:?},", self.pending_write_completion_operations)?;
+        write!(f, " next_operation_id: {},", self.next_operation_id)?;
+        write!(f, " next_packet_id: {}", self.next_packet_id)?;
+        write!(f, " }}")?;
 
         Ok(())
     }
@@ -1866,7 +1866,7 @@ impl OperationalState {
         self.next_operation_id += 1;
 
         info!("[{} ms] create_operation - building {} operation with id {}", self.elapsed_time_ms, mqtt_packet_to_str(&packet), id);
-        debug!("[{} ms] create_operation - operation {}:\n{}", self.elapsed_time_ms, id, &packet);
+        debug!("[{} ms] create_operation - operation {}: {}", self.elapsed_time_ms, id, &packet);
 
         let operation = MqttOperation {
             id,

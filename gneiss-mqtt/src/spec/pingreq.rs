@@ -43,7 +43,7 @@ pub(crate) fn decode_pingreq_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
 
 impl fmt::Display for PingreqPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "PingreqPacket {{}}")
+        write!(f, "PingreqPacket {{ }}")
     }
 }
 

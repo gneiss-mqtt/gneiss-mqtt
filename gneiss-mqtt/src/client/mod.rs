@@ -301,22 +301,20 @@ pub struct NegotiatedSettings {
 
 impl fmt::Display for NegotiatedSettings {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "NegotiatedSettings {{")?;
-        writeln!(f, "  maximum_qos: {}", quality_of_service_to_str(self.maximum_qos))?;
-        writeln!(f, "  session_expiry_interval: {}", self.session_expiry_interval)?;
-        writeln!(f, "  receive_maximum_from_server: {}", self.receive_maximum_from_server)?;
-        writeln!(f, "  maximum_packet_size_to_server: {}", self.maximum_packet_size_to_server)?;
-        writeln!(f, "  topic_alias_maximum_to_server: {}", self.topic_alias_maximum_to_server)?;
-        writeln!(f, "  server_keep_alive: {}", self.server_keep_alive)?;
-        writeln!(f, "  retain_available: {}", self.retain_available)?;
-        writeln!(f, "  wildcard_subscriptions_available: {}", self.wildcard_subscriptions_available)?;
-        writeln!(f, "  subscription_identifiers_available: {}", self.subscription_identifiers_available)?;
-        writeln!(f, "  shared_subscriptions_available: {}", self.shared_subscriptions_available)?;
-        writeln!(f, "  rejoined_session: {}", self.rejoined_session)?;
-        writeln!(f, "  client_id: {}", self.client_id)?;
-        write!(f, "}}")?;
-
-        Ok(())
+        write!(f, "NegotiatedSettings {{")?;
+        write!(f, " maximum_qos:{}", quality_of_service_to_str(self.maximum_qos))?;
+        write!(f, " session_expiry_interval:{}", self.session_expiry_interval)?;
+        write!(f, " receive_maximum_from_server:{}", self.receive_maximum_from_server)?;
+        write!(f, " maximum_packet_size_to_server:{}", self.maximum_packet_size_to_server)?;
+        write!(f, " topic_alias_maximum_to_server:{}", self.topic_alias_maximum_to_server)?;
+        write!(f, " server_keep_alive:{}", self.server_keep_alive)?;
+        write!(f, " retain_available:{}", self.retain_available)?;
+        write!(f, " wildcard_subscriptions_available:{}", self.wildcard_subscriptions_available)?;
+        write!(f, " subscription_identifiers_available:{}", self.subscription_identifiers_available)?;
+        write!(f, " shared_subscriptions_available:{}", self.shared_subscriptions_available)?;
+        write!(f, " rejoined_session:{}", self.rejoined_session)?;
+        write!(f, " client_id:{}", self.client_id)?;
+        write!(f, " }}")
     }
 }
 

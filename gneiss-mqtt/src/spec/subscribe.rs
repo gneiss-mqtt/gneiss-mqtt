@@ -17,7 +17,6 @@ use crate::validate::utils::*;
 use log::*;
 use std::collections::VecDeque;
 use std::fmt;
-use std::fmt::Write;
 
 /// Data model of an [MQTT5 SUBSCRIBE](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901161) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -238,29 +237,29 @@ pub(crate) fn validate_subscribe_packet_outbound_internal(packet: &SubscribePack
     Ok(())
 }
 
-fn build_subscription_log_string(subscription: &Subscription) -> String {
-    let mut val : String = "{\n".to_string();
-    writeln!(&mut val, "      topic_filter: {}", subscription.topic_filter).ok();
-    writeln!(&mut val, "      qos: {}", quality_of_service_to_str(subscription.qos)).ok();
-    writeln!(&mut val, "      no_local: {}", subscription.no_local).ok();
-    writeln!(&mut val, "      retain_as_published: {}", subscription.retain_as_published).ok();
-    writeln!(&mut val, "      retain_handling_type: {}", retain_handling_type_to_str(subscription.retain_handling_type)).ok();
-    write!(&mut val, "    }}").ok();
-    val
+impl fmt::Display for Subscription {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{")?;
+        log_string!(self.topic_filter, f, "topic_filter");
+        log_enum!(self.qos, f, "qos", quality_of_service_to_str);
+        log_primitive_value!(self.no_local, f, "no_local");
+        log_primitive_value!(self.retain_as_published, f, "retain_as_published");
+        log_enum!(self.retain_handling_type, f, "retain_handling_type", retain_handling_type_to_str);
+        write!(f, " }}")
+    }
 }
 
 impl fmt::Display for SubscribePacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "SubscribePacket {{")?;
+        write!(f, "SubscribePacket {{")?;
         log_primitive_value!(self.packet_id, f, "packet_id");
         log_optional_primitive_value!(self.subscription_identifier, f, "subscription_identifier", value);
         log_user_properties!(self.user_properties, f, "user_properties", value);
-        writeln!(f, "  subscriptions: [")?;
+        write!(f, " subscriptions: [")?;
         for (i, subscription) in self.subscriptions.iter().enumerate() {
-            writeln!(f, "    {}: {}", i, build_subscription_log_string(subscription))?;
+            write!(f, " {}:{}", i, subscription)?;
         }
-        writeln!(f, "  ]")?;
-        write!(f, "}}")
+        write!(f, " ] }}")
     }
 }
 
