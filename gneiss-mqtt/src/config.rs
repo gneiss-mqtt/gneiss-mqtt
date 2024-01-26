@@ -622,10 +622,11 @@ impl Debug for ClientEventListener {
 }
 
 /// A structure that holds client-level behavioral configuration
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Mqtt5ClientOptions {
     pub(crate) offline_queue_policy: OfflineQueuePolicy,
 
+    pub(crate) connect_timeout: Duration,
     pub(crate) connack_timeout: Duration,
     pub(crate) ping_timeout: Duration,
 
@@ -640,6 +641,7 @@ impl Debug for Mqtt5ClientOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "Mqtt5ClientOptions {{ ")?;
         write!(f, "offline_queue_policy: {:?}, ", self.offline_queue_policy)?;
+        write!(f, "connect_timeout: {:?}, ", self.connect_timeout)?;
         write!(f, "connack_timeout: {:?}, ", self.connack_timeout)?;
         write!(f, "ping_timeout: {:?}, ", self.ping_timeout)?;
         write!(f, "default_event_listener: {:?}, ", self.default_event_listener)?;
@@ -651,6 +653,20 @@ impl Debug for Mqtt5ClientOptions {
         write!(f, "reconnect_options: {:?}, ", self.reconnect_options)?;
 
         write!(f, "}}")
+    }
+}
+
+impl Default for Mqtt5ClientOptions {
+    fn default() -> Self {
+        Mqtt5ClientOptions {
+            offline_queue_policy: OfflineQueuePolicy::PreserveAcknowledged,
+            connect_timeout: Duration::from_secs(30),
+            connack_timeout: Duration::from_secs(15),
+            ping_timeout: Duration::from_secs(10),
+            default_event_listener: None,
+            outbound_alias_resolver_factory: None,
+            reconnect_options: ReconnectOptions::default(),
+        }
     }
 }
 

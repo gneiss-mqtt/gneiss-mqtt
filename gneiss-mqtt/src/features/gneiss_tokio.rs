@@ -168,6 +168,8 @@ pub(crate) struct ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send 
 impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
     pub(crate) async fn process_stopped(&mut self, client: &mut Mqtt5ClientImpl) -> MqttResult<ClientImplState> {
         loop {
+            trace!("tokio - process_stopped loop");
+
             tokio::select! {
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
@@ -185,10 +187,12 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
     pub(crate) async fn process_connecting(&mut self, client: &mut Mqtt5ClientImpl) -> MqttResult<ClientImplState> {
         let mut connect = (self.tokio_config.connection_factory)();
 
-        let timeout = sleep(Duration::from_millis(30 * 1000));
+        let timeout = sleep(*client.connect_timeout());
         tokio::pin!(timeout);
 
         loop {
+            trace!("tokio - process_connecting loop");
+
             tokio::select! {
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {

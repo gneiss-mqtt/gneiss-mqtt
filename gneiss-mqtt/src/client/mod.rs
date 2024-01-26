@@ -18,6 +18,7 @@ use crate::spec::disconnect::validate_disconnect_packet_outbound;
 use crate::spec::utils::*;
 use crate::validate::*;
 
+use log::*;
 use std::fmt::{Debug, Display};
 use std::future::Future;
 use std::pin::Pin;
@@ -299,7 +300,7 @@ pub struct NegotiatedSettings {
     pub client_id : String
 }
 
-impl fmt::Display for NegotiatedSettings {
+impl Display for NegotiatedSettings {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "NegotiatedSettings {{")?;
         write!(f, " maximum_qos:{}", quality_of_service_to_str(self.maximum_qos))?;
@@ -323,6 +324,12 @@ impl fmt::Display for NegotiatedSettings {
 #[derive(Debug)]
 pub struct ConnectionAttemptEvent {}
 
+impl Display for ConnectionAttemptEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ConnectionAttemptEvent {{ }}")
+    }
+}
+
 /// An event emitted by the client after successfully performing a Connect <-> Connack handshake
 /// with the broker over a new network connection.
 #[derive(Debug)]
@@ -334,6 +341,12 @@ pub struct ConnectionSuccessEvent {
 
     /// Set of protocol-related values that are negotiated by the Connect <-> Connack handshake
     pub settings: NegotiatedSettings
+}
+
+impl Display for ConnectionSuccessEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ConnectionSuccessEvent {{ {}, {} }}", self.connack, self.settings)
+    }
 }
 
 /// An event emitted by the client every time a connection attempt does not succeed.  The reason
@@ -349,6 +362,16 @@ pub struct ConnectionFailureEvent {
     pub connack: Option<ConnackPacket>,
 }
 
+impl Display for ConnectionFailureEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(connack) = &self.connack {
+            write!(f, "ConnectionFailureEvent {{ {}, {} }}", self.error, connack )
+        } else {
+            write!(f, "ConnectionFailureEvent {{ {}, None }}", self.error )
+        }
+    }
+}
+
 /// An event emitted by the client when a previously successfully-established connection is
 /// shut down, for any reason.
 #[derive(Debug)]
@@ -362,10 +385,27 @@ pub struct DisconnectionEvent {
     pub disconnect: Option<DisconnectPacket>,
 }
 
+impl Display for DisconnectionEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(disconnect) = &self.disconnect {
+            write!(f, "DisconnectionEvent {{ {}, {} }}", self.error, disconnect)
+        } else {
+            write!(f, "DisconnectionEvent {{ {}, None }}", self.error)
+        }
+
+    }
+}
+
 /// An event emitted by the client when it enters the Stopped state, causing it to no longer
 /// attempt to reconnect to the broker.
 #[derive(Debug)]
 pub struct StoppedEvent {}
+
+impl Display for StoppedEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "StoppedEvent {{ }}")
+    }
+}
 
 /// An event emitted by the client whenever it receives a Publish packet from the broker.
 /// This structure may expand in the future (pre-1.0.0) to support MQTT bridging.
@@ -376,6 +416,12 @@ pub struct PublishReceivedEvent {
     /// sent by the client before this event is emitted.  In the future, bridging support
     /// may make the sending of Acks a user-controlled option.
     pub publish: PublishPacket
+}
+
+impl Display for PublishReceivedEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "PublishReceivedEvent {{ {} }}", self.publish )
+    }
 }
 
 /// Union of all the different events emitted by the client.
@@ -403,6 +449,19 @@ pub enum ClientEvent {
 
     /// An event emitted by the client whenever it receives a Publish packet from the broker.
     PublishReceived(PublishReceivedEvent),
+}
+
+impl Display for ClientEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ClientEvent::ConnectionAttempt(event) => { write!(f, "{}", event) }
+            ClientEvent::ConnectionSuccess(event) => { write!(f, "{}", event) }
+            ClientEvent::ConnectionFailure(event) => { write!(f, "{}", event) }
+            ClientEvent::Disconnection(event) => { write!(f, "{}", event) }
+            ClientEvent::Stopped(event) => { write!(f, "{}", event) }
+            ClientEvent::PublishReceived(event) => { write!(f, "{}", event) }
+        }
+    }
 }
 
 /// Opaque structure that represents the identity of a client event listener.  Returned by
@@ -446,12 +505,14 @@ impl Mqtt5Client {
     /// Signals the client that it should attempt to recurrently maintain a connection to
     /// the broker endpoint it has been configured with.
     pub fn start(&self) -> MqttResult<()> {
+        info!("client start invoked");
         self.user_state.try_send(OperationOptions::Start())
     }
 
     /// Signals the client that it should close any current connection it has and enter the
     /// Stopped state, where it does nothing.
     pub fn stop(&self, options: Option<StopOptions>) -> MqttResult<()> {
+        info!("client stop invoked {} a disconnect packet", if options.as_ref().is_some_and(|opts| { opts.disconnect.is_some()}) { "with" } else { "without" });
         let options = options.unwrap_or_default();
 
         if let Some(disconnect) = &options.disconnect {
@@ -474,12 +535,14 @@ impl Mqtt5Client {
     /// a full resource wipe.  If just `stop()` is used then the client will continue to track
     /// MQTT session state internally.
     pub fn close(&self) -> MqttResult<()> {
+        info!("client close invoked; no further operations allowed");
         self.user_state.try_send(OperationOptions::Shutdown())
     }
 
     /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
     pub fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> Pin<Box<PublishResultFuture>> {
+        debug!("Publish operation submitted");
         let boxed_packet = Box::new(MqttPacket::Publish(packet));
         if let Err(error) = validate_packet_outbound(&boxed_packet) {
             return Box::pin(async move { Err(error) });
@@ -491,6 +554,7 @@ impl Mqtt5Client {
     /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
     pub fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> Pin<Box<SubscribeResultFuture>> {
+        debug!("Subscribe operation submitted");
         let boxed_packet = Box::new(MqttPacket::Subscribe(packet));
         if let Err(error) = validate_packet_outbound(&boxed_packet) {
             return Box::pin(async move { Err(error) });
@@ -502,6 +566,7 @@ impl Mqtt5Client {
     /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
     pub fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> Pin<Box<UnsubscribeResultFuture>> {
+        debug!("Unsubscribe operation submitted");
         let boxed_packet = Box::new(MqttPacket::Unsubscribe(packet));
         if let Err(error) = validate_packet_outbound(&boxed_packet) {
             return Box::pin(async move { Err(error) });
@@ -513,6 +578,7 @@ impl Mqtt5Client {
     /// Adds an additional listener to the events emitted by this client.  This is useful when
     /// multiple higher-level constructs are sharing the same MQTT client.
     pub fn add_event_listener(&self, listener: ClientEventListener) -> MqttResult<ListenerHandle> {
+        debug!("AddListener operation submitted");
         let mut current_id = self.listener_id_allocator.lock().unwrap();
         let listener_id = *current_id;
         *current_id += 1;
@@ -526,6 +592,7 @@ impl Mqtt5Client {
 
     /// Removes a listener from this client's set of event listeners.
     pub fn remove_event_listener(&self, listener: ListenerHandle) -> MqttResult<()> {
+        debug!("RemoveListener operation submitted");
         self.user_state.try_send(OperationOptions::RemoveListener(listener.id))
     }
 }
