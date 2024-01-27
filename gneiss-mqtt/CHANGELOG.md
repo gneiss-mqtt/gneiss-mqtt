@@ -10,3 +10,10 @@ This document is currently hand-written and non-authoritative.
 * * Http proxy support
 * * MQTT over websockets support
 * * Initial crate documentation
+
+## 0.3.0
+* Refactoring/Chores
+* * Errors refactored to be composable and include additional context
+* * Errors consolidated into a much smaller set
+* * Logging added to client, configuration, and connection establishment
+* * Logging of packets and state changed to single-line
