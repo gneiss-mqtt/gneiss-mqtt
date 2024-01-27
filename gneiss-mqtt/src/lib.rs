@@ -59,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
-    client.start()?;
+    client.start(None)?;
 
     // <do stuff with the client>
 

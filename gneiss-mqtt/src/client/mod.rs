@@ -10,7 +10,6 @@ Module containing the public MQTT client and associated types necessary to invok
 pub(crate) mod shared_impl;
 
 use crate::client::shared_impl::*;
-use crate::config::*;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
 use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
@@ -463,6 +462,12 @@ impl Display for ClientEvent {
     }
 }
 
+/// Callback function to be invoked with every emitted client event
+pub type ClientEventListenerCallback = dyn Fn(Arc<ClientEvent>) + Send + Sync;
+
+/// Basic client event listener type
+pub type ClientEventListener = Arc<ClientEventListenerCallback>;
+
 /// Opaque structure that represents the identity of a client event listener.  Returned by
 /// adding a listener and used to remove that same listener if needed.
 #[derive(Debug, Eq, PartialEq)]
@@ -503,9 +508,9 @@ impl Mqtt5Client {
 
     /// Signals the client that it should attempt to recurrently maintain a connection to
     /// the broker endpoint it has been configured with.
-    pub fn start(&self) -> MqttResult<()> {
+    pub fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> MqttResult<()> {
         info!("client start invoked");
-        self.user_state.try_send(OperationOptions::Start())
+        self.user_state.try_send(OperationOptions::Start(default_listener))
     }
 
     /// Signals the client that it should close any current connection it has and enter the

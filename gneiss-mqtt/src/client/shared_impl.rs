@@ -41,7 +41,7 @@ pub(crate) enum OperationOptions {
     Publish(Box<MqttPacket>, PublishOptionsInternal),
     Subscribe(Box<MqttPacket>, SubscribeOptionsInternal),
     Unsubscribe(Box<MqttPacket>, UnsubscribeOptionsInternal),
-    Start(),
+    Start(Option<ClientEventListener>),
     Stop(StopOptionsInternal),
     Shutdown(),
     AddListener(u64, ClientEventListener),
@@ -95,7 +95,7 @@ pub(crate) struct Mqtt5ClientImpl {
 
 impl Mqtt5ClientImpl {
 
-    pub(crate) fn new(mut client_config: Mqtt5ClientOptions, connect_config: ConnectOptions) -> Self {
+    pub(crate) fn new(client_config: Mqtt5ClientOptions, connect_config: ConnectOptions) -> Self {
         debug!("Creating new MQTT client - client options: {:?}", client_config);
         debug!("Creating new MQTT client - connect options: {:?}", connect_config);
 
@@ -107,8 +107,6 @@ impl Mqtt5ClientImpl {
             ping_timeout: client_config.ping_timeout,
             outbound_alias_resolver: client_config.outbound_alias_resolver_factory.map(|f| { f() })
         };
-
-        let default_listener = client_config.default_event_listener.take();
 
         let mut client_impl = Mqtt5ClientImpl {
             protocol_state: ProtocolState::new(state_config),
@@ -127,10 +125,6 @@ impl Mqtt5ClientImpl {
         };
 
         client_impl.reconnect_options.normalize();
-
-        if let Some(listener) = default_listener {
-            client_impl.listeners.insert(0, listener);
-        }
 
         client_impl
     }
@@ -159,11 +153,7 @@ impl Mqtt5ClientImpl {
         debug!("Broadcasting client event: {}", *event);
 
         for listener in self.listeners.values() {
-            match listener {
-                ClientEventListener::Callback(callback) => {
-                    spawn_event_callback(event.clone(), callback.clone());
-                }
-            }
+            spawn_event_callback(event.clone(), listener.clone());
         }
     }
 
@@ -204,7 +194,11 @@ impl Mqtt5ClientImpl {
 
                 self.protocol_state.handle_user_event(user_event_context);
             }
-            OperationOptions::Start() => {
+            OperationOptions::Start(listener_option) => {
+                if let Some(listener) = listener_option {
+                    self.listeners.insert(0, listener);
+                }
+
                 debug!("Updating desired state to Connected");
                 self.desired_stop_options = None;
                 self.desired_state = ClientImplState::Connected;

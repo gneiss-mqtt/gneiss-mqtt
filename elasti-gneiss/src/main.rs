@@ -5,12 +5,11 @@
 
 use std::fs::File;
 use argh::FromArgs;
-use elasti_gneiss_core::{client_event_callback, ElastiError, ElastiResult, main_loop};
+use elasti_gneiss_core::{ElastiError, ElastiResult, main_loop};
 use gneiss_mqtt::client::Mqtt5Client;
 use gneiss_mqtt::config::*;
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::runtime::Handle;
 use url::Url;
 use gneiss_mqtt::alias::OutboundAliasResolverFactory;
@@ -152,10 +151,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         WriteLogger::init(LevelFilter::Debug, log_config, log_file_result.unwrap()).unwrap();
     }
 
-    let function = |event|{client_event_callback(event)} ;
-    let dyn_function = Arc::new(function);
-    let callback = ClientEventListener::Callback(dyn_function);
-
     let connect_options = ConnectOptionsBuilder::new()
         .with_keep_alive_interval_seconds(Some(60))
         .with_client_id("HelloClient-wss")
@@ -164,7 +159,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Mqtt5ClientOptionsBuilder::new()
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
-        .with_default_event_listener(callback)
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::None)
         .with_outbound_alias_resolver_factory(OutboundAliasResolverFactory::new_lru_factory(10))
         .build();
