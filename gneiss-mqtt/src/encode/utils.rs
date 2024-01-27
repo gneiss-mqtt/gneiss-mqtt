@@ -8,7 +8,7 @@
 use std::collections::VecDeque;
 
 use crate::error::{MqttError, MqttResult};
-use crate::spec::*;
+use crate::mqtt::*;
 
 pub(crate) enum EncodingStep {
     Uint8(u8),

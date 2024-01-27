@@ -9,40 +9,16 @@ use crate::encode::*;
 use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
-use crate::spec::*;
-use crate::spec::utils::*;
+use crate::mqtt::*;
+use crate::mqtt::utils::*;
 use crate::validate::*;
 use crate::validate::utils::*;
 
-use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 
-/// Data model of an [MQTT5 UNSUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901187) packet.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct UnsubackPacket {
-
-    /// Id of the unsubscribe this packet is acknowledging
-    pub packet_id: u16,
-
-    /// Additional diagnostic information about the result of the UNSUBSCRIBE attempt.
-    ///
-    /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901192)
-    pub reason_string: Option<String>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901193)
-    pub user_properties: Option<Vec<UserProperty>>,
-
-    /// A list of reason codes indicating the result of unsubscribing from each individual topic filter entry in the
-    /// associated UNSUBSCRIBE packet.
-    ///
-    /// See [MQTT5 Unsuback Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901194)
-    pub reason_codes: Vec<UnsubackReasonCode>,
-}
-
 #[rustfmt::skip]
+#[cfg(test)]
 fn compute_unsuback_packet_length_properties(packet: &UnsubackPacket) -> MqttResult<(u32, u32)> {
     let mut unsuback_property_section_length = compute_user_properties_length(&packet.user_properties);
     add_optional_string_property_length!(unsuback_property_section_length, packet.reason_string);
@@ -55,10 +31,12 @@ fn compute_unsuback_packet_length_properties(packet: &UnsubackPacket) -> MqttRes
     Ok((total_remaining_length as u32, unsuback_property_section_length as u32))
 }
 
+#[cfg(test)]
 fn get_unsuback_packet_reason_string(packet: &MqttPacket) -> &str {
     get_optional_packet_field!(packet, MqttPacket::Unsuback, reason_string)
 }
 
+#[cfg(test)]
 fn get_unsuback_packet_user_property(packet: &MqttPacket, index: usize) -> &UserProperty {
     if let MqttPacket::Unsuback(unsuback) = packet {
         if let Some(properties) = &unsuback.user_properties {
@@ -70,6 +48,7 @@ fn get_unsuback_packet_user_property(packet: &MqttPacket, index: usize) -> &User
 }
 
 #[rustfmt::skip]
+#[cfg(test)]
 pub(crate) fn write_unsuback_encoding_steps(packet: &UnsubackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
     let (total_remaining_length, unsuback_property_length) = compute_unsuback_packet_length_properties(packet)?;
 
@@ -88,6 +67,11 @@ pub(crate) fn write_unsuback_encoding_steps(packet: &UnsubackPacket, _: &Encodin
     }
 
     Ok(())
+}
+
+#[cfg(not(test))]
+pub(crate) fn write_unsuback_encoding_steps(_: &UnsubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+    Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
 fn decode_unsuback_properties(property_bytes: &[u8], packet : &mut UnsubackPacket) -> MqttResult<()> {

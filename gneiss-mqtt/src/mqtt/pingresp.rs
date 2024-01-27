@@ -6,23 +6,24 @@
 use crate::encode::*;
 use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
-use crate::spec::*;
-use crate::spec::utils::*;
+use crate::mqtt::*;
+use crate::mqtt::utils::*;
 
-use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 
-/// Data model of an [MQTT5 PINGRESP](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901200) packet.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PingrespPacket {}
-
 #[rustfmt::skip]
+#[cfg(test)]
 pub(crate) fn write_pingresp_encoding_steps(_: &PingrespPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_PINGRESP << 4);
     encode_integral_expression!(steps, Uint8, 0);
 
     Ok(())
+}
+
+#[cfg(not(test))]
+pub(crate) fn write_pingresp_encoding_steps(_: &PingrespPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+    Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
 const PINGRESP_FIRST_BYTE : u8 = PACKET_TYPE_PINGRESP << 4;

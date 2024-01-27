@@ -4,7 +4,7 @@
  */
 
 use crate::error::{MqttError, MqttResult};
-use crate::spec::UserProperty;
+use crate::mqtt::UserProperty;
 
 use log::*;
 
@@ -94,6 +94,7 @@ pub(crate) fn decode_optional_length_prefixed_string<'a>(bytes: &'a[u8], value: 
     Ok(&mutable_bytes[(value_length)..])
 }
 
+#[cfg(test)]
 pub(crate) fn decode_length_prefixed_optional_string<'a>(bytes: &'a[u8], value: &mut Option<String>) -> MqttResult<&'a[u8]> {
     if bytes.len() < 2 {
         error!("Packet Decode - Utf-8 string value does not have a full length prefix");
@@ -145,6 +146,7 @@ pub(crate) fn decode_optional_length_prefixed_bytes<'a>(bytes: &'a[u8], value: &
     Ok(&mutable_bytes[(value_length)..])
 }
 
+#[cfg(test)]
 pub(crate) fn decode_length_prefixed_optional_bytes<'a>(bytes: &'a[u8], value: &mut Option<Vec<u8>>) -> MqttResult<&'a[u8]> {
     if bytes.len() < 2 {
         error!("Packet Decode - Binary data value does not have a full length prefix");
@@ -189,6 +191,7 @@ pub(crate) fn decode_user_property<'a>(bytes: &'a[u8], properties: &mut Option<V
     Ok(mutable_bytes)
 }
 
+#[cfg(test)]
 pub(crate) fn decode_u8<'a>(bytes: &'a[u8], value: &mut u8) -> MqttResult<&'a[u8]> {
     if bytes.is_empty() {
         return Err(MqttError::new_decoding_failure("insufficient packet data for u8 property value"));

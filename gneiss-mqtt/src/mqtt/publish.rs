@@ -10,109 +10,13 @@ use crate::encode::*;
 use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
-use crate::spec::*;
-use crate::spec::utils::*;
+use crate::mqtt::*;
+use crate::mqtt::utils::*;
 use crate::validate::*;
 use crate::validate::utils::*;
 
-use log::*;
 use std::collections::VecDeque;
 use std::fmt;
-
-/// Data model of an [MQTT5 PUBLISH](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901100) packet
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PublishPacket {
-
-    /// Packet Id of the publish.  Setting this value on an outbound publish has no effect on the
-    /// actual packet id used by the client.
-    pub packet_id: u16,
-
-    /// Sent publishes - The topic this message should be published to.
-    ///
-    /// Received publishes - The topic this message was published to.
-    ///
-    /// See [MQTT5 Topic Name](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901107)
-    pub topic: String,
-
-    /// Sent publishes - The MQTT quality of service level this message should be delivered with.
-    ///
-    /// Received publishes - The MQTT quality of service level this message was delivered at.
-    ///
-    /// See [MQTT5 QoS](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901103)
-    pub qos: QualityOfService,
-
-    /// Indicates to the recipient that this packet is a resend of a previously-submitted
-    /// Publish
-    pub duplicate: bool,
-
-    /// True if this is a retained message, false otherwise.
-    ///
-    /// Always set on received publishes; on sent publishes, undefined implies false.
-    ///
-    /// See [MQTT5 Retain](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901104)
-    pub retain: bool,
-
-    /// The payload of the publish message.
-    ///
-    /// See [MQTT5 Publish Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901119)
-    pub payload: Option<Vec<u8>>,
-
-    /// Property specifying the format of the payload data.  The mqtt5 client does not enforce or use this
-    /// value in a meaningful way.
-    ///
-    /// See [MQTT5 Payload Format Indicator](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901111)
-    pub payload_format: Option<PayloadFormatIndicator>,
-
-    /// Sent publishes - indicates the maximum amount of time allowed to elapse for message delivery before the server
-    /// should instead delete the message (relative to a recipient).
-    ///
-    /// Received publishes - indicates the remaining amount of time (from the server's perspective) before the message would
-    /// have been deleted relative to the subscribing client.
-    ///
-    /// If left undefined, indicates no expiration timeout.
-    ///
-    /// See [MQTT5 Message Expiry Interval](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901112)
-    pub message_expiry_interval_seconds: Option<u32>,
-
-    /// If the topic field is non-empty:
-    ///   Tells the recipient to bind this id to the topic field's value within its alias cache
-    ///
-    /// If the topic field is empty:
-    ///   Tells the recipient to lookup the topic in their alias cache based on this id.
-    ///
-    /// See [MQTT5 Topic Alias](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901113)
-    pub topic_alias: Option<u16>,
-
-    /// Opaque topic string intended to assist with request/response implementations.  Not internally meaningful to
-    /// MQTT5 or this client.
-    ///
-    /// See [MQTT5 Response Topic](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901114)
-    pub response_topic: Option<String>,
-
-    /// Opaque binary data used to correlate between publish messages, as a potential method for request-response
-    /// implementation.  Not internally meaningful to MQTT5.
-    ///
-    /// See [MQTT5 Correlation Data](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901115)
-    pub correlation_data: Option<Vec<u8>>,
-
-    /// Sent publishes - setting this fails client-side packet validation
-    ///
-    /// Received publishes - the subscription identifiers of all the subscriptions this message matched.
-    ///
-    /// See [MQTT5 Subscription Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901117)
-    pub subscription_identifiers: Option<Vec<u32>>,
-
-    /// Property specifying the content type of the payload.  Not internally meaningful to MQTT5.
-    ///
-    /// See [MQTT5 Content Type](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901118)
-    pub content_type: Option<String>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901116)
-    pub user_properties: Option<Vec<UserProperty>>,
-}
-
 
 #[rustfmt::skip]
 fn compute_publish_packet_length_properties(packet: &PublishPacket, alias_resolution: &OutboundAliasResolution) -> MqttResult<(u32, u32)> {

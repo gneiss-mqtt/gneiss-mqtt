@@ -6,16 +6,11 @@
 use crate::encode::*;
 use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
-use crate::spec::*;
-use crate::spec::utils::*;
+use crate::mqtt::*;
+use crate::mqtt::utils::*;
 
-use log::*;
 use std::collections::VecDeque;
 use std::fmt;
-
-/// Data model of an [MQTT5 PINGREQ](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901195) packet.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PingreqPacket {}
 
 #[rustfmt::skip]
 pub(crate) fn write_pingreq_encoding_steps(_: &PingreqPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
@@ -25,8 +20,10 @@ pub(crate) fn write_pingreq_encoding_steps(_: &PingreqPacket, _: &EncodingContex
     Ok(())
 }
 
+#[cfg(test)]
 const PINGREQ_FIRST_BYTE : u8 = PACKET_TYPE_PINGREQ << 4;
 
+#[cfg(test)]
 pub(crate) fn decode_pingreq_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
     if !packet_body.is_empty() {
         error!("Packet Decode - Pingreq packet with non-zero remaining length");
@@ -39,6 +36,11 @@ pub(crate) fn decode_pingreq_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
     }
 
     Ok(Box::new(MqttPacket::Pingreq(PingreqPacket{})))
+}
+
+#[cfg(not(test))]
+pub(crate) fn decode_pingreq_packet(_: u8, _: &[u8]) -> MqttResult<Box<MqttPacket>> {
+    Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
 impl fmt::Display for PingreqPacket {

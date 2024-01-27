@@ -9,48 +9,13 @@ use crate::encode::*;
 use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
-use crate::spec::*;
-use crate::spec::utils::*;
+use crate::mqtt::*;
+use crate::mqtt::utils::*;
 use crate::validate::*;
 use crate::validate::utils::*;
 
-use log::*;
 use std::collections::VecDeque;
 use std::fmt;
-
-/// Data model of an [MQTT5 DISCONNECT](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901205) packet.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct DisconnectPacket {
-
-    /// Value indicating the reason that the sender is closing the connection
-    ///
-    /// See [MQTT5 Disconnect Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901208)
-    pub reason_code: DisconnectReasonCode,
-
-    /// Requests a change to the session expiry interval negotiated at connection time as part of the disconnect.  Only
-    /// valid for  DISCONNECT packets sent from client to server.  It is not valid to attempt to change session expiry
-    /// from zero to a non-zero value.
-    ///
-    /// See [MQTT5 Session Expiry Interval](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901211)
-    pub session_expiry_interval_seconds: Option<u32>,
-
-    /// Additional diagnostic information about the reason that the sender is closing the connection
-    ///
-    /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901212)
-    pub reason_string: Option<String>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901213)
-    pub user_properties: Option<Vec<UserProperty>>,
-
-    /// Property indicating an alternate server that the client may temporarily or permanently attempt
-    /// to connect to instead of the configured endpoint.  Will only be set if the reason code indicates another
-    /// server may be used (ServerMoved, UseAnotherServer).
-    ///
-    /// See [MQTT5 Server Reference](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901214)
-    pub server_reference: Option<String>,
-}
 
 #[rustfmt::skip]
 fn compute_disconnect_packet_length_properties(packet: &DisconnectPacket) -> MqttResult<(u32, u32)> {

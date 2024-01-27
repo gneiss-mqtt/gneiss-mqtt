@@ -7,8 +7,8 @@
 use crate::*;
 use crate::client::*;
 use crate::config::*;
-use crate::operation::*;
-use crate::spec::*;
+use crate::protocol::*;
+use crate::mqtt::*;
 
 use log::*;
 use std::collections::{HashMap, VecDeque};
@@ -72,7 +72,7 @@ impl Display for ClientImplState {
 }
 
 pub(crate) struct Mqtt5ClientImpl {
-    operational_state: OperationalState,
+    protocol_state: ProtocolState,
     listeners: HashMap<u64, ClientEventListener>,
 
     current_state: ClientImplState,
@@ -100,7 +100,7 @@ impl Mqtt5ClientImpl {
         debug!("Creating new MQTT client - client options: {:?}", client_config);
         debug!("Creating new MQTT client - connect options: {:?}", connect_config);
 
-        let state_config = OperationalStateConfig {
+        let state_config = ProtocolStateConfig {
             connect_options: connect_config,
             base_timestamp: Instant::now(),
             offline_queue_policy: client_config.offline_queue_policy,
@@ -112,7 +112,7 @@ impl Mqtt5ClientImpl {
         let default_listener = client_config.default_event_listener.take();
 
         let mut client_impl = Mqtt5ClientImpl {
-            operational_state: OperationalState::new(state_config),
+            protocol_state: ProtocolState::new(state_config),
             listeners: HashMap::new(),
             current_state: ClientImplState::Stopped,
             desired_state: ClientImplState::Stopped,
@@ -144,8 +144,8 @@ impl Mqtt5ClientImpl {
         self.current_state
     }
 
-    pub(crate) fn get_protocol_state(&self) -> OperationalStateType {
-        self.operational_state.state()
+    pub(crate) fn get_protocol_state(&self) -> ProtocolStateType {
+        self.protocol_state.state()
     }
 
     pub(crate) fn add_listener(&mut self, id: u64, listener: ClientEventListener) {
@@ -185,7 +185,7 @@ impl Mqtt5ClientImpl {
                     current_time: Instant::now()
                 };
 
-                self.operational_state.handle_user_event(user_event_context);
+                self.protocol_state.handle_user_event(user_event_context);
             }
             OperationOptions::Subscribe(packet, internal_options) => {
                 debug!("Submitting subscribe operation to protocol state");
@@ -194,7 +194,7 @@ impl Mqtt5ClientImpl {
                     current_time: Instant::now()
                 };
 
-                self.operational_state.handle_user_event(user_event_context);
+                self.protocol_state.handle_user_event(user_event_context);
             }
             OperationOptions::Unsubscribe(packet, internal_options) => {
                 debug!("Submitting unsubscribe operation to protocol state");
@@ -203,7 +203,7 @@ impl Mqtt5ClientImpl {
                     current_time: Instant::now()
                 };
 
-                self.operational_state.handle_user_event(user_event_context);
+                self.protocol_state.handle_user_event(user_event_context);
             }
             OperationOptions::Start() => {
                 debug!("Updating desired state to Connected");
@@ -219,7 +219,7 @@ impl Mqtt5ClientImpl {
                         current_time: Instant::now()
                     };
 
-                    self.operational_state.handle_user_event(disconnect_context);
+                    self.protocol_state.handle_user_event(disconnect_context);
                 }
 
                 debug!("Updating desired state to Stopped");
@@ -228,7 +228,7 @@ impl Mqtt5ClientImpl {
             }
             OperationOptions::Shutdown() => {
                 debug!("Updating desired state to Shutdown");
-                self.operational_state.reset(&Instant::now());
+                self.protocol_state.reset(&Instant::now());
                 self.desired_state = ClientImplState::Shutdown;
             }
             OperationOptions::AddListener(id, listener) => {
@@ -284,7 +284,7 @@ impl Mqtt5ClientImpl {
             packet_events: &mut self.packet_events
         };
 
-        let result = self.operational_state.handle_network_event(&mut context);
+        let result = self.protocol_state.handle_network_event(&mut context);
         self.dispatch_packet_events();
         result
     }
@@ -297,7 +297,7 @@ impl Mqtt5ClientImpl {
             packet_events: &mut self.packet_events
         };
 
-        self.operational_state.handle_network_event(&mut context)
+        self.protocol_state.handle_network_event(&mut context)
     }
 
     pub(crate) fn handle_service(&mut self, outbound_data: &mut Vec<u8>) -> MqttResult<()> {
@@ -307,7 +307,7 @@ impl Mqtt5ClientImpl {
             current_time: Instant::now(),
         };
 
-        self.operational_state.service(&mut context)
+        self.protocol_state.service(&mut context)
     }
 
     fn clamp_reconnect_period(&self, mut reconnect_period: Duration) -> Duration {
@@ -378,7 +378,7 @@ impl Mqtt5ClientImpl {
 
     pub(crate) fn get_next_connected_service_time(&mut self) -> Option<Instant> {
         if self.current_state == ClientImplState::Connected {
-            return self.operational_state.get_next_service_timepoint(&Instant::now());
+            return self.protocol_state.get_next_service_timepoint(&Instant::now());
         }
 
         None
@@ -392,7 +392,7 @@ impl Mqtt5ClientImpl {
     }
 
     fn emit_connection_success_event(&self) {
-        let settings = self.operational_state.get_negotiated_settings().as_ref().unwrap();
+        let settings = self.protocol_state.get_negotiated_settings().as_ref().unwrap();
 
         let connection_success_event = ConnectionSuccessEvent {
             connack: self.last_connack.as_ref().unwrap().clone(),
@@ -447,7 +447,7 @@ impl Mqtt5ClientImpl {
         //      We can't break out of
         //      connected until the disconnect is written to the socket, and so we suspend the
         //      desired != current check to support that since flushing a disconnect will halt
-        //      the operational state.  But then we blindly transition to pending connect which isn't
+        //      the protocol state.  But then we blindly transition to pending connect which isn't
         //      right, so correct that here.
         //  (2) Stopped -> Shutdown after a close operation has been received
         //      Stopped does not have a naturally exit point except operation receipt.  But we've
@@ -472,7 +472,7 @@ impl Mqtt5ClientImpl {
                 packet_events: &mut self.packet_events
             };
 
-            self.operational_state.handle_network_event(&mut connection_opened_context)?;
+            self.protocol_state.handle_network_event(&mut connection_opened_context)?;
         } else if old_state == ClientImplState::Connected {
             let mut connection_closed_context = NetworkEventContext {
                 event: NetworkEvent::ConnectionClosed,
@@ -480,7 +480,7 @@ impl Mqtt5ClientImpl {
                 packet_events: &mut self.packet_events
             };
 
-            self.operational_state.handle_network_event(&mut connection_closed_context)?;
+            self.protocol_state.handle_network_event(&mut connection_closed_context)?;
         }
 
         if new_state == ClientImplState::Connecting {

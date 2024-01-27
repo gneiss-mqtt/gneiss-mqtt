@@ -17,9 +17,9 @@ use crate::decode::*;
 use crate::encode::*;
 use crate::encode::utils::*;
 use crate::error::{fold_mqtt_result, MqttError, MqttResult};
-use crate::spec::*;
-use crate::spec::connack::*;
-use crate::spec::utils::*;
+use crate::mqtt::*;
+use crate::mqtt::connack::*;
+use crate::mqtt::utils::*;
 use crate::validate::*;
 
 use log::*;
@@ -129,7 +129,7 @@ pub(crate) enum PacketEvent {
     Disconnect(DisconnectPacket)
 }
 
-// The client's operational state is completely uncoupled from networking data types.  We offer
+// The client's protocol state is completely uncoupled from networking data types.  We offer
 // a simple interface that models and handles all relevant events.
 pub(crate) enum NetworkEvent<'a> {
     ConnectionOpened,
@@ -146,7 +146,7 @@ pub(crate) struct NetworkEventContext<'a> {
     pub(crate) packet_events: &'a mut VecDeque<PacketEvent>,
 }
 
-// The four actions users can take with respect to operational state.  Start/stop is handled
+// The four actions users can take with respect to protocol state.  Start/stop is handled
 // by the containing client.
 pub(crate) enum UserEvent {
     Publish(Box<MqttPacket>, PublishOptionsInternal),
@@ -169,7 +169,7 @@ pub(crate) struct ServiceContext<'a> {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub(crate) enum OperationalStateType {
+pub(crate) enum ProtocolStateType {
     Disconnected,
     PendingConnack,
     Connected,
@@ -177,23 +177,23 @@ pub(crate) enum OperationalStateType {
     Halted
 }
 
-pub(crate) fn is_connection_established(state: OperationalStateType) -> bool {
-    state == OperationalStateType::Connected
+pub(crate) fn is_connection_established(state: ProtocolStateType) -> bool {
+    state == ProtocolStateType::Connected
 }
 
-impl Display for OperationalStateType {
+impl Display for ProtocolStateType {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            OperationalStateType::Disconnected => { write!(f, "Disconnected") }
-            OperationalStateType::PendingConnack => { write!(f, "PendingConnack") }
-            OperationalStateType::Connected => { write!(f, "Connected") }
-            OperationalStateType::PendingDisconnect => { write!(f, "PendingDisconnect") }
-            OperationalStateType::Halted => { write!(f, "Halted") }
+            ProtocolStateType::Disconnected => { write!(f, "Disconnected") }
+            ProtocolStateType::PendingConnack => { write!(f, "PendingConnack") }
+            ProtocolStateType::Connected => { write!(f, "Connected") }
+            ProtocolStateType::PendingDisconnect => { write!(f, "PendingDisconnect") }
+            ProtocolStateType::Halted => { write!(f, "Halted") }
         }
     }
 }
 
-pub(crate) struct OperationalStateConfig {
+pub(crate) struct ProtocolStateConfig {
     pub connect_options: ConnectOptions,
 
     pub base_timestamp: Instant,
@@ -207,37 +207,37 @@ pub(crate) struct OperationalStateConfig {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-enum OperationalQueueType {
+enum ProtocolQueueType {
     User,
     HighPriority,
 }
 
-impl Display for OperationalQueueType {
+impl Display for ProtocolQueueType {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            OperationalQueueType::User => { write!(f, "User") }
-            OperationalQueueType::HighPriority => { write!(f, "HighPriority") }
+            ProtocolQueueType::User => { write!(f, "User") }
+            ProtocolQueueType::HighPriority => { write!(f, "HighPriority") }
         }
     }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-enum OperationalQueueServiceMode {
+enum ProtocolQueueServiceMode {
     All,
     HighPriorityOnly,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-enum OperationalEnqueuePosition {
+enum ProtocolEnqueuePosition {
     Front,
     Back
 }
 
-impl Display for OperationalEnqueuePosition {
+impl Display for ProtocolEnqueuePosition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OperationalEnqueuePosition::Front => { write!(f, "Front") }
-            OperationalEnqueuePosition::Back => { write!(f, "Back") }
+            ProtocolEnqueuePosition::Front => { write!(f, "Front") }
+            ProtocolEnqueuePosition::Back => { write!(f, "Back") }
         }
     }
 }
@@ -267,10 +267,10 @@ impl Ord for OperationTimeoutRecord {
 }
 
 // Primary data structure that tracks MQTT-related state for the containing client.
-pub(crate) struct OperationalState {
-    config: OperationalStateConfig,
+pub(crate) struct ProtocolState {
+    config: ProtocolStateConfig,
 
-    state: OperationalStateType,
+    state: ProtocolStateType,
 
     // the need to model time in a simple, test-controllable fashion leads to a solution where
     // the state thinks in time based on elapsed milliseconds since the state was created.  This
@@ -368,7 +368,7 @@ pub(crate) struct OperationalState {
     inbound_alias_resolver: InboundAliasResolver
 }
 
-impl Display for OperationalState {
+impl Display for ProtocolState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let level = log::max_level();
         match level {
@@ -383,18 +383,18 @@ impl Display for OperationalState {
     }
 }
 
-impl OperationalState {
+impl ProtocolState {
 
     // Crate-public API
 
-    pub(crate) fn new(mut config: OperationalStateConfig) -> OperationalState {
+    pub(crate) fn new(mut config: ProtocolStateConfig) -> ProtocolState {
         let outbound_resolver = config.outbound_alias_resolver.take().unwrap_or((OutboundAliasResolverFactory::new_null_factory())());
         let inbound_resolver = InboundAliasResolver::new(config.connect_options.topic_alias_maximum.unwrap_or(0));
         let base_time = config.base_timestamp;
 
-        OperationalState {
+        ProtocolState {
             config,
-            state: OperationalStateType::Disconnected,
+            state: ProtocolStateType::Disconnected,
             current_time: base_time,
             elapsed_time_ms: 0,
             pending_write_completion : false,
@@ -423,7 +423,7 @@ impl OperationalState {
         }
     }
 
-    pub(crate) fn state(&self) -> OperationalStateType {
+    pub(crate) fn state(&self) -> ProtocolStateType {
         self.state
     }
 
@@ -439,14 +439,14 @@ impl OperationalState {
                 NetworkEvent::IncomingData(data) => { self.handle_network_event_incoming_data(context, data) }
             };
 
-        self.log_operational_state();
+        self.log_state();
 
         // Any error state returned from an event handler halts the client.  This is not always
         // an ERROR-error.  For example, write completion that includes a disconnect packet will
         // return an error, allowing us to reset the client nicely.
         if result.is_err() {
             error!("[{} ms] handle_network_event - final result: {:?}", self.elapsed_time_ms, result);
-            self.change_state(OperationalStateType::Halted);
+            self.change_state(ProtocolStateType::Halted);
         } else {
             debug!("[{} ms] handle_network_event - final result: {:?}", self.elapsed_time_ms, result);
         }
@@ -459,19 +459,19 @@ impl OperationalState {
 
         let result =
             match self.state {
-                OperationalStateType::Disconnected => { self.service_disconnected(context) }
-                OperationalStateType::PendingConnack => { self.service_pending_connack(context) }
-                OperationalStateType::Connected => { self.service_connected(context) }
-                OperationalStateType::PendingDisconnect => { self.service_pending_disconnect(context) }
-                OperationalStateType::Halted => { Err(MqttError::new_internal_state_error("protocol state previously halted")) }
+                ProtocolStateType::Disconnected => { self.service_disconnected(context) }
+                ProtocolStateType::PendingConnack => { self.service_pending_connack(context) }
+                ProtocolStateType::Connected => { self.service_connected(context) }
+                ProtocolStateType::PendingDisconnect => { self.service_pending_disconnect(context) }
+                ProtocolStateType::Halted => { Err(MqttError::new_internal_state_error("protocol state previously halted")) }
             };
 
-        self.log_operational_state();
+        self.log_state();
 
         // Any error state returned from an event handler halts the client.
         if result.is_err() {
             error!("[{} ms] service - final result: {:?}", self.elapsed_time_ms, result);
-            self.change_state(OperationalStateType::Halted);
+            self.change_state(ProtocolStateType::Halted);
         } else {
             debug!("[{} ms] service - final result: {:?}", self.elapsed_time_ms, result);
         }
@@ -486,16 +486,16 @@ impl OperationalState {
         let (op_id, queue, position) =
             match event {
                 UserEvent::Subscribe(packet, subscribe_options) => {
-                    (self.create_operation(packet, Some(MqttOperationOptions::Subscribe(subscribe_options))), OperationalQueueType::User, OperationalEnqueuePosition::Back)
+                    (self.create_operation(packet, Some(MqttOperationOptions::Subscribe(subscribe_options))), ProtocolQueueType::User, ProtocolEnqueuePosition::Back)
                 }
                 UserEvent::Unsubscribe(packet, unsubscribe_options) => {
-                    (self.create_operation(packet, Some(MqttOperationOptions::Unsubscribe(unsubscribe_options))), OperationalQueueType::User, OperationalEnqueuePosition::Back)
+                    (self.create_operation(packet, Some(MqttOperationOptions::Unsubscribe(unsubscribe_options))), ProtocolQueueType::User, ProtocolEnqueuePosition::Back)
                 }
                 UserEvent::Publish(packet, publish_options) => {
-                    (self.create_operation(packet, Some(MqttOperationOptions::Publish(publish_options))), OperationalQueueType::User, OperationalEnqueuePosition::Back)
+                    (self.create_operation(packet, Some(MqttOperationOptions::Publish(publish_options))), ProtocolQueueType::User, ProtocolEnqueuePosition::Back)
                 }
                 UserEvent::Disconnect(disconnect) => {
-                    (self.create_operation(disconnect, None), OperationalQueueType::HighPriority, OperationalEnqueuePosition::Front)
+                    (self.create_operation(disconnect, None), ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Front)
                 }
             };
 
@@ -512,7 +512,7 @@ impl OperationalState {
         debug!("[{} ms] handle_user_event - queuing operation with id {} into {} of {} queue", self.elapsed_time_ms, op_id, position, queue);
         self.enqueue_operation(op_id, queue, position);
 
-        self.log_operational_state();
+        self.log_state();
     }
 
     pub(crate) fn get_next_service_timepoint(&mut self, current_time: &Instant) -> Option<Instant> {
@@ -520,11 +520,11 @@ impl OperationalState {
 
         let next_service_time =
             match self.state {
-                OperationalStateType::Disconnected => { self.get_next_service_timepoint_disconnected() }
-                OperationalStateType::PendingConnack => { self.get_next_service_timepoint_pending_connack() }
-                OperationalStateType::Connected => { self.get_next_service_timepoint_connected() }
-                OperationalStateType::PendingDisconnect => { self.get_next_service_timepoint_pending_disconnect() }
-                OperationalStateType::Halted => { None }
+                ProtocolStateType::Disconnected => { self.get_next_service_timepoint_disconnected() }
+                ProtocolStateType::PendingConnack => { self.get_next_service_timepoint_pending_connack() }
+                ProtocolStateType::Connected => { self.get_next_service_timepoint_connected() }
+                ProtocolStateType::PendingDisconnect => { self.get_next_service_timepoint_pending_disconnect() }
+                ProtocolStateType::Halted => { None }
             };
 
         if let Some(next_timepoint) = &next_service_time {
@@ -539,8 +539,8 @@ impl OperationalState {
     pub(crate) fn reset(&mut self, current_time: &Instant) {
         self.update_internal_clock(current_time);
 
-        if self.state != OperationalStateType::Disconnected {
-            self.state = OperationalStateType::Halted;
+        if self.state != ProtocolStateType::Disconnected {
+            self.state = ProtocolStateType::Halted;
         }
 
         let operations : Vec<u64> = self.operations.keys().copied().collect();
@@ -571,7 +571,7 @@ impl OperationalState {
     // Private Implementation
 
     fn operation_packet_passes_offline_queue_policy(&self, packet: &MqttPacket) -> bool {
-        if self.state == OperationalStateType::Connected {
+        if self.state == ProtocolStateType::Connected {
             return true;
         }
 
@@ -579,7 +579,7 @@ impl OperationalState {
     }
 
     fn log_debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "OperationalState: {{")?;
+        write!(f, "ProtocolState: {{")?;
         write!(f, " state:{},", self.state)?;
         write!(f, " elapsed_time_ms:{},", self.elapsed_time_ms)?;
         write!(f, " pending_write_completion:{},", self.pending_write_completion)?;
@@ -602,7 +602,7 @@ impl OperationalState {
     }
 
     fn log_trace(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "OperationalState: {{")?;
+        write!(f, "ProtocolState: {{")?;
         write!(f, " state:{},", self.state)?;
         write!(f, " elapsed_time_ms:{},", self.elapsed_time_ms)?;
         write!(f, " pending_write_completion:{},", self.pending_write_completion)?;
@@ -640,7 +640,7 @@ impl OperationalState {
         Ok(())
     }
 
-    fn log_operational_state(&self) {
+    fn log_state(&self) {
         let level = log::max_level();
         match level {
             LevelFilter::Debug => {
@@ -697,8 +697,8 @@ impl OperationalState {
 
     fn apply_disconnect_completion(&mut self, operation: &MqttOperation) -> MqttResult<()> {
         if let MqttPacket::Disconnect(_) = &*operation.packet {
-            if self.state == OperationalStateType::PendingDisconnect {
-                self.state = OperationalStateType::Halted;
+            if self.state == ProtocolStateType::PendingDisconnect {
+                self.state = ProtocolStateType::Halted;
             }
             info!("[{} ms] apply_disconnect_completion - user-requested disconnect operation {} completed", self.elapsed_time_ms, operation.id);
             return Err(MqttError::new_user_initiated_disconnect());
@@ -782,14 +782,14 @@ impl OperationalState {
     }
 
     fn handle_network_event_connection_opened(&mut self, context: &NetworkEventContext) -> MqttResult<()> {
-        if self.state != OperationalStateType::Disconnected {
+        if self.state != ProtocolStateType::Disconnected {
             error!("[{} ms] handle_network_event_connection_opened - called in invalid state", self.elapsed_time_ms);
-            self.change_state(OperationalStateType::Halted);
+            self.change_state(ProtocolStateType::Halted);
             return Err(MqttError::new_internal_state_error("connection opened in an invalid state"));
         }
 
         info!("[{} ms] handle_network_event_connection_opened", self.elapsed_time_ms);
-        self.change_state(OperationalStateType::PendingConnack);
+        self.change_state(ProtocolStateType::PendingConnack);
         self.current_operation = None;
         self.pending_write_completion = false;
         self.decoder.reset_for_new_connection();
@@ -798,7 +798,7 @@ impl OperationalState {
         let connect = self.create_connect();
         let connect_op_id = self.create_operation(connect, None);
 
-        self.enqueue_operation(connect_op_id, OperationalQueueType::HighPriority, OperationalEnqueuePosition::Front);
+        self.enqueue_operation(connect_op_id, ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Front);
 
         let connack_timeout = context.current_time + self.config.connack_timeout;
 
@@ -843,13 +843,13 @@ impl OperationalState {
     }
 
     fn handle_network_event_connection_closed(&mut self, _: &mut NetworkEventContext) -> MqttResult<()> {
-        if self.state == OperationalStateType::Disconnected {
+        if self.state == ProtocolStateType::Disconnected {
             error!("[{} ms] handle_network_event_connection_closed - called in invalid state", self.elapsed_time_ms);
             return Err(MqttError::new_internal_state_error("connection closed in an invalid state"));
         }
 
         info!("[{} ms] handle_network_event_connection_closed", self.elapsed_time_ms);
-        self.change_state(OperationalStateType::Disconnected);
+        self.change_state(ProtocolStateType::Disconnected);
         self.connack_timeout_timepoint = None;
         self.next_ping_timepoint = None;
         self.ping_timeout_timepoint = None;
@@ -936,14 +936,14 @@ impl OperationalState {
     }
 
     fn handle_network_event_write_completion(&mut self, _: &NetworkEventContext) -> MqttResult<()> {
-        if self.state == OperationalStateType::Halted || self.state == OperationalStateType::Disconnected {
+        if self.state == ProtocolStateType::Halted || self.state == ProtocolStateType::Disconnected {
             error!("[{} ms] handle_network_event_write_completion - called in invalid state", self.elapsed_time_ms);
             return Err(MqttError::new_internal_state_error("write completion in an invalid state"));
         }
 
         if !self.pending_write_completion {
             error!("[{} ms] handle_network_event_write_completion - called with no pending completion", self.elapsed_time_ms);
-            self.change_state(OperationalStateType::Halted);
+            self.change_state(ProtocolStateType::Halted);
 
             return Err(MqttError::new_internal_state_error("write completion called with no pending completion"));
         }
@@ -959,7 +959,7 @@ impl OperationalState {
         result
     }
 
-    fn change_state(&mut self, next_state: OperationalStateType) {
+    fn change_state(&mut self, next_state: ProtocolStateType) {
         debug!("[{} ms] change_state - transitioning from {} to {}", self.elapsed_time_ms, self.state, next_state);
         self.state = next_state;
     }
@@ -977,14 +977,14 @@ impl OperationalState {
     }
 
     fn handle_network_event_incoming_data(&mut self, context: &mut NetworkEventContext, data: &[u8]) -> MqttResult<()> {
-        if self.state == OperationalStateType::Disconnected || self.state == OperationalStateType::Halted {
+        if self.state == ProtocolStateType::Disconnected || self.state == ProtocolStateType::Halted {
             error!("[{} ms] handle_network_event_incoming_data - called in invalid state", self.elapsed_time_ms);
             return Err(MqttError::new_internal_state_error("incoming network data while in an invalid state"));
         }
 
-        if self.state == OperationalStateType::PendingConnack && self.is_connect_in_queue() {
+        if self.state == ProtocolStateType::PendingConnack && self.is_connect_in_queue() {
             error!("[{} ms] handle_network_event_incoming_data - data received before CONNECT sent", self.elapsed_time_ms);
-            self.change_state(OperationalStateType::Halted);
+            self.change_state(ProtocolStateType::Halted);
             return Err(MqttError::new_protocol_error("data received before CONNECT sent"));
         }
 
@@ -998,7 +998,7 @@ impl OperationalState {
         let decode_result = self.decoder.decode_bytes(data, &mut decode_context);
         if decode_result.is_err() {
             error!("[{} ms] handle_network_event_incoming_data - decode failure", self.elapsed_time_ms);
-            self.change_state(OperationalStateType::Halted);
+            self.change_state(ProtocolStateType::Halted);
             return decode_result;
         }
 
@@ -1021,14 +1021,14 @@ impl OperationalState {
             let validation_result = validate_packet_inbound_internal(&packet, &validation_context);
             if validation_result.is_err() {
                 error!("[{} ms] handle_network_event_incoming_data - incoming packet validation failure", self.elapsed_time_ms);
-                self.change_state(OperationalStateType::Halted);
+                self.change_state(ProtocolStateType::Halted);
                 return validation_result;
             }
 
             let handler_result = self.handle_packet(packet, context);
             if handler_result.is_err() {
                 error!("[{} ms] handle_network_event_incoming_data - packet handling failure", self.elapsed_time_ms);
-                self.change_state(OperationalStateType::Halted);
+                self.change_state(ProtocolStateType::Halted);
                 return handler_result;
             }
         }
@@ -1060,12 +1060,12 @@ impl OperationalState {
         true
     }
 
-    fn dequeue_operation(&mut self, mode: OperationalQueueServiceMode) -> Option<u64> {
+    fn dequeue_operation(&mut self, mode: ProtocolQueueServiceMode) -> Option<u64> {
         if !self.high_priority_operation_queue.is_empty() {
             return Some(self.high_priority_operation_queue.pop_front().unwrap());
         }
 
-        if mode != OperationalQueueServiceMode::HighPriorityOnly {
+        if mode != ProtocolQueueServiceMode::HighPriorityOnly {
             if !self.resubmit_operation_queue.is_empty() {
                 if self.does_operation_pass_receive_maximum_flow_control(*self.resubmit_operation_queue.front().unwrap()) {
                     return Some(self.resubmit_operation_queue.pop_front().unwrap());
@@ -1198,7 +1198,7 @@ impl OperationalState {
                 }
             }
             MqttPacket::Disconnect(_) => {
-                self.state = OperationalStateType::PendingDisconnect;
+                self.state = ProtocolStateType::PendingDisconnect;
                 self.pending_write_completion_operations.push_back(operation.id);
             }
             _ => {
@@ -1219,10 +1219,10 @@ impl OperationalState {
         Ok(())
     }
 
-    fn service_queue(&mut self, context: &mut ServiceContext, mode: OperationalQueueServiceMode) -> MqttResult<()> {
+    fn service_queue(&mut self, context: &mut ServiceContext, mode: ProtocolQueueServiceMode) -> MqttResult<()> {
         let to_socket_length = context.to_socket.len();
 
-        while self.state == OperationalStateType::PendingConnack || self.state == OperationalStateType::Connected {
+        while self.state == ProtocolStateType::PendingConnack || self.state == ProtocolStateType::Connected {
             if self.current_operation.is_none() {
                 self.current_operation = self.dequeue_operation(mode);
                 if self.current_operation.is_none() {
@@ -1301,7 +1301,7 @@ impl OperationalState {
             return Err(MqttError::new_connection_establishment_failure("connack response timeout reached"));
         }
 
-        self.service_queue(context, OperationalQueueServiceMode::HighPriorityOnly)?;
+        self.service_queue(context, ProtocolQueueServiceMode::HighPriorityOnly)?;
 
         Ok(())
     }
@@ -1318,7 +1318,7 @@ impl OperationalState {
                 let ping = Box::new(MqttPacket::Pingreq(PingreqPacket{}));
                 let ping_op_id = self.create_operation(ping, None);
 
-                self.enqueue_operation(ping_op_id, OperationalQueueType::HighPriority, OperationalEnqueuePosition::Front);
+                self.enqueue_operation(ping_op_id, ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Front);
 
                 self.ping_timeout_timepoint = Some(context.current_time + self.config.ping_timeout);
 
@@ -1336,7 +1336,7 @@ impl OperationalState {
         debug!("[{} ms] service_connected", self.elapsed_time_ms);
 
         self.service_keep_alive(context)?;
-        self.service_queue(context, OperationalQueueServiceMode::All)?;
+        self.service_queue(context, ProtocolQueueServiceMode::All)?;
         self.process_ack_timeouts()?;
 
         Ok(())
@@ -1350,7 +1350,7 @@ impl OperationalState {
         Ok(())
     }
 
-    fn get_next_service_timepoint_operational_queue(&self, mode: OperationalQueueServiceMode) -> Option<Instant> {
+    fn get_next_service_timepoint_protocol_queue(&self, mode: ProtocolQueueServiceMode) -> Option<Instant> {
         if self.pending_write_completion {
             return None;
         }
@@ -1359,7 +1359,7 @@ impl OperationalState {
             return Some(self.current_time);
         }
 
-        if mode == OperationalQueueServiceMode::All {
+        if mode == ProtocolQueueServiceMode::All {
             /* receive_maximum flow control check */
             if let Some(settings) = &self.current_settings {
                 if self.pending_publish_operations.len() >= settings.receive_maximum_from_server as usize {
@@ -1393,7 +1393,7 @@ impl OperationalState {
     }
 
     fn get_next_service_timepoint_pending_connack(&self) -> Option<Instant> {
-        fold_timepoint(&self.get_next_service_timepoint_operational_queue(OperationalQueueServiceMode::HighPriorityOnly), &self.connack_timeout_timepoint.unwrap())
+        fold_timepoint(&self.get_next_service_timepoint_protocol_queue(ProtocolQueueServiceMode::HighPriorityOnly), &self.connack_timeout_timepoint.unwrap())
     }
 
     fn get_next_service_timepoint_connected(&self) -> Option<Instant> {
@@ -1409,11 +1409,11 @@ impl OperationalState {
 
         next_service_time = fold_optional_timepoint_min(&next_service_time, &self.next_ping_timepoint);
 
-        fold_optional_timepoint_min(&self.get_next_service_timepoint_operational_queue( OperationalQueueServiceMode::All), &next_service_time)
+        fold_optional_timepoint_min(&self.get_next_service_timepoint_protocol_queue( ProtocolQueueServiceMode::All), &next_service_time)
     }
 
     fn get_next_service_timepoint_pending_disconnect(&self) -> Option<Instant> {
-        let mut next_service_time = self.get_next_service_timepoint_operational_queue(OperationalQueueServiceMode::HighPriorityOnly);
+        let mut next_service_time = self.get_next_service_timepoint_protocol_queue(ProtocolQueueServiceMode::HighPriorityOnly);
 
         if let Some(ack_timeout) = self.operation_ack_timeouts.peek() {
             next_service_time = fold_timepoint(&next_service_time, &ack_timeout.0.timeout);
@@ -1502,7 +1502,7 @@ impl OperationalState {
         if let MqttPacket::Connack(connack) = *packet {
             info!("[{} ms] handle_connack - processing CONNACK packet", self.elapsed_time_ms);
 
-            if self.state != OperationalStateType::PendingConnack {
+            if self.state != ProtocolStateType::PendingConnack {
                 error!("[{} ms] handle_connack - invalid state to receive a connack", self.elapsed_time_ms);
                 return Err(MqttError::new_protocol_error("invalid state for connack receipt"));
             }
@@ -1515,7 +1515,7 @@ impl OperationalState {
 
             validate_connack_packet_inbound_internal(&connack)?;
 
-            self.change_state(OperationalStateType::Connected);
+            self.change_state(ProtocolStateType::Connected);
             self.has_connected_successfully = true;
 
             let settings = build_negotiated_settings(&self.config, &connack, &self.current_settings);
@@ -1547,7 +1547,7 @@ impl OperationalState {
     fn handle_pingresp(&mut self) -> MqttResult<()> {
         info!("[{} ms] handle_pingresp - processing PINGRESP packet", self.elapsed_time_ms);
         match self.state {
-            OperationalStateType::Connected |  OperationalStateType::PendingDisconnect => {
+            ProtocolStateType::Connected |  ProtocolStateType::PendingDisconnect => {
                 if self.ping_timeout_timepoint.is_some() {
                     self.ping_timeout_timepoint = None;
                     Ok(())
@@ -1566,7 +1566,7 @@ impl OperationalState {
     fn handle_suback(&mut self, packet: Box<MqttPacket>) -> MqttResult<()> {
         info!("[{} ms] handle_suback - processing SUBACK packet", self.elapsed_time_ms);
         match self.state {
-            OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
+            ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_suback - invalid state to receive a SUBACK", self.elapsed_time_ms);
                 return Err(MqttError::new_protocol_error("invalid state to receive a suback"));
             }
@@ -1590,7 +1590,7 @@ impl OperationalState {
     fn handle_unsuback(&mut self, packet: Box<MqttPacket>) -> MqttResult<()> {
         info!("[{} ms] handle_unsuback - processing UNSUBACK packet", self.elapsed_time_ms);
         match self.state {
-            OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
+            ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_unsuback - invalid state to receive an UNSUBACK", self.elapsed_time_ms);
                 return Err(MqttError::new_protocol_error("invalid state to receive an unsuback"));
             }
@@ -1614,7 +1614,7 @@ impl OperationalState {
     fn handle_puback(&mut self, packet: Box<MqttPacket>) -> MqttResult<()> {
         info!("[{} ms] handle_puback - processing PUBACK packet", self.elapsed_time_ms);
         match self.state {
-            OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
+            ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_puback - invalid state to receive a PUBACK", self.elapsed_time_ms);
                 return Err(MqttError::new_protocol_error("invalid state to receive a puback"));
             }
@@ -1638,7 +1638,7 @@ impl OperationalState {
     fn handle_pubrec(&mut self, packet: Box<MqttPacket>) -> MqttResult<()> {
         info!("[{} ms] handle_pubrec - processing PUBREC packet", self.elapsed_time_ms);
         match self.state {
-            OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
+            ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_pubrec - invalid state to receive a PUBREC", self.elapsed_time_ms);
                 return Err(MqttError::new_protocol_error("invalid state to receive a pubrec"));
             }
@@ -1661,7 +1661,7 @@ impl OperationalState {
                                     ..Default::default()
                                 })));
 
-                                self.enqueue_operation(*operation_id, OperationalQueueType::HighPriority, OperationalEnqueuePosition::Back);
+                                self.enqueue_operation(*operation_id, ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Back);
                                 return Ok(());
                             }
                         }
@@ -1685,7 +1685,7 @@ impl OperationalState {
     fn handle_pubrel(&mut self, packet: Box<MqttPacket>) -> MqttResult<()> {
         info!("[{} ms] handle_pubrel - processing PUBREL packet", self.elapsed_time_ms);
         match self.state {
-            OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
+            ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_pubrel - invalid state to receive a PUBREL", self.elapsed_time_ms);
                 return Err(MqttError::new_protocol_error("invalid state to receive a pubrel"));
             }
@@ -1701,7 +1701,7 @@ impl OperationalState {
             }));
             let pubcomp_op_id = self.create_operation(pubcomp, None);
 
-            self.enqueue_operation(pubcomp_op_id, OperationalQueueType::HighPriority, OperationalEnqueuePosition::Back);
+            self.enqueue_operation(pubcomp_op_id, ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Back);
 
             return Ok(());
         }
@@ -1712,7 +1712,7 @@ impl OperationalState {
     fn handle_pubcomp(&mut self, packet: Box<MqttPacket>) -> MqttResult<()> {
         info!("[{} ms] handle_pubcomp - processing PUBCOMP packet", self.elapsed_time_ms);
         match self.state {
-            OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
+            ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_pubcomp - invalid state to receive a PUBCOMP", self.elapsed_time_ms);
                 return Err(MqttError::new_protocol_error("invalid state to receive a pubcomp"));
             }
@@ -1736,7 +1736,7 @@ impl OperationalState {
     fn handle_publish(&mut self, packet: Box<MqttPacket>, context: &mut NetworkEventContext) -> MqttResult<()> {
         info!("[{} ms] handle_publish - processing PUBLISH packet", self.elapsed_time_ms);
         match self.state {
-            OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
+            ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_publish - invalid state to receive a PUBLISH", self.elapsed_time_ms);
                 return Err(MqttError::new_protocol_error("invalid state to receive a publish"));
             }
@@ -1761,7 +1761,7 @@ impl OperationalState {
                     }));
                     let puback_op_id = self.create_operation(puback, None);
 
-                    self.enqueue_operation(puback_op_id, OperationalQueueType::HighPriority, OperationalEnqueuePosition::Back);
+                    self.enqueue_operation(puback_op_id, ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Back);
 
                     return Ok(());
                 }
@@ -1778,7 +1778,7 @@ impl OperationalState {
                     }));
                     let pubrec_op_id = self.create_operation(pubrec, None);
 
-                    self.enqueue_operation(pubrec_op_id, OperationalQueueType::HighPriority, OperationalEnqueuePosition::Back);
+                    self.enqueue_operation(pubrec_op_id, ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Back);
 
                     return Ok(());
                 }
@@ -1791,7 +1791,7 @@ impl OperationalState {
     fn handle_disconnect(&mut self, packet: Box<MqttPacket>, context: &mut NetworkEventContext) -> MqttResult<()> {
         info!("[{} ms] handle_disconnect - processing DISCONNECT packet", self.elapsed_time_ms);
         match self.state {
-            OperationalStateType::Disconnected | OperationalStateType::PendingConnack => {
+            ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 // per spec, the server must always send a CONNACK before a DISCONNECT is valid
                 error!("[{} ms] handle_disconnect - invalid state to receive a DISCONNECT", self.elapsed_time_ms);
                 return Err(MqttError::new_protocol_error("invalid state receive a disconnect"));
@@ -1841,14 +1841,14 @@ impl OperationalState {
         MAXIMUM_VARIABLE_LENGTH_INTEGER as u32
     }
 
-    fn get_queue(&mut self, queue_type: OperationalQueueType) -> &mut VecDeque<u64> {
+    fn get_queue(&mut self, queue_type: ProtocolQueueType) -> &mut VecDeque<u64> {
         match queue_type {
-            OperationalQueueType::User => { &mut self.user_operation_queue }
-            OperationalQueueType::HighPriority => { &mut self.high_priority_operation_queue }
+            ProtocolQueueType::User => { &mut self.user_operation_queue }
+            ProtocolQueueType::HighPriority => { &mut self.high_priority_operation_queue }
         }
     }
 
-    fn enqueue_operation(&mut self, id: u64, queue_type: OperationalQueueType, position: OperationalEnqueuePosition) {
+    fn enqueue_operation(&mut self, id: u64, queue_type: ProtocolQueueType, position: ProtocolEnqueuePosition) {
         if !self.operations.contains_key(&id) {
             panic!("Attempt to enqueue a non-existent operation");
         }
@@ -1856,8 +1856,8 @@ impl OperationalState {
         debug!("[{} ms] enqueue_operation - operation {} added to {} of queue {} ", self.elapsed_time_ms, id, position, queue_type);
         let queue = self.get_queue(queue_type);
         match position {
-            OperationalEnqueuePosition::Front => { queue.push_front(id); }
-            OperationalEnqueuePosition::Back => { queue.push_back(id); }
+            ProtocolEnqueuePosition::Front => { queue.push_front(id); }
+            ProtocolEnqueuePosition::Back => { queue.push_back(id); }
         }
     }
 
@@ -1959,7 +1959,7 @@ fn generate_offline_queue_policy_failed_error() -> MqttError {
     MqttError::new_offline_queue_policy_failed()
 }
 
-fn build_negotiated_settings(config: &OperationalStateConfig, packet: &ConnackPacket, existing_settings: &Option<NegotiatedSettings>) -> NegotiatedSettings {
+fn build_negotiated_settings(config: &ProtocolStateConfig, packet: &ConnackPacket, existing_settings: &Option<NegotiatedSettings>) -> NegotiatedSettings {
     let connect = &config.connect_options;
 
     let final_client_id =
@@ -2089,8 +2089,8 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
 
-    fn build_operational_state_config_for_settings_test(connect_options: ConnectOptions) -> OperationalStateConfig {
-        OperationalStateConfig {
+    fn build_protocol_state_config_for_settings_test(connect_options: ConnectOptions) -> ProtocolStateConfig {
+        ProtocolStateConfig {
             connect_options,
             base_timestamp: Instant::now(),
             offline_queue_policy: OfflineQueuePolicy::PreserveAll,
@@ -2102,7 +2102,7 @@ mod tests {
 
     #[test]
     fn build_negotiated_settings_min_connect_min_connack() {
-        let config = build_operational_state_config_for_settings_test(ConnectOptionsBuilder::new().build());
+        let config = build_protocol_state_config_for_settings_test(ConnectOptionsBuilder::new().build());
 
         let connack = ConnackPacket {
             assigned_client_identifier: Some("client".to_string()),
@@ -2130,7 +2130,7 @@ mod tests {
 
     #[test]
     fn build_negotiated_settings_max_connect_min_connack() {
-        let config = build_operational_state_config_for_settings_test(
+        let config = build_protocol_state_config_for_settings_test(
             ConnectOptionsBuilder::new()
                 .with_keep_alive_interval_seconds(None)
                 .with_rejoin_session_policy(RejoinSessionPolicy::Always)
@@ -2166,7 +2166,7 @@ mod tests {
 
     #[test]
     fn build_negotiated_settings_min_connect_max_connack() {
-        let config = build_operational_state_config_for_settings_test(ConnectOptionsBuilder::new().build());
+        let config = build_protocol_state_config_for_settings_test(ConnectOptionsBuilder::new().build());
 
         let connack = ConnackPacket {
             session_present: true,
@@ -2205,7 +2205,7 @@ mod tests {
 
     #[test]
     fn build_negotiated_settings_max_connect_max_connack() {
-        let config = build_operational_state_config_for_settings_test(
+        let config = build_protocol_state_config_for_settings_test(
             ConnectOptionsBuilder::new()
                 .with_rejoin_session_policy(RejoinSessionPolicy::Never)
                 .with_client_id("connect_client_id")
@@ -2252,7 +2252,7 @@ mod tests {
 
     #[test]
     fn build_negotiated_settings_existing_client_id() {
-        let config = build_operational_state_config_for_settings_test(ConnectOptionsBuilder::new().build());
+        let config = build_protocol_state_config_for_settings_test(ConnectOptionsBuilder::new().build());
 
         let connack = ConnackPacket {
             ..Default::default()
@@ -2360,8 +2360,8 @@ mod tests {
         );
     }
 
-    fn build_operational_state_for_acquire_packet_id_test() -> OperationalState {
-        let config = OperationalStateConfig {
+    fn build_protocol_state_for_acquire_packet_id_test() -> ProtocolState {
+        let config = ProtocolStateConfig {
             connect_options: ConnectOptionsBuilder::new().build(),
             base_timestamp: Instant::now(),
             offline_queue_policy: OfflineQueuePolicy::PreserveNothing,
@@ -2370,68 +2370,68 @@ mod tests {
             outbound_alias_resolver: None,
         };
 
-        OperationalState::new(config)
+        ProtocolState::new(config)
     }
 
     #[test]
     fn acquire_free_packet_id_start() {
-        let mut operational_state = build_operational_state_for_acquire_packet_id_test();
+        let mut protocol_state = build_protocol_state_for_acquire_packet_id_test();
 
-        assert_matches!(operational_state.acquire_free_packet_id(1), Ok(1));
-        assert_matches!(operational_state.acquire_free_packet_id(2), Ok(2));
-        assert_matches!(operational_state.acquire_free_packet_id(3), Ok(3));
+        assert_matches!(protocol_state.acquire_free_packet_id(1), Ok(1));
+        assert_matches!(protocol_state.acquire_free_packet_id(2), Ok(2));
+        assert_matches!(protocol_state.acquire_free_packet_id(3), Ok(3));
     }
 
     #[test]
     fn acquire_free_packet_id_with_skips() {
-        let mut operational_state = build_operational_state_for_acquire_packet_id_test();
+        let mut protocol_state = build_protocol_state_for_acquire_packet_id_test();
 
-        operational_state.next_packet_id = 5;
-        operational_state.allocated_packet_ids.insert(5, 10);
-        operational_state.allocated_packet_ids.insert(6, 12);
-        operational_state.allocated_packet_ids.insert(7, 14);
-        operational_state.allocated_packet_ids.insert(9, 18);
-        operational_state.allocated_packet_ids.insert(11, 22);
+        protocol_state.next_packet_id = 5;
+        protocol_state.allocated_packet_ids.insert(5, 10);
+        protocol_state.allocated_packet_ids.insert(6, 12);
+        protocol_state.allocated_packet_ids.insert(7, 14);
+        protocol_state.allocated_packet_ids.insert(9, 18);
+        protocol_state.allocated_packet_ids.insert(11, 22);
 
-        assert_matches!(operational_state.acquire_free_packet_id(1), Ok(8));
-        assert_matches!(operational_state.acquire_free_packet_id(2), Ok(10));
-        assert_matches!(operational_state.acquire_free_packet_id(3), Ok(12));
+        assert_matches!(protocol_state.acquire_free_packet_id(1), Ok(8));
+        assert_matches!(protocol_state.acquire_free_packet_id(2), Ok(10));
+        assert_matches!(protocol_state.acquire_free_packet_id(3), Ok(12));
     }
 
     #[test]
     fn acquire_free_packet_id_with_wrap_around() {
-        let mut operational_state = build_operational_state_for_acquire_packet_id_test();
+        let mut protocol_state = build_protocol_state_for_acquire_packet_id_test();
 
-        operational_state.next_packet_id = 65534;
+        protocol_state.next_packet_id = 65534;
 
-        assert_matches!(operational_state.acquire_free_packet_id(1), Ok(65534));
-        assert_matches!(operational_state.acquire_free_packet_id(2), Ok(65535));
-        assert_matches!(operational_state.acquire_free_packet_id(3), Ok(1));
-        assert_matches!(operational_state.acquire_free_packet_id(4), Ok(2));
+        assert_matches!(protocol_state.acquire_free_packet_id(1), Ok(65534));
+        assert_matches!(protocol_state.acquire_free_packet_id(2), Ok(65535));
+        assert_matches!(protocol_state.acquire_free_packet_id(3), Ok(1));
+        assert_matches!(protocol_state.acquire_free_packet_id(4), Ok(2));
     }
 
     #[test]
     fn acquire_free_packet_id_with_wrap_around_with_skips() {
-        let mut operational_state = build_operational_state_for_acquire_packet_id_test();
+        let mut protocol_state = build_protocol_state_for_acquire_packet_id_test();
 
-        operational_state.next_packet_id = 65534;
-        operational_state.allocated_packet_ids.insert(65534, 10);
-        operational_state.allocated_packet_ids.insert(65535, 12);
-        operational_state.allocated_packet_ids.insert(1, 14);
-        operational_state.allocated_packet_ids.insert(2, 18);
-        operational_state.allocated_packet_ids.insert(4, 22);
+        protocol_state.next_packet_id = 65534;
+        protocol_state.allocated_packet_ids.insert(65534, 10);
+        protocol_state.allocated_packet_ids.insert(65535, 12);
+        protocol_state.allocated_packet_ids.insert(1, 14);
+        protocol_state.allocated_packet_ids.insert(2, 18);
+        protocol_state.allocated_packet_ids.insert(4, 22);
 
-        assert_matches!(operational_state.acquire_free_packet_id(1), Ok(3));
-        assert_matches!(operational_state.acquire_free_packet_id(2), Ok(5));
+        assert_matches!(protocol_state.acquire_free_packet_id(1), Ok(3));
+        assert_matches!(protocol_state.acquire_free_packet_id(2), Ok(5));
     }
 
     #[test]
     fn acquire_free_packet_id_no_space() {
-        let mut operational_state = build_operational_state_for_acquire_packet_id_test();
+        let mut protocol_state = build_protocol_state_for_acquire_packet_id_test();
         for i in 0..u16::MAX {
-            operational_state.allocated_packet_ids.insert(i + 1, i as u64);
+            protocol_state.allocated_packet_ids.insert(i + 1, i as u64);
         }
 
-        assert_matches!(operational_state.acquire_free_packet_id(1), Err(MqttError::InternalStateError(_)));
+        assert_matches!(protocol_state.acquire_free_packet_id(1), Err(MqttError::InternalStateError(_)));
     }
 }

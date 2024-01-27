@@ -5,25 +5,25 @@
 
 pub(crate) mod utils;
 
-use crate::*;
+use crate::PacketType;
 use crate::alias::*;
 use crate::client::*;
 use crate::config::*;
 use crate::error::{MqttError, MqttResult};
-use crate::spec::*;
-use crate::spec::auth::*;
-use crate::spec::connack::*;
-use crate::spec::connect::*;
-use crate::spec::disconnect::*;
-use crate::spec::puback::*;
-use crate::spec::pubcomp::*;
-use crate::spec::publish::*;
-use crate::spec::pubrec::*;
-use crate::spec::pubrel::*;
-use crate::spec::suback::*;
-use crate::spec::subscribe::*;
-use crate::spec::unsubscribe::*;
-use crate::spec::unsuback::*;
+use crate::mqtt::*;
+use crate::mqtt::auth::*;
+use crate::mqtt::connack::*;
+use crate::mqtt::connect::*;
+use crate::mqtt::disconnect::*;
+use crate::mqtt::puback::*;
+use crate::mqtt::pubcomp::*;
+use crate::mqtt::publish::*;
+use crate::mqtt::pubrec::*;
+use crate::mqtt::pubrel::*;
+use crate::mqtt::suback::*;
+use crate::mqtt::subscribe::*;
+use crate::mqtt::unsubscribe::*;
+use crate::mqtt::unsuback::*;
 use crate::validate::utils::*;
 
 use log::*;

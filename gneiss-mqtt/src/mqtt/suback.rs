@@ -9,39 +9,15 @@ use crate::encode::*;
 use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
-use crate::spec::*;
-use crate::spec::utils::*;
+use crate::mqtt::*;
+use crate::mqtt::utils::*;
 use crate::validate::*;
 use crate::validate::utils::*;
 
-use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 
-/// Data model of an [MQTT5 SUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901171) packet.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SubackPacket {
-
-    /// Id of the unsubscribe this packet is acknowledging
-    pub packet_id: u16,
-
-    /// Additional diagnostic information about the result of the SUBSCRIBE attempt.
-    ///
-    /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901176)
-    pub reason_string: Option<String>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901177)
-    pub user_properties: Option<Vec<UserProperty>>,
-
-    /// A list of reason codes indicating the result of each individual subscription entry in the
-    /// associated SUBSCRIBE packet.
-    ///
-    /// See [MQTT5 Suback Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901178)
-    pub reason_codes: Vec<SubackReasonCode>,
-}
-
+#[cfg(test)]
 #[rustfmt::skip]
 fn compute_suback_packet_length_properties(packet: &SubackPacket) -> MqttResult<(u32, u32)> {
     let mut suback_property_section_length = compute_user_properties_length(&packet.user_properties);
@@ -55,10 +31,12 @@ fn compute_suback_packet_length_properties(packet: &SubackPacket) -> MqttResult<
     Ok((total_remaining_length as u32, suback_property_section_length as u32))
 }
 
+#[cfg(test)]
 fn get_suback_packet_reason_string(packet: &MqttPacket) -> &str {
     get_optional_packet_field!(packet, MqttPacket::Suback, reason_string)
 }
 
+#[cfg(test)]
 fn get_suback_packet_user_property(packet: &MqttPacket, index: usize) -> &UserProperty {
     if let MqttPacket::Suback(suback) = packet {
         if let Some(properties) = &suback.user_properties {
@@ -70,6 +48,7 @@ fn get_suback_packet_user_property(packet: &MqttPacket, index: usize) -> &UserPr
 }
 
 #[rustfmt::skip]
+#[cfg(test)]
 pub(crate) fn write_suback_encoding_steps(packet: &SubackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
     let (total_remaining_length, suback_property_length) = compute_suback_packet_length_properties(packet)?;
 
@@ -88,6 +67,11 @@ pub(crate) fn write_suback_encoding_steps(packet: &SubackPacket, _: &EncodingCon
     }
 
     Ok(())
+}
+
+#[cfg(not(test))]
+pub(crate) fn write_suback_encoding_steps(_: &SubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+    Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
 fn decode_suback_properties(property_bytes: &[u8], packet : &mut SubackPacket) -> MqttResult<()> {

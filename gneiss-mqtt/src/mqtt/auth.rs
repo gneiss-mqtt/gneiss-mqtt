@@ -10,52 +10,14 @@ use crate::encode::*;
 use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
-use crate::spec::*;
-use crate::spec::utils::*;
+use crate::mqtt::*;
+use crate::mqtt::utils::*;
 use crate::validate::*;
 use crate::validate::utils::*;
 
-use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 
-/// Data model of an [MQTT5 AUTH](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901217) packet.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct AuthPacket {
-
-    /// Specifies an endpoint's response to a previously-received AUTH packet as part of an authentication exchange.
-    ///
-    /// See [MQTT5 Authenticate Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901220)
-    pub reason_code: AuthenticateReasonCode,
-
-    /// Authentication method this packet corresponds to.  The authentication method must remain the
-    /// same for the entirety of an authentication exchange.
-    ///
-    /// The MQTT5 specification lists the authentication method property as required, from a
-    /// protocol perspective.  At the same time it specifies that it is valid to short-circuit the
-    /// packet encoding if the reason is Success and there are no properties.  This is a bit
-    /// self-contradictory, but we resolve it by modeling the authentication method as an optional
-    /// string (so supporting the short-circuited encode/decode) but -- despite the option type --
-    /// the packet fails validation if authentication_method is None.
-    ///
-    /// See [MQTT5 Authentication Method](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901223)
-    pub authentication_method: Option<String>,
-
-    /// Method-specific binary data included in this step of an authentication exchange.
-    ///
-    /// See [MQTT5 Authentication Data](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901224)
-    pub authentication_data: Option<Vec<u8>>,
-
-    /// Additional diagnostic information or context.
-    ///
-    /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901225)
-    pub reason_string: Option<String>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901226)
-    pub user_properties: Option<Vec<UserProperty>>,
-}
 
 #[rustfmt::skip]
 fn compute_auth_packet_length_properties(packet: &AuthPacket) -> MqttResult<(u32, u32)> {

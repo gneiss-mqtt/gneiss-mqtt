@@ -4,38 +4,19 @@
  */
 
 use crate::*;
+#[cfg(test)]
 use crate::decode::utils::*;
 use crate::encode::*;
 use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
-use crate::spec::*;
-use crate::spec::utils::*;
+use crate::mqtt::*;
+use crate::mqtt::utils::*;
 use crate::validate::*;
 use crate::validate::utils::*;
 
-use log::*;
 use std::collections::VecDeque;
 use std::fmt;
-
-/// Data model of an [MQTT5 UNSUBSCRIBE](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901179) packet.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct UnsubscribePacket {
-
-    /// Packet Id of the unsubscribe.  Setting this value on an outbound unsubscribe has no effect on the
-    /// actual packet id used by the client.
-    pub packet_id: u16,
-
-    /// List of topic filters that the client wishes to unsubscribe from.
-    ///
-    /// See [MQTT5 Unsubscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901185)
-    pub topic_filters: Vec<String>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901184)
-    pub user_properties: Option<Vec<UserProperty>>,
-}
 
 #[rustfmt::skip]
 fn compute_unsubscribe_packet_length_properties(packet: &UnsubscribePacket) -> MqttResult<(u32, u32)> {
@@ -89,6 +70,7 @@ pub(crate) fn write_unsubscribe_encoding_steps(packet: &UnsubscribePacket, _: &E
     Ok(())
 }
 
+#[cfg(test)]
 fn decode_unsubscribe_properties(property_bytes: &[u8], packet : &mut UnsubscribePacket) -> MqttResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
@@ -108,6 +90,7 @@ fn decode_unsubscribe_properties(property_bytes: &[u8], packet : &mut Unsubscrib
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn decode_unsubscribe_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
 
     if first_byte != UNSUBSCRIBE_FIRST_BYTE {
@@ -144,6 +127,11 @@ pub(crate) fn decode_unsubscribe_packet(first_byte: u8, packet_body: &[u8]) -> M
     }
 
     panic!("UnsubscribePacket Decode - Internal error");
+}
+
+#[cfg(not(test))]
+pub(crate) fn decode_unsubscribe_packet(_: u8, _: &[u8]) -> MqttResult<Box<MqttPacket>> {
+    Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
 pub(crate) fn validate_unsubscribe_packet_outbound(packet: &UnsubscribePacket) -> MqttResult<()> {
