@@ -61,11 +61,17 @@ pub(crate) const PUBLISH_PACKET_FIXED_HEADER_DUPLICATE_FLAG : u8 = 8;
 pub(crate) const PUBLISH_PACKET_FIXED_HEADER_RETAIN_FLAG : u8 = 1;
 pub(crate) const QOS_MASK : u8 = 3;
 
+#[cfg(test)]
 pub(crate) const CONNECT_PACKET_CLEAN_START_FLAG_MASK : u8 = 1 << 1;
+#[cfg(test)]
 pub(crate) const CONNECT_PACKET_HAS_WILL_FLAG_MASK : u8 = 1 << 2;
+#[cfg(test)]
 pub(crate) const CONNECT_PACKET_WILL_RETAIN_FLAG_MASK : u8 = 1 << 5;
+#[cfg(test)]
 pub(crate) const CONNECT_PACKET_WILL_QOS_FLAG_SHIFT : u8 = 3;
+#[cfg(test)]
 pub(crate) const CONNECT_PACKET_HAS_USERNAME_FLAG_MASK : u8 = 1 << 7;
+#[cfg(test)]
 pub(crate) const CONNECT_PACKET_HAS_PASSWORD_FLAG_MASK : u8 = 1 << 6;
 
 pub(crate) const UNSUBSCRIBE_FIRST_BYTE : u8 = (PACKET_TYPE_UNSUBSCRIBE << 4) | (0x02u8);
@@ -437,6 +443,7 @@ pub(crate) fn suback_reason_code_to_str (reason_code: SubackReasonCode) -> &'sta
     }
 }
 
+#[cfg(test)]
 pub(crate) fn convert_u8_to_retain_handling_type(value: u8) -> MqttResult<RetainHandlingType> {
     match value {
         0 => { Ok(RetainHandlingType::SendOnSubscribe) }

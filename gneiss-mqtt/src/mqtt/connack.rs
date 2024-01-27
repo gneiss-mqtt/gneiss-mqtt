@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::fmt;
 
 #[rustfmt::skip]
+#[cfg(test)]
 fn compute_connack_packet_length_properties(packet: &ConnackPacket) -> MqttResult<(u32, u32)> {
 
     let mut connack_property_section_length = compute_user_properties_length(&packet.user_properties);
@@ -47,30 +48,37 @@ fn compute_connack_packet_length_properties(packet: &ConnackPacket) -> MqttResul
     Ok((total_remaining_length as u32, connack_property_section_length as u32))
 }
 
+#[cfg(test)]
 fn get_connack_packet_assigned_client_identifier(packet: &MqttPacket) -> &str {
     get_optional_packet_field!(packet, MqttPacket::Connack, assigned_client_identifier)
 }
 
+#[cfg(test)]
 fn get_connack_packet_reason_string(packet: &MqttPacket) -> &str {
     get_optional_packet_field!(packet, MqttPacket::Connack, reason_string)
 }
 
+#[cfg(test)]
 fn get_connack_packet_response_information(packet: &MqttPacket) -> &str {
     get_optional_packet_field!(packet, MqttPacket::Connack, response_information)
 }
 
+#[cfg(test)]
 fn get_connack_packet_server_reference(packet: &MqttPacket) -> &str {
     get_optional_packet_field!(packet, MqttPacket::Connack, server_reference)
 }
 
+#[cfg(test)]
 fn get_connack_packet_authentication_method(packet: &MqttPacket) -> &str {
     get_optional_packet_field!(packet, MqttPacket::Connack, authentication_method)
 }
 
+#[cfg(test)]
 fn get_connack_packet_authentication_data(packet: &MqttPacket) -> &[u8] {
     get_optional_packet_field!(packet, MqttPacket::Connack, authentication_data)
 }
 
+#[cfg(test)]
 fn get_connack_packet_user_property(packet: &MqttPacket, index: usize) -> &UserProperty {
     if let MqttPacket::Connack(connack) = packet {
         if let Some(properties) = &connack.user_properties {
@@ -82,6 +90,7 @@ fn get_connack_packet_user_property(packet: &MqttPacket, index: usize) -> &UserP
 }
 
 #[rustfmt::skip]
+#[cfg(test)]
 pub(crate) fn write_connack_encoding_steps(packet: &ConnackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
     let (total_remaining_length, connack_property_length) = compute_connack_packet_length_properties(packet)?;
 
@@ -120,6 +129,10 @@ pub(crate) fn write_connack_encoding_steps(packet: &ConnackPacket, _: &EncodingC
     Ok(())
 }
 
+#[cfg(not(test))]
+pub(crate) fn write_connack_encoding_steps(_: &ConnackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+    Err(MqttError::new_unimplemented("Test-only functionality"))
+}
 
 fn decode_connack_properties(property_bytes: &[u8], packet : &mut ConnackPacket) -> MqttResult<()> {
     let mut mutable_property_bytes = property_bytes;

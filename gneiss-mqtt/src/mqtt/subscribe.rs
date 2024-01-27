@@ -4,6 +4,7 @@
  */
 
 use crate::*;
+#[cfg(test)]
 use crate::decode::utils::*;
 use crate::encode::*;
 use crate::encode::utils::*;
@@ -88,6 +89,7 @@ pub(crate) fn write_subscribe_encoding_steps(packet: &SubscribePacket, _: &Encod
     Ok(())
 }
 
+#[cfg(test)]
 fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePacket) -> MqttResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
@@ -108,8 +110,10 @@ fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePac
     Ok(())
 }
 
+#[cfg(test)]
 const SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK : u8 = 192;
 
+#[cfg(test)]
 pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
 
     if first_byte != SUBSCRIBE_FIRST_BYTE {
@@ -167,6 +171,11 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Mqt
     }
 
     panic!("SubscribePacket Decode - Internal error");
+}
+
+#[cfg(not(test))]
+pub(crate) fn decode_subscribe_packet(_: u8, _: &[u8]) -> MqttResult<Box<MqttPacket>> {
+    Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
 pub(crate) fn validate_subscribe_packet_outbound(packet: &SubscribePacket) -> MqttResult<()> {

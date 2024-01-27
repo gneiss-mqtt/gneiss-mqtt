@@ -4,6 +4,7 @@
  */
 
 use crate::*;
+#[cfg(test)]
 use crate::decode::utils::*;
 use crate::encode::*;
 use crate::encode::utils::*;
@@ -69,6 +70,7 @@ pub(crate) fn write_unsubscribe_encoding_steps(packet: &UnsubscribePacket, _: &E
     Ok(())
 }
 
+#[cfg(test)]
 fn decode_unsubscribe_properties(property_bytes: &[u8], packet : &mut UnsubscribePacket) -> MqttResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
@@ -88,6 +90,7 @@ fn decode_unsubscribe_properties(property_bytes: &[u8], packet : &mut Unsubscrib
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn decode_unsubscribe_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
 
     if first_byte != UNSUBSCRIBE_FIRST_BYTE {
@@ -124,6 +127,11 @@ pub(crate) fn decode_unsubscribe_packet(first_byte: u8, packet_body: &[u8]) -> M
     }
 
     panic!("UnsubscribePacket Decode - Internal error");
+}
+
+#[cfg(not(test))]
+pub(crate) fn decode_unsubscribe_packet(_: u8, _: &[u8]) -> MqttResult<Box<MqttPacket>> {
+    Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
 pub(crate) fn validate_unsubscribe_packet_outbound(packet: &UnsubscribePacket) -> MqttResult<()> {

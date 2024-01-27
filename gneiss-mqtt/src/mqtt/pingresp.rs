@@ -13,11 +13,17 @@ use std::collections::VecDeque;
 use std::fmt;
 
 #[rustfmt::skip]
+#[cfg(test)]
 pub(crate) fn write_pingresp_encoding_steps(_: &PingrespPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_PINGRESP << 4);
     encode_integral_expression!(steps, Uint8, 0);
 
     Ok(())
+}
+
+#[cfg(not(test))]
+pub(crate) fn write_pingresp_encoding_steps(_: &PingrespPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+    Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
 const PINGRESP_FIRST_BYTE : u8 = PACKET_TYPE_PINGRESP << 4;

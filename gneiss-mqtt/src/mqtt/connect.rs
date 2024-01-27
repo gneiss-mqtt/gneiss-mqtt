@@ -4,6 +4,7 @@
  */
 
 use crate::*;
+#[cfg(test)]
 use crate::decode::utils::*;
 use crate::encode::*;
 use crate::encode::utils::*;
@@ -255,6 +256,7 @@ pub(crate) fn write_connect_encoding_steps(packet: &ConnectPacket, _: &EncodingC
     Ok(())
 }
 
+#[cfg(test)]
 fn decode_connect_properties(property_bytes: &[u8], packet : &mut ConnectPacket) -> MqttResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
@@ -282,6 +284,7 @@ fn decode_connect_properties(property_bytes: &[u8], packet : &mut ConnectPacket)
     Ok(())
 }
 
+#[cfg(test)]
 fn decode_will_properties(property_bytes: &[u8], will: &mut PublishPacket, connect : &mut ConnectPacket) -> MqttResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
@@ -307,8 +310,10 @@ fn decode_will_properties(property_bytes: &[u8], will: &mut PublishPacket, conne
     Ok(())
 }
 
+#[cfg(test)]
 const CONNECT_HEADER_PROTOCOL_LENGTH : usize = 7;
 
+#[cfg(test)]
 pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
     if first_byte != (PACKET_TYPE_CONNECT << 4)  {
         error!("ConnectPacket Decode - invalid first byte");
@@ -420,6 +425,11 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
     }
 
     panic!("ConnectPacket Decode - Internal error");
+}
+
+#[cfg(not(test))]
+pub(crate) fn decode_connect_packet(_: u8, _: &[u8]) -> MqttResult<Box<MqttPacket>> {
+    Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
 pub(crate) fn validate_connect_packet_outbound(packet: &ConnectPacket) -> MqttResult<()> {

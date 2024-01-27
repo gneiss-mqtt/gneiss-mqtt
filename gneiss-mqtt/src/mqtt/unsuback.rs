@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::fmt;
 
 #[rustfmt::skip]
+#[cfg(test)]
 fn compute_unsuback_packet_length_properties(packet: &UnsubackPacket) -> MqttResult<(u32, u32)> {
     let mut unsuback_property_section_length = compute_user_properties_length(&packet.user_properties);
     add_optional_string_property_length!(unsuback_property_section_length, packet.reason_string);
@@ -30,10 +31,12 @@ fn compute_unsuback_packet_length_properties(packet: &UnsubackPacket) -> MqttRes
     Ok((total_remaining_length as u32, unsuback_property_section_length as u32))
 }
 
+#[cfg(test)]
 fn get_unsuback_packet_reason_string(packet: &MqttPacket) -> &str {
     get_optional_packet_field!(packet, MqttPacket::Unsuback, reason_string)
 }
 
+#[cfg(test)]
 fn get_unsuback_packet_user_property(packet: &MqttPacket, index: usize) -> &UserProperty {
     if let MqttPacket::Unsuback(unsuback) = packet {
         if let Some(properties) = &unsuback.user_properties {
@@ -45,6 +48,7 @@ fn get_unsuback_packet_user_property(packet: &MqttPacket, index: usize) -> &User
 }
 
 #[rustfmt::skip]
+#[cfg(test)]
 pub(crate) fn write_unsuback_encoding_steps(packet: &UnsubackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
     let (total_remaining_length, unsuback_property_length) = compute_unsuback_packet_length_properties(packet)?;
 
@@ -63,6 +67,11 @@ pub(crate) fn write_unsuback_encoding_steps(packet: &UnsubackPacket, _: &Encodin
     }
 
     Ok(())
+}
+
+#[cfg(not(test))]
+pub(crate) fn write_unsuback_encoding_steps(_: &UnsubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+    Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
 fn decode_unsuback_properties(property_bytes: &[u8], packet : &mut UnsubackPacket) -> MqttResult<()> {
