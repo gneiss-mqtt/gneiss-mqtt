@@ -286,14 +286,7 @@ impl Mqtt5ClientImpl {
 
         let result = self.operational_state.handle_network_event(&mut context);
         self.dispatch_packet_events();
-
-        match result {
-            Err(error) => {
-                self.apply_error(error); // this error propagates
-                Err(MqttError::new_internal_state_error("unseen")) // this error does not propagate
-            }
-            _ => { Ok(()) }
-        }
+        result
     }
 
     pub(crate) fn handle_write_completion(&mut self) -> MqttResult<()> {
@@ -304,15 +297,7 @@ impl Mqtt5ClientImpl {
             packet_events: &mut self.packet_events
         };
 
-        let result = self.operational_state.handle_network_event(&mut context);
-
-        match result {
-            Err(error) => {
-                self.apply_error(error); // this error propagates
-                Err(MqttError::new_internal_state_error("unseen")) // this error does not propagate
-            }
-            _ => { Ok(()) }
-        }
+        self.operational_state.handle_network_event(&mut context)
     }
 
     pub(crate) fn handle_service(&mut self, outbound_data: &mut Vec<u8>) -> MqttResult<()> {
@@ -322,15 +307,7 @@ impl Mqtt5ClientImpl {
             current_time: Instant::now(),
         };
 
-        let result = self.operational_state.service(&mut context);
-
-        match result {
-            Err(error) => {
-                self.apply_error(error); // this error propagates
-                Err(MqttError::new_internal_state_error("unseen")) // this error does not propagate
-            }
-            _ => { Ok(()) }
-        }
+        self.operational_state.service(&mut context)
     }
 
     fn clamp_reconnect_period(&self, mut reconnect_period: Duration) -> Duration {

@@ -13,6 +13,7 @@ use crate::error::*;
 use crate::client::*;
 use crate::features::gneiss_tokio::{TokioClientOptions};
 
+use log::*;
 use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::io::Read;
@@ -694,8 +695,17 @@ impl Mqtt5ClientOptionsBuilder {
         self
     }
 
+    /// Configures how long the client will wait for the client's transport connection to be fully
+    /// established (such that the MQTT protocol can begin).
+    pub fn with_connect_timeout(&mut self, connect_timeout: Duration) -> &mut Self {
+        self.options.connect_timeout = connect_timeout;
+        self
+    }
+
     /// Configures how long the client will wait for a Connack from the broker before giving up and
     /// failing the connection attempt.
+    ///
+    /// TODO: fold into connect timeout
     pub fn with_connack_timeout(&mut self, connack_timeout: Duration) -> &mut Self {
         self.options.connack_timeout = connack_timeout;
         self
@@ -869,8 +879,14 @@ fn make_addr(endpoint: &str, port: u16) -> std::io::Result<SocketAddr> {
 }
 
 fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    info!("make_direct_client - creating async connection establishment closure");
+
     let broker_endpoint = Endpoint::new(endpoint.as_str(), port);
     let proxy_endpoint = http_proxy_options.as_ref().map(|val| { Endpoint::new( val.endpoint.as_str(), val.port )});
+    info!("make_direct_client - broker address - {}:{}", broker_endpoint.endpoint, broker_endpoint.port);
+    if let Some(proxy_end) = &proxy_endpoint {
+        info!("make_direct_client - proxy address - {}:{}", proxy_end.endpoint, proxy_end.port);
+    }
 
     let (stream_endpoint, http_connect_endpoint) =
         if let Some(proxy_endpoint) = proxy_endpoint {
@@ -892,6 +908,7 @@ fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOption
                     }),
                 };
 
+                info!("make_direct_client - tls-to-proxy -> tls-to-broker");
                 Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
             } else {
                 let tokio_options = TokioClientOptions {
@@ -903,6 +920,7 @@ fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOption
                     }),
                 };
 
+                info!("make_direct_client - plaintext-to-proxy -> tls-to-broker");
                 Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
             }
         } else {
@@ -913,6 +931,7 @@ fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOption
                 }),
             };
 
+            info!("make_direct_client - tls-to-broker");
             Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
@@ -926,6 +945,7 @@ fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOption
                 }),
             };
 
+            info!("make_direct_client - tls-to-proxy -> plaintext-to-broker");
             Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         } else {
             let tokio_options = TokioClientOptions {
@@ -936,6 +956,7 @@ fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOption
                 }),
             };
 
+            info!("make_direct_client - plaintext-to-proxy -> plaintext-to-broker");
             Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         }
     } else {
@@ -945,6 +966,7 @@ fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOption
             }),
         };
 
+        info!("make_direct_client - plaintext-to-broker");
         Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
     }
 }
@@ -952,8 +974,14 @@ fn make_direct_client(endpoint: String, port: u16, tls_options: Option<TlsOption
 // you're not the boss of me, clippy
 #[allow(clippy::too_many_arguments)]
 fn make_websocket_client(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    info!("make_websocket_client - creating async connection establishment closure");
     let broker_endpoint = Endpoint::new(endpoint.as_str(), port);
     let proxy_endpoint = http_proxy_options.as_ref().map(|val| { Endpoint::new( val.endpoint.as_str(), val.port )});
+
+    info!("make_websocket_client - broker address - {}:{}", broker_endpoint.endpoint, broker_endpoint.port);
+    if let Some(proxy_end) = &proxy_endpoint {
+        info!("make_websocket_client - proxy address - {}:{}", proxy_end.endpoint, proxy_end.port);
+    }
 
     let (stream_endpoint, http_connect_endpoint) =
         if let Some(proxy_endpoint) = proxy_endpoint {
@@ -976,6 +1004,7 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
                     }),
                 };
 
+                info!("make_websocket_client - tls-to-proxy -> tls-to-broker");
                 Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
             } else {
                 let tokio_options = TokioClientOptions {
@@ -988,6 +1017,7 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
                     }),
                 };
 
+                info!("make_websocket_client - plaintext-to-proxy -> tls-to-broker");
                 Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
             }
         } else {
@@ -999,6 +1029,7 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
                 }),
             };
 
+            info!("make_websocket_client - tls-to-broker");
             Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
@@ -1013,6 +1044,7 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
                 }),
             };
 
+            info!("make_websocket_client - tls-to-proxy -> plaintext-to-broker");
             Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         } else {
             let tokio_options = TokioClientOptions {
@@ -1024,6 +1056,7 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
                 }),
             };
 
+            info!("make_websocket_client - plaintext-to-proxy -> plaintext-to-broker");
             Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         }
     } else {
@@ -1034,13 +1067,16 @@ fn make_websocket_client(endpoint: String, port: u16, websocket_options: Websock
             }),
         };
 
+        info!("make_websocket_client - plaintext-to-broker");
         Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
     }
 }
 
 async fn make_leaf_stream(endpoint: Endpoint) -> MqttResult<TcpStream> {
     let addr = make_addr(endpoint.endpoint.as_str(), endpoint.port)?;
+    debug!("make_leaf_stream - opening TCP stream");
     let stream = TcpStream::connect(&addr).await?;
+    debug!("make_leaf_stream - TCP stream successfully established");
 
     Ok(stream)
 }
@@ -1055,8 +1091,10 @@ async fn wrap_stream_with_tls<S>(stream : Pin<Box<impl Future<Output=MqttResult<
             TlsData::Rustls(_, config) => { TlsConnector::from(config.clone()) }
         };
 
+    debug!("wrap_stream_with_tls - performing tls handshake");
     let inner_stream= stream.await?;
     let stream = connector.connect(domain, inner_stream).await?;
+    debug!("wrap_stream_with_tls - tls handshake successfully completed");
 
     Ok(stream)
 }
@@ -1091,16 +1129,21 @@ async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=Mqtt
 
     let uri = format!("{}://{}/mqtt", scheme, endpoint); // scheme needs to be present but value irrelevant
     let handshake_builder = create_default_websocket_handshake_request(uri)?;
+
+    debug!("wrap_stream_with_websockets - performing websocket upgrade request transform");
     let transformed_handshake_builder =
         if let Some(transform) = &*websocket_options.handshake_transform {
             transform(handshake_builder).await?
         } else {
             handshake_builder
         };
+    debug!("wrap_stream_with_websockets - successfully transformed websocket upgrade request");
 
+    debug!("wrap_stream_with_websockets - upgrading stream to websockets");
     let inner_stream= stream.await?;
     let (message_stream, _) = client_async( HandshakeRequest { handshake_builder: transformed_handshake_builder }, inner_stream).await?;
     let byte_stream = WsMessageHandler::wrap_stream(message_stream);
+    debug!("wrap_stream_with_websockets - successfully upgraded stream to websockets");
 
     Ok(byte_stream)
 }
@@ -1117,8 +1160,10 @@ use tokio::io::AsyncReadExt;
 async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, http_connect_endpoint: Endpoint) -> MqttResult<S> where S : AsyncRead + AsyncWrite + Unpin {
     let mut inner_stream = stream.await?;
 
+    debug!("apply_proxy_connect_to_stream - writing CONNECT request to connection stream");
     let request_bytes = build_connect_request(&http_connect_endpoint);
     inner_stream.write_all(request_bytes.as_slice()).await?;
+    debug!("apply_proxy_connect_to_stream - successfully wrote CONNECT request to stream");
 
     let mut inbound_data: [u8; 4096] = [0; 4096];
     let mut response_bytes = Vec::new();
@@ -1126,6 +1171,7 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Mq
     loop {
         let bytes_read = inner_stream.read(&mut inbound_data).await?;
         if bytes_read == 0 {
+            info!("apply_proxy_connect_to_stream - proxy connect stream closed with zero byte read");
             return Err(MqttError::new_connection_establishment_failure("proxy connect stream closed"));
         }
 
@@ -1137,10 +1183,12 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Mq
         let parse_result = response.parse(response_bytes.as_slice());
         match parse_result {
             Err(e) => {
+                error!("apply_proxy_connect_to_stream - failed to parse proxy response to CONNECT request: {:?}", e);
                 return Err(MqttError::new_connection_establishment_failure(e));
             }
             Ok(httparse::Status::Complete(bytes_parsed)) => {
                 if bytes_parsed < response_bytes.len() {
+                    error!("apply_proxy_connect_to_stream - stream incoming data contains more data than the CONNECT response");
                     return Err(MqttError::new_connection_establishment_failure("proxy connect response too long"));
                 }
 
@@ -1150,6 +1198,7 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Mq
                     }
                 }
 
+                error!("apply_proxy_connect_to_stream - CONNECT request was failed, with http code: {:?}", response.code);
                 return Err(MqttError::new_connection_establishment_failure("proxy connect request unsuccessful"));
             }
             Ok(httparse::Status::Partial) => {}
