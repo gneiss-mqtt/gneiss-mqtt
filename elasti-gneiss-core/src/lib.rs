@@ -8,7 +8,6 @@ use argh::FromArgs;
 use gneiss_mqtt::error::{MqttError};
 use gneiss_mqtt::client::*;
 use gneiss_mqtt::mqtt::*;
-use gneiss_mqtt::mqtt::utils::*;
 use std::fmt;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -181,7 +180,7 @@ fn handle_stop(client: &Mqtt5Client, args: StopArgs) {
     let mut stop_options_builder = StopOptionsBuilder::new();
 
     if let Some(reason_code_u8) = args.reason_code {
-        if let Ok(reason_code) = convert_u8_to_disconnect_reason_code(reason_code_u8) {
+        if let Ok(reason_code) = DisconnectReasonCode::try_from(reason_code_u8) {
             stop_options_builder = stop_options_builder.with_disconnect_packet(DisconnectPacket{
                 reason_code,
                 ..Default::default()
@@ -203,7 +202,7 @@ async fn handle_publish(client: &Mqtt5Client, args: PublishArgs) {
 
     let mut publish = PublishPacket::new_empty(&args.topic, QualityOfService::AtLeastOnce);
 
-    if let Ok(qos) = convert_u8_to_quality_of_service(args.qos) {
+    if let Ok(qos) = QualityOfService::try_from(args.qos) {
         publish.qos = qos;
     } else {
         println!("Invalid input!  Qos must be 0, 1, or 2");
@@ -226,7 +225,7 @@ async fn handle_publish(client: &Mqtt5Client, args: PublishArgs) {
 }
 
 async fn handle_subscribe(client: &Mqtt5Client, args: SubscribeArgs) {
-    let qos_result = convert_u8_to_quality_of_service(args.qos);
+    let qos_result = QualityOfService::try_from(args.qos);
     if qos_result.is_err() {
         println!("Invalid input!  Qos must be 0, 1, or 2");
         return;

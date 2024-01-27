@@ -7,6 +7,9 @@
 Module containing a set of structured data types that model the MQTT5 specification.
  */
 
+use log::error;
+use crate::error::{MqttError};
+
 pub(crate) mod auth;
 pub(crate) mod connack;
 pub(crate) mod connect;
@@ -40,6 +43,14 @@ pub enum QualityOfService {
 
     /// A level of service that ensures that the message arrives at the receiver exactly once.
     ExactlyOnce = 2,
+}
+
+impl TryFrom<u8> for QualityOfService {
+    type Error = MqttError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        utils::convert_u8_to_quality_of_service(value)
+    }
 }
 
 /// Optional property describing a PUBLISH payload's format.
@@ -469,6 +480,14 @@ pub enum DisconnectReasonCode {
     WildcardSubscriptionsNotSupported = 162,
 }
 
+impl TryFrom<u8> for DisconnectReasonCode {
+    type Error = MqttError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        utils::convert_u8_to_disconnect_reason_code(value)
+    }
+}
+
 /// Reason codes inside SUBACK packet payloads that specify the results for each subscription in the associated
 /// SUBSCRIBE packet.
 ///
@@ -634,10 +653,9 @@ impl Subscription {
     }
 }
 
-
 /// Data model of an [MQTT5 AUTH](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901217) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct AuthPacket {
+pub(crate) struct AuthPacket {
 
     /// Specifies an endpoint's response to a previously-received AUTH packet as part of an authentication exchange.
     ///
@@ -937,11 +955,11 @@ pub struct DisconnectPacket {
 
 /// Data model of an [MQTT5 PINGREQ](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901195) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PingreqPacket {}
+pub(crate) struct PingreqPacket {}
 
 /// Data model of an [MQTT5 PINGRESP](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901200) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PingrespPacket {}
+pub(crate) struct PingrespPacket {}
 
 /// Data model of an [MQTT5 PUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901121) packet
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

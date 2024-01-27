@@ -15,7 +15,6 @@ use crate::mqtt::utils::*;
 use crate::validate::*;
 use crate::validate::utils::*;
 
-use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 

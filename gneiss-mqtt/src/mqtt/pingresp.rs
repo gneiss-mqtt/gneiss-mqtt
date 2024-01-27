@@ -9,7 +9,6 @@ use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
 
-use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 

@@ -13,8 +13,6 @@ use crate::*;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
 
-use log::*;
-
 pub(crate) const PACKET_TYPE_CONNECT: u8 = 1;
 pub(crate) const PACKET_TYPE_CONNACK: u8 = 2;
 pub(crate) const PACKET_TYPE_PUBLISH: u8 = 3;
@@ -83,8 +81,8 @@ pub(crate) const SUBSCRIPTION_OPTIONS_NO_LOCAL_MASK : u8 = 1u8 << 2;
 pub(crate) const SUBSCRIPTION_OPTIONS_RETAIN_AS_PUBLISHED_MASK : u8 = 1u8 << 3;
 pub(crate) const SUBSCRIPTION_OPTIONS_RETAIN_HANDLING_SHIFT : u8 = 4;
 
-/// Converts an integer to a modeled QualityOfService value
-pub fn convert_u8_to_quality_of_service(value: u8) -> MqttResult<QualityOfService> {
+
+pub(crate) fn convert_u8_to_quality_of_service(value: u8) -> MqttResult<QualityOfService> {
     match value {
         0 => { Ok(QualityOfService::AtMostOnce) }
         1 => { Ok(QualityOfService::AtLeastOnce) }
@@ -281,7 +279,7 @@ pub(crate) fn connect_reason_code_to_str (reason_code: ConnectReasonCode) -> &'s
 }
 
 /// Converts an integer to a modeled DisconnectReasonCode value
-pub fn convert_u8_to_disconnect_reason_code(value: u8) -> MqttResult<DisconnectReasonCode> {
+pub(crate) fn convert_u8_to_disconnect_reason_code(value: u8) -> MqttResult<DisconnectReasonCode> {
     match value {
         0 => { Ok(DisconnectReasonCode::NormalDisconnection) }
         4 => { Ok(DisconnectReasonCode::DisconnectWithWillMessage) }
