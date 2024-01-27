@@ -4,7 +4,7 @@
  */
 
 #[cfg(test)]
-mod operational_state_tests {
+mod protocol_state_tests {
 
     // feature conditional
     use crate::features::gneiss_tokio::*;
@@ -12,8 +12,8 @@ mod operational_state_tests {
     use assert_matches::assert_matches;
     use crate::validate::utils::testing::verify_validation_failure;
 
-    fn build_standard_test_config() -> OperationalStateConfig {
-        OperationalStateConfig {
+    fn build_standard_test_config() -> ProtocolStateConfig {
+        ProtocolStateConfig {
             connect_options : ConnectOptionsBuilder::new().with_client_id("DefaultTesting").with_keep_alive_interval_seconds(None).build(),
             base_timestamp: Instant::now(),
             offline_queue_policy: OfflineQueuePolicy::PreserveAll,
@@ -356,13 +356,13 @@ mod operational_state_tests {
         handlers
     }
 
-    struct OperationalStateTestFixture {
+    struct ProtocolStateTestFixture {
         base_timestamp: Instant,
 
         broker_decoder: Decoder,
         broker_encoder: Encoder,
 
-        pub client_state: OperationalState,
+        pub client_state: ProtocolState,
 
         pub client_packet_events: VecDeque<PacketEvent>,
 
@@ -372,15 +372,15 @@ mod operational_state_tests {
         pub broker_packet_handlers: HashMap<PacketType, PacketHandler>,
     }
 
-    impl OperationalStateTestFixture {
+    impl ProtocolStateTestFixture {
 
 
-        pub(crate) fn new(config : OperationalStateConfig) -> Self {
+        pub(crate) fn new(config : ProtocolStateConfig) -> Self {
             Self {
                 base_timestamp : config.base_timestamp.clone(),
                 broker_decoder: Decoder::new(),
                 broker_encoder: Encoder::new(),
-                client_state: OperationalState::new(config),
+                client_state: ProtocolState::new(config),
                 client_packet_events : VecDeque::new(),
                 to_broker_packet_stream : VecDeque::new(),
                 to_client_packet_stream : VecDeque::new(),
@@ -650,27 +650,27 @@ mod operational_state_tests {
             Ok(())
         }
 
-        pub(crate) fn advance_disconnected_to_state(&mut self, state: OperationalStateType, elapsed_millis: u64) -> MqttResult<()> {
-            assert_eq!(OperationalStateType::Disconnected, self.client_state.state);
+        pub(crate) fn advance_disconnected_to_state(&mut self, state: ProtocolStateType, elapsed_millis: u64) -> MqttResult<()> {
+            assert_eq!(ProtocolStateType::Disconnected, self.client_state.state);
 
             let result = match state {
-                OperationalStateType::PendingConnack => {
+                ProtocolStateType::PendingConnack => {
                     self.on_connection_opened(elapsed_millis)
                 }
-                OperationalStateType::Connected => {
+                ProtocolStateType::Connected => {
                     self.on_connection_opened(elapsed_millis)?;
                     let server_bytes = self.service_with_drain(elapsed_millis, 4096)?;
                     self.on_incoming_bytes(elapsed_millis, server_bytes.as_slice())
                 }
-                OperationalStateType::PendingDisconnect => {
+                ProtocolStateType::PendingDisconnect => {
                     panic!("Not supported");
                 }
-                OperationalStateType::Halted => {
+                ProtocolStateType::Halted => {
                     self.on_connection_opened(elapsed_millis)?;
                     self.on_connection_opened(elapsed_millis).unwrap_or(());
                     Ok(())
                 }
-                OperationalStateType::Disconnected => { Ok(()) }
+                ProtocolStateType::Disconnected => { Ok(()) }
             };
 
             assert_eq!(state, self.client_state.state);
@@ -710,7 +710,7 @@ mod operational_state_tests {
         assert!(expected_sequence.eq(type_sequence));
     }
 
-    fn verify_operational_state_empty(fixture: &OperationalStateTestFixture) {
+    fn verify_protocol_state_empty(fixture: &ProtocolStateTestFixture) {
         assert_eq!(0, fixture.client_state.operations.len());
         assert_eq!(0, fixture.client_state.user_operation_queue.len());
         assert_eq!(0, fixture.client_state.resubmit_operation_queue.len());
@@ -724,8 +724,8 @@ mod operational_state_tests {
 
     #[test]
     fn disconnected_state_network_event_handler_fails() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert_eq!(OperationalStateType::Disconnected, fixture.client_state.state);
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert_eq!(ProtocolStateType::Disconnected, fixture.client_state.state);
 
         assert_matches!(fixture.on_connection_closed(0).err().unwrap(), MqttError::InternalStateError(_));
         assert!(fixture.client_packet_events.is_empty());
@@ -740,13 +740,13 @@ mod operational_state_tests {
 
     #[test]
     fn disconnected_state_next_service_time_never() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert_eq!(OperationalStateType::Disconnected, fixture.client_state.state);
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert_eq!(ProtocolStateType::Disconnected, fixture.client_state.state);
 
         assert_eq!(None, fixture.get_next_service_time(0));
     }
 
-    fn verify_service_does_nothing(fixture : &mut OperationalStateTestFixture) {
+    fn verify_service_does_nothing(fixture : &mut ProtocolStateTestFixture) {
         let client_packet_events_length = fixture.client_packet_events.len();
         let to_broker_packet_stream_length = fixture.to_broker_packet_stream.len();
         let to_client_packet_stream_length = fixture.to_client_packet_stream.len();
@@ -773,77 +773,77 @@ mod operational_state_tests {
 
     #[test]
     fn disconnected_state_service_does_nothing() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert_eq!(OperationalStateType::Disconnected, fixture.client_state.state);
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert_eq!(ProtocolStateType::Disconnected, fixture.client_state.state);
 
         verify_service_does_nothing(&mut fixture);
     }
 
     #[test]
     fn halted_state_network_event_handler_fails() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Halted, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Halted, 0).is_ok());
 
         assert_matches!(fixture.on_connection_opened(0).err().unwrap(), MqttError::InternalStateError(_));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
 
         assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError(_));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
 
         let bytes : Vec<u8> = vec!(0, 1, 2, 3, 4, 5);
         assert_matches!(fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap(), MqttError::InternalStateError(_));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
     }
 
     #[test]
     fn halted_state_next_service_time_never() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Halted, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Halted, 0).is_ok());
 
         assert_eq!(None, fixture.get_next_service_time(0));
     }
 
     #[test]
     fn halted_state_service_does_nothing() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Halted, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Halted, 0).is_ok());
 
         verify_service_does_nothing(&mut fixture);
     }
 
     #[test]
     fn halted_state_transition_out_on_connection_closed() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Halted, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Halted, 0).is_ok());
 
         assert!(fixture.on_connection_closed(0).is_ok());
-        assert_eq!(OperationalStateType::Disconnected, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Disconnected, fixture.client_state.state);
     }
 
     #[test]
     fn pending_connack_state_network_event_connection_opened_fails() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
         assert!(fixture.on_connection_opened(0).is_ok());
-        assert_eq!(OperationalStateType::PendingConnack, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::PendingConnack, fixture.client_state.state);
 
         assert_matches!(fixture.on_connection_opened(0).err().unwrap(), MqttError::InternalStateError(_));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
     }
 
     #[test]
     fn pending_connack_state_network_event_write_completion_fails() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
         assert!(fixture.on_connection_opened(0).is_ok());
-        assert_eq!(OperationalStateType::PendingConnack, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::PendingConnack, fixture.client_state.state);
 
         assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError(_));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
     }
 
@@ -852,8 +852,8 @@ mod operational_state_tests {
         let config = build_standard_test_config();
         let connack_timeout_millis = config.connack_timeout.as_millis();
 
-        let mut fixture = OperationalStateTestFixture::new(config);
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::PendingConnack, 1).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(config);
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 1).is_ok());
 
         assert_eq!(Some(1), fixture.get_next_service_time(1));
 
@@ -864,49 +864,49 @@ mod operational_state_tests {
 
         // service post-timeout
         assert_matches!(fixture.service_with_drain(1 + connack_timeout_millis as u64, 4096), Err(MqttError::ConnectionEstablishmentFailure(_)));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
     fn pending_connack_state_failure_connack() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
         fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_failure_connack));
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::PendingConnack, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 0).is_ok());
 
         let server_bytes = fixture.service_with_drain(0, 4096).unwrap();
 
         assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::ConnectionEstablishmentFailure(_)));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
 
         let expected_events = VecDeque::from(vec!(PacketEvent::Connack(create_connack_rejection())));
         assert_eq!(expected_events, fixture.client_packet_events);
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
     fn pending_connack_state_connection_closed() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::PendingConnack, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 0).is_ok());
 
         let _ = fixture.service_with_drain(0, 4096).unwrap();
 
         assert!(fixture.on_connection_closed(0).is_ok());
-        assert_eq!(OperationalStateType::Disconnected, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Disconnected, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
     fn pending_connack_state_incoming_garbage_data() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::PendingConnack, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 0).is_ok());
 
         let mut server_bytes = fixture.service_with_drain(0, 4096).unwrap();
         server_bytes.clear();
@@ -914,9 +914,9 @@ mod operational_state_tests {
         server_bytes.append(&mut garbage);
 
         assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::DecodingFailure(_)));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     fn encode_packet_to_buffer(packet: MqttPacket, buffer: &mut Vec<u8>) -> MqttResult<()> {
@@ -945,9 +945,9 @@ mod operational_state_tests {
     }
 
     fn do_pending_connack_state_non_connack_packet_test(packet: MqttPacket) {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::PendingConnack, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 0).is_ok());
 
         let mut server_bytes = fixture.service_with_drain(0, 4096).unwrap();
         server_bytes.clear();
@@ -955,9 +955,9 @@ mod operational_state_tests {
         assert!(encode_packet_to_buffer(packet, &mut server_bytes).is_ok());
 
         assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::ProtocolError(_)));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
@@ -1017,9 +1017,9 @@ mod operational_state_tests {
 
     #[test]
     fn pending_connack_state_connack_received_too_soon() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::PendingConnack, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 0).is_ok());
 
         let mut server_bytes = Vec::new();
 
@@ -1028,26 +1028,26 @@ mod operational_state_tests {
         }), &mut server_bytes).is_ok());
 
         assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::ProtocolError(_)));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert!(fixture.client_packet_events.is_empty());
     }
 
     #[test]
     fn pending_connack_state_transition_to_disconnected() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::PendingConnack, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 0).is_ok());
 
         assert!(fixture.on_connection_closed(0).is_ok());
-        assert_eq!(OperationalStateType::Disconnected, fixture.client_state.state);
-        verify_operational_state_empty(&fixture);
+        assert_eq!(ProtocolStateType::Disconnected, fixture.client_state.state);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
     fn connected_state_transition_to_success() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         let connack = ConnackPacket {
             ..Default::default()
@@ -1056,69 +1056,69 @@ mod operational_state_tests {
         let expected_events = VecDeque::from(vec!(PacketEvent::Connack(connack)));
         assert_eq!(expected_events, fixture.client_packet_events);
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
     fn connected_state_network_event_connection_opened_fails() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         let client_event_count = fixture.client_packet_events.len();
 
         assert_matches!(fixture.on_connection_opened(0).err().unwrap(), MqttError::InternalStateError(_));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert_eq!(client_event_count, fixture.client_packet_events.len());
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
     fn connected_state_network_event_write_completion_fails() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError(_));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
-        verify_operational_state_empty(&fixture);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
     fn connected_state_transition_to_disconnected() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         assert!(fixture.on_connection_closed(0).is_ok());
-        assert_eq!(OperationalStateType::Disconnected, fixture.client_state.state);
-        verify_operational_state_empty(&fixture);
+        assert_eq!(ProtocolStateType::Disconnected, fixture.client_state.state);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
     fn connected_state_incoming_garbage_data() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         let garbage = vec!(1, 2, 3, 4, 5, 6, 7, 8);
 
         assert_matches!(fixture.on_incoming_bytes(0, garbage.as_slice()), Err(MqttError::DecodingFailure(_)));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
-        verify_operational_state_empty(&fixture);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
+        verify_protocol_state_empty(&fixture);
     }
 
     fn do_connected_state_unexpected_packet_test(packet : MqttPacket) {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         let mut buffer = Vec::new();
         assert!(encode_packet_to_buffer(packet, &mut buffer).is_ok());
 
         assert_matches!(fixture.on_incoming_bytes(0, buffer.as_slice()), Err(MqttError::ProtocolError(_)));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
-        verify_operational_state_empty(&fixture);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
@@ -1145,9 +1145,9 @@ mod operational_state_tests {
     }
 
     fn do_connected_state_invalid_ack_packet_id_test(packet : MqttPacket) -> MqttResult<()> {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         let mut buffer = Vec::new();
         assert!(encode_packet_to_buffer(packet, &mut buffer).is_ok());
@@ -1155,8 +1155,8 @@ mod operational_state_tests {
         let incoming_bytes_result = fixture.on_incoming_bytes(0, buffer.as_slice());
         assert!(incoming_bytes_result.is_err());
 
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
-        verify_operational_state_empty(&fixture);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
+        verify_protocol_state_empty(&fixture);
 
         incoming_bytes_result
     }
@@ -1236,9 +1236,9 @@ mod operational_state_tests {
         config.ping_timeout = Duration::from_millis(PING_TIMEOUT_MILLIS as u64);
         config.connect_options.keep_alive_interval_seconds = Some(KEEP_ALIVE_SECONDS);
 
-        let mut fixture = OperationalStateTestFixture::new(config);
+        let mut fixture = ProtocolStateTestFixture::new(config);
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, connack_delay).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, connack_delay).is_ok());
 
         let mut current_time = connack_delay;
         let mut rolling_ping_time = current_time + KEEP_ALIVE_MILLIS;
@@ -1272,7 +1272,7 @@ mod operational_state_tests {
             rolling_ping_time = current_time + KEEP_ALIVE_MILLIS;
         }
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
@@ -1295,7 +1295,7 @@ mod operational_state_tests {
         do_ping_sequence_test(7, 999, 131);
     }
 
-    fn do_connected_state_ping_push_out_test(operation_function: Box<dyn Fn(&mut OperationalStateTestFixture, u64, u64) -> ()>, transmission_time: u64, response_time: u64, expected_push_out: u64) {
+    fn do_connected_state_ping_push_out_test(operation_function: Box<dyn Fn(&mut ProtocolStateTestFixture, u64, u64) -> ()>, transmission_time: u64, response_time: u64, expected_push_out: u64) {
         const PING_TIMEOUT_MILLIS: u64 = 10000;
         const KEEP_ALIVE_SECONDS: u16 = 20;
         const KEEP_ALIVE_MILLIS: u64 = (KEEP_ALIVE_SECONDS as u64) * 1000;
@@ -1304,17 +1304,17 @@ mod operational_state_tests {
         config.ping_timeout = Duration::from_millis(PING_TIMEOUT_MILLIS);
         config.connect_options.keep_alive_interval_seconds = Some(KEEP_ALIVE_SECONDS);
 
-        let mut fixture = OperationalStateTestFixture::new(config);
+        let mut fixture = ProtocolStateTestFixture::new(config);
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         operation_function(&mut fixture, transmission_time, response_time);
 
         assert_eq!(Some(expected_push_out + KEEP_ALIVE_MILLIS), fixture.get_next_service_time(response_time));
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
-    fn do_subscribe_success(fixture : &mut OperationalStateTestFixture, transmission_time: u64, response_time: u64, expected_reason_code: SubackReasonCode) {
+    fn do_subscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_time: u64, response_time: u64, expected_reason_code: SubackReasonCode) {
         let subscribe = SubscribePacket {
             subscriptions: vec!(
                 Subscription{
@@ -1355,10 +1355,10 @@ mod operational_state_tests {
             panic!("Expected suback");
         }
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
-    fn do_publish_success(fixture : &mut OperationalStateTestFixture, qos: QualityOfService, transmission_time: u64, response_time: u64, expected_response: PublishResponse) {
+    fn do_publish_success(fixture : &mut ProtocolStateTestFixture, qos: QualityOfService, transmission_time: u64, response_time: u64, expected_response: PublishResponse) {
         let publish = PublishPacket {
             topic: "hello/world".to_string(),
             qos,
@@ -1435,10 +1435,10 @@ mod operational_state_tests {
             }
         }
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
-    fn do_unsubscribe_success(fixture : &mut OperationalStateTestFixture, transmission_time: u64, response_time: u64, expected_reason_code: UnsubackReasonCode) {
+    fn do_unsubscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_time: u64, response_time: u64, expected_reason_code: UnsubackReasonCode) {
         let unsubscribe = UnsubscribePacket {
             topic_filters: vec!("hello/world".to_string()),
             ..Default::default()
@@ -1473,7 +1473,7 @@ mod operational_state_tests {
             panic!("Expected unsuback");
         }
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
@@ -1538,9 +1538,9 @@ mod operational_state_tests {
         config.ping_timeout = Duration::from_millis(PING_TIMEOUT_MILLIS);
         config.connect_options.keep_alive_interval_seconds = Some(KEEP_ALIVE_SECONDS);
 
-        let mut fixture = OperationalStateTestFixture::new(config);
+        let mut fixture = ProtocolStateTestFixture::new(config);
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, CONNACK_TIME).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, CONNACK_TIME).is_ok());
         let expected_ping_time = CONNACK_TIME + KEEP_ALIVE_MILLIS;
         assert_eq!(Some(expected_ping_time), fixture.get_next_service_time(CONNACK_TIME));
 
@@ -1560,15 +1560,15 @@ mod operational_state_tests {
 
         // invoke service after timeout, verify failure and halt
         assert_matches!(fixture.service_once(ping_timeout_timepoint, 4096), Err(MqttError::ConnectionClosed(_)));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert_eq!(outbound_packet_count, fixture.to_broker_packet_stream.len());
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
     fn connected_state_ping_no_pings_on_zero_keep_alive() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
         assert_eq!(None, fixture.get_next_service_time(0));
 
         for i in 0..3600 {
@@ -1579,37 +1579,37 @@ mod operational_state_tests {
             assert_eq!(1, fixture.to_client_packet_stream.len());
         }
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
     fn connected_state_subscribe_immediate_success() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         do_subscribe_success(&mut fixture, 1, 2, SubackReasonCode::GrantedQos1);
     }
 
     #[test]
     fn connected_state_unsubscribe_immediate_success() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         do_unsubscribe_success(&mut fixture, 3, 7, UnsubackReasonCode::Success);
     }
 
     #[test]
     fn connected_state_publish_qos0_immediate_success() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         do_publish_success(&mut fixture, QualityOfService::AtMostOnce, 11, 13, PublishResponse::Qos0);
     }
 
     #[test]
     fn connected_state_publish_qos1_immediate_success() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         do_publish_success(&mut fixture, QualityOfService::AtLeastOnce, 17, 23, PublishResponse::Qos1(PubackPacket{
             reason_code: PubackReasonCode::Success,
@@ -1619,8 +1619,8 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_publish_qos2_immediate_success() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         do_publish_success(&mut fixture, QualityOfService::ExactlyOnce, 29, 31, PublishResponse::Qos2(Qos2Response::Pubcomp(PubcompPacket{
             reason_code: PubcompReasonCode::Success,
@@ -1634,8 +1634,8 @@ mod operational_state_tests {
                 let mut config = build_standard_test_config();
                 config.offline_queue_policy = $queue_policy;
 
-                let mut fixture = OperationalStateTestFixture::new(config);
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                let mut fixture = ProtocolStateTestFixture::new(config);
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
                 let operation = $build_operation_function_name();
 
@@ -1647,7 +1647,7 @@ mod operational_state_tests {
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
 
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
 
@@ -1660,7 +1660,7 @@ mod operational_state_tests {
                     panic!("Expected ack result");
                 }
 
-                verify_operational_state_empty(&fixture);
+                verify_protocol_state_empty(&fixture);
             }
         };
     }
@@ -1821,8 +1821,8 @@ mod operational_state_tests {
                 let mut config = build_standard_test_config();
                 config.offline_queue_policy = $queue_policy;
 
-                let mut fixture = OperationalStateTestFixture::new(config);
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                let mut fixture = ProtocolStateTestFixture::new(config);
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
                 let operation = $build_operation_function_name();
 
@@ -1840,7 +1840,7 @@ mod operational_state_tests {
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
 
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
 
@@ -1853,7 +1853,7 @@ mod operational_state_tests {
                     panic!("Expected ack result");
                 }
 
-                verify_operational_state_empty(&fixture);
+                verify_protocol_state_empty(&fixture);
             }
         };
     }
@@ -1934,8 +1934,8 @@ mod operational_state_tests {
                 let mut config = build_standard_test_config();
                 config.offline_queue_policy = $queue_policy;
 
-                let mut fixture = OperationalStateTestFixture::new(config);
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                let mut fixture = ProtocolStateTestFixture::new(config);
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
                 let operation = $build_operation_function_name();
 
@@ -1958,7 +1958,7 @@ mod operational_state_tests {
 
                 assert_eq!(1, fixture.client_state.resubmit_operation_queue.len() + fixture.client_state.user_operation_queue.len());
 
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
 
@@ -1971,7 +1971,7 @@ mod operational_state_tests {
                     panic!("Expected ack result");
                 }
 
-                verify_operational_state_empty(&fixture);
+                verify_protocol_state_empty(&fixture);
             }
         };
     }
@@ -2048,30 +2048,30 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_subscribe_success_failing_reason_code() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
         fixture.broker_packet_handlers.insert(PacketType::Subscribe, Box::new(handle_subscribe_with_failure));
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         do_subscribe_success(&mut fixture, 0, 0, SubackReasonCode::NotAuthorized);
     }
 
     #[test]
     fn connected_state_unsubscribe_success_failing_reason_code() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
         fixture.broker_packet_handlers.insert(PacketType::Unsubscribe, Box::new(handle_unsubscribe_with_failure));
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         do_unsubscribe_success(&mut fixture, 0, 0, UnsubackReasonCode::ImplementationSpecificError);
     }
 
     #[test]
     fn connected_state_qos1_publish_success_failing_reason_code() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
         fixture.broker_packet_handlers.insert(PacketType::Publish, Box::new(handle_publish_with_failure));
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         do_publish_success(&mut fixture, QualityOfService::AtLeastOnce, 0, 0, PublishResponse::Qos1(PubackPacket{
             reason_code: PubackReasonCode::QuotaExceeded,
@@ -2081,10 +2081,10 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_qos2_publish_success_failing_reason_code_pubrec() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
         fixture.broker_packet_handlers.insert(PacketType::Publish, Box::new(handle_publish_with_failure));
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         do_publish_success(&mut fixture, QualityOfService::ExactlyOnce, 0, 0, PublishResponse::Qos2(Qos2Response::Pubrec(PubrecPacket{
             reason_code: PubrecReasonCode::QuotaExceeded,
@@ -2094,10 +2094,10 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_qos2_publish_success_failing_reason_code_pubcomp() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
         fixture.broker_packet_handlers.insert(PacketType::Pubrel, Box::new(handle_pubrel_with_failure));
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         do_publish_success(&mut fixture, QualityOfService::ExactlyOnce, 0, 0, PublishResponse::Qos2(Qos2Response::Pubcomp(PubcompPacket{
             reason_code: PubcompReasonCode::PacketIdentifierNotFound,
@@ -2108,10 +2108,10 @@ mod operational_state_tests {
     macro_rules! define_operation_failure_validation_helper {
         ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type: ident, $expected_packet_validation_error_packet_type: expr) => {
             fn $test_helper_name() {
-                let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+                let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
                 fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_tiny_maximum_packet_size));
 
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
                 let packet = $build_operation_function_name();
 
@@ -2125,7 +2125,7 @@ mod operational_state_tests {
                 assert!(operation_result.is_err());
 
                 verify_validation_failure!(operation_result, $expected_packet_validation_error_packet_type);
-                verify_operational_state_empty(&fixture);
+                verify_protocol_state_empty(&fixture);
             }
         };
     }
@@ -2247,10 +2247,10 @@ mod operational_state_tests {
     macro_rules! define_operation_failure_timeout_helper {
         ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type_builder: ident, $packet_type: ident) => {
             fn $test_helper_name() {
-                let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+                let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
                 fixture.broker_packet_handlers.insert(PacketType::$packet_type, Box::new(handle_with_nothing));
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
                 let packet = $build_operation_function_name();
 
@@ -2272,7 +2272,7 @@ mod operational_state_tests {
                 assert!(fixture.service_round_trip(30000, 30000, 4096).is_ok());
                 let result = operation_result_receiver.blocking_recv();
                 assert_matches!(result.unwrap().unwrap_err(), MqttError::AckTimeout(_));
-                verify_operational_state_empty(&fixture);
+                verify_protocol_state_empty(&fixture);
             }
         };
     }
@@ -2331,10 +2331,10 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_qos2_publish_failure_pubrel_timeout() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
         fixture.broker_packet_handlers.insert(PacketType::Pubrel, Box::new(handle_with_nothing));
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         let packet = build_qos2_publish_success_packet();
 
@@ -2361,7 +2361,7 @@ mod operational_state_tests {
         let result = operation_result_receiver.blocking_recv();
         assert_matches!(result.unwrap().unwrap_err(), MqttError::AckTimeout(_));
         assert!(fixture.service_round_trip(30010, 30010, 4096).is_ok());
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     macro_rules! define_operation_failure_offline_submit_and_policy_fail_helper {
@@ -2370,7 +2370,7 @@ mod operational_state_tests {
                 let mut config = build_standard_test_config();
                 config.offline_queue_policy = OfflineQueuePolicy::$offline_policy;
 
-                let mut fixture = OperationalStateTestFixture::new(config);
+                let mut fixture = ProtocolStateTestFixture::new(config);
 
                 let packet = $build_operation_function_name();
 
@@ -2383,7 +2383,7 @@ mod operational_state_tests {
                 assert!(operation_result.is_err());
 
                 assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
-                verify_operational_state_empty(&fixture);
+                verify_protocol_state_empty(&fixture);
             }
         };
     }
@@ -2459,8 +2459,8 @@ mod operational_state_tests {
                 let mut config = build_standard_test_config();
                 config.offline_queue_policy = OfflineQueuePolicy::$offline_policy;
 
-                let mut fixture = OperationalStateTestFixture::new(config);
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                let mut fixture = ProtocolStateTestFixture::new(config);
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
                 let packet = $build_operation_function_name();
 
@@ -2470,7 +2470,7 @@ mod operational_state_tests {
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
 
                 assert!(fixture.on_connection_closed(0).is_ok());
-                verify_operational_state_empty(&fixture);
+                verify_protocol_state_empty(&fixture);
 
                 let result = operation_result_receiver.blocking_recv();
                 assert!(!result.is_err());
@@ -2479,7 +2479,7 @@ mod operational_state_tests {
                 assert!(operation_result.is_err());
 
                 assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
-                verify_operational_state_empty(&fixture);
+                verify_protocol_state_empty(&fixture);
             }
         };
     }
@@ -2555,8 +2555,8 @@ mod operational_state_tests {
                 let mut config = build_standard_test_config();
                 config.offline_queue_policy = OfflineQueuePolicy::$offline_policy;
 
-                let mut fixture = OperationalStateTestFixture::new(config);
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                let mut fixture = ProtocolStateTestFixture::new(config);
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
                 let packet = $build_operation_function_name();
 
@@ -2572,7 +2572,7 @@ mod operational_state_tests {
                 assert!(fixture.client_state.current_operation.is_some());
 
                 assert!(fixture.on_connection_closed(0).is_ok());
-                verify_operational_state_empty(&fixture);
+                verify_protocol_state_empty(&fixture);
 
                 let result = operation_result_receiver.blocking_recv();
                 assert!(!result.is_err());
@@ -2581,7 +2581,7 @@ mod operational_state_tests {
                 assert!(operation_result.is_err());
 
                 assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
-                verify_operational_state_empty(&fixture);
+                verify_protocol_state_empty(&fixture);
             }
         };
     }
@@ -2657,8 +2657,8 @@ mod operational_state_tests {
                 let mut config = build_standard_test_config();
                 config.offline_queue_policy = OfflineQueuePolicy::$offline_policy;
 
-                let mut fixture = OperationalStateTestFixture::new(config);
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                let mut fixture = ProtocolStateTestFixture::new(config);
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
                 let packet = $build_operation_function_name();
 
@@ -2678,7 +2678,7 @@ mod operational_state_tests {
                 }
 
                 assert!(fixture.on_connection_closed(0).is_ok());
-                verify_operational_state_empty(&fixture);
+                verify_protocol_state_empty(&fixture);
 
                 let result = operation_result_receiver.blocking_recv();
                 assert!(!result.is_err());
@@ -2687,7 +2687,7 @@ mod operational_state_tests {
                 assert!(operation_result.is_err());
 
                 assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
-                verify_operational_state_empty(&fixture);
+                verify_protocol_state_empty(&fixture);
             }
         };
     }
@@ -2737,8 +2737,8 @@ mod operational_state_tests {
                 let mut config = build_standard_test_config();
                 config.offline_queue_policy = OfflineQueuePolicy::PreserveNothing;
 
-                let mut fixture = OperationalStateTestFixture::new(config);
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                let mut fixture = ProtocolStateTestFixture::new(config);
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
                 let packet = $build_operation_function_name();
 
@@ -2827,10 +2827,10 @@ mod operational_state_tests {
                 config.offline_queue_policy = OfflineQueuePolicy::PreserveNothing;
                 config.connect_options.rejoin_session_policy = RejoinSessionPolicy::PostSuccess;
 
-                let mut fixture = OperationalStateTestFixture::new(config);
+                let mut fixture = ProtocolStateTestFixture::new(config);
                 fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_session_resumption));
 
-                assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+                assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
                 let packet = $build_operation_function_name();
 
@@ -2975,8 +2975,8 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_user_disconnect_success_empty_queues() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         // submit a disconnect
         let disconnect = DisconnectPacket {
@@ -2989,13 +2989,13 @@ mod operational_state_tests {
 
         // process it but don't write complete yet, verify state expectations
         assert!(fixture.service_once(10, 4096).is_ok());
-        assert_eq!(OperationalStateType::PendingDisconnect, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::PendingDisconnect, fixture.client_state.state);
         assert_eq!(1, fixture.client_state.pending_write_completion_operations.len());
 
         // write complete and verify final state
         assert_matches!(fixture.on_write_completion(20), Err(MqttError::UserInitiatedDisconnect(_)));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
-        verify_operational_state_empty(&fixture);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
+        verify_protocol_state_empty(&fixture);
     }
 
 
@@ -3005,10 +3005,10 @@ mod operational_state_tests {
         config.offline_queue_policy = OfflineQueuePolicy::PreserveQos1PlusPublishes;
         config.connect_options.rejoin_session_policy = RejoinSessionPolicy::PostSuccess;
 
-        let mut fixture = OperationalStateTestFixture::new(config);
+        let mut fixture = ProtocolStateTestFixture::new(config);
         fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_session_resumption));
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         // (1)-(6) set up so that there's a user operation, resubmit operation and high priority operation
 
@@ -3055,7 +3055,7 @@ mod operational_state_tests {
         assert_eq!(3, fixture.client_state.resubmit_operation_queue.len());
 
         // (4) reconnect and rejoin the session
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 40).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 40).is_ok());
         assert_eq!(3, fixture.client_state.resubmit_operation_queue.len());
 
         // (5) service carefully so that only the qos2 goes out and we process the response from
@@ -3097,7 +3097,7 @@ mod operational_state_tests {
         assert_matches!(disconnect_service_result, Err(MqttError::UserInitiatedDisconnect(_)));
 
         // (9) verify the current operation got sent, the disconnect was sent and nothing else happened
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert_eq!(1, fixture.client_state.resubmit_operation_queue.len());
         assert_eq!(1, fixture.client_state.high_priority_operation_queue.len());
         assert_eq!(1, fixture.client_state.user_operation_queue.len());
@@ -3131,10 +3131,10 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_user_disconnect_failure_invalid_packet() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
         fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_tiny_maximum_packet_size));
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         let disconnect = DisconnectPacket {
             reason_code: DisconnectReasonCode::DisconnectWithWillMessage,
@@ -3145,9 +3145,9 @@ mod operational_state_tests {
         assert!(fixture.disconnect(10, disconnect).is_ok());
 
         assert_matches!(fixture.service_round_trip(0, 0, 4096), Err(MqttError::UserInitiatedDisconnect(_)));
-        assert_eq!(OperationalStateType::Halted, fixture.client_state.state);
+        assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
 
         // we didn't send it, it was invalid
         assert!(find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Disconnect, 1, None, None).is_none());
@@ -3155,8 +3155,8 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_server_disconnect() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         let server_disconnect = DisconnectPacket {
             reason_code: DisconnectReasonCode::UseAnotherServer,
@@ -3179,7 +3179,7 @@ mod operational_state_tests {
         assert_eq!(EncodeResult::Complete, encode_result);
 
         assert_matches!(fixture.on_incoming_bytes(10, encoded_buffer.as_slice()), Err(MqttError::ConnectionClosed(_)));
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
 
         assert_eq!(2, fixture.client_packet_events.len());
         let client_event = fixture.client_packet_events.get(1).unwrap();
@@ -3194,11 +3194,11 @@ mod operational_state_tests {
         let mut config = build_standard_test_config();
         config.connect_options.rejoin_session_policy = rejoin_policy;
 
-        let mut fixture = OperationalStateTestFixture::new(config);
+        let mut fixture = ProtocolStateTestFixture::new(config);
         fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_session_resumption));
 
         for i in 0..4 {
-            assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, i * 10).is_ok());
+            assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, i * 10).is_ok());
             assert!(fixture.on_connection_closed(i * 10).is_ok());
         }
 
@@ -3233,10 +3233,10 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_maximum_inflight_publish_limit_respected() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
         fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_low_receive_maximum));
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
         if let Some(settings) = &fixture.client_state.current_settings {
             assert_eq!(1, settings.receive_maximum_from_server);
         } else {
@@ -3338,7 +3338,7 @@ mod operational_state_tests {
         assert_eq!(0, fixture.client_state.pending_publish_operations.len());
         assert!(result3.try_recv().is_ok());
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
@@ -3346,8 +3346,8 @@ mod operational_state_tests {
         let mut config = build_standard_test_config();
         config.connect_options = ConnectOptionsBuilder::new().with_topic_alias_maximum(2).build();
 
-        let mut fixture = OperationalStateTestFixture::new(config);
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(config);
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         let mut incoming_packet_buffer = Vec::with_capacity(4096);
 
@@ -3538,7 +3538,7 @@ mod operational_state_tests {
         }
     }
 
-    fn submit_sequenced_packet(fixture: &mut OperationalStateTestFixture, context: &mut MultiOperationContext, packet_index: usize, elapsed: u64) {
+    fn submit_sequenced_packet(fixture: &mut ProtocolStateTestFixture, context: &mut MultiOperationContext, packet_index: usize, elapsed: u64) {
         let packet = &context.outbound_packets[packet_index];
         match packet {
             MqttPacket::Publish(publish) => {
@@ -3557,8 +3557,8 @@ mod operational_state_tests {
         }
     }
 
-    fn initialize_multi_operation_sequence_test(fixture: &mut OperationalStateTestFixture) -> MultiOperationContext {
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+    fn initialize_multi_operation_sequence_test(fixture: &mut ProtocolStateTestFixture) -> MultiOperationContext {
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         let mut context = MultiOperationContext::new();
 
@@ -3671,7 +3671,7 @@ mod operational_state_tests {
     #[test]
     fn connected_state_multi_operation_sequence_simple_success() {
         let config = build_standard_test_config();
-        let mut fixture = OperationalStateTestFixture::new(config);
+        let mut fixture = ProtocolStateTestFixture::new(config);
 
         let mut context = initialize_multi_operation_sequence_test(&mut fixture);
         assert!(fixture.on_write_completion(150).is_ok());
@@ -3681,7 +3681,7 @@ mod operational_state_tests {
         assert!(fixture.on_incoming_bytes(300, to_client2.as_slice()).is_ok());
         assert!(fixture.service_round_trip(500, 500, 65536).is_ok());
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
 
         for (_, result) in context.publish_receivers.iter_mut() {
             let result_value = result.try_recv().unwrap();
@@ -3800,7 +3800,7 @@ mod operational_state_tests {
         successful_sequence_ids
     }
 
-    fn verify_successful_reconnect_sequencing(fixture: &OperationalStateTestFixture, successful_sequence_ids: &[u64], second_connect_index: usize) {
+    fn verify_successful_reconnect_sequencing(fixture: &ProtocolStateTestFixture, successful_sequence_ids: &[u64], second_connect_index: usize) {
         let mut expected_next_sequence_id_index = 0;
         for packet in fixture.to_broker_packet_stream.iter().skip(second_connect_index + 1) {
             let sequence_id_option = packet_to_sequence_number(&**packet).unwrap();
@@ -3818,7 +3818,7 @@ mod operational_state_tests {
         config.connect_options.rejoin_session_policy = RejoinSessionPolicy::PostSuccess;
         config.offline_queue_policy = offline_queue_policy;
 
-        let mut fixture = OperationalStateTestFixture::new(config);
+        let mut fixture = ProtocolStateTestFixture::new(config);
         if rejoin_session {
             fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_session_resumption));
         }
@@ -3826,11 +3826,11 @@ mod operational_state_tests {
         let mut context = initialize_multi_operation_sequence_test(&mut fixture);
         assert!(fixture.on_connection_closed(150).is_ok());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 200).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 200).is_ok());
         assert!(fixture.service_round_trip(500, 500, 65536).is_ok());
         assert!(fixture.service_round_trip(600, 500, 65536).is_ok());
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
         if let Some(settings) = &fixture.client_state.current_settings {
             assert_eq!(rejoin_session, settings.rejoined_session);
         } else {
@@ -3903,7 +3903,7 @@ mod operational_state_tests {
         do_connected_state_multi_operation_reconnect_test(OfflineQueuePolicy::PreserveQos1PlusPublishes, true);
     }
 
-    fn scoped_qos0_publish(fixture: &mut OperationalStateTestFixture) {
+    fn scoped_qos0_publish(fixture: &mut ProtocolStateTestFixture) {
         let publish = PublishPacket {
             qos: QualityOfService::AtMostOnce,
             topic: "hello/world".to_string(),
@@ -3916,18 +3916,18 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_qos0_publish_no_failure_on_dropped_receiver() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         scoped_qos0_publish(&mut fixture);
 
         assert!(fixture.service_round_trip(100, 150, 4096).is_ok());
         assert!(fixture.service_round_trip(200, 250, 4096).is_ok());
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
-    fn scoped_qos1_publish(fixture: &mut OperationalStateTestFixture) {
+    fn scoped_qos1_publish(fixture: &mut ProtocolStateTestFixture) {
         let publish = PublishPacket {
             qos: QualityOfService::AtLeastOnce,
             topic: "hello/world".to_string(),
@@ -3940,18 +3940,18 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_qos1_publish_no_failure_on_dropped_receiver() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         scoped_qos1_publish(&mut fixture);
 
         assert!(fixture.service_round_trip(100, 150, 4096).is_ok());
         assert!(fixture.service_round_trip(200, 250, 4096).is_ok());
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
-    fn scoped_qos2_publish(fixture: &mut OperationalStateTestFixture) {
+    fn scoped_qos2_publish(fixture: &mut ProtocolStateTestFixture) {
         let publish = PublishPacket {
             qos: QualityOfService::AtLeastOnce,
             topic: "hello/world".to_string(),
@@ -3964,18 +3964,18 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_qos2_publish_no_failure_on_dropped_receiver() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         scoped_qos2_publish(&mut fixture);
 
         assert!(fixture.service_round_trip(100, 150, 4096).is_ok());
         assert!(fixture.service_round_trip(200, 250, 4096).is_ok());
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
-    fn scoped_subscribe(fixture: &mut OperationalStateTestFixture) {
+    fn scoped_subscribe(fixture: &mut ProtocolStateTestFixture) {
         let subscribe = SubscribePacket {
             subscriptions: vec!(
                 Subscription {
@@ -3993,18 +3993,18 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_subscribe_no_failure_on_dropped_receiver() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         scoped_subscribe(&mut fixture);
 
         assert!(fixture.service_round_trip(100, 150, 4096).is_ok());
         assert!(fixture.service_round_trip(200, 250, 4096).is_ok());
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
-    fn scoped_unsubscribe(fixture: &mut OperationalStateTestFixture) {
+    fn scoped_unsubscribe(fixture: &mut ProtocolStateTestFixture) {
         let unsubscribe = UnsubscribePacket {
             topic_filters: vec!("hello/+".to_string()),
             ..Default::default()
@@ -4016,15 +4016,15 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_unsubscribe_no_failure_on_dropped_receiver() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         scoped_unsubscribe(&mut fixture);
 
         assert!(fixture.service_round_trip(100, 150, 4096).is_ok());
         assert!(fixture.service_round_trip(200, 250, 4096).is_ok());
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
@@ -4035,10 +4035,10 @@ mod operational_state_tests {
         lru_resolver.reset_for_new_connection(2);
         config.outbound_alias_resolver = Some(lru_resolver);
 
-        let mut fixture = OperationalStateTestFixture::new(config);
+        let mut fixture = ProtocolStateTestFixture::new(config);
         fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_topic_aliasing));
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         let publish = PublishPacket {
             qos: QualityOfService::AtLeastOnce,
@@ -4053,7 +4053,7 @@ mod operational_state_tests {
         assert!(fixture.service_round_trip(100, 150, 4096).is_ok());
         assert!(fixture.service_round_trip(200, 250, 4096).is_ok());
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
 
         let (_, first_packet) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Publish, 1, None, None).unwrap();
         if let MqttPacket::Publish(publish) = &**first_packet {
@@ -4083,18 +4083,18 @@ mod operational_state_tests {
 
     #[test]
     fn connected_state_reset_test() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
         let _ = initialize_multi_operation_sequence_test(&mut fixture);
 
         fixture.reset(500);
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
     }
 
     #[test]
     fn connected_state_disconnect_with_high_priority_pubrel() {
-        let mut fixture = OperationalStateTestFixture::new(build_standard_test_config());
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 0).is_ok());
+        let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
         let publish = PublishPacket {
             qos: QualityOfService::ExactlyOnce,
@@ -4111,11 +4111,11 @@ mod operational_state_tests {
         assert_eq!(0, fixture.client_state.high_priority_operation_queue.len());
         assert_eq!(1, fixture.client_state.resubmit_operation_queue.len());
 
-        assert!(fixture.advance_disconnected_to_state(OperationalStateType::Connected, 300).is_ok());
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 300).is_ok());
         assert!(fixture.service_round_trip(350, 400, 4096).is_ok());
         assert!(fixture.service_round_trip(450, 500, 4096).is_ok());
 
-        verify_operational_state_empty(&fixture);
+        verify_protocol_state_empty(&fixture);
 
         let result = receiver.try_recv().unwrap();
         if let PublishResponse::Qos2(Qos2Response::Pubcomp(pubcomp)) = &result.unwrap() {
