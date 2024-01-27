@@ -4,7 +4,6 @@
  */
 
 
-use crate::*;
 use crate::client::*;
 use crate::config::*;
 use crate::protocol::*;
@@ -60,7 +59,7 @@ pub(crate) enum ClientImplState {
 }
 
 impl Display for ClientImplState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ClientImplState::Stopped => { write!(f, "Stopped") }
             ClientImplState::Connecting => { write!(f, "Connecting") }
