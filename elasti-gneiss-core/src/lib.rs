@@ -173,7 +173,10 @@ pub fn client_event_callback(event: Arc<ClientEvent>) {
 }
 
 fn handle_start(client: &Mqtt5Client, _: StartArgs) {
-    let _ = client.start();
+    let function = |event|{ client_event_callback(event) };
+    let listener_callback = Arc::new(function);
+
+    let _ = client.start(Some(listener_callback));
 }
 
 fn handle_stop(client: &Mqtt5Client, args: StopArgs) {

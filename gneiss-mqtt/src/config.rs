@@ -597,31 +597,6 @@ impl Default for ReconnectOptions {
     }
 }
 
-/// Type for a callback function to be invoked with every emitted client event
-pub type ClientEventListenerCallback = dyn Fn(Arc<ClientEvent>) + Send + Sync;
-
-/// Union type for all of the different ways a client event listener can be configured.
-#[derive(Clone)]
-pub enum ClientEventListener {
-
-    /// A function that should be invoked with the events.
-    ///
-    /// Important Note: for async clients, this function is invoked from a spawned task on the
-    /// client's runtime.  This means you can safely `.await` within the callback without blocking
-    /// the client's forward progress.
-    Callback(Arc<ClientEventListenerCallback>)
-}
-
-impl Debug for ClientEventListener {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ClientEventListener::Callback(_) => {
-                write!(f, "ClientEventListener::Callback(...)")
-            }
-        }
-    }
-}
-
 /// A structure that holds client-level behavioral configuration
 #[derive(Clone)]
 pub struct Mqtt5ClientOptions {
@@ -630,8 +605,6 @@ pub struct Mqtt5ClientOptions {
     pub(crate) connect_timeout: Duration,
     pub(crate) connack_timeout: Duration,
     pub(crate) ping_timeout: Duration,
-
-    pub(crate) default_event_listener: Option<ClientEventListener>,
 
     pub(crate) outbound_alias_resolver_factory: Option<OutboundAliasResolverFactoryFn>,
 
@@ -645,7 +618,6 @@ impl Debug for Mqtt5ClientOptions {
         write!(f, "connect_timeout: {:?}, ", self.connect_timeout)?;
         write!(f, "connack_timeout: {:?}, ", self.connack_timeout)?;
         write!(f, "ping_timeout: {:?}, ", self.ping_timeout)?;
-        write!(f, "default_event_listener: {:?}, ", self.default_event_listener)?;
         if self.outbound_alias_resolver_factory.is_some() {
             write!(f, "outbound_alias_resolver_factory: Some(...), ")?;
         } else {
@@ -664,7 +636,6 @@ impl Default for Mqtt5ClientOptions {
             connect_timeout: Duration::from_secs(30),
             connack_timeout: Duration::from_secs(15),
             ping_timeout: Duration::from_secs(10),
-            default_event_listener: None,
             outbound_alias_resolver_factory: None,
             reconnect_options: ReconnectOptions::default(),
         }
@@ -715,12 +686,6 @@ impl Mqtt5ClientOptionsBuilder {
     /// broker before giving up and shutting down the connection.
     pub fn with_ping_timeout(&mut self, ping_timeout: Duration) -> &mut Self {
         self.options.ping_timeout = ping_timeout;
-        self
-    }
-
-    /// Configures the default event listener for the client.
-    pub fn with_default_event_listener(&mut self, default_event_listener: ClientEventListener) -> &mut Self {
-        self.options.default_event_listener = Some(default_event_listener);
         self
     }
 
