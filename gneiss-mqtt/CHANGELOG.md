@@ -22,4 +22,5 @@ This document is currently hand-written and non-authoritative.
 * * removed all re-exports from top-level crate
 * * added public Into implementations for a few spec enums
 * * broker encode/decode functionality needed for testing wrapped in test feature checks
+* * default client event listener injection moved from client config to the start() client method
 
