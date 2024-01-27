@@ -457,7 +457,7 @@ pub(crate) fn validate_publish_packet_inbound_internal(packet: &PublishPacket, _
 
 impl fmt::Display for PublishPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "PublishPacket {{")?;
+        write!(f, "PublishPacket {{")?;
         log_primitive_value!(self.packet_id, f, "packet_id");
         log_string!(self.topic, f, "topic");
         log_enum!(self.qos, f, "qos", quality_of_service_to_str);
@@ -473,14 +473,14 @@ impl fmt::Display for PublishPacket {
         if let Some(ids) = &self.subscription_identifiers {
             write!(f, "  subscription_identifiers: [")?;
             for id in ids {
-                write!(f, "{} ", id)?;
+                write!(f, " {}", id)?;
             }
-            writeln!(f, "]")?;
+            write!(f, " ]")?;
         }
 
         log_optional_string!(self.content_type, f, "content_type", value);
         log_user_properties!(self.user_properties, f, "user_properties", value);
-        write!(f, "}}")
+        write!(f, " }}")
     }
 }
 

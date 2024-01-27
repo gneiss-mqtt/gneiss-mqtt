@@ -226,12 +226,12 @@ pub(crate) fn validate_disconnect_packet_inbound_internal(packet: &DisconnectPac
 
 impl fmt::Display for DisconnectPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "DisconnectPacket {{")?;
+        write!(f, "DisconnectPacket {{")?;
         log_enum!(self.reason_code, f, "reason_code", disconnect_reason_code_to_str);
         log_optional_primitive_value!(self.session_expiry_interval_seconds, f, "session_expiry_interval_seconds", value);
         log_user_properties!(self.user_properties, f, "user_properties", value);
         log_optional_string!(self.server_reference, f, "server_reference", value);
-        write!(f, "}}")
+        write!(f, " }}")
     }
 }
 

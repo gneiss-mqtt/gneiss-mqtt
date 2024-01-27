@@ -168,9 +168,12 @@ pub(crate) struct ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send 
 impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
     pub(crate) async fn process_stopped(&mut self, client: &mut Mqtt5ClientImpl) -> MqttResult<ClientImplState> {
         loop {
+            trace!("tokio - process_stopped loop");
+
             tokio::select! {
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
+                        debug!("tokio - process_stopped - user operation received");
                         client.handle_incoming_operation(operation_options);
                     }
                 }
@@ -185,27 +188,33 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
     pub(crate) async fn process_connecting(&mut self, client: &mut Mqtt5ClientImpl) -> MqttResult<ClientImplState> {
         let mut connect = (self.tokio_config.connection_factory)();
 
-        let timeout = sleep(Duration::from_millis(30 * 1000));
+        let timeout = sleep(*client.connect_timeout());
         tokio::pin!(timeout);
 
         loop {
+            trace!("tokio - process_connecting loop");
+
             tokio::select! {
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
+                        debug!("tokio - process_connecting - user operation received");
                         client.handle_incoming_operation(operation_options);
                     }
                 }
                 () = &mut timeout => {
+                    info!("tokio - process_connecting - connection establishment timeout exceeded");
                     client.apply_error(MqttError::new_connection_establishment_failure("connection establishment timeout reached"));
                     return Ok(ClientImplState::PendingReconnect);
                 }
                 connection_result = &mut connect => {
                     match connection_result {
                         Ok(stream) => {
+                            info!("tokio - process_connecting - transport connection established successfully");
                             self.stream = Some(stream);
                             return Ok(ClientImplState::Connected);
                         }
                         Err(error) => {
+                            info!("tokio - process_connecting - transport connection establishment failed");
                             client.apply_error(MqttError::new_connection_establishment_failure(error));
                             return Ok(ClientImplState::PendingReconnect);
                         }
@@ -234,6 +243,8 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
 
         let mut next_state = None;
         while next_state.is_none() {
+            trace!("tokio - process_connected loop");
+
             let next_service_time_option = client.get_next_connected_service_time();
             let service_wait: Option<tokio::time::Sleep> = next_service_time_option.map(|next_service_time| sleep(next_service_time - Instant::now()));
 
@@ -245,10 +256,13 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 };
 
             if should_flush {
+                debug!("tokio - process_connected - flushing previous write");
                 write_directive = Some(WriteDirective::Flush);
-            } else if outbound_slice_option.is_some() {
-                write_directive = Some(WriteDirective::Bytes(outbound_slice_option.unwrap()))
+            } else if let Some(outbound_slice) = outbound_slice_option {
+                debug!("tokio - process_connected - {} bytes to write", outbound_slice.len());
+                write_directive = Some(WriteDirective::Bytes(outbound_slice))
             } else {
+                debug!("tokio - process_connected - nothing to write");
                 write_directive = None;
             }
 
@@ -256,6 +270,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 // incoming user operations future
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
+                        debug!("tokio - process_connected - user operation received");
                         client.handle_incoming_operation(operation_options);
                     }
                 }
@@ -263,14 +278,20 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 read_result = stream_reader.read(inbound_data.as_mut_slice()) => {
                     match read_result {
                         Ok(bytes_read) => {
+                            debug!("tokio - process_connected - read {} bytes from connection stream", bytes_read);
+
                             if bytes_read == 0 {
+                                info!("tokio - process_connected - connection closed for read (0 bytes)");
                                 client.apply_error(MqttError::new_connection_closed("network stream closed"));
                                 next_state = Some(ClientImplState::PendingReconnect);
-                            } else if client.handle_incoming_bytes(&inbound_data[..bytes_read]).is_err() {
+                            } else if let Err(error) = client.handle_incoming_bytes(&inbound_data[..bytes_read]) {
+                                info!("tokio - process_connected - error handling incoming bytes: {:?}", error);
+                                client.apply_error(error);
                                 next_state = Some(ClientImplState::PendingReconnect);
                             }
                         }
                         Err(error) => {
+                            info!("tokio - process_connected - connection stream read failed: {:?}", error);
                             if is_connection_established(client.get_protocol_state()) {
                                 client.apply_error(MqttError::new_connection_closed(error));
                             } else {
@@ -282,7 +303,9 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 }
                 // client service future (if relevant)
                 Some(_) = conditional_wait(service_wait) => {
-                    if client.handle_service(&mut outbound_data).is_err() {
+                    debug!("tokio - process_connected - running client service task");
+                    if let Err(error) = client.handle_service(&mut outbound_data) {
+                        client.apply_error(error);
                         next_state = Some(ClientImplState::PendingReconnect);
                     }
                 }
@@ -290,9 +313,12 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 Some(bytes_written_result) = conditional_write(write_directive, &mut stream_writer) => {
                     match bytes_written_result {
                         Ok(bytes_written) => {
+                            debug!("tokio - process_connected - wrote {} bytes to connection stream", bytes_written);
                             if should_flush {
                                 should_flush = false;
-                                if client.handle_write_completion().is_err() {
+                                if let Err(error) = client.handle_write_completion() {
+                                    info!("tokio - process_connected - stream write completion handler failed: {:?}", error);
+                                    client.apply_error(error);
                                     next_state = Some(ClientImplState::PendingReconnect);
                                 }
                             } else {
@@ -305,6 +331,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                             }
                         }
                         Err(error) => {
+                            info!("tokio - process_connected - connection stream write failed: {:?}", error);
                             if is_connection_established(client.get_protocol_state()) {
                                 client.apply_error(MqttError::new_connection_closed(error));
                             } else {
@@ -321,7 +348,9 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
             }
         }
 
+        info!("tokio - process_connected - shutting down stream");
         let _ = stream_writer.shutdown().await;
+        info!("tokio - process_connected - stream fully closed");
 
         Ok(next_state.unwrap())
     }
@@ -331,13 +360,17 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
         tokio::pin!(reconnect_timer);
 
         loop {
+            trace!("tokio - process_pending_reconnect loop");
+
             tokio::select! {
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
+                        debug!("tokio - process_pending_reconnect - user operation received");
                         client.handle_incoming_operation(operation_options);
                     }
                 }
                 () = &mut reconnect_timer => {
+                    info!("tokio - process_pending_reconnect - reconnect timer exceeded");
                     return Ok(ClientImplState::Connecting);
                 }
             }

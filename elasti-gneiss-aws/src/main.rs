@@ -12,7 +12,6 @@ use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions, WebsocketSigv4Opti
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::runtime::Handle;
 use url::Url;
 
@@ -174,8 +173,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Mqtt5ClientOptionsBuilder::new()
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
-        .with_connack_timeout(Duration::from_secs(60))
-        .with_ping_timeout(Duration::from_secs(60))
         .with_default_event_listener(callback)
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::Uniform)
         .build();

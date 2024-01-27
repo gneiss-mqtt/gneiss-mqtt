@@ -216,7 +216,7 @@ async fn handle_publish(client: &Mqtt5Client, args: PublishArgs) {
     let publish_result = client.publish(publish, None).await;
     match &publish_result {
         Ok(publish_response) => {
-            println!("Publish Result: Ok(\n  {} )\n", publish_response);
+            println!("Publish Result: Ok( {} )\n", publish_response);
         }
         Err(err) => {
             println!("Publish Result: Err( {} )\n", err);
@@ -242,7 +242,7 @@ async fn handle_subscribe(client: &Mqtt5Client, args: SubscribeArgs) {
 
     match &subscribe_result {
         Ok(subscribe_response) => {
-            println!("Subscribe Result: Ok(\n  {} )\n", subscribe_response);
+            println!("Subscribe Result: Ok( {} )\n", subscribe_response);
         }
         Err(err) => {
             println!("Subscribe Result: Err( {} )\n", err);
@@ -263,7 +263,7 @@ async fn handle_unsubscribe(client: &Mqtt5Client, args: UnsubscribeArgs) {
 
     match &unsubscribe_result {
         Ok(unsubscribe_response) => {
-            println!("Unsubscribe Result: Ok(\n  {} )\n", unsubscribe_response);
+            println!("Unsubscribe Result: Ok( {} )\n", unsubscribe_response);
         }
         Err(err) => {
             println!("Unsubscribe Result: Err( {} )\n", err);

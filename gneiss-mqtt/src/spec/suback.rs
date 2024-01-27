@@ -151,16 +151,16 @@ validate_ack_inbound_internal!(validate_suback_packet_inbound_internal, SubackPa
 
 impl fmt::Display for SubackPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "SubackPacket {{")?;
+        write!(f, "SubackPacket {{")?;
         log_primitive_value!(self.packet_id, f, "packet_id");
         log_optional_string!(self.reason_string, f, "reason_string", value);
         log_user_properties!(self.user_properties, f, "user_properties", value);
-        writeln!(f, "  reason_codes: [")?;
+        write!(f, " reason_codes: [")?;
         for (i, rc) in self.reason_codes.iter().enumerate() {
-            writeln!(f, "    {}: {}", i, suback_reason_code_to_str(*rc))?;
+            write!(f, " {}: {}", i, suback_reason_code_to_str(*rc))?;
         }
-        writeln!(f, "  ]")?;
-        write!(f, "}}")
+        write!(f, " ]")?;
+        write!(f, " }}")
     }
 }
 

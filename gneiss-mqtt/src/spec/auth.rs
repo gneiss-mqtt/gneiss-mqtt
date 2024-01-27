@@ -218,13 +218,13 @@ pub(crate) fn validate_auth_packet_inbound_internal(packet: &AuthPacket, _: &Inb
 
 impl fmt::Display for AuthPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "AuthPacket {{")?;
+        write!(f, "AuthPacket {{")?;
         log_enum!(self.reason_code, f, "reason_code", authenticate_reason_code_to_str);
         log_optional_string!(self.authentication_method, f, "authentication_method", value);
         log_optional_binary_data_sensitive!(self.authentication_data, f, "authentication_data");
         log_optional_string!(self.reason_string, f, "reason_string", value);
         log_user_properties!(self.user_properties, f, "user_properties", value);
-        write!(f, "}}")
+        write!(f, " }}")
     }
 }
 
