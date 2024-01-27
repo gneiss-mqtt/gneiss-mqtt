@@ -14,6 +14,7 @@ use crate::client::*;
 use crate::client::shared_impl::*;
 use crate::config::*;
 use crate::error::{MqttError, MqttResult};
+use crate::protocol::is_connection_established;
 use log::*;
 use std::future::Future;
 use std::pin::Pin;
@@ -54,7 +55,6 @@ macro_rules! submit_async_client_operation {
 }
 
 pub(crate) use submit_async_client_operation;
-use crate::operation::is_connection_established;
 
 pub(crate) struct AsyncOperationChannel<T> {
     sender: AsyncOperationSender<T>,

@@ -4,7 +4,7 @@
  */
 
 use crate::error::{MqttError, MqttResult};
-use crate::spec::UserProperty;
+use crate::mqtt::UserProperty;
 
 use log::*;
 

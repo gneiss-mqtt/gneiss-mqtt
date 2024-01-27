@@ -7,8 +7,8 @@
 use crate::*;
 use crate::client::*;
 use crate::config::*;
-use crate::operation::*;
-use crate::spec::*;
+use crate::protocol::*;
+use crate::mqtt::*;
 
 use log::*;
 use std::collections::{HashMap, VecDeque};

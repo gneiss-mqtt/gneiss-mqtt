@@ -96,42 +96,42 @@ mod encode;
 pub mod error;
 pub mod features;
 mod logging;
-mod operation;
-pub mod spec;
+pub mod mqtt;
+mod protocol;
 mod validate;
 
 /* Re-export all spec types at the root level */
-pub use spec::QualityOfService;
-pub use spec::PayloadFormatIndicator;
-pub use spec::RetainHandlingType;
-pub use spec::ConnectReasonCode;
-pub use spec::PubackReasonCode;
-pub use spec::PubrecReasonCode;
-pub use spec::PubrelReasonCode;
-pub use spec::PubcompReasonCode;
-pub use spec::DisconnectReasonCode;
-pub use spec::SubackReasonCode;
-pub use spec::UnsubackReasonCode;
-pub use spec::AuthenticateReasonCode;
-pub use spec::UserProperty;
-pub use spec::Subscription;
+pub use mqtt::QualityOfService;
+pub use mqtt::PayloadFormatIndicator;
+pub use mqtt::RetainHandlingType;
+pub use mqtt::ConnectReasonCode;
+pub use mqtt::PubackReasonCode;
+pub use mqtt::PubrecReasonCode;
+pub use mqtt::PubrelReasonCode;
+pub use mqtt::PubcompReasonCode;
+pub use mqtt::DisconnectReasonCode;
+pub use mqtt::SubackReasonCode;
+pub use mqtt::UnsubackReasonCode;
+pub use mqtt::AuthenticateReasonCode;
+pub use mqtt::UserProperty;
+pub use mqtt::Subscription;
 
-pub use spec::auth::AuthPacket;
-pub use spec::connack::ConnackPacket;
-pub use spec::connect::ConnectPacket;
-pub use spec::disconnect::DisconnectPacket;
-pub use spec::pingreq::PingreqPacket;
-pub use spec::pingresp::PingrespPacket;
-pub use spec::puback::PubackPacket;
-pub use spec::pubcomp::PubcompPacket;
-pub use spec::publish::PublishPacket;
-pub use spec::pubrec::PubrecPacket;
-pub use spec::pubrel::PubrelPacket;
-pub use spec::suback::SubackPacket;
-pub use spec::subscribe::SubscribePacket;
-pub use spec::unsuback::UnsubackPacket;
-pub use spec::unsubscribe::UnsubscribePacket;
-pub use spec::utils::{
+pub use mqtt::auth::AuthPacket;
+pub use mqtt::connack::ConnackPacket;
+pub use mqtt::connect::ConnectPacket;
+pub use mqtt::disconnect::DisconnectPacket;
+pub use mqtt::pingreq::PingreqPacket;
+pub use mqtt::pingresp::PingrespPacket;
+pub use mqtt::puback::PubackPacket;
+pub use mqtt::pubcomp::PubcompPacket;
+pub use mqtt::publish::PublishPacket;
+pub use mqtt::pubrec::PubrecPacket;
+pub use mqtt::pubrel::PubrelPacket;
+pub use mqtt::suback::SubackPacket;
+pub use mqtt::subscribe::SubscribePacket;
+pub use mqtt::unsuback::UnsubackPacket;
+pub use mqtt::unsubscribe::UnsubscribePacket;
+pub use mqtt::utils::{
     convert_u8_to_disconnect_reason_code,
     convert_u8_to_quality_of_service,
 };

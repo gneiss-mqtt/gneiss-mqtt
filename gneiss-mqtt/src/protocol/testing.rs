@@ -8,7 +8,7 @@ mod operational_state_tests {
 
     // feature conditional
     use crate::features::gneiss_tokio::*;
-    use crate::operation::*;
+    use crate::protocol::*;
     use assert_matches::assert_matches;
     use crate::validate::utils::testing::verify_validation_failure;
 

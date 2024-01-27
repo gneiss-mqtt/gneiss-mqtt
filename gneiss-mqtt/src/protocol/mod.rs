@@ -17,9 +17,9 @@ use crate::decode::*;
 use crate::encode::*;
 use crate::encode::utils::*;
 use crate::error::{fold_mqtt_result, MqttError, MqttResult};
-use crate::spec::*;
-use crate::spec::connack::*;
-use crate::spec::utils::*;
+use crate::mqtt::*;
+use crate::mqtt::connack::*;
+use crate::mqtt::utils::*;
 use crate::validate::*;
 
 use log::*;

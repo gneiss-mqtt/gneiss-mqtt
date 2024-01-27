@@ -13,9 +13,9 @@ use crate::*;
 use crate::client::shared_impl::*;
 use crate::config::*;
 use crate::error::{MqttError, MqttResult};
-use crate::spec::*;
-use crate::spec::disconnect::validate_disconnect_packet_outbound;
-use crate::spec::utils::*;
+use crate::mqtt::*;
+use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
+use crate::mqtt::utils::*;
 use crate::validate::*;
 
 use log::*;

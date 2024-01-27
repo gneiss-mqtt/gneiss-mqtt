@@ -5,7 +5,7 @@
 
 use crate::*;
 use crate::error::{MqttError, MqttResult};
-use crate::spec::*;
+use crate::mqtt::*;
 
 use log::*;
 
