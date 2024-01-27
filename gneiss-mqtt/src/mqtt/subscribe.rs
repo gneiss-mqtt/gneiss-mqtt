@@ -18,32 +18,6 @@ use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 
-/// Data model of an [MQTT5 SUBSCRIBE](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901161) packet.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SubscribePacket {
-
-    /// Packet Id of the subscribe.  Setting this value on an outbound subscribe has no effect on the
-    /// actual packet id used by the client.
-    pub packet_id: u16,
-
-    /// List of topic filter subscriptions that the client wishes to listen to
-    ///
-    /// See [MQTT5 Subscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901168)
-    pub subscriptions: Vec<Subscription>,
-
-    /// A positive integer to associate with all subscriptions in this request.  Publish packets that match
-    /// a subscription in this request should include this identifier in the resulting message.
-    ///
-    /// See [MQTT5 Subscription Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901166)
-    pub subscription_identifier: Option<u32>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901167)
-    pub user_properties: Option<Vec<UserProperty>>,
-}
-
-
 #[rustfmt::skip]
 fn compute_subscribe_packet_length_properties(packet: &SubscribePacket) -> MqttResult<(u32, u32)> {
     let mut subscribe_property_section_length = compute_user_properties_length(&packet.user_properties);

@@ -7,11 +7,11 @@
 Module containing types for configuring an MQTT client.
  */
 
-use crate::*;
 use crate::alias::{OutboundAliasResolverFactoryFn};
 use crate::error::*;
 use crate::client::*;
 use crate::features::gneiss_tokio::{TokioClientOptions};
+use crate::mqtt::*;
 
 use log::*;
 use std::fmt::{Debug, Formatter};
@@ -613,7 +613,7 @@ pub enum ClientEventListener {
 }
 
 impl Debug for ClientEventListener {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ClientEventListener::Callback(_) => {
                 write!(f, "ClientEventListener::Callback(...)")
@@ -639,7 +639,7 @@ pub struct Mqtt5ClientOptions {
 }
 
 impl Debug for Mqtt5ClientOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Mqtt5ClientOptions {{ ")?;
         write!(f, "offline_queue_policy: {:?}, ", self.offline_queue_policy)?;
         write!(f, "connect_timeout: {:?}, ", self.connect_timeout)?;

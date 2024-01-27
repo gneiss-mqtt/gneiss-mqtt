@@ -3,79 +3,85 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+/*!
+Module containing containing miscellaneous constants and conversion functions related to the MQTT specification.
+While currently public, this is unstable and probably going to change because the only exports are a couple of
+integer -> mqtt spec enum conversion functions.
+ */
+
 use crate::*;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
 
 use log::*;
 
-pub const PACKET_TYPE_CONNECT: u8 = 1;
-pub const PACKET_TYPE_CONNACK: u8 = 2;
-pub const PACKET_TYPE_PUBLISH: u8 = 3;
-pub const PACKET_TYPE_PUBACK: u8 = 4;
-pub const PACKET_TYPE_PUBREC: u8 = 5;
-pub const PACKET_TYPE_PUBREL: u8 = 6;
-pub const PACKET_TYPE_PUBCOMP: u8 = 7;
-pub const PACKET_TYPE_SUBSCRIBE: u8 = 8;
-pub const PACKET_TYPE_SUBACK: u8 = 9;
-pub const PACKET_TYPE_UNSUBSCRIBE: u8 = 10;
-pub const PACKET_TYPE_UNSUBACK: u8 = 11;
-pub const PACKET_TYPE_PINGREQ: u8 = 12;
-pub const PACKET_TYPE_PINGRESP: u8 = 13;
-pub const PACKET_TYPE_DISCONNECT: u8 = 14;
-pub const PACKET_TYPE_AUTH: u8 = 15;
+pub(crate) const PACKET_TYPE_CONNECT: u8 = 1;
+pub(crate) const PACKET_TYPE_CONNACK: u8 = 2;
+pub(crate) const PACKET_TYPE_PUBLISH: u8 = 3;
+pub(crate) const PACKET_TYPE_PUBACK: u8 = 4;
+pub(crate) const PACKET_TYPE_PUBREC: u8 = 5;
+pub(crate) const PACKET_TYPE_PUBREL: u8 = 6;
+pub(crate) const PACKET_TYPE_PUBCOMP: u8 = 7;
+pub(crate) const PACKET_TYPE_SUBSCRIBE: u8 = 8;
+pub(crate) const PACKET_TYPE_SUBACK: u8 = 9;
+pub(crate) const PACKET_TYPE_UNSUBSCRIBE: u8 = 10;
+pub(crate) const PACKET_TYPE_UNSUBACK: u8 = 11;
+pub(crate) const PACKET_TYPE_PINGREQ: u8 = 12;
+pub(crate) const PACKET_TYPE_PINGRESP: u8 = 13;
+pub(crate) const PACKET_TYPE_DISCONNECT: u8 = 14;
+pub(crate) const PACKET_TYPE_AUTH: u8 = 15;
 
-pub const PROPERTY_KEY_PAYLOAD_FORMAT_INDICATOR: u8 = 1;
-pub const PROPERTY_KEY_MESSAGE_EXPIRY_INTERVAL: u8 = 2;
-pub const PROPERTY_KEY_CONTENT_TYPE: u8 = 3;
-pub const PROPERTY_KEY_RESPONSE_TOPIC: u8 = 8;
-pub const PROPERTY_KEY_CORRELATION_DATA: u8 = 9;
-pub const PROPERTY_KEY_SUBSCRIPTION_IDENTIFIER: u8 = 11;
-pub const PROPERTY_KEY_SESSION_EXPIRY_INTERVAL: u8 = 17;
-pub const PROPERTY_KEY_ASSIGNED_CLIENT_IDENTIFIER: u8 = 18;
-pub const PROPERTY_KEY_SERVER_KEEP_ALIVE: u8 = 19;
-pub const PROPERTY_KEY_AUTHENTICATION_METHOD: u8 = 21;
-pub const PROPERTY_KEY_AUTHENTICATION_DATA: u8 = 22;
-pub const PROPERTY_KEY_REQUEST_PROBLEM_INFORMATION: u8 = 23;
-pub const PROPERTY_KEY_WILL_DELAY_INTERVAL: u8 = 24;
-pub const PROPERTY_KEY_REQUEST_RESPONSE_INFORMATION: u8 = 25;
-pub const PROPERTY_KEY_RESPONSE_INFORMATION: u8 = 26;
-pub const PROPERTY_KEY_SERVER_REFERENCE: u8 = 28;
-pub const PROPERTY_KEY_REASON_STRING: u8 = 31;
-pub const PROPERTY_KEY_RECEIVE_MAXIMUM: u8 = 33;
-pub const PROPERTY_KEY_TOPIC_ALIAS_MAXIMUM: u8 = 34;
-pub const PROPERTY_KEY_TOPIC_ALIAS: u8 = 35;
-pub const PROPERTY_KEY_MAXIMUM_QOS: u8 = 36;
-pub const PROPERTY_KEY_RETAIN_AVAILABLE: u8 = 37;
-pub const PROPERTY_KEY_USER_PROPERTY: u8 = 38;
-pub const PROPERTY_KEY_MAXIMUM_PACKET_SIZE: u8 = 39;
-pub const PROPERTY_KEY_WILDCARD_SUBSCRIPTIONS_AVAILABLE: u8 = 40;
-pub const PROPERTY_KEY_SUBSCRIPTION_IDENTIFIERS_AVAILABLE: u8 = 41;
-pub const PROPERTY_KEY_SHARED_SUBSCRIPTIONS_AVAILABLE: u8 = 42;
+pub(crate) const PROPERTY_KEY_PAYLOAD_FORMAT_INDICATOR: u8 = 1;
+pub(crate) const PROPERTY_KEY_MESSAGE_EXPIRY_INTERVAL: u8 = 2;
+pub(crate) const PROPERTY_KEY_CONTENT_TYPE: u8 = 3;
+pub(crate) const PROPERTY_KEY_RESPONSE_TOPIC: u8 = 8;
+pub(crate) const PROPERTY_KEY_CORRELATION_DATA: u8 = 9;
+pub(crate) const PROPERTY_KEY_SUBSCRIPTION_IDENTIFIER: u8 = 11;
+pub(crate) const PROPERTY_KEY_SESSION_EXPIRY_INTERVAL: u8 = 17;
+pub(crate) const PROPERTY_KEY_ASSIGNED_CLIENT_IDENTIFIER: u8 = 18;
+pub(crate) const PROPERTY_KEY_SERVER_KEEP_ALIVE: u8 = 19;
+pub(crate) const PROPERTY_KEY_AUTHENTICATION_METHOD: u8 = 21;
+pub(crate) const PROPERTY_KEY_AUTHENTICATION_DATA: u8 = 22;
+pub(crate) const PROPERTY_KEY_REQUEST_PROBLEM_INFORMATION: u8 = 23;
+pub(crate) const PROPERTY_KEY_WILL_DELAY_INTERVAL: u8 = 24;
+pub(crate) const PROPERTY_KEY_REQUEST_RESPONSE_INFORMATION: u8 = 25;
+pub(crate) const PROPERTY_KEY_RESPONSE_INFORMATION: u8 = 26;
+pub(crate) const PROPERTY_KEY_SERVER_REFERENCE: u8 = 28;
+pub(crate) const PROPERTY_KEY_REASON_STRING: u8 = 31;
+pub(crate) const PROPERTY_KEY_RECEIVE_MAXIMUM: u8 = 33;
+pub(crate) const PROPERTY_KEY_TOPIC_ALIAS_MAXIMUM: u8 = 34;
+pub(crate) const PROPERTY_KEY_TOPIC_ALIAS: u8 = 35;
+pub(crate) const PROPERTY_KEY_MAXIMUM_QOS: u8 = 36;
+pub(crate) const PROPERTY_KEY_RETAIN_AVAILABLE: u8 = 37;
+pub(crate) const PROPERTY_KEY_USER_PROPERTY: u8 = 38;
+pub(crate) const PROPERTY_KEY_MAXIMUM_PACKET_SIZE: u8 = 39;
+pub(crate) const PROPERTY_KEY_WILDCARD_SUBSCRIPTIONS_AVAILABLE: u8 = 40;
+pub(crate) const PROPERTY_KEY_SUBSCRIPTION_IDENTIFIERS_AVAILABLE: u8 = 41;
+pub(crate) const PROPERTY_KEY_SHARED_SUBSCRIPTIONS_AVAILABLE: u8 = 42;
 
-pub const PUBLISH_PACKET_FIXED_HEADER_DUPLICATE_FLAG : u8 = 8;
-pub const PUBLISH_PACKET_FIXED_HEADER_RETAIN_FLAG : u8 = 1;
-pub const QOS_MASK : u8 = 3;
+pub(crate) const PUBLISH_PACKET_FIXED_HEADER_DUPLICATE_FLAG : u8 = 8;
+pub(crate) const PUBLISH_PACKET_FIXED_HEADER_RETAIN_FLAG : u8 = 1;
+pub(crate) const QOS_MASK : u8 = 3;
 
-pub const CONNECT_PACKET_CLEAN_START_FLAG_MASK : u8 = 1 << 1;
-pub const CONNECT_PACKET_HAS_WILL_FLAG_MASK : u8 = 1 << 2;
-pub const CONNECT_PACKET_WILL_RETAIN_FLAG_MASK : u8 = 1 << 5;
-pub const CONNECT_PACKET_WILL_QOS_FLAG_SHIFT : u8 = 3;
-pub const CONNECT_PACKET_HAS_USERNAME_FLAG_MASK : u8 = 1 << 7;
-pub const CONNECT_PACKET_HAS_PASSWORD_FLAG_MASK : u8 = 1 << 6;
+pub(crate) const CONNECT_PACKET_CLEAN_START_FLAG_MASK : u8 = 1 << 1;
+pub(crate) const CONNECT_PACKET_HAS_WILL_FLAG_MASK : u8 = 1 << 2;
+pub(crate) const CONNECT_PACKET_WILL_RETAIN_FLAG_MASK : u8 = 1 << 5;
+pub(crate) const CONNECT_PACKET_WILL_QOS_FLAG_SHIFT : u8 = 3;
+pub(crate) const CONNECT_PACKET_HAS_USERNAME_FLAG_MASK : u8 = 1 << 7;
+pub(crate) const CONNECT_PACKET_HAS_PASSWORD_FLAG_MASK : u8 = 1 << 6;
 
-pub const UNSUBSCRIBE_FIRST_BYTE : u8 = (PACKET_TYPE_UNSUBSCRIBE << 4) | (0x02u8);
-pub const UNSUBACK_FIRST_BYTE : u8 = PACKET_TYPE_UNSUBACK << 4;
-pub const SUBSCRIBE_FIRST_BYTE : u8 = (PACKET_TYPE_SUBSCRIBE << 4) | (0x02u8);
-pub const SUBACK_FIRST_BYTE : u8 = PACKET_TYPE_SUBACK << 4;
-pub const PUBREL_FIRST_BYTE : u8 = (PACKET_TYPE_PUBREL << 4) | (0x02u8);
-pub const PUBACK_FIRST_BYTE : u8 = PACKET_TYPE_PUBACK << 4;
-pub const PUBREC_FIRST_BYTE : u8 = PACKET_TYPE_PUBREC << 4;
-pub const PUBCOMP_FIRST_BYTE : u8 = PACKET_TYPE_PUBCOMP << 4;
+pub(crate) const UNSUBSCRIBE_FIRST_BYTE : u8 = (PACKET_TYPE_UNSUBSCRIBE << 4) | (0x02u8);
+pub(crate) const UNSUBACK_FIRST_BYTE : u8 = PACKET_TYPE_UNSUBACK << 4;
+pub(crate) const SUBSCRIBE_FIRST_BYTE : u8 = (PACKET_TYPE_SUBSCRIBE << 4) | (0x02u8);
+pub(crate) const SUBACK_FIRST_BYTE : u8 = PACKET_TYPE_SUBACK << 4;
+pub(crate) const PUBREL_FIRST_BYTE : u8 = (PACKET_TYPE_PUBREL << 4) | (0x02u8);
+pub(crate) const PUBACK_FIRST_BYTE : u8 = PACKET_TYPE_PUBACK << 4;
+pub(crate) const PUBREC_FIRST_BYTE : u8 = PACKET_TYPE_PUBREC << 4;
+pub(crate) const PUBCOMP_FIRST_BYTE : u8 = PACKET_TYPE_PUBCOMP << 4;
 
-pub const SUBSCRIPTION_OPTIONS_NO_LOCAL_MASK : u8 = 1u8 << 2;
-pub const SUBSCRIPTION_OPTIONS_RETAIN_AS_PUBLISHED_MASK : u8 = 1u8 << 3;
-pub const SUBSCRIPTION_OPTIONS_RETAIN_HANDLING_SHIFT : u8 = 4;
+pub(crate) const SUBSCRIPTION_OPTIONS_NO_LOCAL_MASK : u8 = 1u8 << 2;
+pub(crate) const SUBSCRIPTION_OPTIONS_RETAIN_AS_PUBLISHED_MASK : u8 = 1u8 << 3;
+pub(crate) const SUBSCRIPTION_OPTIONS_RETAIN_HANDLING_SHIFT : u8 = 4;
 
 /// Converts an integer to a modeled QualityOfService value
 pub fn convert_u8_to_quality_of_service(value: u8) -> MqttResult<QualityOfService> {
@@ -98,7 +104,7 @@ pub(crate) fn quality_of_service_to_str (qos: QualityOfService) -> &'static str 
     }
 }
 
-pub fn convert_u8_to_payload_format_indicator(value: u8) -> MqttResult<PayloadFormatIndicator> {
+pub(crate) fn convert_u8_to_payload_format_indicator(value: u8) -> MqttResult<PayloadFormatIndicator> {
     match value {
         0 => { Ok(PayloadFormatIndicator::Bytes) }
         1 => { Ok(PayloadFormatIndicator::Utf8) }
@@ -347,7 +353,7 @@ pub(crate) fn disconnect_reason_code_to_str (reason_code: DisconnectReasonCode) 
     }
 }
 
-pub fn convert_u8_to_authenticate_reason_code(value: u8) -> MqttResult<AuthenticateReasonCode> {
+pub(crate) fn convert_u8_to_authenticate_reason_code(value: u8) -> MqttResult<AuthenticateReasonCode> {
     match value {
         0 => { Ok(AuthenticateReasonCode::Success) }
         24 => { Ok(AuthenticateReasonCode::ContinueAuthentication) }
@@ -433,7 +439,7 @@ pub(crate) fn suback_reason_code_to_str (reason_code: SubackReasonCode) -> &'sta
     }
 }
 
-pub fn convert_u8_to_retain_handling_type(value: u8) -> MqttResult<RetainHandlingType> {
+pub(crate) fn convert_u8_to_retain_handling_type(value: u8) -> MqttResult<RetainHandlingType> {
     match value {
         0 => { Ok(RetainHandlingType::SendOnSubscribe) }
         1 => { Ok(RetainHandlingType::SendOnSubscribeIfNew) }

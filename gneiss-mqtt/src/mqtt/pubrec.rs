@@ -18,29 +18,6 @@ use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 
-/// Data model of an [MQTT5 PUBREC](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901131) packet
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PubrecPacket {
-
-    /// Id of the QoS 2 publish this packet corresponds to
-    pub packet_id: u16,
-
-    /// Success indicator or failure reason for the initial step of the QoS 2 PUBLISH delivery process.
-    ///
-    /// See [MQTT5 PUBREC Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901134)
-    pub reason_code: PubrecReasonCode,
-
-    /// Additional diagnostic information about the result of the PUBLISH attempt.
-    ///
-    /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901147)
-    pub reason_string: Option<String>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901138)
-    pub user_properties: Option<Vec<UserProperty>>,
-}
-
 #[rustfmt::skip]
 define_ack_packet_lengths_function!(compute_pubrec_packet_length_properties, PubrecPacket, PubrecReasonCode);
 define_ack_packet_reason_string_accessor!(get_pubrec_packet_reason_string, Pubrec);

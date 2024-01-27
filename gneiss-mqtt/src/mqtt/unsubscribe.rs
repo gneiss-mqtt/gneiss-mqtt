@@ -18,25 +18,6 @@ use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 
-/// Data model of an [MQTT5 UNSUBSCRIBE](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901179) packet.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct UnsubscribePacket {
-
-    /// Packet Id of the unsubscribe.  Setting this value on an outbound unsubscribe has no effect on the
-    /// actual packet id used by the client.
-    pub packet_id: u16,
-
-    /// List of topic filters that the client wishes to unsubscribe from.
-    ///
-    /// See [MQTT5 Unsubscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901185)
-    pub topic_filters: Vec<String>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901184)
-    pub user_properties: Option<Vec<UserProperty>>,
-}
-
 #[rustfmt::skip]
 fn compute_unsubscribe_packet_length_properties(packet: &UnsubscribePacket) -> MqttResult<(u32, u32)> {
     let unsubscribe_property_section_length = compute_user_properties_length(&packet.user_properties);

@@ -13,10 +13,6 @@ use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 
-/// Data model of an [MQTT5 PINGRESP](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901200) packet.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PingrespPacket {}
-
 #[rustfmt::skip]
 pub(crate) fn write_pingresp_encoding_steps(_: &PingrespPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_PINGRESP << 4);

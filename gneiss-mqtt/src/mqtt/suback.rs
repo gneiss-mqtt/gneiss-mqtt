@@ -18,30 +18,6 @@ use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 
-/// Data model of an [MQTT5 SUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901171) packet.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SubackPacket {
-
-    /// Id of the unsubscribe this packet is acknowledging
-    pub packet_id: u16,
-
-    /// Additional diagnostic information about the result of the SUBSCRIBE attempt.
-    ///
-    /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901176)
-    pub reason_string: Option<String>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901177)
-    pub user_properties: Option<Vec<UserProperty>>,
-
-    /// A list of reason codes indicating the result of each individual subscription entry in the
-    /// associated SUBSCRIBE packet.
-    ///
-    /// See [MQTT5 Suback Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901178)
-    pub reason_codes: Vec<SubackReasonCode>,
-}
-
 #[rustfmt::skip]
 fn compute_suback_packet_length_properties(packet: &SubackPacket) -> MqttResult<(u32, u32)> {
     let mut suback_property_section_length = compute_user_properties_length(&packet.user_properties);

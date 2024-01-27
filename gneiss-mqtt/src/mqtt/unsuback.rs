@@ -18,30 +18,6 @@ use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 
-/// Data model of an [MQTT5 UNSUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901187) packet.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct UnsubackPacket {
-
-    /// Id of the unsubscribe this packet is acknowledging
-    pub packet_id: u16,
-
-    /// Additional diagnostic information about the result of the UNSUBSCRIBE attempt.
-    ///
-    /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901192)
-    pub reason_string: Option<String>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901193)
-    pub user_properties: Option<Vec<UserProperty>>,
-
-    /// A list of reason codes indicating the result of unsubscribing from each individual topic filter entry in the
-    /// associated UNSUBSCRIBE packet.
-    ///
-    /// See [MQTT5 Unsuback Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901194)
-    pub reason_codes: Vec<UnsubackReasonCode>,
-}
-
 #[rustfmt::skip]
 fn compute_unsuback_packet_length_properties(packet: &UnsubackPacket) -> MqttResult<(u32, u32)> {
     let mut unsuback_property_section_length = compute_user_properties_length(&packet.user_properties);

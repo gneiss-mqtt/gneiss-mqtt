@@ -5,9 +5,10 @@
 
 
 use argh::FromArgs;
-use gneiss_mqtt::*;
 use gneiss_mqtt::error::{MqttError};
 use gneiss_mqtt::client::*;
+use gneiss_mqtt::mqtt::*;
+use gneiss_mqtt::mqtt::utils::*;
 use std::fmt;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};

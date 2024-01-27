@@ -18,29 +18,6 @@ use log::*;
 use std::collections::VecDeque;
 use std::fmt;
 
-/// Data model of an [MQTT5 PUBREL](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901141) packet
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PubrelPacket {
-
-    // packet id is modeled but internal to the client
-    pub(crate) packet_id: u16,
-
-    /// Success indicator or failure reason for the middle step of the QoS 2 PUBLISH delivery process.
-    ///
-    /// See [MQTT5 PUBREL Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901144)
-    pub reason_code: PubrelReasonCode,
-
-    /// Additional diagnostic information about the ongoing QoS 2 PUBLISH delivery process.
-    ///
-    /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901147)
-    pub reason_string: Option<String>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901148)
-    pub user_properties: Option<Vec<UserProperty>>,
-}
-
 #[rustfmt::skip]
 define_ack_packet_lengths_function!(compute_pubrel_packet_length_properties, PubrelPacket, PubrelReasonCode);
 define_ack_packet_reason_string_accessor!(get_pubrel_packet_reason_string, Pubrel);
