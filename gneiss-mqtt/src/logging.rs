@@ -4,9 +4,7 @@
  */
 
 use crate::mqtt::*;
-
 use log::*;
-
 use std::fmt;
 use std::fmt::Write;
 

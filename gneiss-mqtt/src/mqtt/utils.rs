@@ -9,7 +9,6 @@ While currently public, this is unstable and probably going to change because th
 integer -> mqtt spec enum conversion functions.
  */
 
-use crate::*;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
 

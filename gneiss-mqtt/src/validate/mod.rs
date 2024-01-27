@@ -5,7 +5,7 @@
 
 pub(crate) mod utils;
 
-use crate::PacketType;
+use crate::mqtt::PacketType;
 use crate::alias::*;
 use crate::client::*;
 use crate::config::*;

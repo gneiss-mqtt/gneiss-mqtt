@@ -7,6 +7,7 @@
 Module containing a set of structured data types that model the MQTT5 specification.
  */
 
+use std::fmt;
 use log::error;
 use crate::error::{MqttError};
 
@@ -1258,4 +1259,75 @@ pub(crate) enum MqttPacket {
     Pingresp(PingrespPacket),
     Disconnect(DisconnectPacket),
     Auth(AuthPacket),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+/// An enum indicating the kind of MQTT packet
+pub enum PacketType {
+    /// A [Connect](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901033) packet
+    Connect,
+
+    /// A [Connack](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901074) packet
+    Connack,
+
+    /// A [Publish](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901100) packet
+    Publish,
+
+    /// A [Puback](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901121) packet
+    Puback,
+
+    /// A [Pubrec](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901131) packet
+    Pubrec,
+
+    /// A [Pubrel](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901141) packet
+    Pubrel,
+
+    /// A [Pubcomp](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901151) packet
+    Pubcomp,
+
+    /// A [Subscribe](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901161) packet
+    Subscribe,
+
+    /// A [Suback](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901171) packet
+    Suback,
+
+    /// An [Unsubscribe](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901179) packet
+    Unsubscribe,
+
+    /// An [Unsuback](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901187) packet
+    Unsuback,
+
+    /// A [Pingreq](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901195) packet
+    Pingreq,
+
+    /// A [Pingresp](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901200) packet
+    Pingresp,
+
+    /// A [Disconnect](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901205) packet
+    Disconnect,
+
+    /// An [Auth](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901217) packet
+    Auth,
+}
+
+impl fmt::Display for PacketType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PacketType::Connect => { write!(f, "ConnectPacket") }
+            PacketType::Connack => { write!(f, "ConnackPacket") }
+            PacketType::Publish => { write!(f, "PublishPacket") }
+            PacketType::Puback => { write!(f, "PubackPacket") }
+            PacketType::Pubrec => { write!(f, "PubrecPacket") }
+            PacketType::Pubrel => { write!(f, "PubrelPacket") }
+            PacketType::Pubcomp => { write!(f, "PubcompPacket") }
+            PacketType::Subscribe => { write!(f, "SubscribePacket") }
+            PacketType::Suback => { write!(f, "SubackPacket") }
+            PacketType::Unsubscribe => { write!(f, "UnsubscribePacket") }
+            PacketType::Unsuback => { write!(f, "UnsubackPacket") }
+            PacketType::Pingreq => { write!(f, "PingreqPacket") }
+            PacketType::Pingresp => { write!(f, "PingrespPacket") }
+            PacketType::Disconnect => { write!(f, "DisconnectPacket") }
+            PacketType::Auth => { write!(f, "AuthPacket") }
+        }
+    }
 }

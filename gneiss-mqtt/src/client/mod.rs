@@ -9,7 +9,6 @@ Module containing the public MQTT client and associated types necessary to invok
 
 pub(crate) mod shared_impl;
 
-use crate::*;
 use crate::client::shared_impl::*;
 use crate::config::*;
 use crate::error::{MqttError, MqttResult};
@@ -77,7 +76,7 @@ pub enum Qos2Response {
 }
 
 impl Display for Qos2Response {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Qos2Response::Pubrec(pubrec) => {
                 write!(f, "Pubrec ( {} )", pubrec)
@@ -107,7 +106,7 @@ pub enum PublishResponse {
 }
 
 impl Display for PublishResponse {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             PublishResponse::Qos0 => {
                 write!(f, "PublishResponse Qos0")
@@ -301,7 +300,7 @@ pub struct NegotiatedSettings {
 }
 
 impl Display for NegotiatedSettings {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "NegotiatedSettings {{")?;
         write!(f, " maximum_qos:{}", quality_of_service_to_str(self.maximum_qos))?;
         write!(f, " session_expiry_interval:{}", self.session_expiry_interval)?;
@@ -325,7 +324,7 @@ impl Display for NegotiatedSettings {
 pub struct ConnectionAttemptEvent {}
 
 impl Display for ConnectionAttemptEvent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ConnectionAttemptEvent {{ }}")
     }
 }
@@ -344,7 +343,7 @@ pub struct ConnectionSuccessEvent {
 }
 
 impl Display for ConnectionSuccessEvent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ConnectionSuccessEvent {{ {}, {} }}", self.connack, self.settings)
     }
 }
@@ -363,7 +362,7 @@ pub struct ConnectionFailureEvent {
 }
 
 impl Display for ConnectionFailureEvent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(connack) = &self.connack {
             write!(f, "ConnectionFailureEvent {{ {}, {} }}", self.error, connack )
         } else {
@@ -386,7 +385,7 @@ pub struct DisconnectionEvent {
 }
 
 impl Display for DisconnectionEvent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(disconnect) = &self.disconnect {
             write!(f, "DisconnectionEvent {{ {}, {} }}", self.error, disconnect)
         } else {
@@ -402,7 +401,7 @@ impl Display for DisconnectionEvent {
 pub struct StoppedEvent {}
 
 impl Display for StoppedEvent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "StoppedEvent {{ }}")
     }
 }
@@ -419,7 +418,7 @@ pub struct PublishReceivedEvent {
 }
 
 impl Display for PublishReceivedEvent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "PublishReceivedEvent {{ {} }}", self.publish )
     }
 }
@@ -452,7 +451,7 @@ pub enum ClientEvent {
 }
 
 impl Display for ClientEvent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ClientEvent::ConnectionAttempt(event) => { write!(f, "{}", event) }
             ClientEvent::ConnectionSuccess(event) => { write!(f, "{}", event) }

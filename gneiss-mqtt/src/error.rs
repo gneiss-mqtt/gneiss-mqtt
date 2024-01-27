@@ -8,9 +8,10 @@ A module containing the core crate error enumeration, context structures, and co
 definitions.
  */
 
+use crate::mqtt::PacketType;
+
 use std::error::Error;
 use std::fmt;
-use crate::PacketType;
 
 /// Additional details about an Unimplemented error variant
 #[derive(Debug)]

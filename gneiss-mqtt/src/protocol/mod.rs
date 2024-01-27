@@ -234,7 +234,7 @@ enum ProtocolEnqueuePosition {
 }
 
 impl Display for ProtocolEnqueuePosition {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             ProtocolEnqueuePosition::Front => { write!(f, "Front") }
             ProtocolEnqueuePosition::Back => { write!(f, "Back") }
@@ -369,7 +369,7 @@ pub(crate) struct ProtocolState {
 }
 
 impl Display for ProtocolState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         let level = log::max_level();
         match level {
             LevelFilter::Debug => {
@@ -578,7 +578,7 @@ impl ProtocolState {
         does_packet_pass_offline_queue_policy(packet, &self.config.offline_queue_policy)
     }
 
-    fn log_debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn log_debug(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "ProtocolState: {{")?;
         write!(f, " state:{},", self.state)?;
         write!(f, " elapsed_time_ms:{},", self.elapsed_time_ms)?;
@@ -601,7 +601,7 @@ impl ProtocolState {
         Ok(())
     }
 
-    fn log_trace(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn log_trace(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "ProtocolState: {{")?;
         write!(f, " state:{},", self.state)?;
         write!(f, " elapsed_time_ms:{},", self.elapsed_time_ms)?;

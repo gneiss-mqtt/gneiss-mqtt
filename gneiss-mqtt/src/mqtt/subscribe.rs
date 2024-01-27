@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::*;
 #[cfg(test)]
 use crate::decode::utils::*;
 use crate::encode::*;
