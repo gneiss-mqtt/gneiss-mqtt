@@ -223,6 +223,14 @@ pub enum PubackReasonCode {
     PayloadFormatInvalid = 153,
 }
 
+impl PubackReasonCode {
+    /// Returns whether or not the reason code represents a successful publish
+    pub fn is_success(&self) -> bool {
+        matches!(self, PubackReasonCode::Success | PubackReasonCode::NoMatchingSubscribers)
+    }
+}
+
+
 /// Reason code inside PUBREC packets that indicates the result of the associated QoS 2 PUBLISH request.
 ///
 /// Enum values match [MQTT5 spec](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901134) encoding values.
@@ -276,6 +284,13 @@ pub enum PubrecReasonCode {
     ///
     /// May be sent by the client or the server.
     PayloadFormatInvalid = 153,
+}
+
+impl PubrecReasonCode {
+    /// Returns whether or not the reason code represents a successful publish
+    pub fn is_success(&self) -> bool {
+        matches!(self, PubrecReasonCode::Success | PubrecReasonCode::NoMatchingSubscribers)
+    }
 }
 
 /// Reason code inside PUBREL packets that indicates the result of receiving a PUBREC packet as part of the QoS 2 PUBLISH delivery process.
@@ -538,6 +553,13 @@ pub enum SubackReasonCode {
     WildcardSubscriptionsNotSupported = 162,
 }
 
+impl SubackReasonCode {
+    /// Returns whether or not the reason code represents a successful subscription
+    pub fn is_success(&self) -> bool {
+        matches!(self, SubackReasonCode::GrantedQos0 | SubackReasonCode::GrantedQos1 | SubackReasonCode::GrantedQos2)
+    }
+}
+
 /// Reason codes inside UNSUBACK packet payloads that specify the results for each topic filter in the associated
 /// UNSUBSCRIBE packet.
 ///
@@ -567,6 +589,13 @@ pub enum UnsubackReasonCode {
 
     /// Returned when the packet identifier was already in use on the server.
     PacketIdentifierInUse = 145,
+}
+
+impl UnsubackReasonCode {
+    /// Returns whether or not the reason code represents a successful unsubscribe
+    pub fn is_success(&self) -> bool {
+        matches!(self, UnsubackReasonCode::Success | UnsubackReasonCode::NoSubscriptionExisted)
+    }
 }
 
 /// Reason code that specifies the response to a received AUTH packet.
