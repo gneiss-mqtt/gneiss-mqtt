@@ -127,7 +127,7 @@ pub type PublishResult = MqttResult<PublishResponse>;
 /// receive the operation's result, but note that the operation will complete independently of
 /// the use of `.await` (you don't need to await for the operation to be performed, you only need
 /// to await to get the final result of performing it).
-pub type PublishResultFuture = dyn Future<Output = PublishResult>;
+pub type PublishResultFuture = dyn Future<Output = PublishResult> + Send;
 
 /// Additional client options applicable to an MQTT Subscribe operation
 #[derive(Debug, Default)]
@@ -172,7 +172,7 @@ pub type SubscribeResult = MqttResult<SubackPacket>;
 /// receive the operation's result, but note that the operation will complete independently of
 /// the use of `.await` (you don't need to await for the operation to be performed, you only need
 /// to await to get the final result of performing it).
-pub type SubscribeResultFuture = dyn Future<Output = SubscribeResult>;
+pub type SubscribeResultFuture = dyn Future<Output = SubscribeResult> + Send;
 
 /// Additional client options applicable to an MQTT Unsubscribe operation
 #[derive(Debug, Default)]
@@ -217,7 +217,7 @@ pub type UnsubscribeResult = MqttResult<UnsubackPacket>;
 /// receive the operation's result, but note that the operation will complete independently of
 /// the use of `.await` (you don't need to await for the operation to be performed, you only need
 /// to await to get the final result of performing it).
-pub type UnsubscribeResultFuture = dyn Future<Output = UnsubscribeResult>;
+pub type UnsubscribeResultFuture = dyn Future<Output = UnsubscribeResult> + Send;
 
 /// Additional client options applicable to client Stop operation
 #[derive(Debug, Default)]

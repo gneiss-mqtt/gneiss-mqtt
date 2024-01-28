@@ -67,9 +67,122 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-# Example: React to client events
+# Example: Subscribe to a topic
+
+In order to receive messages, you must first subscribe to the topics you want to receive messages for.  Subscribing
+is straightforward: configure a Subscribe packet and submit it to the client.  The subscribe will
+be performed whether or not the result is waited on.  (In the async case) Await is simply how the response is
+transferred back to you.
+
+A successful subscribe call returns the Suback packet that the broker responded with.  You must check the Suback
+reason code vector to verify the success/failure result for each subscription in the original subscribe.
+
+```no_run
+use gneiss_mqtt::error::MqttResult;
+use gneiss_mqtt::client::{Mqtt5Client, SubscribeResult};
+use gneiss_mqtt::mqtt::{QualityOfService, SubscribePacket, Subscription};
+
+async fn subscribe_to_topic(client: Mqtt5Client) {
+    let subscribe = SubscribePacket {
+        subscriptions: vec!(
+            Subscription {
+                topic_filter: "hello/world/+".to_string(),
+                qos: QualityOfService::AtLeastOnce,
+                ..Default::default()
+            }
+        ),
+        ..Default::default()
+    };
+
+    let subscribe_result = client.subscribe(subscribe, None).await;
+    if let Ok(suback) = subscribe_result {
+        if suback.reason_codes[0].is_success() {
+            println!("Subscribe success!");
+            return;
+        }
+    }
+
+    println!("Subscribe failed!");
+}
+```
+
+# Example: Unsubscribe from a topic
 
 TODO
+
+# Example: Publish to a topic
+
+TODO
+
+# Example: React to client events
+In addition to performing MQTT operations with the client, you can also react to events emitted by the
+client.  The client emits events when connectivity changes (successful connection, failed connection, disconnection,
+etc...) as well as when publishes are received.
+
+To handle client events, pass in a handler when starting the client.  See the ClientEvent documentation for
+more information on what data each event variant may contain.
+
+This example shows how you can capture the client in the event handler closure, letting you perform additional
+operations in reaction to client events (the client's public API is immutable).  In this case, we send a "Pong" publish
+every time we receive a "Ping" publish:
+
+```no_run
+use gneiss_mqtt::client::{ClientEvent, Mqtt5Client};
+use gneiss_mqtt::mqtt::{PublishPacket, QualityOfService};
+use std::sync::Arc;
+
+pub fn client_event_callback(client: Arc<Mqtt5Client>, event: Arc<ClientEvent>) {
+    if let ClientEvent::PublishReceived(publish_received_event) = event.as_ref() {
+        let publish = &publish_received_event.publish;
+        if let Some(payload) = &publish.payload {
+            if "Ping".as_bytes() == payload.as_slice() {
+                // we received a Ping, let's send a Pong in response
+                let pong_publish = PublishPacket {
+                    topic: publish.topic.clone(),
+                    qos: QualityOfService::AtMostOnce,
+                    ..Default::default()
+                };
+
+                // we're in a synchronous function, but it's being called from an async task within the runtime, so
+                // we can await and check the publish result by getting the current runtime and spawning an async
+                // task in it
+                let runtime_handle = Handle::current();
+                runtime_handle.spawn(async move {
+                    if let Ok(publish_result) = client.publish(pong_publish, None).await {
+                        println!("Successfully published Pong!");
+                    } else {
+                        println!("Failed to publish Pong!");
+                    }
+                });
+            }
+        }
+    }
+}
+
+use gneiss_mqtt::config::GenericClientBuilder;
+use tokio::runtime::Handle;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+
+    // put the client in an Arc so we can capture an Arc clone in the event handler closure
+    let client =
+        Arc::new(GenericClientBuilder::new("127.0.0.1", 1883)
+            .build(&Handle::current())?);
+
+    // make a client event handler closure
+    let closure_client = client.clone();
+    let listener_callback = Arc::new(move |event| { client_event_callback(closure_client.clone(), event) });
+
+    // Pass the event handler callback into start()
+    client.start(Some(listener_callback))?;
+
+    // <do stuff with the client>
+
+    Ok(())
+}
+
+```
 
 # Additional Notes
 
