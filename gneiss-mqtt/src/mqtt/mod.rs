@@ -168,6 +168,14 @@ pub enum ConnectReasonCode {
     ConnectionRateExceeded = 159,
 }
 
+impl ConnectReasonCode {
+    /// Returns whether or not the reason code represents a successful connect
+    pub fn is_success(&self) -> bool {
+        matches!(self, ConnectReasonCode::Success)
+    }
+}
+
+
 /// Reason code inside PUBACK packets that indicates the result of the associated PUBLISH request.
 ///
 /// Enum values match [MQTT5 spec](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901124) encoding values.
@@ -311,6 +319,13 @@ pub enum PubrelReasonCode {
     PacketIdentifierNotFound = 146,
 }
 
+impl PubrelReasonCode {
+    /// Returns whether the reason code represents a successful pubrec
+    pub fn is_success(&self) -> bool {
+        matches!(self, PubrelReasonCode::Success)
+    }
+}
+
 /// Reason code inside PUBCOMP packets that indicates the result of receiving a PUBREL packet as part of the QoS 2 publish delivery process.
 ///
 /// Enum values match [MQTT5 spec](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901154) encoding values.
@@ -328,6 +343,13 @@ pub enum PubcompReasonCode {
     ///
     /// May be sent by the client or the server.
     PacketIdentifierNotFound = 146,
+}
+
+impl PubcompReasonCode {
+    /// Returns whether the reason code represents a successful pubrel
+    pub fn is_success(&self) -> bool {
+        matches!(self, PubcompReasonCode::Success)
+    }
 }
 
 /// Reason code inside DISCONNECT packets.  Helps determine why a connection was terminated.
@@ -496,6 +518,13 @@ pub enum DisconnectReasonCode {
     WildcardSubscriptionsNotSupported = 162,
 }
 
+impl DisconnectReasonCode {
+    /// Returns whether the reason code represents a normal disconnect or an error
+    pub fn is_success(&self) -> bool {
+        matches!(self, DisconnectReasonCode::NormalDisconnection | DisconnectReasonCode::DisconnectWithWillMessage)
+    }
+}
+
 impl TryFrom<u8> for DisconnectReasonCode {
     type Error = MqttError;
 
@@ -621,7 +650,6 @@ pub enum AuthenticateReasonCode {
     ReAuthenticate = 25,
 }
 
-
 /// Data model for MQTT5 user properties.
 ///
 /// A user property is a name-value pair of utf-8 strings that can be added to mqtt5 packets. Names are
@@ -644,42 +672,89 @@ pub struct UserProperty {
 /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Subscription {
-
-    /// Topic filter to subscribe to
-    ///
-    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
-    pub topic_filter: String,
-
-    /// Maximum QoS on which the subscriber will accept publish messages.  Negotiated QoS may be different.
-    ///
-    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
-    pub qos: QualityOfService,
-
-    /// Should the server not send publishes to a client when that client was the one who sent the publish?
-    ///
-    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
-    pub no_local: bool,
-
-    /// Should messages sent due to this subscription keep the retain flag preserved on the message?
-    ///
-    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
-    pub retain_as_published: bool,
-
-    /// Should retained messages on matching topics be sent in reaction to this subscription?
-    ///
-    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
-    pub retain_handling_type: RetainHandlingType,
+    pub(crate) topic_filter: String,
+    pub(crate) qos: QualityOfService,
+    pub(crate) no_local: bool,
+    pub(crate) retain_as_published: bool,
+    pub(crate) retain_handling_type: RetainHandlingType,
 }
 
 impl Subscription {
 
-    /// Common-case constructor for Subscriptions that don't need specialized configuration
-    pub fn new(topic_filter: &str, qos: QualityOfService) -> Self {
-        Subscription {
-            topic_filter: topic_filter.to_string(),
-            qos,
-            ..Default::default()
+    /// Creates a new builder for a Subscription
+    pub fn builder(topic_filter: String, qos: QualityOfService) -> SubscriptionBuilder {
+        SubscriptionBuilder::new(topic_filter, qos)
+    }
+
+    /// Returns the topic filter to subscribe to
+    ///
+    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
+    pub fn topic_filter(&self) -> &str { self.topic_filter.as_str() }
+
+    /// Returns the maximum QoS on which the subscriber will accept publish messages.  Negotiated QoS may be different.
+    ///
+    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
+    pub fn qos(&self) -> QualityOfService { self.qos }
+
+    /// Returns if the server should not send publishes to a client when that client was the one who sent the publish?
+    ///
+    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
+    pub fn no_local(&self) -> bool { self.no_local }
+
+    /// Returns if messages sent due to this subscription should keep the retain flag preserved on the message
+    ///
+    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
+    pub fn retain_as_published(&self) -> bool { self.retain_as_published }
+
+    /// Returns if retained messages on matching topics should be sent in reaction to this subscription
+    ///
+    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
+    pub fn retain_handling_type(&self) -> RetainHandlingType { self.retain_handling_type }
+}
+
+/// Builder type for Subscription instances
+pub struct SubscriptionBuilder {
+    subscription: Subscription
+}
+
+impl SubscriptionBuilder {
+    pub(crate) fn new(topic_filter: String, qos: QualityOfService) -> Self {
+        SubscriptionBuilder {
+            subscription: Subscription {
+                topic_filter,
+                qos,
+                ..Default::default()
+            }
         }
+    }
+
+    /// Sets if the server should not send publishes to a client when that client was the one who sent the publish?
+    ///
+    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
+    pub fn with_no_local(mut self, no_local: bool) -> Self {
+        self.subscription.no_local = no_local;
+        self
+    }
+
+    /// Sets if messages sent due to this subscription should keep the retain flag preserved on the message
+    ///
+    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
+    pub fn with_retain_as_published(mut self, retain_as_published: bool) -> Self {
+        self.subscription.retain_as_published = retain_as_published;
+        self
+    }
+
+    /// Sets if retained messages on matching topics should be sent in reaction to this subscription
+    ///
+    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
+    pub fn retain_handling_type(mut self, retain_handling_type: RetainHandlingType) -> Self {
+        self.subscription.retain_handling_type = retain_handling_type;
+        self
+    }
+
+    /// Builds a new Subscription.  Consumes the builder in the process.
+    pub fn build(self) -> Subscription {
+        self.subscription
     }
 }
 
@@ -690,7 +765,7 @@ pub(crate) struct AuthPacket {
     /// Specifies an endpoint's response to a previously-received AUTH packet as part of an authentication exchange.
     ///
     /// See [MQTT5 Authenticate Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901220)
-    pub reason_code: AuthenticateReasonCode,
+    pub(crate) reason_code: AuthenticateReasonCode,
 
     /// Authentication method this packet corresponds to.  The authentication method must remain the
     /// same for the entirety of an authentication exchange.
@@ -703,131 +778,154 @@ pub(crate) struct AuthPacket {
     /// the packet fails validation if authentication_method is None.
     ///
     /// See [MQTT5 Authentication Method](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901223)
-    pub authentication_method: Option<String>,
+    pub(crate) authentication_method: Option<String>,
 
     /// Method-specific binary data included in this step of an authentication exchange.
     ///
     /// See [MQTT5 Authentication Data](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901224)
-    pub authentication_data: Option<Vec<u8>>,
+    pub(crate) authentication_data: Option<Vec<u8>>,
 
     /// Additional diagnostic information or context.
     ///
     /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901225)
-    pub reason_string: Option<String>,
+    pub(crate) reason_string: Option<String>,
 
     /// Set of MQTT5 user properties included with the packet.
     ///
     /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901226)
-    pub user_properties: Option<Vec<UserProperty>>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
 }
 
 /// Data model of an [MQTT5 CONNACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901074) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ConnackPacket {
+    pub(crate) session_present: bool,
+    pub(crate) reason_code: ConnectReasonCode,
+    pub(crate) session_expiry_interval: Option<u32>,
+    pub(crate) receive_maximum: Option<u16>,
+    pub(crate) maximum_qos: Option<QualityOfService>,
+    pub(crate) retain_available: Option<bool>,
+    pub(crate) maximum_packet_size: Option<u32>,
+    pub(crate) assigned_client_identifier: Option<String>,
+    pub(crate) topic_alias_maximum: Option<u16>,
+    pub(crate) reason_string: Option<String>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
+    pub(crate) wildcard_subscriptions_available: Option<bool>,
+    pub(crate) subscription_identifiers_available: Option<bool>,
+    pub(crate) shared_subscriptions_available: Option<bool>,
+    pub(crate) server_keep_alive: Option<u16>,
+    pub(crate) response_information: Option<String>,
+    pub(crate) server_reference: Option<String>,
+    pub(crate) authentication_method: Option<String>,
+    pub(crate) authentication_data: Option<Vec<u8>>,
+}
 
-    /// True if the client rejoined an existing session on the server, false otherwise.
+impl ConnackPacket {
+
+    /// Returns true if the client rejoined an existing session on the server, false otherwise.
     ///
     /// See [MQTT5 Session Present](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901078)
-    pub session_present: bool,
+    pub fn session_present(&self) -> bool { self.session_present }
 
-    /// Indicates either success or the reason for failure for the connection attempt.
+    /// Returns a result value that indicates either success or the reason for failure for the connection attempt.
     ///
     /// See [MQTT5 Connect Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901079)
-    pub reason_code: ConnectReasonCode,
+    pub fn reason_code(&self) -> ConnectReasonCode { self.reason_code }
 
-    /// A time interval, in seconds, that the server will persist this connection's MQTT session state
+    /// Returns the time interval, in seconds, that the server will persist this connection's MQTT session state
     /// for.  If present, this value overrides any session expiry specified in the preceding CONNECT packet.
     ///
     /// See [MQTT5 Session Expiry Interval](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901082)
-    pub session_expiry_interval: Option<u32>,
+    pub fn session_expiry_interval(&self) -> Option<u32> { self.session_expiry_interval }
 
-    /// The maximum amount of in-flight QoS 1 or 2 messages that the server is willing to handle at once.  If omitted,
+    /// Returns the maximum amount of in-flight QoS 1 or 2 messages that the server is willing to handle at once.  If omitted,
     /// the limit is based on the valid MQTT packet id space (65535).
     ///
     /// See [MQTT5 Receive Maximum](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901083)
-    pub receive_maximum: Option<u16>,
+    pub fn receive_maximum(&self) -> Option<u16> { self.receive_maximum }
 
-    /// The maximum message delivery quality of service that the server will allow on this connection.
+    /// Returns the maximum message delivery quality of service that the server will allow on this connection.
     ///
     /// See [MQTT5 Maximum QoS](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901084)
-    pub maximum_qos: Option<QualityOfService>,
+    pub fn maximum_qos(&self) -> Option<QualityOfService> { self.maximum_qos }
 
-    /// Indicates whether the server supports retained messages.  If undefined, retained messages are
+    /// Returns whether the server supports retained messages.  If undefined, retained messages are
     /// supported.
     ///
     /// See [MQTT5 Retain Available](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901085)
-    pub retain_available: Option<bool>,
+    pub fn retain_available(&self) -> Option<bool> { self.retain_available }
 
-    /// Specifies the maximum packet size, in bytes, that the server is willing to accept.  If undefined, there
+    /// Returns the maximum packet size, in bytes, that the server is willing to accept.  If undefined, there
     /// is no limit beyond what is imposed by the MQTT spec itself.
     ///
     /// See [MQTT5 Maximum Packet Size](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901086)
-    pub maximum_packet_size: Option<u32>,
+    pub fn maximum_packet_size(&self) -> Option<u32> { self.maximum_packet_size }
 
-    /// Specifies a client identifier assigned to this connection by the server.  Only valid when the client id of
+    /// Returns the client identifier assigned to this connection by the server.  Only valid when the client id of
     /// the preceding CONNECT packet was left empty.
     ///
     /// See [MQTT5 Assigned Client Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901087)
-    pub assigned_client_identifier: Option<String>,
+    pub fn assigned_client_identifier(&self) -> Option<&str> { self.assigned_client_identifier.as_deref() }
 
-    /// Specifies the maximum topic alias value that the server will accept from the client.
+    /// Returns the maximum topic alias value that the server will accept from the client.  If undefined, then
+    /// the server does not allow topic aliases in publishes sent to it.
     ///
     /// See [MQTT5 Topic Alias Maximum](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901088)
-    pub topic_alias_maximum: Option<u16>,
+    pub fn topic_alias_maximum(&self) -> Option<u16> { self.topic_alias_maximum }
 
-    /// Additional diagnostic information about the result of the connection attempt.
+    /// Returns any additional diagnostic information about the result of the connection attempt.
     ///
     /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901089)
-    pub reason_string: Option<String>,
+    pub fn reason_string(&self) -> Option<&str> { self.reason_string.as_deref() }
 
-    /// Set of MQTT5 user properties included with the packet.
+    /// Returns the set of MQTT5 user properties included with the packet.
     ///
     /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901090)
-    pub user_properties: Option<Vec<UserProperty>>,
+    pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
 
-    /// Indicates whether the server supports wildcard subscriptions.  If undefined, wildcard subscriptions
+    /// Returns whether the server supports wildcard subscriptions.  If undefined, wildcard subscriptions
     /// are supported.
     ///
     /// See [MQTT5 Wildcard Subscriptions Available](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901091)
-    pub wildcard_subscriptions_available: Option<bool>,
+    pub fn wildcard_subscriptions_available(&self) -> Option<bool> { self.wildcard_subscriptions_available }
 
-    /// Indicates whether the server supports subscription identifiers.  If undefined, subscription identifiers
+    /// Returns whether the server supports subscription identifiers.  If undefined, subscription identifiers
     /// are supported.
     ///
     /// See [MQTT5 Subscription Identifiers Available](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901092)
-    pub subscription_identifiers_available: Option<bool>,
+    pub fn subscription_identifiers_available(&self) -> Option<bool> { self.subscription_identifiers_available }
 
-    /// Indicates whether the server supports shared subscription topic filters.  If undefined, shared subscriptions
+    /// Returns whether the server supports shared subscription topic filters.  If undefined, shared subscriptions
     /// are supported.
     ///
     /// See [MQTT5 Shared Subscriptions Available](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901093)
-    pub shared_subscriptions_available: Option<bool>,
+    pub fn shared_subscriptions_available(&self) -> Option<bool> { self.shared_subscriptions_available }
 
-    /// Server-requested override of the keep alive interval, in seconds.  If undefined, the keep alive value sent
+    /// Returns the server-requested override of the keep alive interval, in seconds.  If undefined, the keep alive value sent
     /// by the client should be used.
     ///
     /// See [MQTT5 Server Keep Alive](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901094)
-    pub server_keep_alive: Option<u16>,
+    pub fn server_keep_alive(&self) -> Option<u16> { self.server_keep_alive }
 
-    /// A value that can be used in the creation of a response topic associated with this connection.  MQTT5-based
+    /// Returns a value that can be used in the creation of a response topic associated with this connection.  MQTT5-based
     /// request/response is outside the purview of the MQTT5 spec and this client.
     ///
     /// See [MQTT5 Response Information](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901095)
-    pub response_information: Option<String>,
+    pub fn response_information(&self) -> Option<&str> { self.response_information.as_deref() }
 
-    /// Property indicating an alternate server that the client may temporarily or permanently attempt
+    /// Returns the name of an alternate server that the client may temporarily or permanently attempt
     /// to connect to instead of the configured endpoint.  Will only be set if the reason code indicates another
     /// server may be used (ServerMoved, UseAnotherServer).
     ///
     /// See [MQTT5 Server Reference](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901096)
-    pub server_reference: Option<String>,
+    pub fn server_reference(&self) -> Option<&str> { self.server_reference.as_deref() }
 
-    /// Authentication method used in the authentication exchange that led to this CONNACK packet being sent.
+    /// Returns the authentication method used in the authentication exchange that led to this CONNACK packet being sent.
     ///
     /// See [MQTT5 Authentication Method](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901097)
-    pub authentication_method: Option<String>,
+    pub fn authentication_method(&self) -> Option<&str> { self.authentication_method.as_deref() }
 
-    /// Authentication method specific binary data associated with the authentication exchange that led to this
+    /// Returns any authentication method specific binary data associated with the authentication exchange that led to this
     /// CONNACK packet being sent.
     ///
     /// Developer Note: It is likely that this field is only relevant in authentication exchanges that *DO NOT*
@@ -835,12 +933,12 @@ pub struct ConnackPacket {
     /// data would have been sent with the final server->client AUTH packet that included the success reason code.
     ///
     /// See [MQTT5 Authentication Data](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901098)
-    pub authentication_data: Option<Vec<u8>>,
+    pub fn authentication_data(&self) -> Option<&[u8]> { self.authentication_data.as_deref() }
 }
 
 /// Data model of an [MQTT5 CONNECT](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901033) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ConnectPacket {
+pub(crate) struct ConnectPacket {
 
     /// The maximum time interval, in seconds, that is permitted to elapse between the point at which the client
     /// finishes transmitting one MQTT packet and the point it starts sending the next.  The client will use
@@ -850,11 +948,11 @@ pub struct ConnectPacket {
     /// Otherwise, the keep alive sent by the client is the negotiated value.
     ///
     /// See [MQTT5 Keep Alive](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901045)
-    pub keep_alive_interval_seconds: u16,
+    pub(crate) keep_alive_interval_seconds: u16,
 
     /// Clean start is modeled but not under direct user control.  Instead it is controlled by client
     /// configuration that is outside the scope of the MQTT5 spec.
-    pub clean_start: bool,
+    pub(crate) clean_start: bool,
 
     /// A unique string identifying the client to the server.  Used to restore session state between connections.
     ///
@@ -862,17 +960,17 @@ pub struct ConnectPacket {
     /// always use the auto-assigned client id.
     ///
     /// See [MQTT5 Client Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901059)
-    pub client_id: Option<String>,
+    pub(crate) client_id: Option<String>,
 
     /// A string value that the server may use for client authentication and authorization.
     ///
     /// See [MQTT5 User Name](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901071)
-    pub username: Option<String>,
+    pub(crate) username: Option<String>,
 
     /// Opaque binary data that the server may use for client authentication and authorization.
     ///
     /// See [MQTT5 Password](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901072)
-    pub password: Option<Vec<u8>>,
+    pub(crate) password: Option<Vec<u8>>,
 
     /// A time interval, in seconds, that the client requests the server to persist this connection's MQTT session state
     /// for.  Has no meaning if the client has not been configured to rejoin sessions.  Must be non-zero in order to
@@ -882,52 +980,52 @@ pub struct ConnectPacket {
     /// value.  Otherwise, the session expiry sent by the client is the negotiated value.
     ///
     /// See [MQTT5 Session Expiry Interval](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901048)
-    pub session_expiry_interval_seconds: Option<u32>,
+    pub(crate) session_expiry_interval_seconds: Option<u32>,
 
     /// If set to true, requests that the server send response information in the subsequent CONNACK.  This response
     /// information may be used to set up request-response implementations over MQTT, but doing so is outside
     /// the scope of the MQTT5 spec and client.
     ///
     /// See [MQTT5 Request Response Information](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901052)
-    pub request_response_information: Option<bool>,
+    pub(crate) request_response_information: Option<bool>,
 
     /// If set to true, requests that the server send additional diagnostic information (via response string or
     /// user properties) in DISCONNECT or CONNACK packets from the server.
     ///
     /// See [MQTT5 Request Problem Information](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901053)
-    pub request_problem_information: Option<bool>,
+    pub(crate) request_problem_information: Option<bool>,
 
     /// Notifies the server of the maximum number of in-flight Qos 1 and 2 messages the client is willing to handle.  If
     /// omitted, then no limit is requested.
     ///
     /// See [MQTT5 Receive Maximum](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901049)
-    pub receive_maximum: Option<u16>,
+    pub(crate) receive_maximum: Option<u16>,
 
     /// Maximum number of topic aliases that the client will accept for incoming publishes.  An inbound topic alias larger than
     /// this number is a protocol error.  If this value is not specified, the client does not support inbound topic
     /// aliasing.
     ///
     /// See [MQTT5 Topic Alias Maximum](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901051)
-    pub topic_alias_maximum: Option<u16>,
+    pub(crate) topic_alias_maximum: Option<u16>,
 
     /// Notifies the server of the maximum packet size the client is willing to handle.  If
     /// omitted, then no limit beyond the natural limits of MQTT packet size is requested.
     ///
     /// See [MQTT5 Maximum Packet Size](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901050)
-    pub maximum_packet_size_bytes: Option<u32>,
+    pub(crate) maximum_packet_size_bytes: Option<u32>,
 
     /// Notifies the server that the client wishes to use a specific authentication method as part of the connection
     /// process.  If this field is left empty, no authentication exchange should be performed as part of the connection
     /// process.
     ///
     /// See [MQTT5 Authentication Method](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901055)
-    pub authentication_method: Option<String>,
+    pub(crate) authentication_method: Option<String>,
 
     /// Additional authentication method specific binary data supplied as part of kicking off an authentication
     /// exchange.  This field may only be set if `authentication_method` is also set.
     ///
     /// See [MQTT5 Authentication Data](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901056)
-    pub authentication_data: Option<Vec<u8>>,
+    pub(crate) authentication_data: Option<Vec<u8>>,
 
     /// A time interval, in seconds, that the server should wait (for a session reconnection) before sending the
     /// will message associated with the connection's session.  If omitted, the server will send the will when the
@@ -935,52 +1033,124 @@ pub struct ConnectPacket {
     /// the will must be sent at the time of session destruction.
     ///
     /// See [MQTT5 Will Delay Interval](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901062)
-    pub will_delay_interval_seconds: Option<u32>,
+    pub(crate) will_delay_interval_seconds: Option<u32>,
 
     /// The definition of a message to be published when the connection's session is destroyed by the server or when
     /// the will delay interval has elapsed, whichever comes first.  If undefined, then nothing will be sent.
     ///
     /// See [MQTT5 Will](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901040)
-    pub will: Option<PublishPacket>,
+    pub(crate) will: Option<PublishPacket>,
 
     /// Set of MQTT5 user properties included with the packet.
     ///
     /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901054)
-    pub user_properties: Option<Vec<UserProperty>>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
 }
 
 /// Data model of an [MQTT5 DISCONNECT](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901205) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DisconnectPacket {
+    pub(crate) reason_code: DisconnectReasonCode,
+    pub(crate) session_expiry_interval_seconds: Option<u32>,
+    pub(crate) reason_string: Option<String>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
+    pub(crate) server_reference: Option<String>,
+}
 
-    /// Value indicating the reason that the sender is closing the connection
+impl DisconnectPacket {
+
+    /// Creates a new builder for a DisconnectPacket.
+    pub fn builder() -> DisconnectPacketBuilder {
+        DisconnectPacketBuilder::new()
+    }
+
+    /// Returns a result value indicating the reason that the sender is closing the connection
     ///
     /// See [MQTT5 Disconnect Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901208)
-    pub reason_code: DisconnectReasonCode,
+    pub fn reason_code(&self) -> DisconnectReasonCode { self.reason_code }
+
+    /// Returns a change to the session expiry interval negotiated at connection time as part of the disconnect.  Only
+    /// valid for  DISCONNECT packets sent from client to server.  It is not valid to attempt to change session expiry
+    /// from zero to a non-zero value.
+    ///
+    /// See [MQTT5 Session Expiry Interval](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901211)
+    pub fn session_expiry_interval_seconds(&self) -> Option<u32> { self.session_expiry_interval_seconds }
+
+    /// Returns any additional diagnostic information about the reason that the sender is closing the connection
+    ///
+    /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901212)
+    pub fn reason_string(&self) -> Option<&str> { self.reason_string.as_deref() }
+
+    /// Returns the set of MQTT5 user properties included with the packet.
+    ///
+    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901213)
+    pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
+
+    /// Returns an alternate server that the client may temporarily or permanently attempt
+    /// to connect to instead of the configured endpoint.  Will only be set if the reason code indicates another
+    /// server may be used (ServerMoved, UseAnotherServer).
+    ///
+    /// See [MQTT5 Server Reference](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901214)
+    pub fn server_reference(&self) -> Option<&str> { self.server_reference.as_deref() }
+}
+
+/// Builder type for DisconnectPacket instances
+pub struct DisconnectPacketBuilder {
+    packet: DisconnectPacket
+}
+
+impl DisconnectPacketBuilder {
+    pub(crate) fn new() -> Self {
+        DisconnectPacketBuilder {
+            packet: DisconnectPacket {
+                ..Default::default()
+            }
+        }
+    }
+
+    /// Sets a result value indicating the reason that the sender is closing the connection
+    ///
+    /// See [MQTT5 Disconnect Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901208)
+    pub fn with_reason_code(mut self, reason_code: DisconnectReasonCode) -> Self {
+        self.packet.reason_code = reason_code;
+        self
+    }
 
     /// Requests a change to the session expiry interval negotiated at connection time as part of the disconnect.  Only
     /// valid for  DISCONNECT packets sent from client to server.  It is not valid to attempt to change session expiry
     /// from zero to a non-zero value.
     ///
     /// See [MQTT5 Session Expiry Interval](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901211)
-    pub session_expiry_interval_seconds: Option<u32>,
+    pub fn with_session_expiry_interval_seconds(mut self, session_expiry_interval_seconds: u32) -> Self {
+        self.packet.session_expiry_interval_seconds = Some(session_expiry_interval_seconds);
+        self
+    }
 
-    /// Additional diagnostic information about the reason that the sender is closing the connection
+    /// Sets any additional diagnostic information about the reason that the sender is closing the connection
     ///
     /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901212)
-    pub reason_string: Option<String>,
+    pub fn with_reason_string(mut self, reason_string: String) -> Self {
+        self.packet.reason_string = Some(reason_string);
+        self
+    }
 
-    /// Set of MQTT5 user properties included with the packet.
+    /// Adds a user property to the set of MQTT5 user properties included with the packet.
     ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901213)
-    pub user_properties: Option<Vec<UserProperty>>,
+    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901184)
+    pub fn with_user_property(mut self, property: UserProperty) -> Self {
+        if let Some(user_properties) = &mut self.packet.user_properties {
+            user_properties.push(property);
+        } else {
+            self.packet.user_properties = Some(vec!(property));
+        }
 
-    /// Property indicating an alternate server that the client may temporarily or permanently attempt
-    /// to connect to instead of the configured endpoint.  Will only be set if the reason code indicates another
-    /// server may be used (ServerMoved, UseAnotherServer).
-    ///
-    /// See [MQTT5 Server Reference](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901214)
-    pub server_reference: Option<String>,
+        self
+    }
+
+    /// Builds a new DisconnectPacket.  Consumes the builder in the process.
+    pub fn build(self) -> DisconnectPacket {
+        self.packet
+    }
 }
 
 /// Data model of an [MQTT5 PINGREQ](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901195) packet.
@@ -994,280 +1164,517 @@ pub(crate) struct PingrespPacket {}
 /// Data model of an [MQTT5 PUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901121) packet
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PubackPacket {
+    pub(crate) packet_id: u16,
+    pub(crate) reason_code: PubackReasonCode,
+    pub(crate) reason_string: Option<String>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
+}
 
-    /// Id of the QoS 1 publish this packet is acknowledging
-    pub packet_id: u16,
+impl PubackPacket {
 
-    /// Success indicator or failure reason for the associated PUBLISH packet.
+    /// Returns success indicator or failure reason for the associated PUBLISH packet.
     ///
     /// See [MQTT5 PUBACK Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901124)
-    pub reason_code: PubackReasonCode,
+    pub fn reason_code(&self) -> PubackReasonCode { self.reason_code }
 
-    /// Additional diagnostic information about the result of the PUBLISH attempt.
+    /// Returns any additional diagnostic information about the result of the PUBLISH attempt.
     ///
     /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901127)
-    pub reason_string: Option<String>,
+    pub fn reason_string(&self) -> Option<&str> { self.reason_string.as_deref() }
 
-    /// Set of MQTT5 user properties included with the packet.
+    /// Returns the set of MQTT5 user properties included with the packet.
     ///
     /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901128)
-    pub user_properties: Option<Vec<UserProperty>>,
+    pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
 }
 
 /// Data model of an [MQTT5 PUBCOMP](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901151) packet
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PubcompPacket {
+    pub(crate) packet_id: u16,
+    pub(crate) reason_code: PubcompReasonCode,
+    pub(crate) reason_string: Option<String>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
+}
 
-    /// Id of the QoS 2 publish this packet corresponds to
-    pub packet_id: u16,
+impl PubcompPacket {
 
-    /// Success indicator or failure reason for the final step of a QoS 2 PUBLISH delivery.
+    /// Returns success indicator or failure reason for the final step of a QoS 2 PUBLISH delivery.
     ///
     /// See [MQTT5 PUBCOMP Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901154)
-    pub reason_code: PubcompReasonCode,
+    pub fn reason_code(&self) -> PubcompReasonCode { self.reason_code }
 
-    /// Additional diagnostic information about the final step of a QoS 2 PUBLISH delivery.
+    /// Returns any additional diagnostic information about the final step of a QoS 2 PUBLISH delivery.
     ///
-    /// See [MQTT5 PUBCOMP Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901157)
-    pub reason_string: Option<String>,
+    /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901157)
+    pub fn reason_string(&self) -> Option<&str> { self.reason_string.as_deref() }
 
-    /// Set of MQTT5 user properties included with the packet.
+    /// Returns the set of MQTT5 user properties included with the packet.
     ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901158)
-    pub user_properties: Option<Vec<UserProperty>>,
+    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901128)
+    pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
 }
 
 /// Data model of an [MQTT5 PUBLISH](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901100) packet
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PublishPacket {
+    pub(crate) packet_id: u16,
+    pub(crate) topic: String,
+    pub(crate) qos: QualityOfService,
+    pub(crate) duplicate: bool,
+    pub(crate) retain: bool,
+    pub(crate) payload: Option<Vec<u8>>,
+    pub(crate) payload_format: Option<PayloadFormatIndicator>,
+    pub(crate) message_expiry_interval_seconds: Option<u32>,
+    pub(crate) topic_alias: Option<u16>,
+    pub(crate) response_topic: Option<String>,
+    pub(crate) correlation_data: Option<Vec<u8>>,
+    pub(crate) subscription_identifiers: Option<Vec<u32>>,
+    pub(crate) content_type: Option<String>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
+}
 
-    /// Packet Id of the publish.  Setting this value on an outbound publish has no effect on the
-    /// actual packet id used by the client.
-    pub packet_id: u16,
+impl PublishPacket {
 
-    /// Sent publishes - The topic this message should be published to.
+    /// Creates a new builder for a PublishPacket.
+    pub fn builder(topic: String, qos: QualityOfService) -> PublishPacketBuilder {
+        PublishPacketBuilder::new(topic, qos)
+    }
+
+    /// Sent publishes - returns the topic this message should be published to.
     ///
-    /// Received publishes - The topic this message was published to.
+    /// Received publishes - returns the topic this message was published to.
     ///
     /// See [MQTT5 Topic Name](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901107)
-    pub topic: String,
+    pub fn topic(&self) -> &str { self.topic.as_str() }
 
-    /// Sent publishes - The MQTT quality of service level this message should be delivered with.
+    /// Sent publishes - returns the MQTT quality of service level this message should be delivered with.
     ///
-    /// Received publishes - The MQTT quality of service level this message was delivered at.
+    /// Received publishes - returns the MQTT quality of service level this message was delivered at.
     ///
     /// See [MQTT5 QoS](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901103)
-    pub qos: QualityOfService,
+    pub fn qos(&self) -> QualityOfService { self.qos }
 
-    /// Indicates to the recipient that this packet is a resend of a previously-submitted
-    /// Publish
-    pub duplicate: bool,
+    /// Returns whether this packet is a resend of a previously-submitted Publish
+    pub fn duplicate(&self) -> bool { self.duplicate }
 
-    /// True if this is a retained message, false otherwise.
+    /// Returns true if this is a retained message, false otherwise.
     ///
     /// Always set on received publishes; on sent publishes, undefined implies false.
     ///
     /// See [MQTT5 Retain](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901104)
-    pub retain: bool,
+    pub fn retain(&self) -> bool { self.retain }
 
-    /// The payload of the publish message.
+    /// Returns the payload of the publish message.
     ///
     /// See [MQTT5 Publish Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901119)
-    pub payload: Option<Vec<u8>>,
+    pub fn payload(&self) -> Option<&[u8]> { self.payload.as_deref() }
 
-    /// Property specifying the format of the payload data.  The mqtt5 client does not enforce or use this
+    /// Returns a property specifying the format of the payload data.  The mqtt5 client does not enforce or use this
     /// value in a meaningful way.
     ///
     /// See [MQTT5 Payload Format Indicator](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901111)
-    pub payload_format: Option<PayloadFormatIndicator>,
+    pub fn payload_format(&self) -> Option<PayloadFormatIndicator> { self.payload_format }
 
-    /// Sent publishes - indicates the maximum amount of time allowed to elapse for message delivery before the server
+    /// Sent publishes - returns the maximum amount of time allowed to elapse for message delivery before the server
     /// should instead delete the message (relative to a recipient).
     ///
-    /// Received publishes - indicates the remaining amount of time (from the server's perspective) before the message would
+    /// Received publishes - returns the remaining amount of time (from the server's perspective) before the message would
     /// have been deleted relative to the subscribing client.
     ///
     /// If left undefined, indicates no expiration timeout.
     ///
     /// See [MQTT5 Message Expiry Interval](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901112)
-    pub message_expiry_interval_seconds: Option<u32>,
+    pub fn message_expiry_interval_seconds(&self) -> Option<u32> { self.message_expiry_interval_seconds }
 
-    /// If the topic field is non-empty:
-    ///   Tells the recipient to bind this id to the topic field's value within its alias cache
-    ///
-    /// If the topic field is empty:
-    ///   Tells the recipient to lookup the topic in their alias cache based on this id.
-    ///
-    /// See [MQTT5 Topic Alias](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901113)
-    pub topic_alias: Option<u16>,
-
-    /// Opaque topic string intended to assist with request/response implementations.  Not internally meaningful to
-    /// MQTT5 or this client.
+    /// Returns an opaque topic string intended to assist with request/response implementations.  Not internally
+    /// meaningful to MQTT5 or this client.
     ///
     /// See [MQTT5 Response Topic](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901114)
-    pub response_topic: Option<String>,
+    pub fn response_topic(&self) -> Option<&str> { self.response_topic.as_deref() }
 
-    /// Opaque binary data used to correlate between publish messages, as a potential method for request-response
+    /// Returns opaque binary data used to correlate between publish messages, as a potential avenue for request-response
     /// implementation.  Not internally meaningful to MQTT5.
     ///
     /// See [MQTT5 Correlation Data](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901115)
-    pub correlation_data: Option<Vec<u8>>,
+    pub fn correlation_data(&self) -> Option<&[u8]> { self.correlation_data.as_deref() }
 
-    /// Sent publishes - setting this fails client-side packet validation
-    ///
-    /// Received publishes - the subscription identifiers of all the subscriptions this message matched.
+    /// Returns the subscription identifiers of all the subscriptions this message matched (inbound publishes only).
     ///
     /// See [MQTT5 Subscription Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901117)
-    pub subscription_identifiers: Option<Vec<u32>>,
+    pub fn subscription_identifiers(&self) -> Option<&[u32]> { self.subscription_identifiers.as_deref() }
 
-    /// Property specifying the content type of the payload.  Not internally meaningful to MQTT5.
+    /// Returns the content type of the payload.  Not internally meaningful to MQTT5.
     ///
     /// See [MQTT5 Content Type](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901118)
-    pub content_type: Option<String>,
+    pub fn content_type(&self) -> Option<&str> { self.content_type.as_deref() }
 
-    /// Set of MQTT5 user properties included with the packet.
+    /// Returns the set of MQTT5 user properties included with the packet.
     ///
     /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901116)
-    pub user_properties: Option<Vec<UserProperty>>,
+    pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
+}
+
+/// Builder type for PublishPacket instances
+pub struct PublishPacketBuilder {
+    packet: PublishPacket
+}
+
+impl PublishPacketBuilder {
+    pub(crate) fn new(topic: String, qos: QualityOfService) -> Self {
+        PublishPacketBuilder {
+            packet: PublishPacket {
+                topic,
+                qos,
+                ..Default::default()
+            }
+        }
+    }
+
+    /// Sets if this should be a retained message
+    ///
+    /// See [MQTT5 Retain](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901104)
+    pub fn with_retain(mut self, retain: bool) -> Self {
+        self.packet.retain = retain;
+        self
+    }
+
+    /// Sets the payload of the publish message.
+    ///
+    /// See [MQTT5 Publish Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901119)
+    pub fn with_payload(mut self, payload: Vec<u8>) -> Self {
+        self.packet.payload = Some(payload);
+        self
+    }
+
+    /// Sets a property specifying the format of the payload data.  The mqtt5 client does not enforce or use this
+    /// value in a meaningful way.
+    ///
+    /// See [MQTT5 Payload Format Indicator](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901111)
+    pub fn with_payload_format(mut self, payload_format: PayloadFormatIndicator) -> Self {
+        self.packet.payload_format = Some(payload_format);
+        self
+    }
+
+    /// Sets the maximum amount of time allowed to elapse for message delivery before the server
+    /// should instead delete the message (relative to a recipient).
+    ///
+    /// If left undefined, indicates no expiration timeout.
+    ///
+    /// See [MQTT5 Message Expiry Interval](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901112)
+    pub fn with_message_expiry_interval_seconds(mut self, message_expiry_interval_seconds: u32) -> Self {
+        self.packet.message_expiry_interval_seconds = Some(message_expiry_interval_seconds);
+        self
+    }
+
+    /// Sets an opaque topic string intended to assist with request/response implementations.  Not internally
+    /// meaningful to MQTT5 or this client.
+    ///
+    /// See [MQTT5 Response Topic](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901114)
+    pub fn with_response_topic(mut self, response_topic: String) -> Self {
+        self.packet.response_topic = Some(response_topic);
+        self
+    }
+
+    /// Returns opaque binary data used to correlate between publish messages, as a potential avenue for request-response
+    /// implementation.  Not internally meaningful to MQTT5.
+    ///
+    /// See [MQTT5 Correlation Data](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901115)
+    pub fn with_correlation_data(mut self, correlation_data: Vec<u8>) -> Self {
+        self.packet.correlation_data = Some(correlation_data);
+        self
+    }
+
+    /// Sets the content type of the payload.  Not internally meaningful to MQTT5.
+    ///
+    /// See [MQTT5 Content Type](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901118)
+    pub fn with_content_type(mut self, content_type: String) -> Self {
+        self.packet.content_type = Some(content_type);
+        self
+    }
+
+    /// Adds a user property to the set of MQTT5 user properties included with the packet.
+    ///
+    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901116)
+    pub fn with_user_property(mut self, property: UserProperty) -> Self {
+        if let Some(user_properties) = &mut self.packet.user_properties {
+            user_properties.push(property);
+        } else {
+            self.packet.user_properties = Some(vec!(property));
+        }
+
+        self
+    }
+
+    /// Builds a new PublishPacket.  Consumes the builder in the process.
+    pub fn build(self) -> PublishPacket {
+        self.packet
+    }
 }
 
 /// Data model of an [MQTT5 PUBREC](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901131) packet
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PubrecPacket {
+    pub(crate) packet_id: u16,
+    pub(crate) reason_code: PubrecReasonCode,
+    pub(crate) reason_string: Option<String>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
+}
 
-    /// Id of the QoS 2 publish this packet corresponds to
-    pub packet_id: u16,
+impl PubrecPacket {
 
-    /// Success indicator or failure reason for the initial step of the QoS 2 PUBLISH delivery process.
+    /// Returns success indicator or failure reason for the initial step of the QoS 2 PUBLISH delivery process.
     ///
     /// See [MQTT5 PUBREC Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901134)
-    pub reason_code: PubrecReasonCode,
+    pub fn reason_code(&self) -> PubrecReasonCode { self.reason_code }
 
-    /// Additional diagnostic information about the result of the PUBLISH attempt.
+    /// Returns any additional diagnostic information about the result of the PUBLISH attempt.
     ///
     /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901147)
-    pub reason_string: Option<String>,
+    pub fn reason_string(&self) -> Option<&str> { self.reason_string.as_deref() }
 
-    /// Set of MQTT5 user properties included with the packet.
+    /// Returns the set of MQTT5 user properties included with the packet.
     ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901138)
-    pub user_properties: Option<Vec<UserProperty>>,
+    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901128)
+    pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
 }
 
 /// Data model of an [MQTT5 PUBREL](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901141) packet
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PubrelPacket {
-
-    // packet id is modeled but internal to the client
     pub(crate) packet_id: u16,
+    pub(crate) reason_code: PubrelReasonCode,
+    pub(crate) reason_string: Option<String>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
+}
 
-    /// Success indicator or failure reason for the middle step of the QoS 2 PUBLISH delivery process.
+impl PubrelPacket {
+
+    /// Returns success indicator or failure reason for the middle step of the QoS 2 PUBLISH delivery process.
     ///
     /// See [MQTT5 PUBREL Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901144)
-    pub reason_code: PubrelReasonCode,
+    pub fn reason_code(&self) -> PubrelReasonCode { self.reason_code }
 
-    /// Additional diagnostic information about the ongoing QoS 2 PUBLISH delivery process.
+    /// Returns any additional diagnostic information about the ongoing QoS 2 PUBLISH delivery process.
     ///
     /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901147)
-    pub reason_string: Option<String>,
+    pub fn reason_string(&self) -> Option<&str> { self.reason_string.as_deref() }
 
-    /// Set of MQTT5 user properties included with the packet.
+    /// Returns the set of MQTT5 user properties included with the packet.
     ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901148)
-    pub user_properties: Option<Vec<UserProperty>>,
+    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901128)
+    pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
 }
 
 /// Data model of an [MQTT5 SUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901171) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SubackPacket {
+    pub(crate) packet_id: u16,
+    pub(crate) reason_string: Option<String>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
+    pub(crate) reason_codes: Vec<SubackReasonCode>,
+}
 
-    /// Id of the unsubscribe this packet is acknowledging
-    pub packet_id: u16,
+impl SubackPacket {
 
-    /// Additional diagnostic information about the result of the SUBSCRIBE attempt.
+    /// Returns any additional diagnostic information about the result of the SUBSCRIBE attempt.
     ///
     /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901176)
-    pub reason_string: Option<String>,
+    pub fn reason_string(&self) -> Option<&str> { self.reason_string.as_deref() }
 
-    /// Set of MQTT5 user properties included with the packet.
+    /// Returns the set of MQTT5 user properties included with the packet.
     ///
     /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901177)
-    pub user_properties: Option<Vec<UserProperty>>,
+    pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
 
-    /// A list of reason codes indicating the result of each individual subscription entry in the
+    /// Returns a list of reason codes indicating the result of each individual subscription entry in the
     /// associated SUBSCRIBE packet.
     ///
     /// See [MQTT5 Suback Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901178)
-    pub reason_codes: Vec<SubackReasonCode>,
+    pub fn reason_codes(&self) -> &[SubackReasonCode] { self.reason_codes.as_slice() }
 }
 
 /// Data model of an [MQTT5 SUBSCRIBE](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901161) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SubscribePacket {
+    pub(crate) packet_id: u16,
+    pub(crate) subscriptions: Vec<Subscription>,
+    pub(crate) subscription_identifier: Option<u32>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
+}
 
-    /// Packet Id of the subscribe.  Setting this value on an outbound subscribe has no effect on the
-    /// actual packet id used by the client.
-    pub packet_id: u16,
+impl SubscribePacket {
 
-    /// List of topic filter subscriptions that the client wishes to listen to
+    /// Creates a new builder for a SubscribePacket.
+    pub fn builder() -> SubscribePacketBuilder {
+        SubscribePacketBuilder::new()
+    }
+
+    /// Returns the list of topic filter subscriptions that the client wishes to listen to
     ///
     /// See [MQTT5 Subscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901168)
-    pub subscriptions: Vec<Subscription>,
+    pub fn subscriptions(&self) -> &[Subscription] { self.subscriptions.as_slice() }
 
-    /// A positive integer to associate with all subscriptions in this request.  Publish packets that match
-    /// a subscription in this request should include this identifier in the resulting message.
+    /// Returns a positive integer to associate with all subscriptions in this request.  Publish packets that match
+    /// a subscription in this request will include this identifier in the resulting message.
     ///
     /// See [MQTT5 Subscription Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901166)
-    pub subscription_identifier: Option<u32>,
+    pub fn subscription_identifier(&self) -> Option<u32> { self.subscription_identifier }
 
-    /// Set of MQTT5 user properties included with the packet.
+    /// Returns the set of MQTT5 user properties included with the packet.
     ///
     /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901167)
-    pub user_properties: Option<Vec<UserProperty>>,
+    pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
+}
+
+/// Builder type for SubscribePacket instances
+pub struct SubscribePacketBuilder {
+    packet: SubscribePacket
+}
+
+impl SubscribePacketBuilder {
+    pub(crate) fn new() -> Self {
+        SubscribePacketBuilder {
+            packet: SubscribePacket::default()
+        }
+    }
+
+    /// Adds a subscription to the list of subscriptions that the client wishes to listen to
+    ///
+    /// See [MQTT5 Subscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901168)
+    pub fn with_subscription(mut self, subscription: Subscription) -> Self {
+        self.packet.subscriptions.push(subscription);
+        self
+    }
+
+    /// Sets a positive integer to associate with all subscriptions in this request.  Publish packets that match
+    /// a subscription in this request will include this identifier in the resulting message.
+    ///
+    /// See [MQTT5 Subscription Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901166)
+    pub fn with_subscription_identifier(mut self, subscription_identifier: u32) -> Self {
+        self.packet.subscription_identifier = Some(subscription_identifier);
+        self
+    }
+
+    /// Adds a user property to the set of MQTT5 user properties included with the packet.
+    ///
+    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901184)
+    pub fn with_user_property(mut self, property: UserProperty) -> Self {
+        if let Some(user_properties) = &mut self.packet.user_properties {
+            user_properties.push(property);
+        } else {
+            self.packet.user_properties = Some(vec!(property));
+        }
+
+        self
+    }
+
+    /// Builds a new SubscribePacket.  Consumes the builder in the process.
+    pub fn build(self) -> SubscribePacket {
+        self.packet
+    }
 }
 
 /// Data model of an [MQTT5 UNSUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901187) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct UnsubackPacket {
+    pub(crate) packet_id: u16,
+    pub(crate) reason_string: Option<String>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
+    pub(crate) reason_codes: Vec<UnsubackReasonCode>,
+}
 
-    /// Id of the unsubscribe this packet is acknowledging
-    pub packet_id: u16,
+impl UnsubackPacket {
 
-    /// Additional diagnostic information about the result of the UNSUBSCRIBE attempt.
-    ///
-    /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901192)
-    pub reason_string: Option<String>,
-
-    /// Set of MQTT5 user properties included with the packet.
-    ///
-    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901193)
-    pub user_properties: Option<Vec<UserProperty>>,
-
-    /// A list of reason codes indicating the result of unsubscribing from each individual topic filter entry in the
+    /// Returns the list of reason codes indicating the result of unsubscribing from each individual topic filter entry in the
     /// associated UNSUBSCRIBE packet.
     ///
     /// See [MQTT5 Unsuback Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901194)
-    pub reason_codes: Vec<UnsubackReasonCode>,
+    pub fn reason_codes(&self) -> &[UnsubackReasonCode] {
+        self.reason_codes.as_slice()
+    }
+
+    /// Returns any additional diagnostic information about the result of the UNSUBSCRIBE attempt.
+    ///
+    /// See [MQTT5 Reason String](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901192)
+    pub fn reason_string(&self) -> Option<&str> { self.reason_string.as_deref() }
+
+    /// Returns the set of MQTT5 user properties included with the packet.
+    ///
+    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901184)
+    pub fn user_properties(&self) -> Option<&[UserProperty]> {
+        self.user_properties.as_deref()
+    }
 }
 
 /// Data model of an [MQTT5 UNSUBSCRIBE](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901179) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct UnsubscribePacket {
+    pub(crate) packet_id: u16,
+    pub(crate) topic_filters: Vec<String>,
+    pub(crate) user_properties: Option<Vec<UserProperty>>,
+}
 
-    /// Packet Id of the unsubscribe.  Setting this value on an outbound unsubscribe has no effect on the
-    /// actual packet id used by the client.
-    pub packet_id: u16,
+impl UnsubscribePacket {
 
-    /// List of topic filters that the client wishes to unsubscribe from.
+    /// Creates a new builder for an UnsubscribePacket.
+    pub fn builder() -> UnsubscribePacketBuilder {
+        UnsubscribePacketBuilder::new()
+    }
+
+    /// Returns the list of topic filters that the client wishes to unsubscribe from.
     ///
     /// See [MQTT5 Unsubscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901185)
-    pub topic_filters: Vec<String>,
+    pub fn topic_filters(&self) -> &[String] { self.topic_filters.as_slice() }
 
-    /// Set of MQTT5 user properties included with the packet.
+    /// Returns the set of MQTT5 user properties included with the packet.
     ///
     /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901184)
-    pub user_properties: Option<Vec<UserProperty>>,
+    pub fn user_properties(&self) -> Option<&[UserProperty]> {
+        self.user_properties.as_deref()
+    }
 }
+
+/// Builder type for UnsubscribePacket instances
+pub struct UnsubscribePacketBuilder {
+    packet: UnsubscribePacket
+}
+
+impl UnsubscribePacketBuilder {
+
+    pub(crate) fn new() -> Self {
+        UnsubscribePacketBuilder {
+            packet: UnsubscribePacket::default()
+        }
+    }
+
+    /// Adds a topic filter to the list of topic filters that the client wishes to unsubscribe from.
+    ///
+    /// See [MQTT5 Unsubscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901185)
+    pub fn with_topic_filter(mut self, topic_filter: String) -> Self {
+        self.packet.topic_filters.push(topic_filter);
+        self
+    }
+
+    /// Adds a user property to the set of MQTT5 user properties included with the packet.
+    ///
+    /// See [MQTT5 User Property](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901184)
+    pub fn with_user_property(mut self, property: UserProperty) -> Self {
+        if let Some(user_properties) = &mut self.packet.user_properties {
+            user_properties.push(property);
+        } else {
+            self.packet.user_properties = Some(vec!(property));
+        }
+
+        self
+    }
+
+    /// Builds a new UnsubscribePacket.  Consumes the builder in the process.
+    pub fn build(self) -> UnsubscribePacket {
+        self.packet
+    }
+}
+
 
 /// Algebraic union of all MQTT5 packet types.
 #[derive(Clone, Debug)]

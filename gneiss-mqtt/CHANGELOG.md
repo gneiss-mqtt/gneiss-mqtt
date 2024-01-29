@@ -23,4 +23,8 @@ This document is currently hand-written and non-authoritative.
 * * added public Into implementations for a few spec enums
 * * broker encode/decode functionality needed for testing wrapped in test feature checks
 * * default client event listener injection moved from client config to the start() client method
+* * packet model refactoring
+* * * all packet fields crate-internal
+* * * add accessors for user-facing packet fields
+* * * builder types for all user-submitted packets: Disconnect, Publish, Subscribe, Unsubscribe
 
