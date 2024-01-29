@@ -184,10 +184,7 @@ fn handle_stop(client: &Mqtt5Client, args: StopArgs) {
 
     if let Some(reason_code_u8) = args.reason_code {
         if let Ok(reason_code) = DisconnectReasonCode::try_from(reason_code_u8) {
-            stop_options_builder = stop_options_builder.with_disconnect_packet(DisconnectPacket{
-                reason_code,
-                ..Default::default()
-            });
+            stop_options_builder = stop_options_builder.with_disconnect_packet(DisconnectPacket::builder().with_reason_code(reason_code).build());
         } else {
             println!("Invalid input!  reason_code must be a valid numeric Disconnect reason code");
             return;
@@ -203,20 +200,19 @@ fn handle_close(client: &Mqtt5Client, _ : CloseArgs) {
 
 async fn handle_publish(client: &Mqtt5Client, args: PublishArgs) {
 
-    let mut publish = PublishPacket::new_empty(&args.topic, QualityOfService::AtLeastOnce);
-
-    if let Ok(qos) = QualityOfService::try_from(args.qos) {
-        publish.qos = qos;
-    } else {
+    let qos_result = QualityOfService::try_from(args.qos);
+    if qos_result.is_err() {
         println!("Invalid input!  Qos must be 0, 1, or 2");
         return;
     }
 
+    let mut publish_builder = PublishPacket::builder(args.topic, qos_result.unwrap());
+
     if let Some(payload) = &args.payload {
-        publish.payload = Some(payload.as_bytes().to_vec());
+        publish_builder = publish_builder.with_payload(payload.as_bytes().to_vec());
     }
 
-    let publish_result = client.publish(publish, None).await;
+    let publish_result = client.publish(publish_builder.build(), None).await;
     match &publish_result {
         Ok(publish_response) => {
             println!("Publish Result: Ok( {} )\n", publish_response);
@@ -234,12 +230,9 @@ async fn handle_subscribe(client: &Mqtt5Client, args: SubscribeArgs) {
         return;
     }
 
-    let subscribe = SubscribePacket {
-        subscriptions: vec!(
-            Subscription::new(&args.topic_filter, qos_result.unwrap())
-        ),
-        ..Default::default()
-    };
+    let subscribe = SubscribePacket::builder()
+        .with_subscription(Subscription::builder(args.topic_filter, qos_result.unwrap()).build())
+        .build();
 
     let subscribe_result = client.subscribe(subscribe, None).await;
 
@@ -255,12 +248,7 @@ async fn handle_subscribe(client: &Mqtt5Client, args: SubscribeArgs) {
 
 async fn handle_unsubscribe(client: &Mqtt5Client, args: UnsubscribeArgs) {
 
-    let unsubscribe = UnsubscribePacket {
-        topic_filters: vec!(
-            args.topic_filter
-        ),
-        ..Default::default()
-    };
+    let unsubscribe = UnsubscribePacket::builder().with_topic_filter(args.topic_filter).build();
 
     let unsubscribe_result = client.unsubscribe(unsubscribe, None).await;
 

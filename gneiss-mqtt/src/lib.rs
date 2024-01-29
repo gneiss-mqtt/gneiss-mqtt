@@ -83,20 +83,13 @@ use gneiss_mqtt::client::{Mqtt5Client, SubscribeResult};
 use gneiss_mqtt::mqtt::{QualityOfService, SubscribePacket, Subscription};
 
 async fn subscribe_to_topic(client: Mqtt5Client) {
-    let subscribe = SubscribePacket {
-        subscriptions: vec!(
-            Subscription {
-                topic_filter: "hello/world/+".to_string(),
-                qos: QualityOfService::AtLeastOnce,
-                ..Default::default()
-            }
-        ),
-        ..Default::default()
-    };
+    let subscribe = SubscribePacket::builder()
+        .with_subscription(Subscription::builder("hello/world/+".to_string(), QualityOfService::AtLeastOnce).build())
+        .build();
 
     let subscribe_result = client.subscribe(subscribe, None).await;
     if let Ok(suback) = subscribe_result {
-        if suback.reason_codes[0].is_success() {
+        if suback.reason_codes()[0].is_success() {
             println!("Subscribe success!");
             return;
         }
@@ -134,14 +127,11 @@ use std::sync::Arc;
 pub fn client_event_callback(client: Arc<Mqtt5Client>, event: Arc<ClientEvent>) {
     if let ClientEvent::PublishReceived(publish_received_event) = event.as_ref() {
         let publish = &publish_received_event.publish;
-        if let Some(payload) = &publish.payload {
-            if "Ping".as_bytes() == payload.as_slice() {
+        if let Some(payload) = publish.payload() {
+            if "Ping".as_bytes() == payload {
                 // we received a Ping, let's send a Pong in response
-                let pong_publish = PublishPacket {
-                    topic: publish.topic.clone(),
-                    qos: QualityOfService::AtMostOnce,
-                    ..Default::default()
-                };
+                let pong_publish = PublishPacket::builder(publish.topic().to_string(), QualityOfService::AtMostOnce)
+                    .with_payload("Pong".as_bytes().to_vec()).build();
 
                 // we're in a synchronous function, but it's being called from an async task within the runtime, so
                 // we can await and check the publish result by getting the current runtime and spawning an async
