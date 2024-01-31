@@ -127,7 +127,7 @@ supported custom authentication modes:
 For an unsigned custom authorizer (for testing/internal purposes only, not recommended for production):
 
 ```no_run
-use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
+use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptionsBuilder};
 use tokio::runtime::Handle;
 
 #[tokio::main]
@@ -137,15 +137,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let username = "<username value to pass to the authorizer>"; // only necessary if the authorizer's lambda uses it
     let password = "<password value to pass to the authorizer>".as_bytes(); // only necessary if the authorizer's lambda uses it
 
-    let unsigned_custom_auth_options = AwsCustomAuthOptions::new_unsigned(
-        authorizer_name,
-        Some(username),
-        Some(password)
+    let mut custom_auth_options_builder = AwsCustomAuthOptionsBuilder::new_unsigned(
+        Some(authorizer_name)
     );
+
+    custom_auth_options_builder.with_username(username);
+    custom_auth_options_builder.with_password(password);
 
     // In the common case, you will not need a root CA certificate
     let client =
-        AwsClientBuilder::new_direct_with_custom_auth(endpoint, unsigned_custom_auth_options, None)?
+        AwsClientBuilder::new_direct_with_custom_auth(endpoint, custom_auth_options_builder.build(), None)?
             .build(&Handle::current())?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
@@ -163,7 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 For a signed custom authorizer (recommended for production):
 
 ```no_run
-use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
+use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptionsBuilder};
 use tokio::runtime::Handle;
 
 #[tokio::main]
@@ -176,18 +177,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let username = "<username value to pass to the authorizer>"; // only necessary if the authorizer's lambda uses it
     let password = "<password value to pass to the authorizer>".as_bytes(); // only necessary if the authorizer's lambda uses it
 
-    let signed_custom_auth_options = AwsCustomAuthOptions::new_signed(
-        authorizer_name,
+    let mut custom_auth_options_builder = AwsCustomAuthOptionsBuilder::new_signed(
+        Some(authorizer_name),
         authorizer_signature,
         authorizer_token_key_name,
-        authorizer_token_key_value,
-        Some(username),
-        Some(password)
+        authorizer_token_key_value
     );
+
+    custom_auth_options_builder.with_username(username);
+    custom_auth_options_builder.with_password(password);
 
     // In the common case, you will not need a root CA certificate
     let client =
-        AwsClientBuilder::new_direct_with_custom_auth(endpoint, signed_custom_auth_options, None)?
+        AwsClientBuilder::new_direct_with_custom_auth(endpoint, custom_auth_options_builder.build(), None)?
             .build(&Handle::current())?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
@@ -242,6 +244,7 @@ different combinations expected by users.
 use gneiss_mqtt::config::*;
 use gneiss_mqtt::client::Mqtt5Client;
 use gneiss_mqtt::error::{MqttError, MqttResult};
+use std::fmt::Write;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::runtime::Handle;
@@ -251,6 +254,8 @@ use aws_sigv4::http_request::{SessionTokenMode, sign, SignableBody, SignableRequ
 use aws_sigv4::sign::v4;
 use aws_smithy_runtime_api::client::identity::Identity;
 use urlencoding::encode;
+
+pub(crate) const GNEISS_MQTT_AWS_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Struct holding all configuration relevant to connecting an MQTT client to AWS IoT Core
 /// over websockets using a Sigv4-signed websocket handshake for authentication
@@ -321,19 +326,30 @@ pub struct AwsCustomAuthOptions {
     pub(crate) password: Option<Vec<u8>>
 }
 
-impl AwsCustomAuthOptions {
+/// Builder type for AwsCustomAuthOptions
+pub struct AwsCustomAuthOptionsBuilder {
+    authorizer_name: Option<String>,
+    authorizer_signature: Option<String>,
+    authorizer_token_key_name: Option<String>,
+    authorizer_token_key_value: Option<String>,
+    username: Option<String>,
+    password: Option<Vec<u8>>
+}
+
+impl AwsCustomAuthOptionsBuilder {
 
     /// Creates a new custom authentication options configuration to use an unsigned authorizer.
     ///
-    /// `authorizer_name` - name of the AWS IoT authorizer to use.  This value must be URI-encoded if necessary.
-    ///
-    /// `username` - specifies additional data to pass to the authorizer's Lambda function via the `protocolData.mqtt.username` field.
-    ///
-    /// `password` - specifies additional data to pass to the authorizer's Lambda function via the `protocolData.mqtt.password` field.
-    pub fn new_unsigned(authorizer_name: &str, username: Option<&str>, password: Option<&[u8]>) -> Self {
-        AwsCustomAuthOptions {
-            username: format!("{}?{}={}", username.unwrap_or(""), CUSTOM_AUTH_AUTHORIZER_QUERY_PARAM_NAME, authorizer_name),
-            password: password.map(|p| p.to_vec())
+    /// `authorizer_name` - name of the AWS IoT authorizer to use.  This value must be URI-encoded if necessary.  A
+    /// value is required unless the AWS account has a default authorizer configured for it.
+    pub fn new_unsigned(authorizer_name: Option<&str>) -> Self {
+        AwsCustomAuthOptionsBuilder {
+            authorizer_name: authorizer_name.map(|name| { name.to_string() }),
+            authorizer_signature: None,
+            authorizer_token_key_name: None,
+            authorizer_token_key_value: None,
+            username: None,
+            password: None
         }
     }
 
@@ -343,7 +359,8 @@ impl AwsCustomAuthOptions {
     /// is the URI-encoded Base64-encoded signature of `authorizer_token_key_value` via the private key
     /// associated with the public key that was registered with the authorizer on creation.
     ///
-    /// `authorizer_name` - name of the AWS IoT authorizer to use.  This value must be URI-encoded if necessary.
+    /// `authorizer_name` - name of the AWS IoT authorizer to use.  This value must be URI-encoded if necessary. A
+    /// value is required unless the AWS account has a default authorizer configured for it.
     ///
     /// `authorizer_signature` - The URI-encoded, Base64-encoded cryptographic signature of the value contained in `authorizer_token_key_value`.  The signature must be
     /// made with the private key associated with the public key that was registered with the authorizer.
@@ -352,22 +369,69 @@ impl AwsCustomAuthOptions {
     ///
     /// `authorizer_token_key_value` - arbitrary value whose digital signature is provided in the `authorizer_signature`
     ///
-    /// `username` - specifies additional data to pass to the authorizer's Lambda function via the `protocolData.mqtt.username` field.
-    ///
-    /// `password` - specifies additional data to pass to the authorizer's Lambda function via the `protocolData.mqtt.password` field.
-    ///
     /// `authorizer_token_key_name` and `authorizer_name` must be valid URI-encoded values.
-    pub fn new_signed(authorizer_name: &str, authorizer_signature: &str, authorizer_token_key_name: &str, authorizer_token_key_value: &str, username: Option<&str>, password: Option<&[u8]>) -> Self {
+    pub fn new_signed(authorizer_name: Option<&str>, authorizer_signature: &str, authorizer_token_key_name: &str, authorizer_token_key_value: &str) -> Self {
+        AwsCustomAuthOptionsBuilder {
+            authorizer_name: authorizer_name.map(|name| { name.to_string() }),
+            authorizer_signature: Some(authorizer_signature.to_string()),
+            authorizer_token_key_name: Some(authorizer_token_key_name.to_string()),
+            authorizer_token_key_value: Some(authorizer_token_key_value.to_string()),
+            username: None,
+            password: None
+        }
+    }
+
+    /// specifies additional data to pass to the authorizer's Lambda function via the `protocolData.mqtt.username` field.
+    /// It is strongly advised to either URI encode this value or make sure it does not contain characters that
+    /// need to be URI-encoded
+    pub fn with_username(&mut self, username: &str) -> &mut Self {
+        self.username = Some(username.to_string());
+        self
+    }
+
+    /// specifies additional data to pass to the authorizer's Lambda function via the `protocolData.mqtt.password` field.
+    pub fn with_password(&mut self, password: &[u8]) -> &mut Self {
+        self.password = Some(password.to_vec());
+        self
+    }
+
+    fn build_query_params(&self) -> Vec<String> {
+        let mut params = Vec::new();
+
+        if let Some(authorizer_name) = &self.authorizer_name {
+            params.push(format!("{}={}", CUSTOM_AUTH_AUTHORIZER_QUERY_PARAM_NAME, authorizer_name.clone()));
+        }
+
+        if let Some(authorizer_signature) = &self.authorizer_signature {
+            params.push(format!("{}={}", CUSTOM_AUTH_SIGNATURE_QUERY_PARAM_NAME, authorizer_signature.clone()));
+        }
+
+        if let Some(authorizer_token_key_name) = &self.authorizer_token_key_name {
+            params.push(format!("{}={}", authorizer_token_key_name.clone(), self.authorizer_token_key_value.as_ref().unwrap().clone()));
+        }
+
+        params.push("SDK=gneiss-mqtt-aws".to_string());
+        params.push(format!("Version={}", GNEISS_MQTT_AWS_VERSION));
+
+        params
+    }
+
+    /// Builds a new set of custom auth options from the builder's configuration.  Does not consume the builder in
+    /// the process.
+    pub fn build(&self) -> AwsCustomAuthOptions {
+        let mut final_username : String = "".to_string();
+
+        if let Some(username) = &self.username {
+            write!(&mut final_username, "{}", username).ok();
+        }
+        write!(&mut final_username, "?").ok();
+
+        let query_params = self.build_query_params();
+        write!(&mut final_username, "{}", query_params.join("&")).ok();
+
         AwsCustomAuthOptions {
-            username: format!("{}?{}={}&{}={}&{}={}",
-                username.unwrap_or(""),
-                CUSTOM_AUTH_AUTHORIZER_QUERY_PARAM_NAME,
-                authorizer_name,
-                CUSTOM_AUTH_SIGNATURE_QUERY_PARAM_NAME,
-                authorizer_signature,
-                authorizer_token_key_name,
-                authorizer_token_key_value),
-            password: password.map(|p| p.to_vec())
+            username: final_username,
+            password: self.password.clone(),
         }
     }
 }
