@@ -253,7 +253,6 @@ use aws_credential_types::provider::ProvideCredentials;
 use aws_sigv4::http_request::{SessionTokenMode, sign, SignableBody, SignableRequest, SignatureLocation};
 use aws_sigv4::sign::v4;
 use aws_smithy_runtime_api::client::identity::Identity;
-use urlencoding::encode;
 
 pub(crate) const GNEISS_MQTT_AWS_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -728,11 +727,11 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     let mut query_param_list = signing_instructions
         .params()
         .iter()
-        .map(|(key, value)| { format!("{}={}", encode(key), encode(value))})
+        .map(|(key, value)| { format!("{}={}", urlencoding::encode(key), urlencoding::encode(value))})
         .collect::<Vec<String>>();
 
     if let Some(session_token) = session_token {
-        query_param_list.push(format!("X-Amz-Security-Token={}", encode(session_token.as_str())));
+        query_param_list.push(format!("X-Amz-Security-Token={}", urlencoding::encode(session_token.as_str())));
     }
 
     let query_params = query_param_list.join("&");
