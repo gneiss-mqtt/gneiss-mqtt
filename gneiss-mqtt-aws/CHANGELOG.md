@@ -12,3 +12,4 @@ This document is currently hand-written and non-authoritative.
 * Custom Auth refactoring
 * * Reworked custom auth options to builder-based
 * * Added SDK/Version params (may remove later)
+* * URI encode custom authorizer signatures when it's safe to do so
