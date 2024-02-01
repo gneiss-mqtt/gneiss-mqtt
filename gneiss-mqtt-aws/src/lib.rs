@@ -416,9 +416,6 @@ impl AwsCustomAuthOptionsBuilder {
             params.push(format!("{}={}", authorizer_token_key_name.clone(), self.authorizer_token_key_value.as_ref().unwrap().clone()));
         }
 
-        params.push("SDK=gneiss-mqtt-aws".to_string());
-        params.push(format!("Version={}", GNEISS_MQTT_AWS_VERSION));
-
         params
     }
 
