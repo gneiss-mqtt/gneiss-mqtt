@@ -403,7 +403,14 @@ impl AwsCustomAuthOptionsBuilder {
         }
 
         if let Some(authorizer_signature) = &self.authorizer_signature {
-            params.push(format!("{}={}", CUSTOM_AUTH_SIGNATURE_QUERY_PARAM_NAME, authorizer_signature.clone()));
+            let final_signature =
+                if !authorizer_signature.contains('%') {
+                    urlencoding::encode(authorizer_signature).to_string()
+                } else {
+                    authorizer_signature.clone()
+                };
+
+            params.push(format!("{}={}", CUSTOM_AUTH_SIGNATURE_QUERY_PARAM_NAME, final_signature));
         }
 
         if let Some(authorizer_token_key_name) = &self.authorizer_token_key_name {
