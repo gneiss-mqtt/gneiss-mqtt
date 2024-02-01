@@ -8,7 +8,7 @@ use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult, main_loop};
 use gneiss_mqtt::client::Mqtt5Client;
 use gneiss_mqtt::config::*;
-use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions, WebsocketSigv4OptionsBuilder};
+use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptionsBuilder, WebsocketSigv4OptionsBuilder};
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
 use tokio::runtime::Handle;
@@ -98,39 +98,32 @@ async fn build_client(connect_config: ConnectOptions, client_config: Mqtt5Client
             }
         }
         "aws-custom-auth" => {
-            let password: Option<Vec<u8>> = args.password.as_ref().map(|p| p.as_bytes().to_vec());
-
-            if args.authorizer.is_some() {
+            let mut config =
                 if args.authorizer_signature.is_some() && args.authorizer_token_key_value.is_some() && args.authorizer_token_key_name.is_some() {
-                    let signed_config = AwsCustomAuthOptions::new_signed(
-                        args.authorizer.as_ref().unwrap(),
+                    AwsCustomAuthOptionsBuilder::new_signed(
+                        args.authorizer.as_deref(),
                         args.authorizer_signature.as_ref().unwrap(),
                         args.authorizer_token_key_name.as_ref().unwrap(),
                         args.authorizer_token_key_value.as_ref().unwrap(),
-                        args.username.as_deref(),
-                        password.as_deref()
-                    );
-
-                    Ok(AwsClientBuilder::new_direct_with_custom_auth(&endpoint, signed_config, capath)?
-                        .with_connect_options(connect_config)
-                        .with_client_options(client_config)
-                        .build(runtime)?)
+                    )
                 } else {
-                    let unsigned_config = AwsCustomAuthOptions::new_unsigned(
-                        args.authorizer.as_ref().unwrap(),
-                        args.username.as_deref(),
-                        password.as_deref()
-                    );
+                    AwsCustomAuthOptionsBuilder::new_unsigned(
+                        args.authorizer.as_deref()
+                    )
+                };
 
-                    Ok(AwsClientBuilder::new_direct_with_custom_auth(&endpoint, unsigned_config, capath)?
-                        .with_connect_options(connect_config)
-                        .with_client_options(client_config)
-                        .build(runtime)?)
-                }
-            } else {
-                println!("ERROR: aws-custom-auth scheme requires authorizer parameter");
-                Err(ElastiError::MissingArguments("--authorizer"))
+            if let Some(username) = &args.username {
+                config.with_username(username.as_str());
             }
+
+            if let Some(password) = &args.password {
+                config.with_password(password.as_bytes());
+            }
+
+            Ok(AwsClientBuilder::new_direct_with_custom_auth(&endpoint, config.build(), capath)?
+                .with_connect_options(connect_config)
+                .with_client_options(client_config)
+                .build(runtime)?)
         }
         "aws-wss" => {
             let signing_region = args.signing_region.clone().unwrap_or("us-east-1".to_string());
