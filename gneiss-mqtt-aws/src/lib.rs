@@ -254,8 +254,6 @@ use aws_sigv4::http_request::{SessionTokenMode, sign, SignableBody, SignableRequ
 use aws_sigv4::sign::v4;
 use aws_smithy_runtime_api::client::identity::Identity;
 
-pub(crate) const GNEISS_MQTT_AWS_VERSION: &str = env!("CARGO_PKG_VERSION");
-
 /// Struct holding all configuration relevant to connecting an MQTT client to AWS IoT Core
 /// over websockets using a Sigv4-signed websocket handshake for authentication
 #[derive(Clone, Debug)]
