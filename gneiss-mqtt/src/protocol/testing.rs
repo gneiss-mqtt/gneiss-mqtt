@@ -12,12 +12,13 @@ mod protocol_state_tests {
     use assert_matches::assert_matches;
     use crate::validate::utils::testing::verify_validation_failure;
 
+    const CONNACK_TIMEOUT_MILLIS: u64 = 10000;
+
     fn build_standard_test_config() -> ProtocolStateConfig {
         ProtocolStateConfig {
             connect_options : ConnectOptionsBuilder::new().with_client_id("DefaultTesting").with_keep_alive_interval_seconds(None).build(),
             base_timestamp: Instant::now(),
             offline_queue_policy: OfflineQueuePolicy::PreserveAll,
-            connack_timeout: Duration::from_millis(10000),
             ping_timeout: Duration::from_millis(30000),
             outbound_alias_resolver: None,
         }
@@ -531,9 +532,14 @@ mod protocol_state_tests {
         }
 
         pub(crate) fn on_connection_opened(&mut self, elapsed_millis: u64) -> MqttResult<()> {
+            let now = self.base_timestamp + Duration::from_millis(elapsed_millis);
+            let establishment_timeout = now + Duration::from_millis(CONNACK_TIMEOUT_MILLIS);
+
             let mut context = NetworkEventContext {
                 current_time : self.base_timestamp + Duration::from_millis(elapsed_millis),
-                event: NetworkEvent::ConnectionOpened,
+                event: NetworkEvent::ConnectionOpened(ConnectionOpenedContext{
+                    establishment_timeout
+                }),
                 packet_events: &mut self.client_packet_events,
             };
 
@@ -850,7 +856,7 @@ mod protocol_state_tests {
     #[test]
     fn pending_connack_state_connack_timeout() {
         let config = build_standard_test_config();
-        let connack_timeout_millis = config.connack_timeout.as_millis();
+        let connack_timeout_millis = CONNACK_TIMEOUT_MILLIS;
 
         let mut fixture = ProtocolStateTestFixture::new(config);
         assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 1).is_ok());

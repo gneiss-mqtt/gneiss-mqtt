@@ -603,7 +603,6 @@ pub struct Mqtt5ClientOptions {
     pub(crate) offline_queue_policy: OfflineQueuePolicy,
 
     pub(crate) connect_timeout: Duration,
-    pub(crate) connack_timeout: Duration,
     pub(crate) ping_timeout: Duration,
 
     pub(crate) outbound_alias_resolver_factory: Option<OutboundAliasResolverFactoryFn>,
@@ -616,7 +615,6 @@ impl Debug for Mqtt5ClientOptions {
         write!(f, "Mqtt5ClientOptions {{ ")?;
         write!(f, "offline_queue_policy: {:?}, ", self.offline_queue_policy)?;
         write!(f, "connect_timeout: {:?}, ", self.connect_timeout)?;
-        write!(f, "connack_timeout: {:?}, ", self.connack_timeout)?;
         write!(f, "ping_timeout: {:?}, ", self.ping_timeout)?;
         if self.outbound_alias_resolver_factory.is_some() {
             write!(f, "outbound_alias_resolver_factory: Some(...), ")?;
@@ -634,7 +632,6 @@ impl Default for Mqtt5ClientOptions {
         Mqtt5ClientOptions {
             offline_queue_policy: OfflineQueuePolicy::PreserveAcknowledged,
             connect_timeout: Duration::from_secs(30),
-            connack_timeout: Duration::from_secs(15),
             ping_timeout: Duration::from_secs(10),
             outbound_alias_resolver_factory: None,
             reconnect_options: ReconnectOptions::default(),
@@ -670,15 +667,6 @@ impl Mqtt5ClientOptionsBuilder {
     /// established (such that the MQTT protocol can begin).
     pub fn with_connect_timeout(&mut self, connect_timeout: Duration) -> &mut Self {
         self.options.connect_timeout = connect_timeout;
-        self
-    }
-
-    /// Configures how long the client will wait for a Connack from the broker before giving up and
-    /// failing the connection attempt.
-    ///
-    /// TODO: fold into connect timeout
-    pub fn with_connack_timeout(&mut self, connack_timeout: Duration) -> &mut Self {
-        self.options.connack_timeout = connack_timeout;
         self
     }
 
