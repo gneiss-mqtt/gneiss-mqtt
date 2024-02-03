@@ -174,7 +174,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
                         debug!("tokio - process_stopped - user operation received");
-                        client.handle_incoming_operation(operation_options);
+                        client.handle_incoming_operation(operation_options, Instant::now());
                     }
                 }
             }
@@ -198,7 +198,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
                         debug!("tokio - process_connecting - user operation received");
-                        client.handle_incoming_operation(operation_options);
+                        client.handle_incoming_operation(operation_options, Instant::now());
                     }
                 }
                 () = &mut timeout => {
@@ -245,7 +245,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
         while next_state.is_none() {
             trace!("tokio - process_connected loop");
 
-            let next_service_time_option = client.get_next_connected_service_time();
+            let next_service_time_option = client.get_next_connected_service_time(Instant::now());
             let service_wait: Option<tokio::time::Sleep> = next_service_time_option.map(|next_service_time| sleep(next_service_time - Instant::now()));
 
             let outbound_slice_option: Option<&[u8]> =
@@ -271,7 +271,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
                         debug!("tokio - process_connected - user operation received");
-                        client.handle_incoming_operation(operation_options);
+                        client.handle_incoming_operation(operation_options, Instant::now());
                     }
                 }
                 // incoming data on the socket future
@@ -284,7 +284,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                                 info!("tokio - process_connected - connection closed for read (0 bytes)");
                                 client.apply_error(MqttError::new_connection_closed("network stream closed"));
                                 next_state = Some(ClientImplState::PendingReconnect);
-                            } else if let Err(error) = client.handle_incoming_bytes(&inbound_data[..bytes_read]) {
+                            } else if let Err(error) = client.handle_incoming_bytes(&inbound_data[..bytes_read], Instant::now()) {
                                 info!("tokio - process_connected - error handling incoming bytes: {:?}", error);
                                 client.apply_error(error);
                                 next_state = Some(ClientImplState::PendingReconnect);
@@ -304,7 +304,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 // client service future (if relevant)
                 Some(_) = conditional_wait(service_wait) => {
                     debug!("tokio - process_connected - running client service task");
-                    if let Err(error) = client.handle_service(&mut outbound_data) {
+                    if let Err(error) = client.handle_service(&mut outbound_data, Instant::now()) {
                         client.apply_error(error);
                         next_state = Some(ClientImplState::PendingReconnect);
                     }
@@ -316,7 +316,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                             debug!("tokio - process_connected - wrote {} bytes to connection stream", bytes_written);
                             if should_flush {
                                 should_flush = false;
-                                if let Err(error) = client.handle_write_completion() {
+                                if let Err(error) = client.handle_write_completion(Instant::now()) {
                                     info!("tokio - process_connected - stream write completion handler failed: {:?}", error);
                                     client.apply_error(error);
                                     next_state = Some(ClientImplState::PendingReconnect);
@@ -366,7 +366,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
                         debug!("tokio - process_pending_reconnect - user operation received");
-                        client.handle_incoming_operation(operation_options);
+                        client.handle_incoming_operation(operation_options, Instant::now());
                     }
                 }
                 () = &mut reconnect_timer => {
@@ -447,7 +447,7 @@ async fn client_event_loop<T>(client_impl: &mut Mqtt5ClientImpl, async_state: &m
 
         done = true;
         if let Ok(next_state) = next_state_result {
-            if client_impl.transition_to_state(next_state).is_ok() && (next_state != ClientImplState::Shutdown) {
+            if client_impl.transition_to_state(next_state, Instant::now()).is_ok() && (next_state != ClientImplState::Shutdown) {
                 done = false;
             }
         }
@@ -491,7 +491,7 @@ impl Mqtt5Client {
     pub fn new_with_tokio<T>(client_config: Mqtt5ClientOptions, connect_config: ConnectOptions, tokio_config: TokioClientOptions<T>, runtime_handle: &runtime::Handle) -> Mqtt5Client where T: AsyncRead + AsyncWrite + Send + Sync + 'static {
         let (user_state, internal_state) = create_runtime_states(tokio_config);
 
-        let client_impl = Mqtt5ClientImpl::new(client_config, connect_config);
+        let client_impl = Mqtt5ClientImpl::new(client_config, connect_config, Instant::now());
 
         spawn_client_impl(client_impl, internal_state, runtime_handle);
 
