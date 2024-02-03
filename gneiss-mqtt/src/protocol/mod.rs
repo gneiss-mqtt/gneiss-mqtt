@@ -129,10 +129,14 @@ pub(crate) enum PacketEvent {
     Disconnect(DisconnectPacket)
 }
 
+pub(crate) struct ConnectionOpenedContext {
+    pub(crate) establishment_timeout: Instant,
+}
+
 // The client's protocol state is completely uncoupled from networking data types.  We offer
 // a simple interface that models and handles all relevant events.
 pub(crate) enum NetworkEvent<'a> {
-    ConnectionOpened,
+    ConnectionOpened(ConnectionOpenedContext),
     ConnectionClosed,
     IncomingData(&'a [u8]),
     WriteCompletion
@@ -200,7 +204,6 @@ pub(crate) struct ProtocolStateConfig {
 
     pub offline_queue_policy: OfflineQueuePolicy,
 
-    pub connack_timeout: Duration,
     pub ping_timeout: Duration,
 
     pub outbound_alias_resolver: Option<Box<dyn OutboundAliasResolver + Send>>,
@@ -433,7 +436,7 @@ impl ProtocolState {
         let event = &context.event;
         let result =
             match &event {
-                NetworkEvent::ConnectionOpened => { self.handle_network_event_connection_opened(context) }
+                NetworkEvent::ConnectionOpened(_) => { self.handle_network_event_connection_opened(context) }
                 NetworkEvent::ConnectionClosed => { self.handle_network_event_connection_closed(context) }
                 NetworkEvent::WriteCompletion => { self.handle_network_event_write_completion(context) }
                 NetworkEvent::IncomingData(data) => { self.handle_network_event_incoming_data(context, data) }
@@ -788,24 +791,28 @@ impl ProtocolState {
             return Err(MqttError::new_internal_state_error("connection opened in an invalid state"));
         }
 
-        info!("[{} ms] handle_network_event_connection_opened", self.elapsed_time_ms);
-        self.change_state(ProtocolStateType::PendingConnack);
-        self.current_operation = None;
-        self.pending_write_completion = false;
-        self.decoder.reset_for_new_connection();
+        if let NetworkEvent::ConnectionOpened(connection_opened_context) = &context.event {
+            info!("[{} ms] handle_network_event_connection_opened", self.elapsed_time_ms);
+            self.change_state(ProtocolStateType::PendingConnack);
+            self.current_operation = None;
+            self.pending_write_completion = false;
+            self.decoder.reset_for_new_connection();
 
-        // Queue up a Connect packet
-        let connect = self.create_connect();
-        let connect_op_id = self.create_operation(connect, None);
+            // Queue up a Connect packet
+            let connect = self.create_connect();
+            let connect_op_id = self.create_operation(connect, None);
 
-        self.enqueue_operation(connect_op_id, ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Front);
+            self.enqueue_operation(connect_op_id, ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Front);
 
-        let connack_timeout = context.current_time + self.config.connack_timeout;
+            let connack_timeout = connection_opened_context.establishment_timeout;
 
-        debug!("[{} ms] handle_network_event_connection_opened - setting connack timeout to {} ms", self.elapsed_time_ms, self.get_elapsed_millis(&connack_timeout));
-        self.connack_timeout_timepoint = Some(connack_timeout);
+            debug!("[{} ms] handle_network_event_connection_opened - setting connack timeout to {} ms", self.elapsed_time_ms, self.get_elapsed_millis(&connack_timeout));
+            self.connack_timeout_timepoint = Some(connack_timeout);
 
-        Ok(())
+            Ok(())
+        } else {
+            panic!("");
+        }
     }
 
     fn apply_connection_closed_to_current_operation(&mut self) -> MqttResult<()> {
@@ -1320,9 +1327,13 @@ impl ProtocolState {
 
                 self.enqueue_operation(ping_op_id, ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Front);
 
-                self.ping_timeout_timepoint = Some(context.current_time + self.config.ping_timeout);
-
                 let server_keep_alive = self.current_settings.as_ref().unwrap().server_keep_alive as u64;
+
+                // Regardless of ping timeout configuration, if we haven't heard anything by KeepAlive * 1.5, then
+                // close the connection
+                let final_timeout = self.config.ping_timeout.min(Duration::from_secs(server_keep_alive / 2));
+                self.ping_timeout_timepoint = Some(context.current_time + final_timeout);
+
                 if server_keep_alive > 0 {
                     self.next_ping_timepoint = Some(context.current_time + Duration::from_secs(server_keep_alive));
                 }
@@ -2094,7 +2105,6 @@ mod tests {
             connect_options,
             base_timestamp: Instant::now(),
             offline_queue_policy: OfflineQueuePolicy::PreserveAll,
-            connack_timeout: Duration::from_secs(30),
             ping_timeout: Duration::from_millis(30000),
             outbound_alias_resolver: None,
         }
@@ -2365,7 +2375,6 @@ mod tests {
             connect_options: ConnectOptionsBuilder::new().build(),
             base_timestamp: Instant::now(),
             offline_queue_policy: OfflineQueuePolicy::PreserveNothing,
-            connack_timeout: Duration::from_millis(0),
             ping_timeout: Duration::from_millis(0),
             outbound_alias_resolver: None,
         };

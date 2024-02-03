@@ -85,6 +85,7 @@ pub(crate) struct Mqtt5ClientImpl {
     last_disconnect: Option<DisconnectPacket>,
     last_error: Option<MqttError>,
 
+    last_start_connect_time: Option<Instant>,
     successful_connect_time: Option<Instant>,
     next_reconnect_period: Duration,
     reconnect_options: ReconnectOptions,
@@ -103,7 +104,6 @@ impl Mqtt5ClientImpl {
             connect_options: connect_config,
             base_timestamp: Instant::now(),
             offline_queue_policy: client_config.offline_queue_policy,
-            connack_timeout: client_config.connack_timeout,
             ping_timeout: client_config.ping_timeout,
             outbound_alias_resolver: client_config.outbound_alias_resolver_factory.map(|f| { f() })
         };
@@ -118,6 +118,7 @@ impl Mqtt5ClientImpl {
             last_connack: None,
             last_disconnect: None,
             last_error: None,
+            last_start_connect_time: None,
             successful_connect_time: None,
             next_reconnect_period: client_config.reconnect_options.base_reconnect_period,
             reconnect_options: client_config.reconnect_options,
@@ -459,8 +460,11 @@ impl Mqtt5ClientImpl {
         debug!("client impl transition_to_state - old state: {}, new_state: {}", old_state, new_state);
 
         if new_state == ClientImplState::Connected {
+            let establishment_timeout = self.last_start_connect_time.unwrap() + self.connect_timeout;
             let mut connection_opened_context = NetworkEventContext {
-                event: NetworkEvent::ConnectionOpened,
+                event: NetworkEvent::ConnectionOpened(ConnectionOpenedContext{
+                    establishment_timeout,
+                }),
                 current_time: Instant::now(),
                 packet_events: &mut self.packet_events
             };
@@ -480,6 +484,7 @@ impl Mqtt5ClientImpl {
             self.last_error = None;
             self.last_connack = None;
             self.last_disconnect = None;
+            self.last_start_connect_time = Some(Instant::now());
             self.emit_connection_attempt_event();
         }
 

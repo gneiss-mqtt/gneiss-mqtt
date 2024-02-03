@@ -27,4 +27,6 @@ This document is currently hand-written and non-authoritative.
 * * * all packet fields crate-internal
 * * * add accessors for user-facing packet fields
 * * * builder types for all user-submitted packets: Disconnect, Publish, Subscribe, Unsubscribe
-
+* * timeout polish
+* * * remove connack timeout as a setting, connect timeout now covers the end-to-end interval from socket open to connack receipt
+* * * fixed an edge case when ping timeout is larger than half the keep alive setting
