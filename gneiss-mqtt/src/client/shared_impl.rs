@@ -91,18 +91,20 @@ pub(crate) struct Mqtt5ClientImpl {
     reconnect_options: ReconnectOptions,
 
     connect_timeout: Duration,
+
+    current_time: Instant,
 }
 
 
 impl Mqtt5ClientImpl {
 
-    pub(crate) fn new(client_config: Mqtt5ClientOptions, connect_config: ConnectOptions) -> Self {
+    pub(crate) fn new(client_config: Mqtt5ClientOptions, connect_config: ConnectOptions, current_time: Instant) -> Self {
         debug!("Creating new MQTT client - client options: {:?}", client_config);
         debug!("Creating new MQTT client - connect options: {:?}", connect_config);
 
         let state_config = ProtocolStateConfig {
             connect_options: connect_config,
-            base_timestamp: Instant::now(),
+            base_timestamp: current_time,
             offline_queue_policy: client_config.offline_queue_policy,
             ping_timeout: client_config.ping_timeout,
             outbound_alias_resolver: client_config.outbound_alias_resolver_factory.map(|f| { f() })
@@ -122,7 +124,8 @@ impl Mqtt5ClientImpl {
             successful_connect_time: None,
             next_reconnect_period: client_config.reconnect_options.base_reconnect_period,
             reconnect_options: client_config.reconnect_options,
-            connect_timeout: client_config.connect_timeout
+            connect_timeout: client_config.connect_timeout,
+            current_time
         };
 
         client_impl.reconnect_options.normalize();
@@ -166,13 +169,19 @@ impl Mqtt5ClientImpl {
         }
     }
 
-    pub(crate) fn handle_incoming_operation(&mut self, operation: OperationOptions) {
+    fn set_current_time(&mut self, current_time: Instant) {
+        self.current_time = current_time;
+    }
+
+    pub(crate) fn handle_incoming_operation(&mut self, operation: OperationOptions, current_time: Instant) {
+        self.set_current_time(current_time);
+
         match operation {
             OperationOptions::Publish(packet, internal_options) => {
                 debug!("Submitting publish operation to protocol state");
                 let user_event_context = UserEventContext {
                     event: UserEvent::Publish(packet, internal_options),
-                    current_time: Instant::now()
+                    current_time
                 };
 
                 self.protocol_state.handle_user_event(user_event_context);
@@ -181,7 +190,7 @@ impl Mqtt5ClientImpl {
                 debug!("Submitting subscribe operation to protocol state");
                 let user_event_context = UserEventContext {
                     event: UserEvent::Subscribe(packet, internal_options),
-                    current_time: Instant::now()
+                    current_time
                 };
 
                 self.protocol_state.handle_user_event(user_event_context);
@@ -190,7 +199,7 @@ impl Mqtt5ClientImpl {
                 debug!("Submitting unsubscribe operation to protocol state");
                 let user_event_context = UserEventContext {
                     event: UserEvent::Unsubscribe(packet, internal_options),
-                    current_time: Instant::now()
+                    current_time
                 };
 
                 self.protocol_state.handle_user_event(user_event_context);
@@ -210,7 +219,7 @@ impl Mqtt5ClientImpl {
                     debug!("Submitting disconnect operation to protocol state");
                     let disconnect_context = UserEventContext {
                         event: UserEvent::Disconnect(disconnect.clone()),
-                        current_time: Instant::now()
+                        current_time
                     };
 
                     self.protocol_state.handle_user_event(disconnect_context);
@@ -222,7 +231,7 @@ impl Mqtt5ClientImpl {
             }
             OperationOptions::Shutdown() => {
                 debug!("Updating desired state to Shutdown");
-                self.protocol_state.reset(&Instant::now());
+                self.protocol_state.reset(&current_time);
                 self.desired_state = ClientImplState::Shutdown;
             }
             OperationOptions::AddListener(id, listener) => {
@@ -260,7 +269,7 @@ impl Mqtt5ClientImpl {
                     let reason_code = connack.reason_code;
                     self.last_connack = Some(connack);
                     if reason_code == ConnectReasonCode::Success {
-                        self.successful_connect_time = Some(Instant::now());
+                        self.successful_connect_time = Some(self.current_time);
                         self.emit_connection_success_event();
                     }
                 }
@@ -270,11 +279,13 @@ impl Mqtt5ClientImpl {
         self.packet_events.clear();
     }
 
-    pub(crate) fn handle_incoming_bytes(&mut self, bytes: &[u8]) -> MqttResult<()> {
+    pub(crate) fn handle_incoming_bytes(&mut self, bytes: &[u8], current_time: Instant) -> MqttResult<()> {
         debug!("client impl - handle_incoming_bytes: {} bytes", bytes.len());
+        self.set_current_time(current_time);
+
         let mut context = NetworkEventContext {
             event: NetworkEvent::IncomingData(bytes),
-            current_time: Instant::now(),
+            current_time,
             packet_events: &mut self.packet_events
         };
 
@@ -283,22 +294,26 @@ impl Mqtt5ClientImpl {
         result
     }
 
-    pub(crate) fn handle_write_completion(&mut self) -> MqttResult<()> {
+    pub(crate) fn handle_write_completion(&mut self, current_time: Instant) -> MqttResult<()> {
         debug!("client impl - handle_write_completion");
+        self.set_current_time(current_time);
+
         let mut context = NetworkEventContext {
             event: NetworkEvent::WriteCompletion,
-            current_time: Instant::now(),
+            current_time,
             packet_events: &mut self.packet_events
         };
 
         self.protocol_state.handle_network_event(&mut context)
     }
 
-    pub(crate) fn handle_service(&mut self, outbound_data: &mut Vec<u8>) -> MqttResult<()> {
+    pub(crate) fn handle_service(&mut self, outbound_data: &mut Vec<u8>, current_time: Instant) -> MqttResult<()> {
         debug!("client impl - handle_service");
+        self.set_current_time(current_time);
+
         let mut context = ServiceContext {
             to_socket: outbound_data,
-            current_time: Instant::now(),
+            current_time,
         };
 
         self.protocol_state.service(&mut context)
@@ -370,9 +385,11 @@ impl Mqtt5ClientImpl {
         None
     }
 
-    pub(crate) fn get_next_connected_service_time(&mut self) -> Option<Instant> {
+    pub(crate) fn get_next_connected_service_time(&mut self, current_time: Instant) -> Option<Instant> {
+        self.set_current_time(current_time);
+
         if self.current_state == ClientImplState::Connected {
-            return self.protocol_state.get_next_service_timepoint(&Instant::now());
+            return self.protocol_state.get_next_service_timepoint(&current_time);
         }
 
         None
@@ -429,7 +446,9 @@ impl Mqtt5ClientImpl {
         self.broadcast_event(Arc::new(ClientEvent::Stopped(stopped_event)));
     }
 
-    pub(crate) fn transition_to_state(&mut self, mut new_state: ClientImplState) -> MqttResult<()> {
+    pub(crate) fn transition_to_state(&mut self, mut new_state: ClientImplState, current_time: Instant) -> MqttResult<()> {
+        self.set_current_time(current_time);
+
         let old_state = self.current_state;
         if old_state == new_state {
             return Ok(());
@@ -465,7 +484,7 @@ impl Mqtt5ClientImpl {
                 event: NetworkEvent::ConnectionOpened(ConnectionOpenedContext{
                     establishment_timeout,
                 }),
-                current_time: Instant::now(),
+                current_time,
                 packet_events: &mut self.packet_events
             };
 
@@ -473,7 +492,7 @@ impl Mqtt5ClientImpl {
         } else if old_state == ClientImplState::Connected {
             let mut connection_closed_context = NetworkEventContext {
                 event: NetworkEvent::ConnectionClosed,
-                current_time: Instant::now(),
+                current_time,
                 packet_events: &mut self.packet_events
             };
 
@@ -484,7 +503,7 @@ impl Mqtt5ClientImpl {
             self.last_error = None;
             self.last_connack = None;
             self.last_disconnect = None;
-            self.last_start_connect_time = Some(Instant::now());
+            self.last_start_connect_time = Some(current_time);
             self.emit_connection_attempt_event();
         }
 
@@ -504,8 +523,7 @@ impl Mqtt5ClientImpl {
             }
 
             if let Some(successful_connect_timepoint) = self.successful_connect_time {
-                let now = Instant::now();
-                if (now - successful_connect_timepoint) > self.reconnect_options.reconnect_stability_reset_period {
+                if (current_time - successful_connect_timepoint) > self.reconnect_options.reconnect_stability_reset_period {
                     self.next_reconnect_period = self.reconnect_options.base_reconnect_period;
                 }
             }
