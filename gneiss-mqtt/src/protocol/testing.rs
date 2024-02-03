@@ -1527,26 +1527,23 @@ mod protocol_state_tests {
         ), 444, 888, 888);
     }
 
-    #[test]
-    fn connected_state_ping_pingresp_timeout() {
+    fn do_connected_state_ping_pingresp_timeout(ping_timeout_millis: u64, keep_alive_seconds: u16) {
         const CONNACK_TIME: u64 = 11;
-        const PING_TIMEOUT_MILLIS: u64 = 10000;
-        const KEEP_ALIVE_SECONDS: u16 = 20;
-        const KEEP_ALIVE_MILLIS: u64 = (KEEP_ALIVE_SECONDS as u64) * 1000;
+        let keep_alive_millis: u64 = (keep_alive_seconds as u64) * 1000;
 
         let mut config = build_standard_test_config();
-        config.ping_timeout = Duration::from_millis(PING_TIMEOUT_MILLIS);
-        config.connect_options.keep_alive_interval_seconds = Some(KEEP_ALIVE_SECONDS);
+        config.ping_timeout = Duration::from_millis(ping_timeout_millis);
+        config.connect_options.keep_alive_interval_seconds = Some(keep_alive_seconds);
 
         let mut fixture = ProtocolStateTestFixture::new(config);
 
         assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, CONNACK_TIME).is_ok());
-        let expected_ping_time = CONNACK_TIME + KEEP_ALIVE_MILLIS;
+        let expected_ping_time = CONNACK_TIME + keep_alive_millis;
         assert_eq!(Some(expected_ping_time), fixture.get_next_service_time(CONNACK_TIME));
 
         // trigger a ping
         assert!(fixture.service_with_drain(expected_ping_time, 4096).is_ok());
-        let ping_timeout_timepoint = CONNACK_TIME + KEEP_ALIVE_MILLIS + PING_TIMEOUT_MILLIS as u64;
+        let ping_timeout_timepoint = CONNACK_TIME + keep_alive_millis + u64::min(ping_timeout_millis, keep_alive_millis / 2) as u64;
         assert_eq!(ping_timeout_timepoint, fixture.get_next_service_time(expected_ping_time).unwrap());
         let (index, _) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Pingreq, 1, None, None).unwrap();
         assert_eq!(1, index); // [connect, pingreq]
@@ -1563,6 +1560,16 @@ mod protocol_state_tests {
         assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
         assert_eq!(outbound_packet_count, fixture.to_broker_packet_stream.len());
         verify_protocol_state_empty(&fixture);
+    }
+
+    #[test]
+    fn connected_state_ping_pingresp_timeout_normal() {
+        do_connected_state_ping_pingresp_timeout(10000, 20);
+    }
+
+    #[test]
+    fn connected_state_ping_pingresp_timeout_too_long() {
+        do_connected_state_ping_pingresp_timeout(30000, 20);
     }
 
     #[test]

@@ -1320,9 +1320,13 @@ impl ProtocolState {
 
                 self.enqueue_operation(ping_op_id, ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Front);
 
-                self.ping_timeout_timepoint = Some(context.current_time + self.config.ping_timeout);
-
                 let server_keep_alive = self.current_settings.as_ref().unwrap().server_keep_alive as u64;
+
+                // Regardless of ping timeout configuration, if we haven't heard anything by KeepAlive * 1.5, then
+                // close the connection
+                let final_timeout = self.config.ping_timeout.min(Duration::from_secs(server_keep_alive / 2));
+                self.ping_timeout_timepoint = Some(context.current_time + final_timeout);
+
                 if server_keep_alive > 0 {
                     self.next_ping_timepoint = Some(context.current_time + Duration::from_secs(server_keep_alive));
                 }
