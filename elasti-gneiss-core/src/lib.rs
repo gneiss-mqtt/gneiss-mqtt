@@ -169,6 +169,9 @@ pub fn client_event_callback(event: Arc<ClientEvent>) {
             println!("Publish Received!");
             println!("{}\n", &event.publish);
         }
+        _ => {
+            println!("Unknon client event!");
+        }
     }
 }
 

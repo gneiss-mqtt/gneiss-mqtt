@@ -424,6 +424,7 @@ impl Display for PublishReceivedEvent {
 
 /// Union of all the different events emitted by the client.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum ClientEvent {
 
     /// An event emitted by the client every time it attempts to establish a new network connection

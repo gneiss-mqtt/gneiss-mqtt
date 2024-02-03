@@ -234,6 +234,7 @@ fn load_file(filename: &str) -> std::io::Result<Vec<u8>> {
 
 /// Controls how the client attempts to rejoin MQTT sessions.
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum RejoinSessionPolicy {
 
     /// The client will not attempt to rejoin a session until it successfully connects for the
@@ -535,6 +536,7 @@ impl ConnectOptionsBuilder {
 /// PreserveNothing, a client must, by specification, keep in-progress QoS1 and 2 operations
 /// ready and available should a session by resumed later.
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum OfflineQueuePolicy {
 
     /// Operations are never failed due to connection state
@@ -554,6 +556,7 @@ pub enum OfflineQueuePolicy {
 /// Controls what kind of jitter, if any, the client will apply to the exponential backoff waiting
 /// period in-between connection attempts.
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum ExponentialBackoffJitterType {
 
     /// The client will not perform any jitter to the backoff, leading to a rigid doubling of
