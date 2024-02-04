@@ -201,6 +201,8 @@ pub mod features;
 mod logging;
 pub mod mqtt;
 mod protocol;
+#[cfg(test)]
+mod testing;
 mod validate;
 
 use std::time::Instant;

@@ -5,9 +5,6 @@
 
 // Internal module that implements most of the MQTT5 spec with respect to client protocol behavior
 
-pub(crate) mod testing;
-
-
 use crate::*;
 use crate::alias::*;
 use crate::client::*;
@@ -49,11 +46,11 @@ pub(crate) struct MqttOperation {
     id: u64,
 
     // The base packet associated with this operation.
-    packet: Box<MqttPacket>,
+    pub(crate) packet: Box<MqttPacket>,
 
     // unpleasant hack to let the same operation track both the original qos 2 publish and the
     // followup pubrel
-    qos2_pubrel: Option<Box<MqttPacket>>,
+    pub(crate) qos2_pubrel: Option<Box<MqttPacket>>,
 
     // MQTT packet id that has been assigned to this operation.  Assignment is also reflected in
     // the packet itself.
@@ -252,7 +249,7 @@ enum OperationResponse {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-struct OperationTimeoutRecord {
+pub(crate) struct OperationTimeoutRecord {
     id: u64,
     timeout: Instant
 }
@@ -271,104 +268,104 @@ impl Ord for OperationTimeoutRecord {
 
 // Primary data structure that tracks MQTT-related state for the containing client.
 pub(crate) struct ProtocolState {
-    config: ProtocolStateConfig,
+    pub(crate) config: ProtocolStateConfig,
 
-    state: ProtocolStateType,
+    pub(crate) state: ProtocolStateType,
 
     // the need to model time in a simple, test-controllable fashion leads to a solution where
     // the state thinks in time based on elapsed milliseconds since the state was created.  This
     // allows for simple time mocking which lets us simulate the passage of time "instantly."
-    current_time: Instant,
-    elapsed_time_ms: u128,
+    pub(crate) current_time: Instant,
+    pub(crate) elapsed_time_ms: u128,
 
     // Flag set by the service function after encoding bytes to be written to the socket.
     // Unset when we receive notice that the socket has fully accepted all encoded bytes.
     // No additional bytes are encoded while this flag is set.
-    pending_write_completion: bool,
+    pub(crate) pending_write_completion: bool,
 
     // All incomplete operations tracked by the client
-    operations: HashMap<u64, MqttOperation>,
+    pub(crate) operations: HashMap<u64, MqttOperation>,
 
     // (Optional) Timeouts for all ack-based operations (qos1+ publish, subscribe, unsubscribe)
     // The timeout only covers the period between operation-written-to-socket and
     // response-received-from-socket.  The time an operation spends in an intake queue is not
     // bounded by anything.
-    operation_ack_timeouts: BinaryHeap<Reverse<OperationTimeoutRecord>>,
+    pub(crate) operation_ack_timeouts: BinaryHeap<Reverse<OperationTimeoutRecord>>,
 
     // Intake queues
 
     // lowest priority queue; all user operations are added to the end on submission
-    user_operation_queue: VecDeque<u64>,
+    pub(crate) user_operation_queue: VecDeque<u64>,
 
     // contains qos1+ publishes that were interrupted by a disconnect; spec compliance requires
     // these be re-sent first on session resumption using the original order and packet ids
-    resubmit_operation_queue: VecDeque<u64>,
+    pub(crate) resubmit_operation_queue: VecDeque<u64>,
 
     // highest priority queue; for acks, pings, disconnect
-    high_priority_operation_queue: VecDeque<u64>,
+    pub(crate) high_priority_operation_queue: VecDeque<u64>,
 
     // Service pulls operations from the intake queues based on priority order.  When an operation
     // becomes current, we bind a packet id if necessary, and set up the encoder to encode it.  It
     // stays there until the encoder has fully written all of the bytes to a buffer.  For larger
     // packets this may take a number of [encode -> write to socket -> write completion] cycles.
-    current_operation: Option<u64>,
+    pub(crate) current_operation: Option<u64>,
 
     // Tracks the packet ids of incoming qos2 publishes that haven't been released yet.  When
     // we receive a qos2 publish whose packet id is in here, we can ignore it because it's a
     // duplicate delivery.  Packet ids are removed when we receive a pubrel for it.
-    qos2_incomplete_incoming_publishes: HashSet<u16>,
+    pub(crate) qos2_incomplete_incoming_publishes: HashSet<u16>,
 
     // Tracks the packet ids in use by the client for outbound ack-based operations.  Does not
     // reset between connections.  Used to find unused packet ids for unbound operations.
     // { packet id -> operation id }
-    allocated_packet_ids: HashMap<u16, u64>,
+    pub(crate) allocated_packet_ids: HashMap<u16, u64>,
 
     // Tracks all qos1+ publishes that have been written to the socket but not yet completed.
     // A Qos2 publish will be in this map from the time the publish is written until the pubcomp is
     // received or there is a disconnection.
     // { packet id -> operation id }
-    pending_publish_operations: HashMap<u16, u64>,
+    pub(crate) pending_publish_operations: HashMap<u16, u64>,
 
     // Tracks all subscribes and unsubscribes that have been written to the socket but not yet
     // completed.
     // { packet id -> operation id }
-    pending_non_publish_operations: HashMap<u16, u64>,
+    pub(crate) pending_non_publish_operations: HashMap<u16, u64>,
 
     // Tracks all incomplete operations that don't use acks that have been written to the socket.
     // These operations will be completed on the next write completion event.
-    pending_write_completion_operations: VecDeque<u64>,
+    pub(crate) pending_write_completion_operations: VecDeque<u64>,
 
     // Connection-scoped set of negotiated protocol values
-    current_settings: Option<NegotiatedSettings>,
+    pub(crate) current_settings: Option<NegotiatedSettings>,
 
     // monotonically-increasing operation id value
-    next_operation_id: u64,
+    pub(crate) next_operation_id: u64,
 
     // counter that helps us heuristically find an unused packet id with as little id-space
     // search as possible
-    next_packet_id: u16,
+    pub(crate) next_packet_id: u16,
 
     // Tracks if the containing client has previously successfully connected.  Used to conditionally
     // rejoin sessions.
-    has_connected_successfully: bool,
+    pub(crate) has_connected_successfully: bool,
 
     // MQTT packet encode and decode
-    encoder: Encoder,
-    decoder: Decoder,
+    pub(crate) encoder: Encoder,
+    pub(crate) decoder: Decoder,
 
     // Point in time we should send another ping.  If None, we are in the middle of a ping.
-    next_ping_timepoint: Option<Instant>,
+    pub(crate) next_ping_timepoint: Option<Instant>,
 
     // Point in time that our current ping will time out.  If none, we are not in the middle of a
     // ping.
-    ping_timeout_timepoint: Option<Instant>,
+    pub(crate) ping_timeout_timepoint: Option<Instant>,
 
     // Point in time that we will consider the initial CONNECT packet/request to have timed out.
-    connack_timeout_timepoint: Option<Instant>,
+    pub(crate) connack_timeout_timepoint: Option<Instant>,
 
     // Topic aliasing support
-    outbound_alias_resolver: RefCell<Box<dyn OutboundAliasResolver>>,
-    inbound_alias_resolver: InboundAliasResolver
+    pub(crate) outbound_alias_resolver: RefCell<Box<dyn OutboundAliasResolver>>,
+    pub(crate) inbound_alias_resolver: InboundAliasResolver
 }
 
 impl Display for ProtocolState {
@@ -2057,7 +2054,7 @@ fn complete_operation_with_error(operation_options: &mut MqttOperationOptions, e
     Ok(())
 }
 
-fn does_packet_pass_offline_queue_policy(packet: &MqttPacket, policy: &OfflineQueuePolicy) -> bool {
+pub(crate) fn does_packet_pass_offline_queue_policy(packet: &MqttPacket, policy: &OfflineQueuePolicy) -> bool {
     match packet {
         MqttPacket::Subscribe(_) | MqttPacket::Unsubscribe(_) => {
             !matches!(policy, OfflineQueuePolicy::PreserveQos1PlusPublishes | OfflineQueuePolicy::PreserveNothing)

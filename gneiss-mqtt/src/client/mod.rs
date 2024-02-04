@@ -8,7 +8,6 @@ Module containing the public MQTT client and associated types necessary to invok
  */
 
 pub(crate) mod shared_impl;
-pub(crate) mod client_event_waiter;
 
 use crate::client::shared_impl::*;
 use crate::error::{MqttError, MqttResult};

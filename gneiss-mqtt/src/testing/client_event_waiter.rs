@@ -37,25 +37,25 @@ pub(crate) struct ClientEventWaiterOptions {
     event_predicate: Option<Box<ClientEventPredicate>>,
 }
 
-pub(crate) struct ClientEventWaiter {
+pub(crate) struct TokioClientEventWaiter {
     event_count: usize,
 
     client: Arc<Mqtt5Client>,
 
     listener: Option<ListenerHandle>,
 
-    event_receiver: std::sync::mpsc::Receiver<Arc<ClientEvent>>,
+    event_receiver: tokio::sync::mpsc::UnboundedReceiver<Arc<ClientEvent>>,
 
     events: Vec<Arc<ClientEvent>>,
 }
 
-impl ClientEventWaiter {
+impl TokioClientEventWaiter {
     pub(crate) fn new(client: Arc<Mqtt5Client>, config: ClientEventWaiterOptions, event_count: usize) -> Self {
         let event_type = config.event_type;
 
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let mut waiter = ClientEventWaiter {
+        let mut waiter = TokioClientEventWaiter {
             event_count,
             client: client.clone(),
             listener: None,
@@ -74,20 +74,29 @@ impl ClientEventWaiter {
                 }
             }
 
-            tx.send(event.clone());
+            let _ = tx.send(event.clone());
         };
 
         waiter.listener = Some(client.add_event_listener(Arc::new(listener_fn)).unwrap());
         waiter
     }
 
-    pub(crate) fn wait(&mut self) -> MqttResult<Vec<Arc<ClientEvent>>> {
+    pub fn new_single(client: Arc<Mqtt5Client>, event_type: ClientEventType) -> Self {
+        let config = ClientEventWaiterOptions {
+            event_type,
+            event_predicate: None
+        };
+
+        Self::new(client, config, 1)
+    }
+
+    pub(crate) async fn wait(&mut self) -> MqttResult<Vec<Arc<ClientEvent>>> {
         while self.events.len() < self.event_count {
-            match self.event_receiver.recv() {
-                Err(error) => {
-                    return Err(MqttError::new_other_error(error));
+            match self.event_receiver.recv().await {
+                None => {
+                    return Err(MqttError::new_other_error("Channel closed"));
                 }
-                Ok(event) => {
+                Some(event) => {
                     self.events.push(event);
                 }
             }
@@ -97,10 +106,10 @@ impl ClientEventWaiter {
     }
 }
 
-impl Drop for ClientEventWaiter {
+impl Drop for TokioClientEventWaiter {
     fn drop(&mut self) {
         let listener_handler = self.listener.take().unwrap();
 
-        self.client.remove_event_listener(listener_handler);
+        let _ = self.client.remove_event_listener(listener_handler);
     }
 }
