@@ -1547,6 +1547,14 @@ impl SubscribePacketBuilder {
         self
     }
 
+    /// Adds a subscription to the list of subscriptions that the client wishes to listen to
+    ///
+    /// See [MQTT5 Subscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901168)
+    pub fn with_subscription_simple(mut self, topic_filter: String, qos: QualityOfService) -> Self {
+        self.packet.subscriptions.push(SubscriptionBuilder::new(topic_filter, qos).build());
+        self
+    }
+
     /// Sets a positive integer to associate with all subscriptions in this request.  Publish packets that match
     /// a subscription in this request will include this identifier in the resulting message.
     ///

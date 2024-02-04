@@ -15,6 +15,7 @@ readme = "README.md"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
+uuid = { version = "1", features = [ "v4", "fast-rng" ] }
 
 [dependencies]
 http = { version = "0.2" }

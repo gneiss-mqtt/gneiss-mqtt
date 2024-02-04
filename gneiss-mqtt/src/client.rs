@@ -815,6 +815,7 @@ impl Mqtt5ClientImpl {
 
                 debug!("Updating desired state to Stopped");
                 self.desired_stop_options = Some(options);
+                self.apply_error(MqttError::new_user_initiated_disconnect());
                 self.desired_state = ClientImplState::Stopped;
             }
             OperationOptions::Shutdown() => {

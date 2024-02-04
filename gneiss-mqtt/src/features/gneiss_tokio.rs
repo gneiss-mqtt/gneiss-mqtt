@@ -502,13 +502,15 @@ impl Mqtt5Client {
 
 #[cfg(test)]
 pub(crate) mod testing {
+    use assert_matches::assert_matches;
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::Arc;
     use std::time::Duration;
-    use crate::client::{ClientEvent, ListenerHandle, Mqtt5Client};
+    use crate::client::{ClientEvent, ListenerHandle, Mqtt5Client, PublishReceivedEvent, PublishResponse, Qos2Response};
     use crate::config::{ConnectOptionsBuilder, GenericClientBuilder, HttpProxyOptionsBuilder, Mqtt5ClientOptionsBuilder, OfflineQueuePolicy, RejoinSessionPolicy, TlsOptionsBuilder, WebsocketOptionsBuilder};
     use crate::error::{MqttError, MqttResult};
+    use crate::mqtt::*;
     use crate::testing::integration::*;
 
     struct TokioClientEventWaiter {
@@ -640,32 +642,53 @@ pub(crate) mod testing {
         runtime.block_on(test_future).unwrap();
     }
 
-    async fn tokio_connect_disconnect_test(client: Arc<Mqtt5Client>) -> MqttResult<()> {
+    async fn start_client(client: &Arc<Mqtt5Client>) -> MqttResult<()> {
         let mut connection_attempt_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionAttempt);
         let mut connection_success_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
 
-        client.start(None).ok();
+        client.start(None)?;
 
-        connection_attempt_waiter.wait().await.ok();
-        connection_success_waiter.wait().await.ok();
-
-        let mut disconnection_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
-        let mut stopped_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
-
-        client.stop(None).ok();
-
-        disconnection_waiter.wait().await.ok();
-        stopped_waiter.wait().await.ok();
+        connection_attempt_waiter.wait().await?;
+        let connection_success_events = connection_success_waiter.wait().await?;
+        assert_eq!(1, connection_success_events.len());
+        let connection_success_event = connection_success_events[0].clone();
+        assert_matches!(*connection_success_event, ClientEvent::ConnectionSuccess(_));
+        if let ClientEvent::ConnectionSuccess(success_event) = &*connection_success_event {
+            assert_eq!(ConnectReasonCode::Success, success_event.connack.reason_code);
+        } else {
+            panic!("impossible");
+        }
 
         Ok(())
     }
 
-    // subscribe-unsubscribe
-    // subscribe-publish-qos0
-    // subscribe-publish-qos1
-    // subscribe-publish-qos2
-    // will check
+    async fn stop_client(client: &Arc<Mqtt5Client>) -> MqttResult<()> {
+        let mut disconnection_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
+        let mut stopped_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
 
+        client.stop(None)?;
+
+        let disconnect_events = disconnection_waiter.wait().await?;
+        assert_eq!(1, disconnect_events.len());
+        let disconnect_event = disconnect_events[0].clone();
+        assert_matches!(*disconnect_event, ClientEvent::Disconnection(_));
+        if let ClientEvent::Disconnection(event) = &*disconnect_event {
+            assert_matches!(event.error, MqttError::UserInitiatedDisconnect(_));
+        } else {
+            panic!("impossible");
+        }
+
+        stopped_waiter.wait().await?;
+
+        Ok(())
+    }
+
+    async fn tokio_connect_disconnect_test(client: Arc<Mqtt5Client>) -> MqttResult<()> {
+        start_client(&client).await?;
+        stop_client(&client).await?;
+
+        Ok(())
+    }
 
     #[test]
     fn client_connect_disconnect_direct_plaintext_no_proxy() {
@@ -722,4 +745,130 @@ pub(crate) mod testing {
             Box::pin(tokio_connect_disconnect_test(client))
         }));
     }
+
+    async fn tokio_subscribe_unsubscribe_test(client: Arc<Mqtt5Client>) -> MqttResult<()> {
+        start_client(&client).await?;
+
+        let subscribe = SubscribePacket::builder()
+            .with_subscription_simple("hello/world".to_string(), QualityOfService::AtLeastOnce)
+            .build();
+
+        let subscribe_result = client.subscribe(subscribe, None).await;
+        assert!(subscribe_result.is_ok());
+        let suback = subscribe_result.unwrap();
+        assert_eq!(1, suback.reason_codes.len());
+        assert_eq!(SubackReasonCode::GrantedQos1, suback.reason_codes[0]);
+
+        let unsubscribe = UnsubscribePacket::builder()
+            .with_topic_filter("hello/world".to_string())
+            .with_topic_filter("not/subscribed".to_string())
+            .build();
+
+        let unsubscribe_result = client.unsubscribe(unsubscribe, None).await;
+        assert!(unsubscribe_result.is_ok());
+        let unsuback = unsubscribe_result.unwrap();
+        assert_eq!(2, unsuback.reason_codes.len());
+        assert_eq!(UnsubackReasonCode::Success, unsuback.reason_codes[0]);
+        // broker may or may not give us a not subscribed reason code, so don't verify
+
+        stop_client(&client).await?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn client_subscribe_unsubscribe() {
+        do_tokio_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|client|{
+            Box::pin(tokio_subscribe_unsubscribe_test(client))
+        }));
+    }
+
+    fn verify_successful_publish_result(result: &PublishResponse, qos: QualityOfService) {
+        match result {
+            PublishResponse::Qos0 => {
+                assert_eq!(qos, QualityOfService::AtMostOnce);
+            }
+            PublishResponse::Qos1(puback) => {
+                assert_eq!(qos, QualityOfService::AtLeastOnce);
+                assert_eq!(PubackReasonCode::Success, puback.reason_code);
+            }
+            PublishResponse::Qos2(qos2_result) => {
+                assert_eq!(qos, QualityOfService::ExactlyOnce);
+                assert_matches!(qos2_result, Qos2Response::Pubcomp(_));
+                if let Qos2Response::Pubcomp(pubcomp) = qos2_result {
+                    assert_eq!(PubcompReasonCode::Success, pubcomp.reason_code);
+                }
+            }
+        }
+    }
+
+    fn verify_publish_received(event: &PublishReceivedEvent, expected_topic: &str, expected_qos: QualityOfService, expected_payload: &[u8]) {
+        let publish = &event.publish;
+
+        assert_eq!(expected_qos, publish.qos);
+        assert_eq!(expected_topic, &publish.topic);
+        assert_eq!(expected_payload, publish.payload.as_ref().unwrap().as_slice());
+    }
+
+    async fn tokio_subscribe_publish_test(client: Arc<Mqtt5Client>, qos: QualityOfService) -> MqttResult<()> {
+        start_client(&client).await?;
+
+        let payload = "derp".as_bytes().to_vec();
+
+        // tests are running in parallel, need a unique topic
+        let uuid = uuid::Uuid::new_v4();
+        let topic = format!("hello/world/{}", uuid.to_string());
+        let subscribe = SubscribePacket::builder()
+            .with_subscription_simple(topic.clone(), QualityOfService::ExactlyOnce)
+            .build();
+
+        let _ = client.subscribe(subscribe, None).await?;
+
+        let mut publish_received_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
+
+        let publish = PublishPacket::builder(topic.clone(), qos)
+            .with_payload(payload.clone())
+            .build();
+
+        let publish_result = client.publish(publish, None).await?;
+        verify_successful_publish_result(&publish_result, qos);
+
+        let publish_received_events = publish_received_waiter.wait().await?;
+        assert_eq!(1, publish_received_events.len());
+        let publish_received_event = publish_received_events[0].clone();
+        assert_matches!(*publish_received_event, ClientEvent::PublishReceived(_));
+        if let ClientEvent::PublishReceived(event) = &*publish_received_event {
+            verify_publish_received(event, &topic, qos, payload.as_slice());
+        } else {
+            panic!("impossible");
+        }
+
+        stop_client(&client).await?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn client_subscribe_publish_qos0() {
+        do_tokio_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|client|{
+            Box::pin(tokio_subscribe_publish_test(client, QualityOfService::AtMostOnce))
+        }));
+    }
+
+    #[test]
+    fn client_subscribe_publish_qos1() {
+        do_tokio_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|client|{
+            Box::pin(tokio_subscribe_publish_test(client, QualityOfService::AtLeastOnce))
+        }));
+    }
+
+    #[test]
+    fn client_subscribe_publish_qos2() {
+        do_tokio_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|client|{
+            Box::pin(tokio_subscribe_publish_test(client, QualityOfService::ExactlyOnce))
+        }));
+    }
+
+    // will check
+    // connect-disconnect-cycle-with-session-rejoin
 }
