@@ -501,3 +501,221 @@ impl Mqtt5Client {
         }
     }
 }
+
+#[cfg(test)]
+pub(crate) mod testing {
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use crate::client::{ClientEvent, ListenerHandle, Mqtt5Client};
+    use crate::config::{ConnectOptionsBuilder, GenericClientBuilder, HttpProxyOptionsBuilder, Mqtt5ClientOptionsBuilder, OfflineQueuePolicy, RejoinSessionPolicy, TlsOptionsBuilder, WebsocketOptionsBuilder};
+    use crate::error::{MqttError, MqttResult};
+    use crate::testing::*;
+    use crate::testing::integration::{get_broker_endpoint, get_broker_port, get_ca_path, get_proxy_endpoint, get_proxy_port, ProxyUsage, TlsUsage, WebsocketUsage};
+
+    struct TokioClientEventWaiter {
+        event_count: usize,
+
+        client: Arc<Mqtt5Client>,
+
+        listener: Option<ListenerHandle>,
+
+        event_receiver: tokio::sync::mpsc::UnboundedReceiver<Arc<ClientEvent>>,
+
+        events: Vec<Arc<ClientEvent>>,
+    }
+
+    impl TokioClientEventWaiter {
+        pub(crate) fn new(client: Arc<Mqtt5Client>, config: ClientEventWaiterOptions, event_count: usize) -> Self {
+            let event_type = config.event_type;
+
+            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+            let mut waiter = TokioClientEventWaiter {
+                event_count,
+                client: client.clone(),
+                listener: None,
+                event_receiver: rx,
+                events: Vec::new(),
+            };
+
+            let listener_fn = move |event: Arc<ClientEvent>| {
+                if !client_event_matches(&event, event_type) {
+                    return;
+                }
+
+                if let Some(event_predicate) = &config.event_predicate {
+                    if !(*event_predicate)(&event) {
+                        return;
+                    }
+                }
+
+                let _ = tx.send(event.clone());
+            };
+
+            waiter.listener = Some(client.add_event_listener(Arc::new(listener_fn)).unwrap());
+            waiter
+        }
+
+        pub fn new_single(client: Arc<Mqtt5Client>, event_type: ClientEventType) -> Self {
+            let config = ClientEventWaiterOptions {
+                event_type,
+                event_predicate: None
+            };
+
+            Self::new(client, config, 1)
+        }
+
+        pub(crate) async fn wait(&mut self) -> MqttResult<Vec<Arc<ClientEvent>>> {
+            while self.events.len() < self.event_count {
+                match self.event_receiver.recv().await {
+                    None => {
+                        return Err(MqttError::new_other_error("Channel closed"));
+                    }
+                    Some(event) => {
+                        self.events.push(event);
+                    }
+                }
+            }
+
+            Ok(self.events.clone())
+        }
+    }
+
+    impl Drop for TokioClientEventWaiter {
+        fn drop(&mut self) {
+            let listener_handler = self.listener.take().unwrap();
+
+            let _ = self.client.remove_event_listener(listener_handler);
+        }
+    }
+
+
+    fn build_tokio_client(runtime: &tokio::runtime::Runtime, tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage) -> Mqtt5Client {
+        let connect_options = ConnectOptionsBuilder::new()
+            .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
+            .build();
+
+        let client_config = Mqtt5ClientOptionsBuilder::new()
+            .with_connect_timeout(Duration::from_secs(5))
+            .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
+            .build();
+
+        let endpoint = get_broker_endpoint(tls, ws);
+        let port = get_broker_port(tls, ws);
+
+        let mut builder = GenericClientBuilder::new(&endpoint, port);
+        builder.with_connect_options(connect_options);
+        builder.with_client_options(client_config);
+
+        if tls != TlsUsage::None {
+            let mut tls_options_builder = TlsOptionsBuilder::new();
+            tls_options_builder.with_verify_peer(false);
+            tls_options_builder.with_root_ca_from_path(&get_ca_path()).unwrap();
+
+            builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
+        }
+
+        if ws != WebsocketUsage::None {
+            let websocket_options = WebsocketOptionsBuilder::new().build();
+            builder.with_websocket_options(websocket_options);
+        }
+
+        if proxy != ProxyUsage::None {
+            let proxy_endpoint = get_proxy_endpoint();
+            let proxy_port = get_proxy_port();
+            let proxy_options = HttpProxyOptionsBuilder::new(&proxy_endpoint, proxy_port).build();
+            builder.with_http_proxy_options(proxy_options);
+        }
+
+        builder.build(runtime.handle()).unwrap()
+    }
+
+    type AsyncClientTestFactoryReturnType = Pin<Box<dyn Future<Output = MqttResult<()>> + Send>>;
+    type AsyncClientTestFactory = Box<dyn Fn(Arc<Mqtt5Client>) -> AsyncClientTestFactoryReturnType + Send + Sync>;
+
+    fn do_tokio_client_test(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: AsyncClientTestFactory) {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let client = Arc::new(build_tokio_client(&runtime, tls, ws, proxy));
+        let test_future = (*test_factory)(client);
+
+        runtime.block_on(test_future).unwrap();
+    }
+
+    async fn tokio_connect_disconnect_test(client: Arc<Mqtt5Client>) -> MqttResult<()> {
+        let mut connection_attempt_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionAttempt);
+        let mut connection_success_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
+
+        client.start(None).ok();
+
+        connection_attempt_waiter.wait().await.ok();
+        connection_success_waiter.wait().await.ok();
+
+        let mut disconnection_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
+        let mut stopped_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
+
+        client.stop(None).ok();
+
+        disconnection_waiter.wait().await.ok();
+        stopped_waiter.wait().await.ok();
+
+        Ok(())
+    }
+
+    #[test]
+    fn tokio_client_connect_disconnect_direct_plaintext_no_proxy() {
+        do_tokio_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|client|{
+            Box::pin(tokio_connect_disconnect_test(client))
+        }));
+    }
+
+    #[test]
+    fn tokio_client_connect_disconnect_direct_rustls_no_proxy() {
+        do_tokio_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::None, Box::new(|client|{
+            Box::pin(tokio_connect_disconnect_test(client))
+        }));
+    }
+
+    #[test]
+    fn tokio_client_connect_disconnect_websocket_plaintext_no_proxy() {
+        do_tokio_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|client|{
+            Box::pin(tokio_connect_disconnect_test(client))
+        }));
+    }
+
+    #[test]
+    fn tokio_client_connect_disconnect_websocket_rustls_no_proxy() {
+        do_tokio_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|client|{
+            Box::pin(tokio_connect_disconnect_test(client))
+        }));
+    }
+
+    #[test]
+    fn tokio_client_connect_disconnect_direct_plaintext_with_proxy() {
+        do_tokio_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|client|{
+            Box::pin(tokio_connect_disconnect_test(client))
+        }));
+    }
+
+    #[test]
+    fn tokio_client_connect_disconnect_direct_rustls_with_proxy() {
+        do_tokio_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|client|{
+            Box::pin(tokio_connect_disconnect_test(client))
+        }));
+    }
+
+    #[test]
+    fn tokio_client_connect_disconnect_websocket_plaintext_with_proxy() {
+        do_tokio_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|client|{
+            Box::pin(tokio_connect_disconnect_test(client))
+        }));
+    }
+
+    #[test]
+    fn tokio_client_connect_disconnect_websocket_rustls_with_proxy() {
+        do_tokio_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|client|{
+            Box::pin(tokio_connect_disconnect_test(client))
+        }));
+    }
+}
