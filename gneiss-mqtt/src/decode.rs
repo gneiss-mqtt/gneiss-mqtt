@@ -4,7 +4,7 @@
  */
 
 
-use crate::encode::utils::*;
+use crate::encode::MAXIMUM_VARIABLE_LENGTH_INTEGER;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::mqtt::*;

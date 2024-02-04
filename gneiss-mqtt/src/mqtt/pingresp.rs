@@ -4,7 +4,6 @@
  */
 
 use crate::encode::*;
-use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
 use crate::mqtt::utils::*;

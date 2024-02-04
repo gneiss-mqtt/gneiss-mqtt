@@ -5,13 +5,11 @@
 
 use crate::decode::*;
 use crate::encode::*;
-use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
 use crate::validate::*;
-use crate::validate::utils::*;
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -166,7 +164,6 @@ mod tests {
     }
 
     use crate::validate::testing::*;
-    use crate::validate::utils::testing::*;
 
     test_ack_validate_success!(pubrec_validate_success, Pubrec, create_pubrec_with_all_properties);
     test_ack_validate_failure_reason_string_length!(pubrec_validate_failure_reason_string_length, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);

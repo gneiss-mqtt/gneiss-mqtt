@@ -14,11 +14,11 @@ use crate::client::*;
 use crate::config::{ConnectOptionsBuilder, OfflineQueuePolicy, RejoinSessionPolicy};
 use crate::decode::{Decoder, DecodingContext};
 use crate::encode::{Encoder, EncodeResult, EncodingContext};
-use crate::encode::utils::MAXIMUM_VARIABLE_LENGTH_INTEGER;
+use crate::encode::MAXIMUM_VARIABLE_LENGTH_INTEGER;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
 use crate::mqtt::utils::mqtt_packet_to_packet_type;
-use crate::validate::utils::testing::verify_validation_failure;
+use crate::validate::testing::verify_validation_failure;
 
 const CONNACK_TIMEOUT_MILLIS: u64 = 10000;
 

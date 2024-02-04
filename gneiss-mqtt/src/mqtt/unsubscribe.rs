@@ -6,13 +6,11 @@
 #[cfg(test)]
 use crate::decode::*;
 use crate::encode::*;
-use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
 use crate::validate::*;
-use crate::validate::utils::*;
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -193,6 +191,7 @@ mod tests {
 
     use super::*;
     use crate::decode::testing::*;
+    use crate::validate::testing::*;
 
     #[test]
     fn unsubscribe_round_trip_encode_decode_default() {
@@ -252,8 +251,6 @@ mod tests {
         do_inbound_size_decode_failure_test(&MqttPacket::Unsubscribe(packet));
     }
 
-    use crate::validate::testing::*;
-
     #[test]
     fn unsubscribe_validate_success() {
         let mut packet = create_unsubscribe_all_properties();
@@ -273,8 +270,6 @@ mod tests {
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
         assert!(validate_packet_outbound_internal(&outbound_internal_packet, &outbound_validation_context).is_ok());
     }
-
-    use crate::validate::utils::testing::verify_validation_failure;
 
     #[test]
     fn unsubscribe_validate_failure_outbound_packet_id_non_zero() {

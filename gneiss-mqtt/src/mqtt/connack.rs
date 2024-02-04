@@ -6,12 +6,11 @@
 
 use crate::decode::*;
 use crate::encode::*;
-use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
-use crate::validate::utils::*;
+use crate::validate::*;
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -262,7 +261,6 @@ impl fmt::Display for ConnackPacket {
 mod tests {
     use super::*;
     use crate::decode::testing::*;
-    use crate::validate::*;
 
     #[test]
     fn connack_round_trip_encode_decode_default() {
@@ -967,7 +965,7 @@ mod tests {
     }
 
     use crate::validate::testing::*;
-    use crate::validate::utils::testing::verify_validation_failure;
+    use crate::validate::testing::verify_validation_failure;
 
     fn do_connack_validate_failure_test(packet: ConnackPacket) {
         let test_validation_context = create_pinned_validation_context();

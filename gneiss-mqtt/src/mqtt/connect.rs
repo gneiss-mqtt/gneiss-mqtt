@@ -6,13 +6,11 @@
 #[cfg(test)]
 use crate::decode::*;
 use crate::encode::*;
-use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
 use crate::validate::*;
-use crate::validate::utils::*;
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -503,7 +501,7 @@ mod tests {
 
     use super::*;
     use crate::decode::testing::*;
-    use crate::validate::utils::testing::*;
+    use crate::validate::testing::*;
 
     #[test]
     fn connect_round_trip_encode_decode_default() {
@@ -1191,8 +1189,6 @@ mod tests {
 
         do_inbound_size_decode_failure_test(&MqttPacket::Connect(packet));
     }
-
-    use crate::validate::testing::*;
 
     #[test]
     fn connect_validate_success_all_properties() {
