@@ -5,7 +5,6 @@
 
 // Internal module that implements most of the MQTT5 spec with respect to client protocol behavior
 
-use crate::*;
 use crate::alias::*;
 use crate::client::*;
 use crate::client::shared_impl::*;
@@ -2090,6 +2089,32 @@ fn partition_operations_by_queue_policy<'a, T>(iterator: T, policy: &OfflineQueu
 fn sort_operation_deque(operations: &mut VecDeque<u64>) {
     operations.rotate_right(operations.as_slices().1.len());
     operations.as_mut_slices().0.sort();
+}
+
+fn fold_timepoint(base: &Option<Instant>, new: &Instant) -> Option<Instant> {
+    if let Some(base_timepoint) = &base {
+        if base_timepoint < new {
+            return *base;
+        }
+    }
+
+    Some(*new)
+}
+
+fn fold_optional_timepoint_min(base: &Option<Instant>, new: &Option<Instant>) -> Option<Instant> {
+    if let Some(base_timepoint) = base {
+        if let Some(new_timepoint) = new {
+            if base_timepoint < new_timepoint {
+                return *base;
+            } else {
+                return *new;
+            }
+        }
+
+        return *base;
+    }
+
+    *new
 }
 
 #[cfg(test)]

@@ -9,7 +9,6 @@ runtime implementation.
  */
 
 
-use crate::*;
 use crate::client::*;
 use crate::client::shared_impl::*;
 use crate::config::*;
@@ -19,7 +18,7 @@ use log::*;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Instant, Duration};
 use tokio::runtime;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, split, WriteHalf};
 use tokio::sync::oneshot;
@@ -670,56 +669,56 @@ pub(crate) mod testing {
 
 
     #[test]
-    fn tokio_client_connect_disconnect_direct_plaintext_no_proxy() {
+    fn client_connect_disconnect_direct_plaintext_no_proxy() {
         do_tokio_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|client|{
             Box::pin(tokio_connect_disconnect_test(client))
         }));
     }
 
     #[test]
-    fn tokio_client_connect_disconnect_direct_rustls_no_proxy() {
+    fn client_connect_disconnect_direct_rustls_no_proxy() {
         do_tokio_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::None, Box::new(|client|{
             Box::pin(tokio_connect_disconnect_test(client))
         }));
     }
 
     #[test]
-    fn tokio_client_connect_disconnect_websocket_plaintext_no_proxy() {
+    fn client_connect_disconnect_websocket_plaintext_no_proxy() {
         do_tokio_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|client|{
             Box::pin(tokio_connect_disconnect_test(client))
         }));
     }
 
     #[test]
-    fn tokio_client_connect_disconnect_websocket_rustls_no_proxy() {
+    fn client_connect_disconnect_websocket_rustls_no_proxy() {
         do_tokio_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|client|{
             Box::pin(tokio_connect_disconnect_test(client))
         }));
     }
 
     #[test]
-    fn tokio_client_connect_disconnect_direct_plaintext_with_proxy() {
+    fn client_connect_disconnect_direct_plaintext_with_proxy() {
         do_tokio_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|client|{
             Box::pin(tokio_connect_disconnect_test(client))
         }));
     }
 
     #[test]
-    fn tokio_client_connect_disconnect_direct_rustls_with_proxy() {
+    fn client_connect_disconnect_direct_rustls_with_proxy() {
         do_tokio_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|client|{
             Box::pin(tokio_connect_disconnect_test(client))
         }));
     }
 
     #[test]
-    fn tokio_client_connect_disconnect_websocket_plaintext_with_proxy() {
+    fn client_connect_disconnect_websocket_plaintext_with_proxy() {
         do_tokio_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|client|{
             Box::pin(tokio_connect_disconnect_test(client))
         }));
     }
 
     #[test]
-    fn tokio_client_connect_disconnect_websocket_rustls_with_proxy() {
+    fn client_connect_disconnect_websocket_rustls_with_proxy() {
         do_tokio_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|client|{
             Box::pin(tokio_connect_disconnect_test(client))
         }));
