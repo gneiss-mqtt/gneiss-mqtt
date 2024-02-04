@@ -10,7 +10,6 @@ runtime implementation.
 
 
 use crate::client::*;
-use crate::client::shared_impl::*;
 use crate::config::*;
 use crate::error::{MqttError, MqttResult};
 use crate::protocol::is_connection_established;

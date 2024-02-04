@@ -7,7 +7,6 @@
 
 use crate::alias::*;
 use crate::client::*;
-use crate::client::shared_impl::*;
 use crate::config::*;
 use crate::decode::*;
 use crate::encode::*;
