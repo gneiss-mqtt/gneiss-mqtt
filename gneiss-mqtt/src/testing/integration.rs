@@ -38,6 +38,16 @@ fn get_ca_path() -> String {
     env::var("GNEISS_MQTT_TEST_BROKER_CA_PATH").unwrap()
 }
 
+fn get_proxy_endpoint() -> String {
+    env::var("GNEISS_MQTT_TEST_HTTP_PROXY_ENDPOINT").unwrap()
+}
+
+fn get_proxy_port() -> u16 {
+    let port_string = env::var("GNEISS_MQTT_TEST_HTTP_PROXY_PORT").unwrap();
+
+    port_string.parse().unwrap()
+}
+
 fn get_broker_endpoint(tls: TlsUsage, ws: WebsocketUsage) -> String {
     if tls == TlsUsage::None {
         if ws == WebsocketUsage::None {
@@ -103,6 +113,13 @@ fn build_tokio_client(runtime: &tokio::runtime::Runtime, tls: TlsUsage, ws: Webs
         builder.with_websocket_options(websocket_options);
     }
 
+    if proxy != ProxyUsage::None {
+        let proxy_endpoint = get_proxy_endpoint();
+        let proxy_port = get_proxy_port();
+        let proxy_options = HttpProxyOptionsBuilder::new(&proxy_endpoint, proxy_port).build();
+        builder.with_http_proxy_options(proxy_options);
+    }
+
     builder.build(runtime.handle()).unwrap()
 }
 
@@ -161,6 +178,34 @@ fn tokio_client_connect_disconnect_websocket_plaintext_no_proxy() {
 #[test]
 fn tokio_client_connect_disconnect_websocket_rustls_no_proxy() {
     do_tokio_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|client|{
+        Box::pin(connect_disconnect_test(client))
+    }));
+}
+
+#[test]
+fn tokio_client_connect_disconnect_direct_plaintext_with_proxy() {
+    do_tokio_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|client|{
+        Box::pin(connect_disconnect_test(client))
+    }));
+}
+
+#[test]
+fn tokio_client_connect_disconnect_direct_rustls_with_proxy() {
+    do_tokio_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|client|{
+        Box::pin(connect_disconnect_test(client))
+    }));
+}
+
+#[test]
+fn tokio_client_connect_disconnect_websocket_plaintext_with_proxy() {
+    do_tokio_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|client|{
+        Box::pin(connect_disconnect_test(client))
+    }));
+}
+
+#[test]
+fn tokio_client_connect_disconnect_websocket_rustls_with_proxy() {
+    do_tokio_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|client|{
         Box::pin(connect_disconnect_test(client))
     }));
 }
