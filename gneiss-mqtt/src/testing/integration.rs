@@ -97,8 +97,11 @@ pub(crate) fn client_event_matches(event: &Arc<ClientEvent>, event_type: ClientE
 
 pub(crate) type ClientEventPredicate = dyn Fn(&Arc<ClientEvent>) -> bool + Send + Sync;
 
-pub(crate) struct ClientEventWaiterOptions {
-    pub(crate) event_type: ClientEventType,
+pub(crate) enum ClientEventWaitType {
+    Type(ClientEventType),
+    Predicate(Box<ClientEventPredicate>)
+}
 
-    pub(crate) event_predicate: Option<Box<ClientEventPredicate>>,
+pub(crate) struct ClientEventWaiterOptions {
+    pub(crate) wait_type: ClientEventWaitType,
 }
