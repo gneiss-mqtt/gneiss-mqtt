@@ -3,15 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::decode::utils::*;
+use crate::decode::*;
 use crate::encode::*;
-use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
 use crate::validate::*;
-use crate::validate::utils::*;
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -39,7 +37,6 @@ mod tests {
     use super::*;
     use crate::decode::testing::*;
     use crate::validate::testing::*;
-    use crate::validate::utils::testing::*;
 
     #[test]
     fn puback_round_trip_encode_decode_default() {

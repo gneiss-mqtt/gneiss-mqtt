@@ -4,15 +4,13 @@
  */
 
 
-use crate::decode::utils::*;
+use crate::decode::*;
 use crate::encode::*;
-use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
 use crate::validate::*;
-use crate::validate::utils::*;
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -362,7 +360,6 @@ mod tests {
     }
 
     use crate::validate::testing::*;
-    use crate::validate::utils::testing::verify_validation_failure;
 
     #[test]
     fn auth_validate_success_all_properties() {

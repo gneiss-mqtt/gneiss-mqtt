@@ -201,32 +201,7 @@ pub mod features;
 mod logging;
 pub mod mqtt;
 mod protocol;
+#[cfg(test)]
+pub(crate) mod testing;
 mod validate;
 
-use std::time::Instant;
-
-fn fold_timepoint(base: &Option<Instant>, new: &Instant) -> Option<Instant> {
-    if let Some(base_timepoint) = &base {
-        if base_timepoint < new {
-            return *base;
-        }
-    }
-
-    Some(*new)
-}
-
-fn fold_optional_timepoint_min(base: &Option<Instant>, new: &Option<Instant>) -> Option<Instant> {
-    if let Some(base_timepoint) = base {
-        if let Some(new_timepoint) = new {
-            if base_timepoint < new_timepoint {
-                return *base;
-            } else {
-                return *new;
-            }
-        }
-
-        return *base;
-    }
-
-    *new
-}

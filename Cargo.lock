@@ -732,6 +732,7 @@ dependencies = [
  "tokio-rustls 0.25.0",
  "tokio-tungstenite",
  "tungstenite",
+ "uuid",
 ]
 
 [[package]]

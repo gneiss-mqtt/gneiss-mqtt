@@ -4,15 +4,13 @@
  */
 
 use crate::alias::*;
-use crate::decode::utils::*;
+use crate::decode::*;
 use crate::encode::*;
-use crate::encode::utils::*;
 use crate::error::{MqttError, MqttResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
 use crate::validate::*;
-use crate::validate::utils::*;
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -392,8 +390,7 @@ mod tests {
 
     use super::*;
     use crate::decode::testing::*;
-    use crate::validate::testing::create_invalid_user_properties;
-    use crate::validate::utils::testing::verify_validation_failure;
+    use crate::validate::testing::*;
 
     #[test]
     fn publish_round_trip_encode_decode_default() {
@@ -835,8 +832,6 @@ mod tests {
 
         verify_validation_failure!(validate_packet_outbound(&MqttPacket::Publish(packet)), PacketType::Publish);
     }
-
-    use crate::validate::testing::*;
 
     #[test]
     fn publish_validate_failure_outbound_size() {
