@@ -500,6 +500,94 @@ impl Mqtt5Client {
     }
 }
 
+use crate::client::waiter::*;
+
+/// Simple debug type that uses the client listener framework to allow tests to asynchronously wait for
+/// configurable client event sequences.  May be useful outside of tests.  May need polish.  Currently public
+/// because we use it across crates.  May eventually go internal.
+///
+/// Requires the client to be Arc-wrapped.
+pub struct ClientEventWaiter {
+    event_count: usize,
+
+    client: Arc<Mqtt5Client>,
+
+    listener: Option<ListenerHandle>,
+
+    event_receiver: tokio::sync::mpsc::UnboundedReceiver<Arc<ClientEvent>>,
+
+    events: Vec<Arc<ClientEvent>>,
+}
+
+impl ClientEventWaiter {
+
+    /// Creates a new ClientEventWaiter instance from full configuration
+    pub fn new(client: Arc<Mqtt5Client>, config: ClientEventWaiterOptions, event_count: usize) -> Self {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let mut waiter = ClientEventWaiter {
+            event_count,
+            client: client.clone(),
+            listener: None,
+            event_receiver: rx,
+            events: Vec::new(),
+        };
+
+        let listener_fn = move |event: Arc<ClientEvent>| {
+            match &config.wait_type {
+                ClientEventWaitType::Type(event_type) => {
+                    if !client_event_matches(&event, *event_type) {
+                        return;
+                    }
+                }
+                ClientEventWaitType::Predicate(event_predicate) => {
+                    if !(*event_predicate)(&event) {
+                        return;
+                    }
+                }
+            }
+
+            let _ = tx.send(event.clone());
+        };
+
+        waiter.listener = Some(client.add_event_listener(Arc::new(listener_fn)).unwrap());
+        waiter
+    }
+
+    /// Creates a new ClientEventWaiter instance that will wait for a single occurrence of a single event type
+    pub fn new_single(client: Arc<Mqtt5Client>, event_type: ClientEventType) -> Self {
+        let config = ClientEventWaiterOptions {
+            wait_type: ClientEventWaitType::Type(event_type),
+        };
+
+        Self::new(client, config, 1)
+    }
+
+    /// Waits for and returns an event sequence that matches the original configuration
+    pub async fn wait(&mut self) -> MqttResult<Vec<Arc<ClientEvent>>> {
+        while self.events.len() < self.event_count {
+            match self.event_receiver.recv().await {
+                None => {
+                    return Err(MqttError::new_other_error("Channel closed"));
+                }
+                Some(event) => {
+                    self.events.push(event);
+                }
+            }
+        }
+
+        Ok(self.events.clone())
+    }
+}
+
+impl Drop for ClientEventWaiter {
+    fn drop(&mut self) {
+        let listener_handler = self.listener.take().unwrap();
+
+        let _ = self.client.remove_event_listener(listener_handler);
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod testing {
     use assert_matches::assert_matches;
@@ -508,87 +596,12 @@ pub(crate) mod testing {
     use std::sync::Arc;
     use std::time::Duration;
     use crate::client::*;
+    use crate::client::waiter::*;
     use crate::config::*;
     use crate::error::{MqttError, MqttResult};
     use crate::mqtt::*;
+    use super::*;
     use crate::testing::integration::*;
-
-    struct TokioClientEventWaiter {
-        event_count: usize,
-
-        client: Arc<Mqtt5Client>,
-
-        listener: Option<ListenerHandle>,
-
-        event_receiver: tokio::sync::mpsc::UnboundedReceiver<Arc<ClientEvent>>,
-
-        events: Vec<Arc<ClientEvent>>,
-    }
-
-    impl TokioClientEventWaiter {
-        pub(crate) fn new(client: Arc<Mqtt5Client>, config: ClientEventWaiterOptions, event_count: usize) -> Self {
-            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-
-            let mut waiter = TokioClientEventWaiter {
-                event_count,
-                client: client.clone(),
-                listener: None,
-                event_receiver: rx,
-                events: Vec::new(),
-            };
-
-            let listener_fn = move |event: Arc<ClientEvent>| {
-                match &config.wait_type {
-                    ClientEventWaitType::Type(event_type) => {
-                        if !client_event_matches(&event, *event_type) {
-                            return;
-                        }
-                    }
-                    ClientEventWaitType::Predicate(event_predicate) => {
-                        if !(*event_predicate)(&event) {
-                            return;
-                        }
-                    }
-                }
-
-                let _ = tx.send(event.clone());
-            };
-
-            waiter.listener = Some(client.add_event_listener(Arc::new(listener_fn)).unwrap());
-            waiter
-        }
-
-        pub fn new_single(client: Arc<Mqtt5Client>, event_type: ClientEventType) -> Self {
-            let config = ClientEventWaiterOptions {
-                wait_type: ClientEventWaitType::Type(event_type),
-            };
-
-            Self::new(client, config, 1)
-        }
-
-        pub(crate) async fn wait(&mut self) -> MqttResult<Vec<Arc<ClientEvent>>> {
-            while self.events.len() < self.event_count {
-                match self.event_receiver.recv().await {
-                    None => {
-                        return Err(MqttError::new_other_error("Channel closed"));
-                    }
-                    Some(event) => {
-                        self.events.push(event);
-                    }
-                }
-            }
-
-            Ok(self.events.clone())
-        }
-    }
-
-    impl Drop for TokioClientEventWaiter {
-        fn drop(&mut self) {
-            let listener_handler = self.listener.take().unwrap();
-
-            let _ = self.client.remove_event_listener(listener_handler);
-        }
-    }
 
     fn create_client_builder_internal(connect_options: ConnectOptions, tls_config: TlsUsage, ws_config: WebsocketUsage, proxy_config: ProxyUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
         let client_config = Mqtt5ClientOptionsBuilder::new()
@@ -653,8 +666,8 @@ pub(crate) mod testing {
     }
 
     async fn start_client(client: &Arc<Mqtt5Client>) -> MqttResult<()> {
-        let mut connection_attempt_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionAttempt);
-        let mut connection_success_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
+        let mut connection_attempt_waiter = ClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionAttempt);
+        let mut connection_success_waiter = ClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
 
         client.start(None)?;
 
@@ -673,8 +686,8 @@ pub(crate) mod testing {
     }
 
     async fn stop_client(client: &Arc<Mqtt5Client>) -> MqttResult<()> {
-        let mut disconnection_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
-        let mut stopped_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
+        let mut disconnection_waiter = ClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
+        let mut stopped_waiter = ClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
 
         client.stop(None)?;
 
@@ -838,7 +851,7 @@ pub(crate) mod testing {
 
         let _ = client.subscribe(subscribe, None).await?;
 
-        let mut publish_received_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
+        let mut publish_received_waiter = ClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
 
         let publish = PublishPacket::builder(topic.clone(), qos)
             .with_payload(payload.clone())
@@ -912,7 +925,7 @@ pub(crate) mod testing {
             .build();
         let _ = client.subscribe(subscribe, None).await?;
 
-        let mut publish_received_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
+        let mut publish_received_waiter = ClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
 
         // no stop options, so we just close the socket locally; the broker should send the will
         stop_client(&will_client).await?;
@@ -954,7 +967,7 @@ pub(crate) mod testing {
                     false
                 })),
             };
-            let mut connection_success_waiter = TokioClientEventWaiter::new(client.clone(), waiter_config, 1);
+            let mut connection_success_waiter = ClientEventWaiter::new(client.clone(), waiter_config, 1);
 
             client.start(None)?;
 
@@ -976,7 +989,7 @@ pub(crate) mod testing {
 
     async fn connection_failure_test(builder : GenericClientBuilder) -> MqttResult<()> {
         let client = Arc::new(builder.build(&tokio::runtime::Handle::current()).unwrap());
-        let mut connection_failure_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
+        let mut connection_failure_waiter = ClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
 
         client.start(None)?;
 

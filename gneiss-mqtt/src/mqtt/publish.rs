@@ -266,7 +266,7 @@ pub(crate) fn validate_publish_packet_outbound(packet: &PublishPacket) -> MqttRe
         return Err(MqttError::new_packet_validation(PacketType::Publish, "duplicate flag is set"));
     }
 
-    validate_string_length(&packet.topic, PacketType::Publish, "Publish", "topic")?;
+    validate_string_length(packet.topic.as_str(), PacketType::Publish, "Publish", "topic")?;
 
     if !is_valid_topic(&packet.topic) {
         error!("PublishPacket Outbound Validation - invalid topic");
@@ -291,7 +291,7 @@ pub(crate) fn validate_publish_packet_outbound(packet: &PublishPacket) -> MqttRe
             return Err(MqttError::new_packet_validation(PacketType::Publish, "invalid response topic"));
         }
 
-        validate_string_length(response_topic, PacketType::Publish, "Publish", "response_topic")?;
+        validate_string_length(response_topic.as_str(), PacketType::Publish, "Publish", "response_topic")?;
     }
 
     validate_user_properties(&packet.user_properties, PacketType::Publish, "Publish")?;

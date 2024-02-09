@@ -451,7 +451,7 @@ pub(crate) fn validate_connect_packet_outbound(packet: &ConnectPacket) -> MqttRe
         validate_optional_string_length(&will.response_topic, PacketType::Connect, "Connect", "response_topic")?;
         validate_optional_binary_length(&will.correlation_data, PacketType::Connect, "Connect", "correlation_data")?;
         validate_user_properties(&will.user_properties, PacketType::Connect, "ConnectWill")?;
-        validate_string_length(&will.topic, PacketType::Connect, "ConnectWill", "topic")?;
+        validate_string_length(will.topic.as_str(), PacketType::Connect, "ConnectWill", "topic")?;
         validate_optional_binary_length(&will.payload, PacketType::Connect, "ConnectWill", "payload")?;
     }
 
