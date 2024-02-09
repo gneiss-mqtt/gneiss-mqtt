@@ -588,6 +588,7 @@ impl Drop for ClientEventWaiter {
     }
 }
 
+#[cfg(feature = "testenv")]
 #[cfg(test)]
 pub(crate) mod testing {
     use assert_matches::assert_matches;

@@ -737,6 +737,7 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     Ok(signed_request_builder)
 }
 
+#[cfg(feature = "testenv")]
 #[cfg(test)]
 mod testing {
     use gneiss_mqtt::error::MqttResult;
