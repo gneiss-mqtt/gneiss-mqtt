@@ -48,8 +48,8 @@ pub(crate) struct InboundValidationContext<'a> {
 pub(crate) fn validate_user_properties(properties: &Option<Vec<UserProperty>>, packet_type: PacketType, packet_name: &str) -> MqttResult<()> {
     if let Some(props) = properties {
         for property in props {
-            validate_string_length(&property.name, packet_type, packet_name, "UserProperty Name")?;
-            validate_string_length(&property.name, packet_type, packet_name, "UserProperty Value")?;
+            validate_string_length(property.name.as_str(), packet_type, packet_name, "UserProperty Name")?;
+            validate_string_length(property.name.as_str(), packet_type, packet_name, "UserProperty Value")?;
         }
     }
 
@@ -130,7 +130,7 @@ pub(crate) fn validate_packet_inbound_internal(packet: &MqttPacket, context: &In
 }
 
 
-pub(crate) fn validate_string_length(value: &String, packet_type: PacketType, packet_name: &str, field_name: &str) -> MqttResult<()> {
+pub(crate) fn validate_string_length(value: &str, packet_type: PacketType, packet_name: &str, field_name: &str) -> MqttResult<()> {
     if value.len() > MAXIMUM_STRING_PROPERTY_LENGTH {
         error!("{}Packet Validation - {} string field too long", packet_name, field_name);
         return Err(MqttError::new_packet_validation(packet_type, field_name));

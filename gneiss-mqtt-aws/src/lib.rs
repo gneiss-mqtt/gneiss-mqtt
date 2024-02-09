@@ -736,3 +736,215 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
 
     Ok(signed_request_builder)
 }
+
+#[cfg(test)]
+mod testing {
+    use gneiss_mqtt::error::MqttResult;
+    use std::env;
+    use std::future::Future;
+    use std::pin::Pin;
+    use gneiss_mqtt::client::{ClientEvent};
+    use gneiss_mqtt::client::waiter::{ClientEventWaiterOptions, ClientEventWaitType};
+    use gneiss_mqtt::features::gneiss_tokio::ClientEventWaiter;
+    use super::*;
+
+    fn get_iot_core_endpoint() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_ENDPOINT").unwrap()
+    }
+
+    fn get_iot_core_cert_path() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_MTLS_CERT_PATH").unwrap()
+    }
+
+    fn get_iot_core_key_path() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_MTLS_KEY_PATH").unwrap()
+    }
+
+    fn get_iot_core_sigv4_region() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_SIGV4_REGION").unwrap()
+    }
+
+    fn get_iot_core_unsigned_authorizer_name() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_UNSIGNED_AUTHORIZER").unwrap()
+    }
+
+    fn get_iot_core_signed_authorizer_name() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_SIGNED_AUTHORIZER").unwrap()
+    }
+
+    fn get_iot_core_custom_auth_username() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_CUSTOM_AUTH_USERNAME").unwrap()
+    }
+
+    fn get_iot_core_custom_auth_password() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_CUSTOM_AUTH_PASSWORD").unwrap()
+    }
+
+    fn get_iot_core_custom_auth_signature() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_CUSTOM_AUTH_SIGNATURE").unwrap()
+    }
+
+    fn get_iot_core_custom_auth_signature_unencoded() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_CUSTOM_AUTH_SIGNATURE_UNENCODED").unwrap()
+    }
+
+    fn get_iot_core_custom_auth_token_key_name() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_CUSTOM_AUTH_TOKEN_KEY_NAME").unwrap()
+    }
+
+    fn get_iot_core_custom_auth_token_key_value() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_CUSTOM_AUTH_TOKEN_KEY_VALUE").unwrap()
+    }
+
+    type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output = MqttResult<()>> + Send>>;
+    type AsyncTestFactory = Box<dyn Fn() -> AsyncTestFactoryReturnType + Send + Sync>;
+
+    fn do_builder_test(test_factory: AsyncTestFactory) {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let test_future = (*test_factory)();
+
+        runtime.block_on(test_future).unwrap();
+    }
+
+    async fn do_connect_test(builder: AwsClientBuilder, should_succeed: bool) -> MqttResult<()> {
+        let client = Arc::new(builder.build(&Handle::current())?);
+
+        let waiter_config = ClientEventWaiterOptions {
+            wait_type: ClientEventWaitType::Predicate(Box::new(|ev| {
+                match &**ev {
+                    ClientEvent::ConnectionSuccess(_) | ClientEvent::ConnectionFailure(_) => {
+                        true
+                    }
+                    _ => { false }
+                }
+            })),
+        };
+
+        let mut connection_result_waiter = ClientEventWaiter::new(client.clone(), waiter_config, 1);
+
+        client.start(None)?;
+
+        let connection_result_events = connection_result_waiter.wait().await?;
+        assert_eq!(1, connection_result_events.len());
+
+        let succeeded =
+            if let ClientEvent::ConnectionSuccess(_) = *connection_result_events[0] {
+                true
+            } else {
+                false
+            };
+
+        if succeeded == should_succeed {
+            Ok(())
+        } else {
+            Err(MqttError::new_other_error("connection result did not match test expectation"))
+        }
+    }
+
+    async fn do_mtls_builder_test(should_succeed: bool) -> MqttResult<()> {
+        let endpoint = get_iot_core_endpoint();
+        let cert_path = get_iot_core_cert_path();
+        let key_path = get_iot_core_key_path();
+
+        let builder = AwsClientBuilder::new_direct_with_mtls_from_fs(endpoint.as_str(), cert_path.as_str(), key_path.as_str(), None).unwrap();
+
+        do_connect_test(builder, should_succeed).await
+    }
+
+    #[test]
+    fn connect_success_aws_iot_core_mtls() {
+        do_builder_test(Box::new(||{
+            Box::pin(do_mtls_builder_test(true))
+        }))
+    }
+
+    async fn do_sigv4_builder_test(should_succeed: bool) -> MqttResult<()> {
+        let signing_region = get_iot_core_sigv4_region();
+        let endpoint = get_iot_core_endpoint();
+
+        let sigv4_options = WebsocketSigv4OptionsBuilder::new(signing_region.as_str()).await.build();
+
+        let builder =
+            AwsClientBuilder::new_websockets_with_sigv4(endpoint.as_str(), sigv4_options, None).unwrap();
+
+        do_connect_test(builder, should_succeed).await
+    }
+
+    #[test]
+    fn connect_success_aws_iot_core_ws_sigv4() {
+        do_builder_test(Box::new(||{
+            Box::pin(do_sigv4_builder_test(true))
+        }))
+    }
+
+    async fn do_unsigned_custom_auth_test() -> MqttResult<()> {
+        let endpoint = get_iot_core_endpoint();
+        let authorizer_name = get_iot_core_unsigned_authorizer_name();
+        let username = get_iot_core_custom_auth_username();
+        let password = get_iot_core_custom_auth_password();
+
+        let mut custom_auth_options_builder = AwsCustomAuthOptionsBuilder::new_unsigned(
+            Some(authorizer_name.as_str())
+        );
+
+        custom_auth_options_builder.with_username(username.as_str());
+        custom_auth_options_builder.with_password(password.as_bytes());
+
+        let builder =
+            AwsClientBuilder::new_direct_with_custom_auth(endpoint.as_str(), custom_auth_options_builder.build(), None).unwrap();
+
+        do_connect_test(builder, true).await
+    }
+
+    #[test]
+    fn connect_success_aws_iot_core_custom_auth_unsigned() {
+        do_builder_test(Box::new(||{
+            Box::pin(do_unsigned_custom_auth_test())
+        }))
+    }
+
+    async fn do_signed_custom_auth_test(use_unencoded_signature: bool) -> MqttResult<()> {
+        let endpoint = get_iot_core_endpoint();
+        let authorizer_name = get_iot_core_signed_authorizer_name();
+        let username = get_iot_core_custom_auth_username();
+        let password = get_iot_core_custom_auth_password();
+        let signature =
+            if use_unencoded_signature {
+                get_iot_core_custom_auth_signature_unencoded()
+            } else {
+                get_iot_core_custom_auth_signature()
+            };
+
+        let token_key_name = get_iot_core_custom_auth_token_key_name();
+        let token_key_value = get_iot_core_custom_auth_token_key_value();
+
+        let mut custom_auth_options_builder = AwsCustomAuthOptionsBuilder::new_signed(
+            Some(authorizer_name.as_str()),
+            signature.as_str(),
+            token_key_name.as_str(),
+            token_key_value.as_str()
+        );
+
+        custom_auth_options_builder.with_username(username.as_str());
+        custom_auth_options_builder.with_password(password.as_bytes());
+
+        let builder =
+            AwsClientBuilder::new_direct_with_custom_auth(endpoint.as_str(), custom_auth_options_builder.build(), None).unwrap();
+
+        do_connect_test(builder, true).await
+    }
+
+    #[test]
+    fn connect_success_aws_iot_core_custom_auth_signed_preencoded() {
+        do_builder_test(Box::new(||{
+            Box::pin(do_signed_custom_auth_test(false))
+        }))
+    }
+
+    #[test]
+    fn connect_success_aws_iot_core_custom_auth_signed_unencoded() {
+        do_builder_test(Box::new(||{
+            Box::pin(do_signed_custom_auth_test(true))
+        }))
+    }
+}
