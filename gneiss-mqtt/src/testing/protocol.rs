@@ -32,9 +32,16 @@ fn build_standard_test_config() -> ProtocolStateConfig {
     }
 }
 
-type PacketHandler = Box<dyn Fn(&Box<MqttPacket>, &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> + 'static>;
+#[derive(Default)]
+pub(crate) struct BrokerTestContext {
 
-fn handle_connect_with_successful_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+}
+
+pub(crate) type PacketHandler = Box<dyn Fn(&Box<MqttPacket>, &mut VecDeque<Box<MqttPacket>>, &mut BrokerTestContext) -> MqttResult<()> + Send + Sync + 'static>;
+pub(crate) type PacketHandlerSet = HashMap<PacketType, PacketHandler>;
+pub(crate) type PacketHandlerSetFactory = Box<dyn Fn() -> PacketHandlerSet + Send + Sync>;
+
+fn handle_connect_with_successful_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Connect(connect) = &**packet {
         let mut assigned_client_identifier = None;
         if connect.client_id.is_none() {
@@ -53,7 +60,7 @@ fn handle_connect_with_successful_connack(packet: &Box<MqttPacket>, response_pac
     panic!("Invalid packet handler state")
 }
 
-fn handle_connect_with_session_resumption(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_connect_with_session_resumption(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Connect(connect) = &**packet {
         let mut assigned_client_identifier = None;
         if connect.client_id.is_none() {
@@ -73,7 +80,7 @@ fn handle_connect_with_session_resumption(packet: &Box<MqttPacket>, response_pac
     panic!("Invalid packet handler state")
 }
 
-fn handle_connect_with_low_receive_maximum(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_connect_with_low_receive_maximum(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Connect(connect) = &**packet {
         let mut assigned_client_identifier = None;
         if connect.client_id.is_none() {
@@ -93,7 +100,7 @@ fn handle_connect_with_low_receive_maximum(packet: &Box<MqttPacket>, response_pa
     panic!("Invalid packet handler state")
 }
 
-fn handle_connect_with_topic_aliasing(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_connect_with_topic_aliasing(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Connect(connect) = &**packet {
         let mut assigned_client_identifier = None;
         if connect.client_id.is_none() {
@@ -120,7 +127,7 @@ fn create_connack_rejection() -> ConnackPacket {
     }
 }
 
-fn handle_connect_with_failure_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_connect_with_failure_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Connect(_) = &**packet {
         let response = Box::new(MqttPacket::Connack(create_connack_rejection()));
         response_packets.push_back(response);
@@ -131,7 +138,7 @@ fn handle_connect_with_failure_connack(packet: &Box<MqttPacket>, response_packet
     panic!("Invalid packet handler state")
 }
 
-fn handle_connect_with_tiny_maximum_packet_size(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_connect_with_tiny_maximum_packet_size(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Connect(_) = &**packet {
         let response = Box::new(MqttPacket::Connack(ConnackPacket {
             maximum_packet_size: Some(10),
@@ -145,14 +152,14 @@ fn handle_connect_with_tiny_maximum_packet_size(packet: &Box<MqttPacket>, respon
     panic!("Invalid packet handler state")
 }
 
-fn handle_pingreq_with_pingresp(_: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_pingreq_with_pingresp(_: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     let response = Box::new(MqttPacket::Pingresp(PingrespPacket{}));
     response_packets.push_back(response);
 
     Ok(())
 }
 
-fn handle_publish_with_success_no_relay(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_publish_with_success_no_relay(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Publish(publish) = &**packet {
         match publish.qos {
             QualityOfService::AtMostOnce => {}
@@ -178,7 +185,7 @@ fn handle_publish_with_success_no_relay(packet: &Box<MqttPacket>, response_packe
     panic!("Invalid packet handler state")
 }
 
-fn handle_publish_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_publish_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Publish(publish) = &**packet {
         match publish.qos {
             QualityOfService::AtMostOnce => {}
@@ -206,7 +213,7 @@ fn handle_publish_with_failure(packet: &Box<MqttPacket>, response_packets: &mut 
     panic!("Invalid packet handler state")
 }
 
-fn handle_pubrec_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_pubrec_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Pubrec(pubrec) = &**packet {
         let response = Box::new(MqttPacket::Pubrel(PubrelPacket{
             packet_id : pubrec.packet_id,
@@ -220,7 +227,7 @@ fn handle_pubrec_with_success(packet: &Box<MqttPacket>, response_packets: &mut V
     panic!("Invalid packet handler state")
 }
 
-fn handle_pubrel_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_pubrel_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Pubrel(pubrel) = &**packet {
         let response = Box::new(MqttPacket::Pubcomp(PubcompPacket{
             packet_id : pubrel.packet_id,
@@ -234,7 +241,7 @@ fn handle_pubrel_with_success(packet: &Box<MqttPacket>, response_packets: &mut V
     panic!("Invalid packet handler state")
 }
 
-fn handle_pubrel_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_pubrel_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Pubrel(pubrel) = &**packet {
         let response = Box::new(MqttPacket::Pubcomp(PubcompPacket{
             packet_id : pubrel.packet_id,
@@ -249,7 +256,7 @@ fn handle_pubrel_with_failure(packet: &Box<MqttPacket>, response_packets: &mut V
     panic!("Invalid packet handler state")
 }
 
-fn handle_subscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_subscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Subscribe(subscribe) = &**packet {
         let mut reason_codes = Vec::new();
         for subscription in &subscribe.subscriptions {
@@ -273,7 +280,7 @@ fn handle_subscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mu
     panic!("Invalid packet handler state")
 }
 
-fn handle_subscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_subscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Subscribe(subscribe) = &**packet {
         let mut reason_codes = Vec::new();
         for _ in &subscribe.subscriptions {
@@ -293,7 +300,7 @@ fn handle_subscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mu
     panic!("Invalid packet handler state")
 }
 
-fn handle_unsubscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_unsubscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Unsubscribe(unsubscribe) = &**packet {
         let mut reason_codes = Vec::new();
         for _ in &unsubscribe.topic_filters {
@@ -313,7 +320,7 @@ fn handle_unsubscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &
     panic!("Invalid packet handler state")
 }
 
-fn handle_unsubscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_unsubscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     if let MqttPacket::Unsubscribe(unsubscribe) = &**packet {
         let mut reason_codes = Vec::new();
         for _ in &unsubscribe.topic_filters {
@@ -333,15 +340,15 @@ fn handle_unsubscribe_with_success(packet: &Box<MqttPacket>, response_packets: &
     panic!("Invalid packet handler state")
 }
 
-fn handle_with_protocol_error(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_with_panic(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     panic!("Invalid packet handler state")
 }
 
-fn handle_with_nothing(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>) -> MqttResult<()> {
+fn handle_with_nothing(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
     Ok(())
 }
 
-fn create_default_packet_handlers() -> HashMap<PacketType, PacketHandler> {
+pub(crate) fn create_default_packet_handlers() -> PacketHandlerSet {
     let mut handlers : HashMap<PacketType, PacketHandler> = HashMap::new();
 
     handlers.insert(PacketType::Connect, Box::new(handle_connect_with_successful_connack));
@@ -357,10 +364,10 @@ fn create_default_packet_handlers() -> HashMap<PacketType, PacketHandler> {
     handlers.insert(PacketType::Puback, Box::new(handle_with_nothing));
     handlers.insert(PacketType::Pubcomp, Box::new(handle_with_nothing));
 
-    handlers.insert(PacketType::Connack, Box::new(handle_with_protocol_error));
-    handlers.insert(PacketType::Suback, Box::new(handle_with_protocol_error));
-    handlers.insert(PacketType::Unsuback, Box::new(handle_with_protocol_error));
-    handlers.insert(PacketType::Pingresp, Box::new(handle_with_protocol_error));
+    handlers.insert(PacketType::Connack, Box::new(handle_with_panic));
+    handlers.insert(PacketType::Suback, Box::new(handle_with_panic));
+    handlers.insert(PacketType::Unsuback, Box::new(handle_with_panic));
+    handlers.insert(PacketType::Pingresp, Box::new(handle_with_panic));
 
     handlers
 }
@@ -379,6 +386,8 @@ struct ProtocolStateTestFixture {
     pub to_client_packet_stream: VecDeque<Box<MqttPacket>>,
 
     pub broker_packet_handlers: HashMap<PacketType, PacketHandler>,
+
+    test_context: BrokerTestContext
 }
 
 impl ProtocolStateTestFixture {
@@ -394,6 +403,7 @@ impl ProtocolStateTestFixture {
             to_broker_packet_stream : VecDeque::new(),
             to_client_packet_stream : VecDeque::new(),
             broker_packet_handlers : create_default_packet_handlers(),
+            test_context: BrokerTestContext::default()
         }
     }
 
@@ -402,7 +412,7 @@ impl ProtocolStateTestFixture {
         let packet_type = mqtt_packet_to_packet_type(&*packet);
 
         if let Some(handler) = self.broker_packet_handlers.get(&packet_type) {
-            (*handler)(packet, &mut response_packets)?;
+            (*handler)(packet, &mut response_packets, &mut self.test_context)?;
 
             let mut encode_buffer = Vec::with_capacity(4096);
 

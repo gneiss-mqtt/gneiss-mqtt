@@ -172,7 +172,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
                         debug!("tokio - process_stopped - user operation received");
-                        client.handle_incoming_operation(operation_options, Instant::now());
+                        client.handle_incoming_operation(operation_options);
                     }
                 }
             }
@@ -196,7 +196,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
                         debug!("tokio - process_connecting - user operation received");
-                        client.handle_incoming_operation(operation_options, Instant::now());
+                        client.handle_incoming_operation(operation_options);
                     }
                 }
                 () = &mut timeout => {
@@ -243,7 +243,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
         while next_state.is_none() {
             trace!("tokio - process_connected loop");
 
-            let next_service_time_option = client.get_next_connected_service_time(Instant::now());
+            let next_service_time_option = client.get_next_connected_service_time();
             let service_wait: Option<tokio::time::Sleep> = next_service_time_option.map(|next_service_time| sleep(next_service_time - Instant::now()));
 
             let outbound_slice_option: Option<&[u8]> =
@@ -269,7 +269,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
                         debug!("tokio - process_connected - user operation received");
-                        client.handle_incoming_operation(operation_options, Instant::now());
+                        client.handle_incoming_operation(operation_options);
                     }
                 }
                 // incoming data on the socket future
@@ -282,7 +282,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                                 info!("tokio - process_connected - connection closed for read (0 bytes)");
                                 client.apply_error(MqttError::new_connection_closed("network stream closed"));
                                 next_state = Some(ClientImplState::PendingReconnect);
-                            } else if let Err(error) = client.handle_incoming_bytes(&inbound_data[..bytes_read], Instant::now()) {
+                            } else if let Err(error) = client.handle_incoming_bytes(&inbound_data[..bytes_read]) {
                                 info!("tokio - process_connected - error handling incoming bytes: {:?}", error);
                                 client.apply_error(error);
                                 next_state = Some(ClientImplState::PendingReconnect);
@@ -302,7 +302,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 // client service future (if relevant)
                 Some(_) = conditional_wait(service_wait) => {
                     debug!("tokio - process_connected - running client service task");
-                    if let Err(error) = client.handle_service(&mut outbound_data, Instant::now()) {
+                    if let Err(error) = client.handle_service(&mut outbound_data) {
                         client.apply_error(error);
                         next_state = Some(ClientImplState::PendingReconnect);
                     }
@@ -314,7 +314,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                             debug!("tokio - process_connected - wrote {} bytes to connection stream", bytes_written);
                             if should_flush {
                                 should_flush = false;
-                                if let Err(error) = client.handle_write_completion(Instant::now()) {
+                                if let Err(error) = client.handle_write_completion() {
                                     info!("tokio - process_connected - stream write completion handler failed: {:?}", error);
                                     client.apply_error(error);
                                     next_state = Some(ClientImplState::PendingReconnect);
@@ -364,7 +364,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 operation_result = self.operation_receiver.recv() => {
                     if let Some(operation_options) = operation_result {
                         debug!("tokio - process_pending_reconnect - user operation received");
-                        client.handle_incoming_operation(operation_options, Instant::now());
+                        client.handle_incoming_operation(operation_options);
                     }
                 }
                 () = &mut reconnect_timer => {
@@ -437,7 +437,7 @@ async fn client_event_loop<T>(client_impl: &mut Mqtt5ClientImpl, async_state: &m
                 ClientImplState::Connecting => { async_state.process_connecting(client_impl).await }
                 ClientImplState::Connected => { async_state.process_connected(client_impl).await }
                 ClientImplState::PendingReconnect => {
-                    let reconnect_wait = client_impl.compute_reconnect_period();
+                    let reconnect_wait = client_impl.advance_reconnect_period();
                     async_state.process_pending_reconnect(client_impl, reconnect_wait).await
                 }
                 _ => { Ok(ClientImplState::Shutdown) }
@@ -445,7 +445,7 @@ async fn client_event_loop<T>(client_impl: &mut Mqtt5ClientImpl, async_state: &m
 
         done = true;
         if let Ok(next_state) = next_state_result {
-            if client_impl.transition_to_state(next_state, Instant::now()).is_ok() && (next_state != ClientImplState::Shutdown) {
+            if client_impl.transition_to_state(next_state).is_ok() && (next_state != ClientImplState::Shutdown) {
                 done = false;
             }
         }
@@ -489,7 +489,7 @@ impl Mqtt5Client {
     pub fn new_with_tokio<T>(client_config: Mqtt5ClientOptions, connect_config: ConnectOptions, tokio_config: TokioClientOptions<T>, runtime_handle: &runtime::Handle) -> Mqtt5Client where T: AsyncRead + AsyncWrite + Send + Sync + 'static {
         let (user_state, internal_state) = create_runtime_states(tokio_config);
 
-        let client_impl = Mqtt5ClientImpl::new(client_config, connect_config, Instant::now());
+        let client_impl = Mqtt5ClientImpl::new(client_config, connect_config);
 
         spawn_client_impl(client_impl, internal_state, runtime_handle);
 
@@ -588,22 +588,26 @@ impl Drop for ClientEventWaiter {
     }
 }
 
-#[cfg(feature = "testenv")]
 #[cfg(test)]
 pub(crate) mod testing {
     use assert_matches::assert_matches;
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::Arc;
+    #[cfg(feature = "testenv")]
     use std::time::Duration;
     use crate::client::*;
+    #[cfg(feature = "testenv")]
     use crate::client::waiter::*;
     use crate::config::*;
     use crate::error::{MqttError, MqttResult};
     use crate::mqtt::*;
     use super::*;
+    #[cfg(feature = "testenv")]
     use crate::testing::integration::*;
+    use crate::testing::mock_server::*;
 
+    #[cfg(feature = "testenv")]
     fn create_client_builder_internal(connect_options: ConnectOptions, tls_config: TlsUsage, ws_config: WebsocketUsage, proxy_config: ProxyUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
         let client_config = Mqtt5ClientOptionsBuilder::new()
             .with_connect_timeout(Duration::from_secs(5))
@@ -640,6 +644,7 @@ pub(crate) mod testing {
         builder
     }
 
+    #[cfg(feature = "testenv")]
     fn create_good_client_builder(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage) -> GenericClientBuilder {
         let connect_options = ConnectOptionsBuilder::new()
             .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
@@ -652,6 +657,7 @@ pub(crate) mod testing {
     type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output = MqttResult<()>> + Send>>;
     type AsyncTestFactory = Box<dyn Fn(GenericClientBuilder) -> AsyncTestFactoryReturnType + Send + Sync>;
 
+    #[cfg(feature = "testenv")]
     fn do_good_client_test(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: AsyncTestFactory) {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let test_future = (*test_factory)(create_good_client_builder(tls, ws, proxy));
@@ -707,6 +713,7 @@ pub(crate) mod testing {
         Ok(())
     }
 
+    #[cfg(feature = "testenv")]
     async fn tokio_connect_disconnect_test(builder: GenericClientBuilder) -> MqttResult<()> {
         let client = Arc::new(builder.build(&tokio::runtime::Handle::current()).unwrap());
 
@@ -716,6 +723,7 @@ pub(crate) mod testing {
         Ok(())
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_connect_disconnect_direct_plaintext_no_proxy() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
@@ -723,6 +731,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_connect_disconnect_direct_rustls_no_proxy() {
         do_good_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
@@ -730,6 +739,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_connect_disconnect_websocket_plaintext_no_proxy() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
@@ -737,6 +747,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_connect_disconnect_websocket_rustls_no_proxy() {
         do_good_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
@@ -744,6 +755,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_connect_disconnect_direct_plaintext_with_proxy() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder|{
@@ -751,6 +763,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_connect_disconnect_direct_rustls_with_proxy() {
         do_good_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder|{
@@ -758,6 +771,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_connect_disconnect_websocket_plaintext_with_proxy() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder|{
@@ -765,6 +779,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_connect_disconnect_websocket_rustls_with_proxy() {
         do_good_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder|{
@@ -772,6 +787,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     async fn tokio_subscribe_unsubscribe_test(builder: GenericClientBuilder) -> MqttResult<()> {
         let client = Arc::new(builder.build(&tokio::runtime::Handle::current()).unwrap());
         start_client(&client).await?;
@@ -803,6 +819,7 @@ pub(crate) mod testing {
         Ok(())
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_subscribe_unsubscribe() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
@@ -810,6 +827,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     fn verify_successful_publish_result(result: &PublishResponse, qos: QualityOfService) {
         match result {
             PublishResponse::Qos0 => {
@@ -829,6 +847,7 @@ pub(crate) mod testing {
         }
     }
 
+    #[cfg(feature = "testenv")]
     fn verify_publish_received(event: &PublishReceivedEvent, expected_topic: &str, expected_qos: QualityOfService, expected_payload: &[u8]) {
         let publish = &event.publish;
 
@@ -837,6 +856,7 @@ pub(crate) mod testing {
         assert_eq!(expected_payload, publish.payload.as_ref().unwrap().as_slice());
     }
 
+    #[cfg(feature = "testenv")]
     async fn tokio_subscribe_publish_test(builder: GenericClientBuilder, qos: QualityOfService) -> MqttResult<()> {
         let client = Arc::new(builder.build(&tokio::runtime::Handle::current()).unwrap());
         start_client(&client).await?;
@@ -876,6 +896,7 @@ pub(crate) mod testing {
         Ok(())
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_subscribe_publish_qos0() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
@@ -883,6 +904,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_subscribe_publish_qos1() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
@@ -890,6 +912,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_subscribe_publish_qos2() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
@@ -897,6 +920,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     // This primarily tests that the will configuration works.  Will functionality is mostly broker-side.
     async fn tokio_will_test(builder: GenericClientBuilder) -> MqttResult<()> {
         let client = Arc::new(builder.build(&tokio::runtime::Handle::current()).unwrap());
@@ -946,6 +970,7 @@ pub(crate) mod testing {
         Ok(())
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn client_will_sent() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
@@ -953,6 +978,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     async fn tokio_connect_disconnect_cycle_session_rejoin_test(builder: GenericClientBuilder) -> MqttResult<()> {
         let client = Arc::new(builder.build(&tokio::runtime::Handle::current()).unwrap());
         start_client(&client).await?;
@@ -981,6 +1007,7 @@ pub(crate) mod testing {
         Ok(())
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connect_disconnect_cycle_session_rejoin() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
@@ -988,6 +1015,7 @@ pub(crate) mod testing {
         }));
     }
 
+    #[cfg(feature = "testenv")]
     async fn connection_failure_test(builder : GenericClientBuilder) -> MqttResult<()> {
         let client = Arc::new(builder.build(&tokio::runtime::Handle::current()).unwrap());
         let mut connection_failure_waiter = ClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
@@ -1000,6 +1028,7 @@ pub(crate) mod testing {
         Ok(())
     }
 
+    #[cfg(feature = "testenv")]
     fn create_mismatch_builder(tls_config: TlsUsage, ws_config: WebsocketUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
         assert!(tls_config != tls_endpoint || ws_config != ws_endpoint);
 
@@ -1008,6 +1037,7 @@ pub(crate) mod testing {
         create_client_builder_internal(connect_options, tls_config, ws_config, ProxyUsage::None, tls_endpoint, ws_endpoint)
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_direct_tls_config_direct_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::None);
@@ -1016,6 +1046,7 @@ pub(crate) mod testing {
         }), builder);
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_direct_tls_config_websocket_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
@@ -1024,6 +1055,7 @@ pub(crate) mod testing {
         }), builder);
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_direct_tls_config_websocket_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
@@ -1032,6 +1064,7 @@ pub(crate) mod testing {
         }), builder);
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_direct_plaintext_config_direct_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::None);
@@ -1040,6 +1073,7 @@ pub(crate) mod testing {
         }), builder);
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_direct_plaintext_config_websocket_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
@@ -1048,6 +1082,7 @@ pub(crate) mod testing {
         }), builder);
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_direct_plaintext_config_websocket_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
@@ -1056,6 +1091,7 @@ pub(crate) mod testing {
         }), builder);
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_websocket_tls_config_direct_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
@@ -1064,6 +1100,7 @@ pub(crate) mod testing {
         }), builder);
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_websocket_tls_config_websocket_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
@@ -1072,6 +1109,7 @@ pub(crate) mod testing {
         }), builder);
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_websocket_tls_config_direct_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
@@ -1080,8 +1118,7 @@ pub(crate) mod testing {
         }), builder);
     }
 
-    //
-
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_websocket_plaintext_config_direct_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
@@ -1090,6 +1127,7 @@ pub(crate) mod testing {
         }), builder);
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_websocket_plaintext_config_websocket_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
@@ -1098,6 +1136,7 @@ pub(crate) mod testing {
         }), builder);
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_websocket_plaintext_config_direct_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
@@ -1106,6 +1145,7 @@ pub(crate) mod testing {
         }), builder);
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_invalid_endpoint() {
         let client_options = Mqtt5ClientOptionsBuilder::new()
@@ -1120,11 +1160,34 @@ pub(crate) mod testing {
         }), builder);
     }
 
+    #[cfg(feature = "testenv")]
     #[test]
     fn connection_failure_invalid_endpoint_http() {
         let builder = GenericClientBuilder::new("amazon.com", 443);
         do_builder_test(Box::new(|builder| {
             Box::pin(connection_failure_test(builder))
         }), builder);
+    }
+
+    async fn connection_mock_server_test(builder : GenericClientBuilder) -> MqttResult<()> {
+        let client = Arc::new(builder.build(&tokio::runtime::Handle::current()).unwrap());
+
+        start_client(&client).await?;
+        stop_client(&client).await?;
+
+        client.close()?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn client_event_emit_connection_events() {
+        let (builder, server) = build_mock_client_server(ClientTestOptions::default());
+
+        do_builder_test(Box::new(|builder| {
+            Box::pin(connection_mock_server_test(builder))
+        }), builder);
+
+        server.close();
     }
 }
