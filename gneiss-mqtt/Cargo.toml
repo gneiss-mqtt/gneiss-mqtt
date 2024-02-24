@@ -11,7 +11,12 @@ documentation = "https://docs.rs/gneiss-mqtt"
 repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 readme = "README.md"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = [] # eventually tokio, rustls
+testenv = [] # enable when running tests to also run environmentally-controlled integration tests
+longtests = [] # enables longer-running tests (30+ seconds) that check reconnect, backoff, etc...
+# Eventually: tokio, rustls, nativetls, async_std, threaded, http_proxy, websockets
+# Consider: mqtt311, mqtt5, log
 
 [dev-dependencies]
 assert_matches = "1.5.0"

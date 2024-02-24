@@ -11,6 +11,12 @@ documentation = "https://docs.rs/gneiss-mqtt-aws"
 repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 readme = "README.md"
 
+[features]
+default = [] # eventually tokio, rustls
+testenv = [] # enable when running tests to also run environmentally-controlled integration tests
+# Eventually: tokio, rustls, nativetls, async_std, threaded, http_proxy, websockets
+# Consider: mqtt311, mqtt5, log
+
 [dependencies]
 aws-config = { version = "1" }
 aws-credential-types = { version = "1" }
