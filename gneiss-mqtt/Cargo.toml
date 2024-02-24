@@ -14,6 +14,7 @@ readme = "README.md"
 [features]
 default = [] # eventually tokio, rustls
 testenv = [] # enable when running tests to also run environmentally-controlled integration tests
+longtests = [] # enables longer-running tests (30+ seconds) that check reconnect, backoff, etc...
 # Eventually: tokio, rustls, nativetls, async_std, threaded, http_proxy, websockets
 # Consider: mqtt311, mqtt5, log
 

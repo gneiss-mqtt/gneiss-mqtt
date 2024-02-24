@@ -10,7 +10,7 @@ use crate::mqtt::*;
 
 use std::collections::{VecDeque};
 use std::io::{ErrorKind, Read, Write};
-use std::io::ErrorKind::TimedOut;
+use std::io::ErrorKind::{TimedOut, WouldBlock, Interrupted};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::time::Duration;
 use crate::alias::OutboundAliasResolution;
@@ -30,13 +30,13 @@ struct MockBrokerConnection {
 }
 
 impl MockBrokerConnection {
-    pub fn new(stream: TcpStream, packet_handlers: PacketHandlerSet) -> Self {
+    pub fn new(stream: TcpStream, packet_handlers: PacketHandlerSet, context: Arc<Mutex<BrokerTestContext>>) -> Self {
         MockBrokerConnection {
             decoder: Decoder::new(),
             encoder: Encoder::new(),
             packet_handlers,
             stream,
-            context: Arc::new(Mutex::new(BrokerTestContext::default()))
+            context
         }
     }
 
@@ -72,8 +72,10 @@ impl MockBrokerConnection {
                     }
                 }
                 Err(error) => {
-                    if error.kind() != TimedOut {
-                        done = true;
+                    let error_kind = error.kind();
+                    match error_kind {
+                        TimedOut | WouldBlock | Interrupted => {}
+                        _ => { done = true; }
                     }
                 }
             }
@@ -164,12 +166,14 @@ impl MockBroker   {
             let shutdown_flag= Arc::new(Mutex::new(false));
             let interior_shutdown_flag = shutdown_flag.clone();
 
+            let test_context = Arc::new(Mutex::new(BrokerTestContext::default()));
+
             std::thread::spawn(move || {
                 for next_stream_result in listener.incoming() {
                     match next_stream_result {
                         Ok(stream) => {
                             let handler_set = handler_set_factory();
-                            let mut connection = MockBrokerConnection::new(stream, handler_set);
+                            let mut connection = MockBrokerConnection::new(stream, handler_set, test_context.clone());
                             std::thread::spawn(move || {
                                 connection.run();
                             });

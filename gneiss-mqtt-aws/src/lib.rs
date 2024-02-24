@@ -829,7 +829,7 @@ mod testing {
         assert_eq!(1, connection_result_events.len());
 
         let succeeded =
-            if let ClientEvent::ConnectionSuccess(_) = *connection_result_events[0] {
+            if let ClientEvent::ConnectionSuccess(_) = &*connection_result_events[0].event {
                 true
             } else {
                 false
