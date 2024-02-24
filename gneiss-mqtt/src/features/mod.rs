@@ -7,5 +7,7 @@
 Module that encompasses feature-specific logic (primarily TLS and Async runtime).
  */
 
+#[cfg(rustls)]
 pub mod gneiss_rustls;
+
 pub mod gneiss_tokio;
