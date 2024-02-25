@@ -481,6 +481,13 @@ impl From<rustls_pki_types::InvalidDnsNameError> for MqttError {
     }
 }
 
+#[cfg(feature = "rustls")]
+impl From<rustls::Error> for MqttError {
+    fn from(err: rustls::Error) -> Self {
+        MqttError::new_tls_error(err)
+    }
+}
+
 impl From<tungstenite::error::Error> for MqttError {
     fn from(err: tungstenite::error::Error) -> Self {
         MqttError::new_transport_error(err)

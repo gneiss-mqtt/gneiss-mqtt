@@ -459,8 +459,8 @@ pub struct AwsClientBuilder {
 
 const ALPN_PORT : u16 = 443;
 const DEFAULT_PORT : u16 = ALPN_PORT;
-const DIRECT_ALPN_PROTOCOL : &[u8] = b"x-amzn-mqtt-ca";
-const CUSTOM_AUTH_ALPN_PROTOCOL : &[u8] = b"mqtt";
+const DIRECT_ALPN_PROTOCOL : &str = "x-amzn-mqtt-ca";
+const CUSTOM_AUTH_ALPN_PROTOCOL : &str = "mqtt";
 
 impl AwsClientBuilder {
 

@@ -10,6 +10,7 @@ implementation.
 
 use crate::config::{TlsData, TlsMode, TlsOptions};
 use crate::config::TlsOptionsBuilder;
+use crate::error::MqttError;
 
 use rustls::pki_types::{PrivateKeyDer};
 use std::sync::Arc;
@@ -18,38 +19,35 @@ use std::sync::Arc;
 impl TlsOptionsBuilder {
 
     /// Builds client TLS options using the `rustls` crate
-    pub fn build_rustls(&self) -> Result<TlsOptions, rustls::Error> {
-        if let Ok(root_cert_store) = build_root_ca_store(self.root_ca_bytes.as_deref()) {
+    pub fn build_rustls(&self) -> Result<TlsOptions, MqttError> {
+        let root_cert_store = build_root_ca_store(self.root_ca_bytes.as_deref())?;
 
-            let mut config =
-                match self.mode {
-                    TlsMode::Standard => {
-                        rustls::ClientConfig::builder()
-                            .with_root_certificates(root_cert_store)
-                            .with_no_client_auth()
-                    }
-                    TlsMode::Mtls => {
-                        let certs = build_certs(self.certificate_bytes.as_deref().unwrap());
-                        let private_key = build_private_key(self.private_key_bytes.as_deref().unwrap())?;
-                        rustls::ClientConfig::builder()
-                            .with_root_certificates(root_cert_store)
-                            .with_client_auth_cert(certs, private_key)?
-                    }
-                };
+        let mut config =
+            match self.mode {
+                TlsMode::Standard => {
+                    rustls::ClientConfig::builder()
+                        .with_root_certificates(root_cert_store)
+                        .with_no_client_auth()
+                }
+                TlsMode::Mtls => {
+                    let certs = build_certs(self.certificate_bytes.as_deref().unwrap());
+                    let private_key = build_private_key(self.private_key_bytes.as_deref().unwrap())?;
+                    rustls::ClientConfig::builder()
+                        .with_root_certificates(root_cert_store)
+                        .with_client_auth_cert(certs, private_key)?
+                }
+            };
 
-            config.alpn_protocols = Vec::new();
-            if let Some(alpn) = &self.alpn {
-                config.alpn_protocols.push(alpn.clone());
-            }
-
-            config.enable_sni = self.verify_peer;
-
-            return Ok(TlsOptions {
-                options: TlsData::Rustls(self.mode, Arc::new(config))
-            });
+        config.alpn_protocols = Vec::new();
+        if let Some(alpn) = &self.alpn {
+            config.alpn_protocols.push(alpn.as_bytes().to_vec());
         }
 
-        Err(rustls::Error::General("failed to build TLS context".to_string()))
+        config.enable_sni = self.verify_peer;
+
+        Ok(TlsOptions {
+            options: TlsData::Rustls(self.mode, Arc::new(config))
+        })
     }
 }
 
