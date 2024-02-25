@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gneiss-mqtt = { path = "../gneiss-mqtt" }
+gneiss-mqtt = { path = "../gneiss-mqtt", features = ["rustls"] }
 elasti-gneiss-core = { path = "../elasti-gneiss-core" }
 tokio = { version = "1", features = ["full"] }
 simplelog = { version = "0.12" }

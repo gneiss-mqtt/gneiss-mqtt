@@ -19,12 +19,13 @@ just supply the minimal required data.
 
 # Usage
 
-To use this crate, you'll first need to add it and [`gneiss-mqtt`](https://crates.io/crates/gneiss-mqtt) to your project's Cargo.toml:
+To use this crate, you'll first need to add it and [`gneiss-mqtt`](https://crates.io/crates/gneiss-mqtt) to your project's Cargo.toml,
+enabling a TLS implementation as well:
 
 ```toml
 [dependencies]
-gneiss-mqtt = "0.2"
-gneiss-mqtt-aws = "0.2"
+gneiss-mqtt = { version = "0.2", features = [ "rustls" ] }
+gneiss-mqtt-aws = { version = "0.2", features = [ "rustls" ] }
 ```
 
 (Temporary) If your project does not include [`tokio`](https://crates.io/crates/tokio), you will need to add it too:
@@ -737,7 +738,7 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     Ok(signed_request_builder)
 }
 
-#[cfg(feature = "testenv")]
+#[cfg(feature = "testing")]
 #[cfg(test)]
 mod testing {
     use gneiss_mqtt::error::MqttResult;

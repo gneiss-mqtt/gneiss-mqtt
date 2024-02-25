@@ -22,7 +22,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::runtime::Handle;
+
+#[cfg(feature = "rustls")]
 use tokio_rustls::client::TlsStream;
+#[cfg(feature = "rustls")]
 use tokio_rustls::{TlsConnector};
 
 // websockets feature
@@ -127,6 +130,7 @@ pub(crate) enum TlsMode {
 
 #[derive(Clone)]
 pub(crate) enum TlsData {
+    #[cfg(feature = "rustls")]
     Rustls(TlsMode, Arc<rustls::ClientConfig>),
 }
 
@@ -136,7 +140,16 @@ pub struct TlsOptions {
     pub(crate) options: TlsData
 }
 
+fn load_file(filename: &str) -> std::io::Result<Vec<u8>> {
+    let mut bytes_vec = Vec::new();
+    let mut bytes_file = File::open(filename)?;
+    bytes_file.read_to_end(&mut bytes_vec)?;
+    Ok(bytes_vec)
+}
+
+
 /// Builder type for constructing TLS configuration.
+#[allow(dead_code)]
 pub struct TlsOptionsBuilder {
     pub(crate) mode: TlsMode,
     pub(crate) root_ca_bytes: Option<Vec<u8>>,
@@ -210,6 +223,7 @@ impl TlsOptionsBuilder {
         self.alpn = Some(alpn.to_vec());
         self
     }
+
 }
 
 impl Default for TlsOptionsBuilder {
@@ -223,13 +237,6 @@ impl Default for TlsOptionsBuilder {
             alpn: None
         }
     }
-}
-
-fn load_file(filename: &str) -> std::io::Result<Vec<u8>> {
-    let mut bytes_vec = Vec::new();
-    let mut bytes_file = File::open(filename)?;
-    bytes_file.read_to_end(&mut bytes_vec)?;
-    Ok(bytes_vec)
 }
 
 /// Controls how the client attempts to rejoin MQTT sessions.
@@ -739,9 +746,24 @@ pub struct GenericClientBuilder {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum TlsImplementation {
     None,
+    #[cfg(feature = "rustls")]
     Rustls,
-    Nativetls,
+    //Nativetls,
     Mixed
+}
+
+fn get_tls_impl_from_options(tls_options: Option<&TlsOptions>) -> TlsImplementation {
+    if let Some(tls_opts) = tls_options {
+        return
+            match &tls_opts.options {
+                #[cfg(feature = "rustls")]
+                TlsData::Rustls(_, _) => { TlsImplementation::Rustls }
+                #[cfg(not(feature = "rustls"))]
+                _ => { TlsImplementation::None }
+            };
+    }
+
+    TlsImplementation::None
 }
 
 impl GenericClientBuilder {
@@ -792,7 +814,25 @@ impl GenericClientBuilder {
     }
 
     fn get_tls_impl(&self) -> TlsImplementation {
-        TlsImplementation::Mixed
+        let to_broker_tls = get_tls_impl_from_options(self.tls_options.as_ref());
+        let mut to_proxy_tls = TlsImplementation::None;
+        if let Some(http_proxy_options) = &self.http_proxy_options {
+            to_proxy_tls = get_tls_impl_from_options(http_proxy_options.tls_options.as_ref());
+        }
+
+        if to_broker_tls == to_proxy_tls {
+            return to_broker_tls;
+        }
+
+        if to_broker_tls != TlsImplementation::None {
+            if to_proxy_tls != TlsImplementation::None {
+                TlsImplementation::Mixed
+            } else {
+                to_broker_tls
+            }
+        } else {
+            to_proxy_tls
+        }
     }
 
     /// Builds a new MQTT client according to all the configuration options given to the builder.
@@ -851,70 +891,71 @@ fn make_addr(endpoint: &str, port: u16) -> std::io::Result<SocketAddr> {
     Ok(to_socket_addrs.next().unwrap())
 }
 
-fn make_direct_client(tls_impl: TlsImplementation, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+#[allow(clippy::too_many_arguments)]
+fn make_direct_client(tls_impl: TlsImplementation, endpoint: String, port: u16, _tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
     match tls_impl {
         TlsImplementation::None => { make_direct_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, runtime) }
-        TlsImplementation::Rustls => { make_direct_client_rustls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, runtime) }
+        #[cfg(feature = "rustls")]
+        TlsImplementation::Rustls => { make_direct_client_rustls(endpoint, port, _tls_options, client_options, connect_options, http_proxy_options, runtime) }
         _ => { panic!("Illegal state"); }
     }
 }
 
-fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
-    info!("make_direct_client_no_tls - creating async connection establishment closure");
-
+fn compute_endpoints(endpoint: String, port: u16, http_proxy_options: &Option<HttpProxyOptions>) -> (Endpoint, Option<Endpoint>) {
     let broker_endpoint = Endpoint::new(endpoint.as_str(), port);
     let proxy_endpoint = http_proxy_options.as_ref().map(|val| { Endpoint::new( val.endpoint.as_str(), val.port )});
-    info!("make_direct_client_no_tls - broker address - {}:{}", broker_endpoint.endpoint, broker_endpoint.port);
+    info!("compute_endpoints - broker address - {}:{}", broker_endpoint.endpoint, broker_endpoint.port);
     if let Some(proxy_end) = &proxy_endpoint {
-        info!("make_direct_client_no_tls - proxy address - {}:{}", proxy_end.endpoint, proxy_end.port);
+        info!("compute_endpoints - proxy address - {}:{}", proxy_end.endpoint, proxy_end.port);
     }
 
-    let (stream_endpoint, http_connect_endpoint) =
-        if let Some(proxy_endpoint) = proxy_endpoint {
-            (proxy_endpoint, Some(broker_endpoint))
-        } else {
-            (broker_endpoint, None)
-        };
-
-    if let Some(http_proxy_options) = http_proxy_options {
-        let tokio_options = TokioClientOptions {
-            connection_factory: Box::new(move || {
-                let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
-                let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                Box::pin(apply_proxy_connect_to_stream(tcp_stream, http_connect_endpoint.clone()))
-            }),
-        };
-
-        info!("make_direct_client_no_tls - plaintext-to-proxy -> plaintext-to-broker");
-        Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+    if let Some(proxy_endpoint) = proxy_endpoint {
+        (proxy_endpoint, Some(broker_endpoint))
     } else {
-        let tokio_options = TokioClientOptions {
-            connection_factory: Box::new(move || {
-                Box::pin(make_leaf_stream(stream_endpoint.clone()))
-            }),
-        };
-
-        info!("make_direct_client_no_tls - plaintext-to-broker");
-        Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+        (broker_endpoint, None)
     }
 }
 
+fn create_direct_client_plaintext_to_proxy_plaintext_to_broker(client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, stream_endpoint: Endpoint, http_connect_endpoint: Option<Endpoint>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    let tokio_options = TokioClientOptions {
+        connection_factory: Box::new(move || {
+            let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+            let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+            Box::pin(apply_proxy_connect_to_stream(tcp_stream, http_connect_endpoint.clone()))
+        }),
+    };
+
+    info!("make_direct_client - plaintext-to-proxy -> plaintext-to-broker");
+    Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+}
+
+fn create_direct_client_plaintext_to_broker(client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, stream_endpoint: Endpoint, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    let tokio_options = TokioClientOptions {
+        connection_factory: Box::new(move || {
+            Box::pin(make_leaf_stream(stream_endpoint.clone()))
+        }),
+    };
+
+    info!("make_direct_client - plaintext-to-broker");
+    Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+}
+
+fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    info!("make_direct_client_no_tls - creating async connection establishment closure");
+    let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
+
+    if http_connect_endpoint.is_some() {
+        create_direct_client_plaintext_to_proxy_plaintext_to_broker(client_options, connect_options, stream_endpoint, http_connect_endpoint, runtime)
+    } else {
+        create_direct_client_plaintext_to_broker(client_options, connect_options, stream_endpoint, runtime)
+    }
+}
+
+#[cfg(feature = "rustls")]
 fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
     info!("make_direct_client_rustls - creating async connection establishment closure");
 
-    let broker_endpoint = Endpoint::new(endpoint.as_str(), port);
-    let proxy_endpoint = http_proxy_options.as_ref().map(|val| { Endpoint::new( val.endpoint.as_str(), val.port )});
-    info!("make_direct_client_rustls - broker address - {}:{}", broker_endpoint.endpoint, broker_endpoint.port);
-    if let Some(proxy_end) = &proxy_endpoint {
-        info!("make_direct_client_rustls - proxy address - {}:{}", proxy_end.endpoint, proxy_end.port);
-    }
-
-    let (stream_endpoint, http_connect_endpoint) =
-        if let Some(proxy_endpoint) = proxy_endpoint {
-            (proxy_endpoint, Some(broker_endpoint))
-        } else {
-            (broker_endpoint, None)
-        };
+    let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
 
     if let Some(tls_options) = tls_options {
         if let Some(http_proxy_options) = http_proxy_options {
@@ -923,9 +964,9 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
                     connection_factory: Box::new(move || {
                         let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
                         let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                        let proxy_tls_stream = Box::pin(wrap_stream_with_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
+                        let proxy_tls_stream = Box::pin(wrap_stream_with_tls_rustls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
                         let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone()));
-                        Box::pin(wrap_stream_with_tls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone()))
+                        Box::pin(wrap_stream_with_tls_rustls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone()))
                     }),
                 };
 
@@ -937,7 +978,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
                         let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
                         let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
                         let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tcp_stream, http_connect_endpoint.clone()));
-                        Box::pin(wrap_stream_with_tls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone()))
+                        Box::pin(wrap_stream_with_tls_rustls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone()))
                     }),
                 };
 
@@ -948,7 +989,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
             let tokio_options = TokioClientOptions {
                 connection_factory: Box::new(move || {
                     let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                    Box::pin(wrap_stream_with_tls(tcp_stream, endpoint.clone(), tls_options.clone()))
+                    Box::pin(wrap_stream_with_tls_rustls(tcp_stream, endpoint.clone(), tls_options.clone()))
                 }),
             };
 
@@ -961,7 +1002,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
                 connection_factory: Box::new(move || {
                     let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
                     let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                    let proxy_tls_stream = Box::pin(wrap_stream_with_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
+                    let proxy_tls_stream = Box::pin(wrap_stream_with_tls_rustls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
                     Box::pin(apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone()))
                 }),
             };
@@ -969,47 +1010,65 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
             info!("make_direct_client_rustls - tls-to-proxy -> plaintext-to-broker");
             Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         } else {
-            let tokio_options = TokioClientOptions {
-                connection_factory: Box::new(move || {
-                    let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
-                    let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                    Box::pin(apply_proxy_connect_to_stream(tcp_stream, http_connect_endpoint.clone()))
-                }),
-            };
-
-            info!("make_direct_client_rustls - plaintext-to-proxy -> plaintext-to-broker");
-            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            create_direct_client_plaintext_to_proxy_plaintext_to_broker(client_options, connect_options, stream_endpoint, http_connect_endpoint, runtime)
         }
     } else {
-        let tokio_options = TokioClientOptions {
-            connection_factory: Box::new(move || {
-                Box::pin(make_leaf_stream(stream_endpoint.clone()))
-            }),
-        };
-
-        info!("make_direct_client_rustls - plaintext-to-broker");
-        Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+        create_direct_client_plaintext_to_broker(client_options, connect_options, stream_endpoint, runtime)
     }
 }
 
-// you're not the boss of me, clippy
 #[allow(clippy::too_many_arguments)]
+fn make_websocket_client(tls_impl: TlsImplementation, endpoint: String, port: u16, websocket_options: WebsocketOptions, _tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    match tls_impl {
+        TlsImplementation::None => { make_websocket_client_no_tls(endpoint, port, websocket_options, client_options, connect_options, http_proxy_options, runtime) }
+        #[cfg(feature = "rustls")]
+        TlsImplementation::Rustls => { make_websocket_client_rustls(endpoint, port, websocket_options, _tls_options, client_options, connect_options, http_proxy_options, runtime) }
+        _ => { panic!("Illegal state"); }
+    }
+}
+
+fn create_websocket_client_plaintext_to_proxy_plaintext_to_broker(websocket_options: WebsocketOptions, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, stream_endpoint: Endpoint, http_connect_endpoint: Option<Endpoint>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    let tokio_options = TokioClientOptions {
+        connection_factory: Box::new(move || {
+            let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+            let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+            let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tcp_stream, http_connect_endpoint.clone()));
+            Box::pin(wrap_stream_with_websockets(connect_stream, http_connect_endpoint.endpoint.clone(), "ws", websocket_options.clone()))
+        }),
+    };
+
+    info!("create_websocket_client_plaintext_to_proxy_plaintext_to_broker");
+    Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+}
+
+fn create_websocket_client_plaintext_to_broker(websocket_options: WebsocketOptions, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, stream_endpoint: Endpoint, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    let tokio_options = TokioClientOptions {
+        connection_factory: Box::new(move || {
+            let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
+            Box::pin(wrap_stream_with_websockets(tcp_stream, stream_endpoint.endpoint.clone(), "ws", websocket_options.clone()))
+        }),
+    };
+
+    info!("create_websocket_client_plaintext_to_broker");
+    Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+}
+
+fn make_websocket_client_no_tls(endpoint: String, port: u16, websocket_options: WebsocketOptions, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    info!("make_websocket_client_no_tls - creating async connection establishment closure");
+    let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
+
+    if http_connect_endpoint.is_some() {
+        create_websocket_client_plaintext_to_proxy_plaintext_to_broker(websocket_options, client_options, connect_options, stream_endpoint, http_connect_endpoint, runtime)
+    } else {
+        create_websocket_client_plaintext_to_broker(websocket_options, client_options, connect_options, stream_endpoint, runtime)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rustls")]
 fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
     info!("make_websocket_client - creating async connection establishment closure");
-    let broker_endpoint = Endpoint::new(endpoint.as_str(), port);
-    let proxy_endpoint = http_proxy_options.as_ref().map(|val| { Endpoint::new( val.endpoint.as_str(), val.port )});
-
-    info!("make_websocket_client - broker address - {}:{}", broker_endpoint.endpoint, broker_endpoint.port);
-    if let Some(proxy_end) = &proxy_endpoint {
-        info!("make_websocket_client - proxy address - {}:{}", proxy_end.endpoint, proxy_end.port);
-    }
-
-    let (stream_endpoint, http_connect_endpoint) =
-        if let Some(proxy_endpoint) = proxy_endpoint {
-            (proxy_endpoint, Some(broker_endpoint))
-        } else {
-            (broker_endpoint, None)
-        };
+    let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
 
     if let Some(tls_options) = tls_options {
         if let Some(http_proxy_options) = http_proxy_options {
@@ -1018,9 +1077,9 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: 
                     connection_factory: Box::new(move || {
                         let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
                         let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                        let proxy_tls_stream = Box::pin(wrap_stream_with_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
+                        let proxy_tls_stream = Box::pin(wrap_stream_with_tls_rustls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
                         let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone()));
-                        let tls_stream = Box::pin(wrap_stream_with_tls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone()));
+                        let tls_stream = Box::pin(wrap_stream_with_tls_rustls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone()));
                         Box::pin(wrap_stream_with_websockets(tls_stream, http_connect_endpoint.endpoint.clone(), "wss", websocket_options.clone()))
                     }),
                 };
@@ -1033,7 +1092,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: 
                         let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
                         let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
                         let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tcp_stream, http_connect_endpoint.clone()));
-                        let tls_stream = Box::pin(wrap_stream_with_tls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone()));
+                        let tls_stream = Box::pin(wrap_stream_with_tls_rustls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone()));
                         Box::pin(wrap_stream_with_websockets(tls_stream, http_connect_endpoint.endpoint.clone(), "wss", websocket_options.clone()))
                     }),
                 };
@@ -1045,7 +1104,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: 
             let tokio_options = TokioClientOptions {
                 connection_factory: Box::new(move || {
                     let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                    let tls_stream = Box::pin(wrap_stream_with_tls(tcp_stream, stream_endpoint.endpoint.clone(), tls_options.clone()));
+                    let tls_stream = Box::pin(wrap_stream_with_tls_rustls(tcp_stream, stream_endpoint.endpoint.clone(), tls_options.clone()));
                     Box::pin(wrap_stream_with_websockets(tls_stream, stream_endpoint.endpoint.clone(), "wss", websocket_options.clone()))
                 }),
             };
@@ -1059,7 +1118,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: 
                 connection_factory: Box::new(move || {
                     let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
                     let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                    let proxy_tls_stream = Box::pin(wrap_stream_with_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
+                    let proxy_tls_stream = Box::pin(wrap_stream_with_tls_rustls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone()));
                     let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone()));
                     Box::pin(wrap_stream_with_websockets(connect_stream, http_connect_endpoint.endpoint.clone(), "ws", websocket_options.clone()))
                 }),
@@ -1068,28 +1127,10 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: 
             info!("make_websocket_client - tls-to-proxy -> plaintext-to-broker");
             Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
         } else {
-            let tokio_options = TokioClientOptions {
-                connection_factory: Box::new(move || {
-                    let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
-                    let proxy_tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                    let connect_stream = Box::pin(apply_proxy_connect_to_stream(proxy_tcp_stream, http_connect_endpoint.clone()));
-                    Box::pin(wrap_stream_with_websockets(connect_stream, http_connect_endpoint.endpoint.clone(), "ws", websocket_options.clone()))
-                }),
-            };
-
-            info!("make_websocket_client - plaintext-to-proxy -> plaintext-to-broker");
-            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            create_websocket_client_plaintext_to_proxy_plaintext_to_broker(websocket_options, client_options, connect_options, stream_endpoint, http_connect_endpoint, runtime)
         }
     } else {
-        let tokio_options = TokioClientOptions {
-            connection_factory: Box::new(move || {
-                let tcp_stream = Box::pin(make_leaf_stream(stream_endpoint.clone()));
-                Box::pin(wrap_stream_with_websockets(tcp_stream, stream_endpoint.endpoint.clone(), "ws", websocket_options.clone()))
-            }),
-        };
-
-        info!("make_websocket_client - plaintext-to-broker");
-        Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+        create_websocket_client_plaintext_to_broker(websocket_options, client_options, connect_options, stream_endpoint, runtime)
     }
 }
 
@@ -1102,8 +1143,8 @@ async fn make_leaf_stream(endpoint: Endpoint) -> MqttResult<TcpStream> {
     Ok(stream)
 }
 
-
-async fn wrap_stream_with_tls<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, tls_options: TlsOptions) -> MqttResult<TlsStream<S>> where S : AsyncRead + AsyncWrite + Unpin {
+#[cfg(feature = "rustls")]
+async fn wrap_stream_with_tls_rustls<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, tls_options: TlsOptions) -> MqttResult<TlsStream<S>> where S : AsyncRead + AsyncWrite + Unpin {
     let domain = rustls_pki_types::ServerName::try_from(endpoint)?
         .to_owned();
 
@@ -1112,10 +1153,10 @@ async fn wrap_stream_with_tls<S>(stream : Pin<Box<impl Future<Output=MqttResult<
             TlsData::Rustls(_, config) => { TlsConnector::from(config.clone()) }
         };
 
-    debug!("wrap_stream_with_tls - performing tls handshake");
+    debug!("wrap_stream_with_tls_rustls - performing tls handshake");
     let inner_stream= stream.await?;
     let stream = connector.connect(domain, inner_stream).await?;
-    debug!("wrap_stream_with_tls - tls handshake successfully completed");
+    debug!("wrap_stream_with_tls_rustls - tls handshake successfully completed");
 
     Ok(stream)
 }

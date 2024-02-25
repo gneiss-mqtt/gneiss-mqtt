@@ -474,7 +474,7 @@ impl From<core::str::Utf8Error> for MqttError {
     }
 }
 
-#[cfg(rustls)]
+#[cfg(feature = "rustls")]
 impl From<rustls_pki_types::InvalidDnsNameError> for MqttError {
     fn from(err: rustls_pki_types::InvalidDnsNameError) -> Self {
         MqttError::new_connection_establishment_failure(err)

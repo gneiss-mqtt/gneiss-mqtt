@@ -12,8 +12,9 @@ repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 readme = "README.md"
 
 [features]
-default = [] # eventually tokio, rustls
-testenv = [] # enable when running tests to also run environmentally-controlled integration tests
+default = [ "rustls" ] # eventually tokio, rustls
+testing = [] # enable when running tests to also run environmentally-controlled integration tests
+rustls = [ "gneiss-mqtt/rustls" ]
 # Eventually: tokio, rustls, nativetls, async_std, threaded, http_proxy, websockets
 # Consider: mqtt311, mqtt5, log
 
