@@ -71,7 +71,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+*/
 
+#![cfg_attr(feature = "websockets", doc = r##"
 # Example: Connect to AWS IoT Core via Websockets (with tokio runtime)
 You'll need to configure your runtime environment to source AWS credentials whose IAM policy allows
 IoT usage.  This crate uses the AWS SDK for Rust to source the credentials necessary
@@ -106,8 +108,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-```
+```"##)]
 
+/*!
 # Example: Connect to AWS IoT Core via AWS IoT Custom Authentication (with tokio runtime)
 
 Custom authentication is an AWS IoT Core specific way to perform authentication without using

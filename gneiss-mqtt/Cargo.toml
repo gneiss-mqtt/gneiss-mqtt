@@ -11,6 +11,10 @@ documentation = "https://docs.rs/gneiss-mqtt"
 repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 readme = "README.md"
 
+[package.metadata.docs.rs]
+features = []
+all-features = true
+
 [features]
 default = [] # remove soon
 testing = [] # enables environmentally-controlled integration tests and long-running tests (30+ seconds) that check reconnect, backoff, etc...

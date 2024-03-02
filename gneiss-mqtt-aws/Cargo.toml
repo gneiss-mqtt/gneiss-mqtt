@@ -11,6 +11,10 @@ documentation = "https://docs.rs/gneiss-mqtt-aws"
 repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 readme = "README.md"
 
+[package.metadata.docs.rs]
+features = []
+all-features = true
+
 [features]
 default = [] # eventually tokio, rustls
 testing = [] # enable when running tests to also run environmentally-controlled integration tests
