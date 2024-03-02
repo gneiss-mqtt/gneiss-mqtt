@@ -11,21 +11,33 @@ documentation = "https://docs.rs/gneiss-mqtt-aws"
 repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 readme = "README.md"
 
+[package.metadata.docs.rs]
+features = []
+all-features = true
+
 [features]
 default = [] # eventually tokio, rustls
 testing = [] # enable when running tests to also run environmentally-controlled integration tests
 rustls = [ "gneiss-mqtt/rustls" ]
 native-tls = [ "gneiss-mqtt/native-tls" ]
+websockets = [
+    "gneiss-mqtt/websockets",
+    "dep:aws-config",
+    "dep:aws-credential-types",
+    "dep:aws-sigv4",
+    "dep:aws-smithy-runtime-api",
+    "dep:http",
+]
 # Eventually: tokio, rustls, nativetls, async_std, threaded, http_proxy, websockets
 # Consider: mqtt311, mqtt5, log
 
 [dependencies]
-aws-config = { version = "1" }
-aws-credential-types = { version = "1" }
-aws-sigv4 = { version = "1" }
-aws-smithy-runtime-api = { version = "1" }
+aws-config = { version = "1", optional = true }
+aws-credential-types = { version = "1", optional = true }
+aws-sigv4 = { version = "1", optional = true }
+aws-smithy-runtime-api = { version = "1", optional = true }
 gneiss-mqtt = { path = "../gneiss-mqtt" }
-http = { version = "0.2" }
+http = { version = "0.2", optional = true }
 tokio = { version = "1", features = ["full"] }
 urlencoding = { version = "2" }
 uuid = { version = "1", features = [ "v4", "fast-rng" ] }

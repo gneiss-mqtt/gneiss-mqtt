@@ -11,11 +11,17 @@ documentation = "https://docs.rs/gneiss-mqtt"
 repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 readme = "README.md"
 
+[package.metadata.docs.rs]
+features = []
+all-features = true
+
 [features]
-default = [] # eventually tokio, rustls
+default = [] # remove soon
 testing = [] # enables environmentally-controlled integration tests and long-running tests (30+ seconds) that check reconnect, backoff, etc...
 rustls = ["dep:rustls", "dep:rustls-native-certs", "dep:rustls-pemfile", "dep:rustls-pki-types", "dep:tokio-rustls"]
 native-tls = ["dep:native-tls", "dep:tokio-native-tls"]
+websockets = ["dep:http", "dep:tungstenite", "dep:tokio-tungstenite", "dep:stream-ws"]
+
 # Eventually: tokio, rustls, nativetls, async_std, threaded, http_proxy, websockets
 # Consider: mqtt311, mqtt5, log
 
@@ -24,7 +30,7 @@ assert_matches = "1.5.0"
 uuid = { version = "1", features = [ "v4", "fast-rng" ] }
 
 [dependencies]
-http = { version = "0.2" }
+http = { version = "0.2", optional = true }
 httparse = { version = "1" }
 lru = { version = "0.12" }
 log = { version = "0.4" }
@@ -34,12 +40,12 @@ rustls = { version = "0.22", default-features = false, optional = true }
 rustls-native-certs = { version = "0.7", optional = true }
 rustls-pemfile = { version = "2", optional = true }
 rustls-pki-types = { version = "1", optional = true }
-stream-ws = { version = "0.1.1", features = ["tungstenite", "tokio"] }
+stream-ws = { version = "0.1.1", features = ["tungstenite", "tokio"], optional = true }
 tokio = { version = "1", features = ["full"] }
 tokio-native-tls = { version = "0.3.1", optional = true}
 tokio-rustls = { version = "0.25", optional = true }
-tokio-tungstenite = { version = "0.20" }
-tungstenite = { version = "0.20" }
+tokio-tungstenite = { version = "0.20" , optional = true }
+tungstenite = { version = "0.20", optional = true }
 
 
 

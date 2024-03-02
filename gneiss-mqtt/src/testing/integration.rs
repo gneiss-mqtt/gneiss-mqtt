@@ -19,6 +19,8 @@ pub(crate) enum TlsUsage {
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub(crate) enum WebsocketUsage {
     None,
+
+    #[cfg(feature="websockets")]
     Tungstenite
 }
 
