@@ -12,7 +12,7 @@ repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 readme = "README.md"
 
 [features]
-default = [ "websockets" ] # remove soon
+default = [] # remove soon
 testing = [] # enables environmentally-controlled integration tests and long-running tests (30+ seconds) that check reconnect, backoff, etc...
 rustls = ["dep:rustls", "dep:rustls-native-certs", "dep:rustls-pemfile", "dep:rustls-pki-types", "dep:tokio-rustls"]
 native-tls = ["dep:native-tls", "dep:tokio-native-tls"]

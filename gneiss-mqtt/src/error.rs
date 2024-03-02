@@ -495,6 +495,7 @@ impl From<native_tls::Error> for MqttError {
     }
 }
 
+#[cfg(feature="websockets")]
 impl From<tungstenite::error::Error> for MqttError {
     fn from(err: tungstenite::error::Error) -> Self {
         MqttError::new_transport_error(err)

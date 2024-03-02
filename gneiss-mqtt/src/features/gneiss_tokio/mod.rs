@@ -651,6 +651,7 @@ pub(crate) mod testing {
             builder.with_tls_options(tls_options_builder.build_native_tls().unwrap());
         }
 
+        #[cfg(feature="websockets")]
         if ws_config != WebsocketUsage::None {
             let websocket_options = WebsocketOptionsBuilder::new().build();
             builder.with_websocket_options(websocket_options);
@@ -766,6 +767,7 @@ pub(crate) mod testing {
     }
 
     #[test]
+    #[cfg(feature="websockets")]
     fn client_connect_disconnect_websocket_plaintext_no_proxy() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
             Box::pin(tokio_connect_disconnect_test(builder))
@@ -773,7 +775,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(all(feature = "rustls", feature = "websockets"))]
     fn client_connect_disconnect_websocket_rustls_no_proxy() {
         do_good_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
             Box::pin(tokio_connect_disconnect_test(builder))
@@ -781,7 +783,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(all(feature = "native-tls", feature = "websockets"))]
     fn client_connect_disconnect_websocket_native_tls_no_proxy() {
         do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
             Box::pin(tokio_connect_disconnect_test(builder))
@@ -812,6 +814,7 @@ pub(crate) mod testing {
     }
 
     #[test]
+    #[cfg(feature="websockets")]
     fn client_connect_disconnect_websocket_plaintext_with_proxy() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder|{
             Box::pin(tokio_connect_disconnect_test(builder))
@@ -819,7 +822,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(all(feature = "rustls", feature="websosckets"))]
     fn client_connect_disconnect_websocket_rustls_with_proxy() {
         do_good_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder|{
             Box::pin(tokio_connect_disconnect_test(builder))
@@ -827,7 +830,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(all(feature = "native-tls", feature = "websockets"))]
     fn client_connect_disconnect_websocket_native_tls_with_proxy() {
         do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder|{
             Box::pin(tokio_connect_disconnect_test(builder))
@@ -1089,7 +1092,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(all(feature = "rustls", feature = "websockets"))]
     fn connection_failure_direct_rustls_tls_config_websocket_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
         do_builder_test(Box::new(|builder| {
@@ -1098,7 +1101,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(all(feature = "native-tls", feature = "websockets"))]
     fn connection_failure_direct_native_tls_tls_config_websocket_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
         do_builder_test(Box::new(|builder| {
@@ -1107,7 +1110,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(all(feature = "rustls", feature = "websockets"))]
     fn connection_failure_direct_rustls_tls_config_websocket_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
         do_builder_test(Box::new(|builder| {
@@ -1116,7 +1119,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(all(feature = "native-tls", feature = "websockets"))]
     fn connection_failure_direct_native_tls_tls_config_websocket_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
         do_builder_test(Box::new(|builder| {
@@ -1143,6 +1146,7 @@ pub(crate) mod testing {
     }
 
     #[test]
+    #[cfg(feature="websockets")]
     fn connection_failure_direct_plaintext_config_websocket_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
         do_builder_test(Box::new(|builder| {
@@ -1151,7 +1155,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(all(feature = "rustls", feature = "websockets"))]
     fn connection_failure_direct_plaintext_config_websocket_rustls_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
         do_builder_test(Box::new(|builder| {
@@ -1160,7 +1164,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(all(feature = "native-tls", feature = "websockets"))]
     fn connection_failure_direct_plaintext_config_websocket_native_tls_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
         do_builder_test(Box::new(|builder| {
@@ -1169,7 +1173,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(all(feature = "rustls", feature = "websockets"))]
     fn connection_failure_websocket_rustls_tls_config_direct_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
         do_builder_test(Box::new(|builder| {
@@ -1178,7 +1182,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(all(feature = "native-tls", feature = "websockets"))]
     fn connection_failure_websocket_native_tls_tls_config_direct_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
         do_builder_test(Box::new(|builder| {
@@ -1187,7 +1191,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(all(feature = "rustls", feature = "websockets"))]
     fn connection_failure_websocket_rustls_tls_config_websocket_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
         do_builder_test(Box::new(|builder| {
@@ -1196,7 +1200,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(all(feature = "native-tls", feature = "websockets"))]
     fn connection_failure_websocket_native_tls_tls_config_websocket_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
         do_builder_test(Box::new(|builder| {
@@ -1205,7 +1209,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(all(feature = "rustls", feature = "websockets"))]
     fn connection_failure_websocket_rustls_tls_config_direct_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
         do_builder_test(Box::new(|builder| {
@@ -1214,7 +1218,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(all(feature = "native-tls", feature = "websockets"))]
     fn connection_failure_websocket_native_tls_tls_config_direct_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::None);
         do_builder_test(Box::new(|builder| {
@@ -1223,6 +1227,7 @@ pub(crate) mod testing {
     }
 
     #[test]
+    #[cfg(feature="websockets")]
     fn connection_failure_websocket_plaintext_config_direct_plaintext_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
         do_builder_test(Box::new(|builder| {
@@ -1231,7 +1236,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(all(feature = "rustls", feature = "websockets"))]
     fn connection_failure_websocket_plaintext_config_websocket_rustls_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
         do_builder_test(Box::new(|builder| {
@@ -1240,7 +1245,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(all(feature = "native-tls", feature = "websockets"))]
     fn connection_failure_websocket_plaintext_config_websocket_native_tls_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
         do_builder_test(Box::new(|builder| {
@@ -1249,7 +1254,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(all(feature = "rustls", feature = "websockets"))]
     fn connection_failure_websocket_plaintext_config_direct_rustls_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
         do_builder_test(Box::new(|builder| {
@@ -1258,7 +1263,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(all(feature = "native-tls", feature = "websockets"))]
     fn connection_failure_websocket_plaintext_config_direct_native_tls_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::None);
         do_builder_test(Box::new(|builder| {

@@ -18,23 +18,26 @@ use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::io::Read;
 use std::net::{SocketAddr, ToSocketAddrs};
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::runtime::Handle;
-
-// websockets feature
 use std::future::Future;
 use std::pin::Pin;
-use tungstenite::Message;
-use tokio_tungstenite::{client_async, WebSocketStream};
-use stream_ws::{tungstenite::WsMessageHandler, WsMessageHandle, WsByteStream};
-use std::str::FromStr;
-use http::{Uri, Version};
 use tokio::io::{AsyncRead, AsyncWrite};
+
+#[cfg(feature="websockets")]
+use std::str::FromStr;
+#[cfg(feature="websockets")]
+use http::{Uri, Version};
+#[cfg(feature="websockets")]
+use tungstenite::Message;
+#[cfg(feature="websockets")]
+use tokio_tungstenite::{client_async, WebSocketStream};
+#[cfg(feature="websockets")]
+use stream_ws::{tungstenite::WsMessageHandler, WsMessageHandle, WsByteStream};
+#[cfg(feature="websockets")]
 use tungstenite::{client::*, handshake::client::generate_key};
 
-// proxy feature
 
 /// Configuration options related to establishing connections through HTTP proxies
 #[derive(Default, Clone)]
@@ -76,23 +79,28 @@ impl HttpProxyOptionsBuilder {
 }
 
 /// Return type for a websocket handshake transformation function
+#[cfg(feature="websockets")]
 pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = MqttResult<http::request::Builder>> + Send >>;
 
 /// Async websocket handshake transformation function type
+#[cfg(feature="websockets")]
 pub type WebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -> WebsocketHandshakeTransformReturnType + Send + Sync>;
 
 /// Configuration options related to establishing an MQTT over websockets
 #[derive(Default, Clone)]
+#[cfg(feature="websockets")]
 pub struct WebsocketOptions {
-    pub(crate) handshake_transform: Arc<Option<WebsocketHandshakeTransform>>
+    pub(crate) handshake_transform: std::sync::Arc<Option<WebsocketHandshakeTransform>>
 }
 
 /// Builder type for constructing Websockets-related configuration.
 #[derive(Default)]
+#[cfg(feature="websockets")]
 pub struct WebsocketOptionsBuilder {
     options : WebsocketOptions
 }
 
+#[cfg(feature="websockets")]
 impl WebsocketOptionsBuilder {
 
     /// Creates a new builder object with default options.
@@ -107,7 +115,7 @@ impl WebsocketOptionsBuilder {
     /// Configure an async transformation function that operates on the websocket handshake.  Useful
     /// for brokers that require some kind of signing algorithm to accept the upgrade request.
     pub fn with_handshake_transform(&mut self, transform: WebsocketHandshakeTransform) -> &mut Self {
-        self.options.handshake_transform = Arc::new(Some(transform));
+        self.options.handshake_transform = std::sync::Arc::new(Some(transform));
         self
     }
 
@@ -129,10 +137,10 @@ pub(crate) enum TlsData {
     Invalid,
 
     #[cfg(feature = "rustls")]
-    Rustls(TlsMode, Arc<rustls::ClientConfig>),
+    Rustls(TlsMode, std::sync::Arc<rustls::ClientConfig>),
 
     #[cfg(feature = "native-tls")]
-    NativeTls(TlsMode, Arc<native_tls::TlsConnectorBuilder>)
+    NativeTls(TlsMode, std::sync::Arc<native_tls::TlsConnectorBuilder>)
 }
 
 /// Opaque struct containing TLS configuration data, assuming TLS has been enabled as a feature
@@ -740,6 +748,7 @@ pub struct GenericClientBuilder {
     tls_options: Option<TlsOptions>,
     connect_options: Option<ConnectOptions>,
     client_options: Option<Mqtt5ClientOptions>,
+    #[cfg(feature="websockets")]
     websocket_options: Option<WebsocketOptions>,
     http_proxy_options: Option<HttpProxyOptions>
 }
@@ -779,6 +788,7 @@ impl GenericClientBuilder {
             tls_options: None,
             connect_options: None,
             client_options: None,
+            #[cfg(feature="websockets")]
             websocket_options: None,
             http_proxy_options: None
         }
@@ -805,6 +815,7 @@ impl GenericClientBuilder {
     }
 
     /// Configures the client to connect over websockets
+    #[cfg(feature="websockets")]
     pub fn with_websocket_options(&mut self, websocket_options: WebsocketOptions) -> &mut Self {
         self.websocket_options = Some(websocket_options);
         self
@@ -862,14 +873,17 @@ impl GenericClientBuilder {
 
         let http_proxy_options = self.http_proxy_options.clone();
         let tls_options = self.tls_options.clone();
-        let websocket_options = self.websocket_options.clone();
         let endpoint = self.endpoint.clone();
 
-        if let Some(websocket_options) = websocket_options {
-            make_websocket_client(tls_impl, endpoint, self.port, websocket_options, tls_options, client_options, connect_options, http_proxy_options, runtime)
-        } else {
-            make_direct_client(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, runtime)
+        #[cfg(feature="websockets")]
+        {
+            let websocket_options = self.websocket_options.clone();
+            if let Some(websocket_options) = websocket_options {
+                return make_websocket_client(tls_impl, endpoint, self.port, websocket_options, tls_options, client_options, connect_options, http_proxy_options, runtime);
+            }
         }
+
+        make_direct_client(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, runtime)
     }
 }
 
@@ -1081,6 +1095,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature="websockets")]
 fn make_websocket_client(tls_impl: TlsConfiguration, endpoint: String, port: u16, websocket_options: WebsocketOptions, _tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
     match tls_impl {
         TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, websocket_options, client_options, connect_options, http_proxy_options, runtime) }
@@ -1092,6 +1107,7 @@ fn make_websocket_client(tls_impl: TlsConfiguration, endpoint: String, port: u16
     }
 }
 
+#[cfg(feature="websockets")]
 fn make_websocket_client_no_tls(endpoint: String, port: u16, websocket_options: WebsocketOptions, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
     info!("make_websocket_client_no_tls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
@@ -1122,7 +1138,7 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, websocket_options: 
 }
 
 #[allow(clippy::too_many_arguments)]
-#[cfg(feature = "rustls")]
+#[cfg(all(feature = "rustls", feature = "websockets"))]
 fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
     info!("make_websocket_client_rustls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
@@ -1192,7 +1208,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: 
 }
 
 #[allow(clippy::too_many_arguments)]
-#[cfg(feature = "native-tls")]
+#[cfg(all(feature = "native-tls", feature = "websockets"))]
 fn make_websocket_client_native_tls(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
     info!("make_websocket_client_native_tls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
@@ -1309,10 +1325,12 @@ async fn wrap_stream_with_tls_native_tls<S>(stream : Pin<Box<impl Future<Output=
     Ok(tls_stream)
 }
 
+#[cfg(feature="websockets")]
 struct HandshakeRequest {
     handshake_builder: http::request::Builder,
 }
 
+#[cfg(feature="websockets")]
 impl IntoClientRequest for HandshakeRequest {
     fn into_client_request(self) -> tungstenite::Result<tungstenite::handshake::client::Request> {
         let final_request = self.handshake_builder.body(()).unwrap();
@@ -1320,7 +1338,7 @@ impl IntoClientRequest for HandshakeRequest {
     }
 }
 
-// TODO: error handling seems suspect
+#[cfg(feature="websockets")]
 fn create_default_websocket_handshake_request(uri: String) -> MqttResult<http::request::Builder> {
     let uri = Uri::from_str(uri.as_str()).unwrap();
 
@@ -1335,6 +1353,7 @@ fn create_default_websocket_handshake_request(uri: String) -> MqttResult<http::r
         .header("Host", uri.host().unwrap()))
 }
 
+#[cfg(feature="websockets")]
 async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, scheme: &str, websocket_options: WebsocketOptions) -> MqttResult<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
 
     let uri = format!("{}://{}/mqtt", scheme, endpoint); // scheme needs to be present but value irrelevant

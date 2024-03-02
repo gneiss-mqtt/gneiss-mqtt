@@ -32,5 +32,7 @@ This document is currently hand-written and non-authoritative.
 * * * fixed an edge case when ping timeout is larger than half the keep alive setting
 * TLS
 * * alpn values changed to a string representation
-* * Rustls support feature-gated
 * * Rustls configuration build errors now a wrapped error
+* Features
+* * Rustls support feature-gated
+* * Native-tls support added and feature-gated

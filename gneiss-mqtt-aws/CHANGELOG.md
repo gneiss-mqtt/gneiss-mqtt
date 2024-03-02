@@ -13,3 +13,6 @@ This document is currently hand-written and non-authoritative.
 * * Reworked custom auth options to builder-based
 * * Added SDK/Version params (may remove later)
 * * URI encode custom authorizer signatures when it's safe to do so
+* Features
+* * Rustls support feature-gated
+* * Native-tls support added and feature-gated
