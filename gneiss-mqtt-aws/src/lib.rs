@@ -624,7 +624,7 @@ impl AwsClientBuilder {
 
     #[cfg(not(any(feature = "rustls", feature = "native-tls")))]
     fn build_tls_options(&self) -> MqttResult<TlsOptions> {
-        compile_error!("gneiss-mqtt-aws must be built with a TLS feature enabled");
+        compile_error!("gneiss-mqtt-aws must be built with a TLS feature (rustls, native-tls) enabled");
         Err(MqttError::new_tls_error("Connecting to AWS IoT Core requires a TLS implementation feature to be configured"))
     }
 
