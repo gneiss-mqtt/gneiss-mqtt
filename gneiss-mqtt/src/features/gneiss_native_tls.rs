@@ -11,6 +11,9 @@ use crate::error::MqttError;
 impl TlsOptionsBuilder {
 
     /// Builds client TLS options using the `native-tls` crate
+    ///
+    /// If using MTLS, native-tls only supports pkcs8 format private keys.  If your private key is in a different
+    /// format, you must first convert it to pkcs8 and instead use that.
     pub fn build_native_tls(&self) -> Result<TlsOptions, MqttError> {
         let mut builder = native_tls::TlsConnector::builder();
 
