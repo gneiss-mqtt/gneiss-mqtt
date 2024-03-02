@@ -19,12 +19,13 @@ just supply the minimal required data.
 
 # Usage
 
-To use this crate, you'll first need to add it and [`gneiss-mqtt`](https://crates.io/crates/gneiss-mqtt) to your project's Cargo.toml:
+To use this crate, you'll first need to add it and [`gneiss-mqtt`](https://crates.io/crates/gneiss-mqtt) to your project's Cargo.toml,
+enabling a TLS implementation as well:
 
 ```toml
 [dependencies]
-gneiss-mqtt = "0.2"
-gneiss-mqtt-aws = "0.2"
+gneiss-mqtt = { version = "0.2", features = [ "rustls" ] }
+gneiss-mqtt-aws = { version = "0.2", features = [ "rustls" ] }
 ```
 
 (Temporary) If your project does not include [`tokio`](https://crates.io/crates/tokio), you will need to add it too:
@@ -437,6 +438,27 @@ impl AwsCustomAuthOptionsBuilder {
     }
 }
 
+/// This enumeration allows the user to override the default TLS implementation in the unfortunate case
+/// that they are forced to build the crate with multiple TLS implementations enabled.
+///
+/// Rustls, if enabled, is the default TLS implementation.
+///
+/// You will probably never need to set this.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum TlsImplementation {
+    /// Use the default TLS implementation, rustls
+    Default,
+
+    /// Use rustls as the TLS implementation
+    #[cfg(feature = "rustls")]
+    Rustls,
+
+    /// Use native-tls as the TLS implementation
+    #[cfg(feature = "native-tls")]
+    Nativetls,
+}
+
 #[derive(PartialEq, Eq)]
 enum AuthType {
     Mtls,
@@ -451,15 +473,16 @@ pub struct AwsClientBuilder {
     custom_auth_options: Option<AwsCustomAuthOptions>,
     connect_options: Option<ConnectOptions>,
     client_options: Option<Mqtt5ClientOptions>,
-    tls_options: TlsOptions,
+    tls_options_builder: TlsOptionsBuilder,
     websocket_sigv4_options: Option<WebsocketSigv4Options>,
-    endpoint: String
+    endpoint: String,
+    tls_impl: TlsImplementation
 }
 
 const ALPN_PORT : u16 = 443;
 const DEFAULT_PORT : u16 = ALPN_PORT;
-const DIRECT_ALPN_PROTOCOL : &[u8] = b"x-amzn-mqtt-ca";
-const CUSTOM_AUTH_ALPN_PROTOCOL : &[u8] = b"mqtt";
+const DIRECT_ALPN_PROTOCOL : &str = "x-amzn-mqtt-ca";
+const CUSTOM_AUTH_ALPN_PROTOCOL : &str = "mqtt";
 
 impl AwsClientBuilder {
 
@@ -479,19 +502,15 @@ impl AwsClientBuilder {
         }
         tls_options_builder.with_alpn(DIRECT_ALPN_PROTOCOL);
 
-        let tls_options_result = tls_options_builder.build_rustls();
-        if let Err(error) = tls_options_result {
-            return Err(MqttError::new_tls_error(error));
-        }
-
         let builder =  AwsClientBuilder {
             auth_type: AuthType::Mtls,
             custom_auth_options: None,
             connect_options: None,
             client_options: None,
-            tls_options: tls_options_result.unwrap(),
+            tls_options_builder,
             websocket_sigv4_options: None,
-            endpoint: endpoint.to_string()
+            endpoint: endpoint.to_string(),
+            tls_impl: TlsImplementation::Default,
         };
 
         Ok(builder)
@@ -513,19 +532,15 @@ impl AwsClientBuilder {
         }
         tls_options_builder.with_alpn(DIRECT_ALPN_PROTOCOL);
 
-        let tls_options_result = tls_options_builder.build_rustls();
-        if let Err(error) = tls_options_result {
-            return Err(MqttError::new_tls_error(error));
-        }
-
         let builder =  AwsClientBuilder {
             auth_type: AuthType::Mtls,
             custom_auth_options: None,
             connect_options: None,
             client_options: None,
-            tls_options: tls_options_result.unwrap(),
+            tls_options_builder,
             websocket_sigv4_options: None,
-            endpoint: endpoint.to_string()
+            endpoint: endpoint.to_string(),
+            tls_impl: TlsImplementation::Default,
         };
 
         Ok(builder)
@@ -545,19 +560,15 @@ impl AwsClientBuilder {
         }
         tls_options_builder.with_alpn(CUSTOM_AUTH_ALPN_PROTOCOL);
 
-        let tls_options_result = tls_options_builder.build_rustls();
-        if let Err(error) = tls_options_result {
-            return Err(MqttError::new_tls_error(error));
-        }
-
         let builder =  AwsClientBuilder {
             auth_type: AuthType::CustomAuth,
             custom_auth_options: Some(custom_auth_options),
             connect_options: None,
             client_options: None,
-            tls_options: tls_options_result.unwrap(),
+            tls_options_builder,
             websocket_sigv4_options: None,
-            endpoint: endpoint.to_string()
+            endpoint: endpoint.to_string(),
+            tls_impl: TlsImplementation::Default,
         };
 
         Ok(builder)
@@ -576,19 +587,15 @@ impl AwsClientBuilder {
             tls_options_builder.with_root_ca_from_path(root_ca)?;
         }
 
-        let tls_options_result = tls_options_builder.build_rustls();
-        if let Err(error) = tls_options_result {
-            return Err(MqttError::new_tls_error(error));
-        }
-
         let builder =  AwsClientBuilder {
             auth_type: AuthType::Sigv4Websockets,
             custom_auth_options: None,
             connect_options: None,
             client_options: None,
-            tls_options: tls_options_result.unwrap(),
+            tls_options_builder,
             websocket_sigv4_options: Some(sigv4_options),
             endpoint: endpoint.to_string(),
+            tls_impl: TlsImplementation::Default,
         };
 
         Ok(builder)
@@ -606,6 +613,41 @@ impl AwsClientBuilder {
     pub fn with_client_options(mut self, client_options: Mqtt5ClientOptions) -> Self {
         self.client_options = Some(client_options);
         self
+    }
+
+    /// Overrides the default TLS implementation to use when building clients.  Only useful if multiple
+    /// TLS implementations are enabled, which you should try to avoid at all costs.
+    pub fn with_default_tls_implementation(mut self, tls_impl: TlsImplementation) -> Self {
+        self.tls_impl = tls_impl;
+        self
+    }
+
+    #[cfg(not(any(feature = "rustls", feature = "native-tls")))]
+    fn build_tls_options(&self) -> MqttResult<TlsOptions> {
+        compile_error!("gneiss-mqtt-aws must be built with a TLS feature (rustls, native-tls) enabled");
+        Err(MqttError::new_tls_error("Connecting to AWS IoT Core requires a TLS implementation feature to be configured"))
+    }
+
+    #[cfg(all(feature = "rustls", feature = "native-tls"))]
+    fn build_tls_options(&self) -> MqttResult<TlsOptions> {
+        match self.tls_impl {
+            TlsImplementation::Nativetls => {
+                self.tls_options_builder.build_native_tls()
+            }
+            _ => {
+                self.tls_options_builder.build_rustls()
+            }
+        }
+    }
+
+    #[cfg(all(feature = "rustls", not(feature = "native-tls")))]
+    fn build_tls_options(&self) -> MqttResult<TlsOptions> {
+        return self.tls_options_builder.build_rustls();
+    }
+
+    #[cfg(all(not(feature = "rustls"), feature = "native-tls"))]
+    fn build_tls_options(&self) -> MqttResult<TlsOptions> {
+        return self.tls_options_builder.build_native_tls();
     }
 
     /// Creates a new MQTT5 client from all of the configuration options registered with the
@@ -627,7 +669,7 @@ impl AwsClientBuilder {
                 Mqtt5ClientOptionsBuilder::new().build()
             };
 
-        let tls_options = self.tls_options.clone();
+        let tls_options = self.build_tls_options()?;
 
         let mut builder = GenericClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
         builder.with_connect_options(final_connect_options)
@@ -737,7 +779,7 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     Ok(signed_request_builder)
 }
 
-#[cfg(feature = "testenv")]
+#[cfg(feature = "testing")]
 #[cfg(test)]
 mod testing {
     use gneiss_mqtt::error::MqttResult;
@@ -759,6 +801,16 @@ mod testing {
 
     fn get_iot_core_key_path() -> String {
         env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_MTLS_KEY_PATH").unwrap()
+    }
+
+    #[cfg(feature = "native-tls")]
+    fn get_iot_core_cert_path_pkcs8() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_MTLS_CERT_PATH_PKCS8").unwrap()
+    }
+
+    #[cfg(feature = "native-tls")]
+    fn get_iot_core_key_path_pkcs8() -> String {
+        env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_MTLS_KEY_PATH_PKCS8").unwrap()
     }
 
     fn get_iot_core_sigv4_region() -> String {
@@ -807,7 +859,7 @@ mod testing {
         runtime.block_on(test_future).unwrap();
     }
 
-    async fn do_connect_test(builder: AwsClientBuilder, should_succeed: bool) -> MqttResult<()> {
+    async fn do_connect_test(builder: AwsClientBuilder) -> MqttResult<()> {
         let client = Arc::new(builder.build(&Handle::current())?);
 
         let waiter_config = ClientEventWaiterOptions {
@@ -835,50 +887,83 @@ mod testing {
                 false
             };
 
-        if succeeded == should_succeed {
+        if succeeded {
             Ok(())
         } else {
-            Err(MqttError::new_other_error("connection result did not match test expectation"))
+            Err(MqttError::new_other_error("connection failed"))
         }
     }
 
-    async fn do_mtls_builder_test(should_succeed: bool) -> MqttResult<()> {
+    async fn do_mtls_builder_test(tls_impl: TlsImplementation) -> MqttResult<()> {
         let endpoint = get_iot_core_endpoint();
-        let cert_path = get_iot_core_cert_path();
-        let key_path = get_iot_core_key_path();
 
-        let builder = AwsClientBuilder::new_direct_with_mtls_from_fs(endpoint.as_str(), cert_path.as_str(), key_path.as_str(), None).unwrap();
+        let mut builder =
+            match tls_impl {
+                #[cfg(feature = "native-tls")]
+                TlsImplementation::Nativetls => {
+                    // native-tls only supports pkcs8/12 private keys
+                    let cert_path_pkcs8 = get_iot_core_cert_path_pkcs8();
+                    let key_path_pkcs8 = get_iot_core_key_path_pkcs8();
+                    AwsClientBuilder::new_direct_with_mtls_from_fs(endpoint.as_str(), cert_path_pkcs8.as_str(), key_path_pkcs8.as_str(), None).unwrap()
+                }
+                _ => {
+                    let cert_path = get_iot_core_cert_path();
+                    let key_path = get_iot_core_key_path();
+                    AwsClientBuilder::new_direct_with_mtls_from_fs(endpoint.as_str(), cert_path.as_str(), key_path.as_str(), None).unwrap()
+                }
+            };
 
-        do_connect_test(builder, should_succeed).await
+        builder = builder.with_default_tls_implementation(tls_impl);
+
+        do_connect_test(builder).await
     }
 
     #[test]
-    fn connect_success_aws_iot_core_mtls() {
+    #[cfg(feature = "rustls")]
+    fn connect_success_aws_iot_core_mtls_rustls() {
         do_builder_test(Box::new(||{
-            Box::pin(do_mtls_builder_test(true))
+            Box::pin(do_mtls_builder_test(TlsImplementation::Rustls))
         }))
     }
 
-    async fn do_sigv4_builder_test(should_succeed: bool) -> MqttResult<()> {
+    #[test]
+    #[cfg(feature = "native-tls")]
+    fn connect_success_aws_iot_core_mtls_native_tls() {
+        do_builder_test(Box::new(||{
+            Box::pin(do_mtls_builder_test(TlsImplementation::Nativetls))
+        }))
+    }
+
+    async fn do_sigv4_builder_test(tls_impl: TlsImplementation) -> MqttResult<()> {
         let signing_region = get_iot_core_sigv4_region();
         let endpoint = get_iot_core_endpoint();
 
         let sigv4_options = WebsocketSigv4OptionsBuilder::new(signing_region.as_str()).await.build();
 
-        let builder =
+        let mut builder =
             AwsClientBuilder::new_websockets_with_sigv4(endpoint.as_str(), sigv4_options, None).unwrap();
+        builder = builder.with_default_tls_implementation(tls_impl);
 
-        do_connect_test(builder, should_succeed).await
+        do_connect_test(builder).await
     }
 
     #[test]
-    fn connect_success_aws_iot_core_ws_sigv4() {
+    #[cfg(feature = "rustls")]
+    fn connect_success_aws_iot_core_ws_sigv4_rustls() {
         do_builder_test(Box::new(||{
-            Box::pin(do_sigv4_builder_test(true))
+            Box::pin(do_sigv4_builder_test(TlsImplementation::Rustls))
         }))
     }
 
-    async fn do_unsigned_custom_auth_test() -> MqttResult<()> {
+    #[test]
+    #[cfg(feature = "native-tls")]
+    fn connect_success_aws_iot_core_ws_sigv4_native_tls() {
+        do_builder_test(Box::new(||{
+            Box::pin(do_sigv4_builder_test(TlsImplementation::Nativetls))
+        }))
+    }
+
+    async fn do_unsigned_custom_auth_test(tls_impl: TlsImplementation) -> MqttResult<()> {
         let endpoint = get_iot_core_endpoint();
         let authorizer_name = get_iot_core_unsigned_authorizer_name();
         let username = get_iot_core_custom_auth_username();
@@ -891,20 +976,30 @@ mod testing {
         custom_auth_options_builder.with_username(username.as_str());
         custom_auth_options_builder.with_password(password.as_bytes());
 
-        let builder =
+        let mut builder =
             AwsClientBuilder::new_direct_with_custom_auth(endpoint.as_str(), custom_auth_options_builder.build(), None).unwrap();
+        builder = builder.with_default_tls_implementation(tls_impl);
 
-        do_connect_test(builder, true).await
+        do_connect_test(builder).await
     }
 
     #[test]
-    fn connect_success_aws_iot_core_custom_auth_unsigned() {
+    #[cfg(feature = "rustls")]
+    fn connect_success_aws_iot_core_custom_auth_unsigned_rustls() {
         do_builder_test(Box::new(||{
-            Box::pin(do_unsigned_custom_auth_test())
+            Box::pin(do_unsigned_custom_auth_test(TlsImplementation::Rustls))
         }))
     }
 
-    async fn do_signed_custom_auth_test(use_unencoded_signature: bool) -> MqttResult<()> {
+    #[test]
+    #[cfg(feature = "native-tls")]
+    fn connect_success_aws_iot_core_custom_auth_unsigned_native_tls() {
+        do_builder_test(Box::new(||{
+            Box::pin(do_unsigned_custom_auth_test(TlsImplementation::Nativetls))
+        }))
+    }
+
+    async fn do_signed_custom_auth_test(tls_impl: TlsImplementation, use_unencoded_signature: bool) -> MqttResult<()> {
         let endpoint = get_iot_core_endpoint();
         let authorizer_name = get_iot_core_signed_authorizer_name();
         let username = get_iot_core_custom_auth_username();
@@ -929,23 +1024,42 @@ mod testing {
         custom_auth_options_builder.with_username(username.as_str());
         custom_auth_options_builder.with_password(password.as_bytes());
 
-        let builder =
+        let mut builder =
             AwsClientBuilder::new_direct_with_custom_auth(endpoint.as_str(), custom_auth_options_builder.build(), None).unwrap();
+        builder = builder.with_default_tls_implementation(tls_impl);
 
-        do_connect_test(builder, true).await
+        do_connect_test(builder).await
     }
 
     #[test]
-    fn connect_success_aws_iot_core_custom_auth_signed_preencoded() {
+    #[cfg(feature = "rustls")]
+    fn connect_success_aws_iot_core_custom_auth_signed_preencoded_rustls() {
         do_builder_test(Box::new(||{
-            Box::pin(do_signed_custom_auth_test(false))
+            Box::pin(do_signed_custom_auth_test(TlsImplementation::Rustls, false))
         }))
     }
 
     #[test]
-    fn connect_success_aws_iot_core_custom_auth_signed_unencoded() {
+    #[cfg(feature = "native-tls")]
+    fn connect_success_aws_iot_core_custom_auth_signed_preencoded_native_tls() {
         do_builder_test(Box::new(||{
-            Box::pin(do_signed_custom_auth_test(true))
+            Box::pin(do_signed_custom_auth_test(TlsImplementation::Nativetls, false))
+        }))
+    }
+
+    #[test]
+    #[cfg(feature = "rustls")]
+    fn connect_success_aws_iot_core_custom_auth_signed_unencoded_rustls() {
+        do_builder_test(Box::new(||{
+            Box::pin(do_signed_custom_auth_test(TlsImplementation::Rustls, true))
+        }))
+    }
+
+    #[test]
+    #[cfg(feature = "native-tls")]
+    fn connect_success_aws_iot_core_custom_auth_signed_unencoded_native_tls() {
+        do_builder_test(Box::new(||{
+            Box::pin(do_signed_custom_auth_test(TlsImplementation::Nativetls, true))
         }))
     }
 }

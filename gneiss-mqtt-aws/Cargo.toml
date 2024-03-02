@@ -13,7 +13,9 @@ readme = "README.md"
 
 [features]
 default = [] # eventually tokio, rustls
-testenv = [] # enable when running tests to also run environmentally-controlled integration tests
+testing = [] # enable when running tests to also run environmentally-controlled integration tests
+rustls = [ "gneiss-mqtt/rustls" ]
+native-tls = [ "gneiss-mqtt/native-tls" ]
 # Eventually: tokio, rustls, nativetls, async_std, threaded, http_proxy, websockets
 # Consider: mqtt311, mqtt5, log
 

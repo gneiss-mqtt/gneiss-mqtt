@@ -154,9 +154,7 @@ impl MockBroker {
         let mut shutdown_status = self.shutdown_flag.lock().unwrap();
         *shutdown_status = true;
     }
-}
 
-impl MockBroker   {
     pub fn new(handler_set_factory: PacketHandlerSetFactory) -> Self {
         let bind_result = TcpListener::bind("127.0.0.1:0");
         if let Ok(listener) = bind_result {

@@ -474,9 +474,24 @@ impl From<core::str::Utf8Error> for MqttError {
     }
 }
 
+#[cfg(feature = "rustls")]
 impl From<rustls_pki_types::InvalidDnsNameError> for MqttError {
     fn from(err: rustls_pki_types::InvalidDnsNameError) -> Self {
         MqttError::new_connection_establishment_failure(err)
+    }
+}
+
+#[cfg(feature = "rustls")]
+impl From<rustls::Error> for MqttError {
+    fn from(err: rustls::Error) -> Self {
+        MqttError::new_tls_error(err)
+    }
+}
+
+#[cfg(feature = "native-tls")]
+impl From<native_tls::Error> for MqttError {
+    fn from(err: native_tls::Error) -> Self {
+        MqttError::new_tls_error(err)
     }
 }
 

@@ -34,11 +34,14 @@ fn build_standard_test_config() -> ProtocolStateConfig {
 
 #[derive(Default)]
 pub(crate) struct BrokerTestContext {
+    #[cfg(feature = "testing")]
     pub(crate) connect_count: usize,
 }
 
 pub(crate) type PacketHandler = Box<dyn Fn(&Box<MqttPacket>, &mut VecDeque<Box<MqttPacket>>, &mut BrokerTestContext) -> MqttResult<()> + Send + Sync + 'static>;
 pub(crate) type PacketHandlerSet = HashMap<PacketType, PacketHandler>;
+
+#[cfg(feature = "testing")]
 pub(crate) type PacketHandlerSetFactory = Box<dyn Fn() -> PacketHandlerSet + Send + Sync>;
 
 fn handle_connect_with_successful_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {

@@ -8,7 +8,12 @@ use std::env;
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub(crate) enum TlsUsage {
     None,
-    Rustls
+
+    #[cfg(feature = "rustls")]
+    Rustls,
+
+    #[cfg(feature = "native-tls")]
+    Nativetls
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -23,6 +28,7 @@ pub(crate) enum ProxyUsage {
     Plaintext
 }
 
+#[cfg(feature = "rustls")]
 pub(crate) fn get_ca_path() -> String {
     env::var("GNEISS_MQTT_TEST_BROKER_CA_PATH").unwrap()
 }
