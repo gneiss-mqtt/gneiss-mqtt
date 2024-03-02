@@ -246,29 +246,36 @@ use gneiss_mqtt::config::*;
 use gneiss_mqtt::client::Mqtt5Client;
 use gneiss_mqtt::error::{MqttError, MqttResult};
 use std::fmt::Write;
-use std::sync::Arc;
-use std::time::{Duration, SystemTime};
 use tokio::runtime::Handle;
 
+#[cfg(feature = "websockets")]
+use std::time::{Duration, SystemTime};
+#[cfg(feature = "websockets")]
 use aws_credential_types::provider::ProvideCredentials;
+#[cfg(feature = "websockets")]
 use aws_sigv4::http_request::{SessionTokenMode, sign, SignableBody, SignableRequest, SignatureLocation};
+#[cfg(feature = "websockets")]
 use aws_sigv4::sign::v4;
+#[cfg(feature = "websockets")]
 use aws_smithy_runtime_api::client::identity::Identity;
 
 /// Struct holding all configuration relevant to connecting an MQTT client to AWS IoT Core
 /// over websockets using a Sigv4-signed websocket handshake for authentication
 #[derive(Clone, Debug)]
+#[cfg(feature = "websockets")]
 pub struct WebsocketSigv4Options {
     signing_region: String,
-    credentials_provider: Arc<dyn ProvideCredentials>
+    credentials_provider: std::sync::Arc<dyn ProvideCredentials>
 }
 
 /// A builder type that configures all relevant AWS signing options for connecting over websockets
 /// using Sigv4 request signing.
+#[cfg(feature = "websockets")]
 pub struct WebsocketSigv4OptionsBuilder {
     options: WebsocketSigv4Options
 }
 
+#[cfg(feature = "websockets")]
 impl WebsocketSigv4OptionsBuilder {
 
     /// Creates a new builder
@@ -283,7 +290,7 @@ impl WebsocketSigv4OptionsBuilder {
         let mut provider_builder = aws_config::default_provider::credentials::Builder::default();
         provider_builder.set_region(Some(region));
 
-        let default_provider_chain = Arc::new(provider_builder.build().await);
+        let default_provider_chain = std::sync::Arc::new(provider_builder.build().await);
 
         WebsocketSigv4OptionsBuilder {
             options: WebsocketSigv4Options {
@@ -303,7 +310,7 @@ impl WebsocketSigv4OptionsBuilder {
         WebsocketSigv4OptionsBuilder {
             options: WebsocketSigv4Options {
                 signing_region: signing_region.to_string(),
-                credentials_provider: Arc::from(credentials_provider)
+                credentials_provider: std::sync::Arc::from(credentials_provider)
             }
         }
     }
@@ -474,6 +481,7 @@ pub struct AwsClientBuilder {
     connect_options: Option<ConnectOptions>,
     client_options: Option<Mqtt5ClientOptions>,
     tls_options_builder: TlsOptionsBuilder,
+    #[cfg(feature = "websockets")]
     websocket_sigv4_options: Option<WebsocketSigv4Options>,
     endpoint: String,
     tls_impl: TlsImplementation
@@ -508,6 +516,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options_builder,
+            #[cfg(feature = "websockets")]
             websocket_sigv4_options: None,
             endpoint: endpoint.to_string(),
             tls_impl: TlsImplementation::Default,
@@ -538,6 +547,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options_builder,
+            #[cfg(feature = "websockets")]
             websocket_sigv4_options: None,
             endpoint: endpoint.to_string(),
             tls_impl: TlsImplementation::Default,
@@ -566,6 +576,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options_builder,
+            #[cfg(feature = "websockets")]
             websocket_sigv4_options: None,
             endpoint: endpoint.to_string(),
             tls_impl: TlsImplementation::Default,
@@ -581,6 +592,7 @@ impl AwsClientBuilder {
     ///
     /// `root_ca_path` - path to a root CA to use in the TLS context of the connection.  Generally
     /// not needed unless a custom domain is involved.
+    #[cfg(feature = "websockets")]
     pub fn new_websockets_with_sigv4(endpoint: &str, sigv4_options: WebsocketSigv4Options, root_ca_path: Option<&str>) -> MqttResult<Self> {
         let mut tls_options_builder = TlsOptionsBuilder::new();
         if let Some(root_ca) = root_ca_path {
@@ -593,6 +605,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options_builder,
+            #[cfg(feature = "websockets")]
             websocket_sigv4_options: Some(sigv4_options),
             endpoint: endpoint.to_string(),
             tls_impl: TlsImplementation::Default,
@@ -676,6 +689,7 @@ impl AwsClientBuilder {
             .with_client_options(client_options)
             .with_tls_options(tls_options);
 
+        #[cfg(feature = "websockets")]
         if self.auth_type == AuthType::Sigv4Websockets {
             let sigv4_options = self.websocket_sigv4_options.as_ref().unwrap().clone();
 
@@ -718,7 +732,8 @@ impl AwsClientBuilder {
     }
 }
 
-async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, signing_region: String, credentials_provider: Arc<dyn ProvideCredentials>) -> MqttResult<http::request::Builder> {
+#[cfg(feature = "websockets")]
+async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, signing_region: String, credentials_provider: std::sync::Arc<dyn ProvideCredentials>) -> MqttResult<http::request::Builder> {
     let credentials = credentials_provider.provide_credentials().await.map_err(|e| { MqttError::new_other_error(e) })?;
     let session_token = credentials.session_token().map(|st| { st.to_string() });
 
@@ -813,6 +828,7 @@ mod testing {
         env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_MTLS_KEY_PATH_PKCS8").unwrap()
     }
 
+    #[cfg(feature = "websockets")]
     fn get_iot_core_sigv4_region() -> String {
         env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_SIGV4_REGION").unwrap()
     }
@@ -860,7 +876,7 @@ mod testing {
     }
 
     async fn do_connect_test(builder: AwsClientBuilder) -> MqttResult<()> {
-        let client = Arc::new(builder.build(&Handle::current())?);
+        let client = std::sync::Arc::new(builder.build(&Handle::current())?);
 
         let waiter_config = ClientEventWaiterOptions {
             wait_type: ClientEventWaitType::Predicate(Box::new(|ev| {
@@ -934,6 +950,7 @@ mod testing {
         }))
     }
 
+    #[cfg(feature = "websockets")]
     async fn do_sigv4_builder_test(tls_impl: TlsImplementation) -> MqttResult<()> {
         let signing_region = get_iot_core_sigv4_region();
         let endpoint = get_iot_core_endpoint();
@@ -948,7 +965,7 @@ mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(all(feature = "rustls", feature = "websockets"))]
     fn connect_success_aws_iot_core_ws_sigv4_rustls() {
         do_builder_test(Box::new(||{
             Box::pin(do_sigv4_builder_test(TlsImplementation::Rustls))
@@ -956,7 +973,7 @@ mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(all(feature = "native-tls", feature = "websockets"))]
     fn connect_success_aws_iot_core_ws_sigv4_native_tls() {
         do_builder_test(Box::new(||{
             Box::pin(do_sigv4_builder_test(TlsImplementation::Nativetls))
