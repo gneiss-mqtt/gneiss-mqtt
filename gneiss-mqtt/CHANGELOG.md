@@ -36,3 +36,4 @@ This document is currently hand-written and non-authoritative.
 * Features
 * * Rustls support feature-gated
 * * Native-tls support added and feature-gated
+* * Websocket support feature-gated
