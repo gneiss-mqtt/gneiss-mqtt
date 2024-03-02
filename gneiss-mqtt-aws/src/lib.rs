@@ -244,6 +244,7 @@ different combinations expected by users.
 
 use gneiss_mqtt::config::*;
 use gneiss_mqtt::client::Mqtt5Client;
+#[allow(unused_imports)]
 use gneiss_mqtt::error::{MqttError, MqttResult};
 use std::fmt::Write;
 use tokio::runtime::Handle;
@@ -469,6 +470,7 @@ pub enum TlsImplementation {
 #[derive(PartialEq, Eq)]
 enum AuthType {
     Mtls,
+    #[cfg(feature = "websockets")]
     Sigv4Websockets,
     CustomAuth
 }
@@ -476,6 +478,7 @@ enum AuthType {
 /// A builder object that allows for easy MQTT client construction for all supported
 /// connection methods to AWS IoT Core.
 pub struct AwsClientBuilder {
+    #[allow(dead_code)]
     auth_type: AuthType,
     custom_auth_options: Option<AwsCustomAuthOptions>,
     connect_options: Option<ConnectOptions>,
