@@ -438,6 +438,27 @@ impl AwsCustomAuthOptionsBuilder {
     }
 }
 
+/// This enumeration allows the user to override the default TLS implementation in the unfortunate case
+/// that they are forced to build the crate with multiple TLS implementations enabled.
+///
+/// Rustls, if enabled, is the default TLS implementation.
+///
+/// You will probably never need to set this.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum TlsImplementation {
+    /// Use the default TLS implementation, rustls
+    Default,
+
+    /// Use rustls as the TLS implementation
+    #[cfg(feature = "rustls")]
+    Rustls,
+
+    /// Use native-tls as the TLS implementation
+    #[cfg(feature = "native-tls")]
+    Nativetls,
+}
+
 #[derive(PartialEq, Eq)]
 enum AuthType {
     Mtls,
@@ -452,9 +473,10 @@ pub struct AwsClientBuilder {
     custom_auth_options: Option<AwsCustomAuthOptions>,
     connect_options: Option<ConnectOptions>,
     client_options: Option<Mqtt5ClientOptions>,
-    tls_options: TlsOptions,
+    tls_options_builder: TlsOptionsBuilder,
     websocket_sigv4_options: Option<WebsocketSigv4Options>,
-    endpoint: String
+    endpoint: String,
+    tls_impl: TlsImplementation
 }
 
 const ALPN_PORT : u16 = 443;
@@ -480,19 +502,15 @@ impl AwsClientBuilder {
         }
         tls_options_builder.with_alpn(DIRECT_ALPN_PROTOCOL);
 
-        let tls_options_result = tls_options_builder.build_rustls();
-        if let Err(error) = tls_options_result {
-            return Err(MqttError::new_tls_error(error));
-        }
-
         let builder =  AwsClientBuilder {
             auth_type: AuthType::Mtls,
             custom_auth_options: None,
             connect_options: None,
             client_options: None,
-            tls_options: tls_options_result.unwrap(),
+            tls_options_builder,
             websocket_sigv4_options: None,
-            endpoint: endpoint.to_string()
+            endpoint: endpoint.to_string(),
+            tls_impl: TlsImplementation::Default,
         };
 
         Ok(builder)
@@ -514,19 +532,15 @@ impl AwsClientBuilder {
         }
         tls_options_builder.with_alpn(DIRECT_ALPN_PROTOCOL);
 
-        let tls_options_result = tls_options_builder.build_rustls();
-        if let Err(error) = tls_options_result {
-            return Err(MqttError::new_tls_error(error));
-        }
-
         let builder =  AwsClientBuilder {
             auth_type: AuthType::Mtls,
             custom_auth_options: None,
             connect_options: None,
             client_options: None,
-            tls_options: tls_options_result.unwrap(),
+            tls_options_builder,
             websocket_sigv4_options: None,
-            endpoint: endpoint.to_string()
+            endpoint: endpoint.to_string(),
+            tls_impl: TlsImplementation::Default,
         };
 
         Ok(builder)
@@ -546,19 +560,15 @@ impl AwsClientBuilder {
         }
         tls_options_builder.with_alpn(CUSTOM_AUTH_ALPN_PROTOCOL);
 
-        let tls_options_result = tls_options_builder.build_rustls();
-        if let Err(error) = tls_options_result {
-            return Err(MqttError::new_tls_error(error));
-        }
-
         let builder =  AwsClientBuilder {
             auth_type: AuthType::CustomAuth,
             custom_auth_options: Some(custom_auth_options),
             connect_options: None,
             client_options: None,
-            tls_options: tls_options_result.unwrap(),
+            tls_options_builder,
             websocket_sigv4_options: None,
-            endpoint: endpoint.to_string()
+            endpoint: endpoint.to_string(),
+            tls_impl: TlsImplementation::Default,
         };
 
         Ok(builder)
@@ -577,19 +587,15 @@ impl AwsClientBuilder {
             tls_options_builder.with_root_ca_from_path(root_ca)?;
         }
 
-        let tls_options_result = tls_options_builder.build_rustls();
-        if let Err(error) = tls_options_result {
-            return Err(MqttError::new_tls_error(error));
-        }
-
         let builder =  AwsClientBuilder {
             auth_type: AuthType::Sigv4Websockets,
             custom_auth_options: None,
             connect_options: None,
             client_options: None,
-            tls_options: tls_options_result.unwrap(),
+            tls_options_builder,
             websocket_sigv4_options: Some(sigv4_options),
             endpoint: endpoint.to_string(),
+            tls_impl: TlsImplementation::Default,
         };
 
         Ok(builder)
@@ -607,6 +613,40 @@ impl AwsClientBuilder {
     pub fn with_client_options(mut self, client_options: Mqtt5ClientOptions) -> Self {
         self.client_options = Some(client_options);
         self
+    }
+
+    /// Overrides the default TLS implementation to use when building clients.  Only useful if multiple
+    /// TLS implementations are enabled, which you should try to avoid at all costs.
+    pub fn with_default_tls_implementation(mut self, tls_impl: TlsImplementation) -> Self {
+        self.tls_impl = tls_impl;
+        self
+    }
+
+    #[cfg(not(any(feature = "rustls", feature = "native-tls")))]
+    fn build_tls_options(&self) -> MqttResult<TlsOptions> {
+        Err(MqttError::new_tls_error("Connecting to AWS IoT Core requires a TLS implementation feature to be configured"))
+    }
+
+    #[cfg(all(feature = "rustls", feature = "native-tls"))]
+    fn build_tls_options(&self) -> MqttResult<TlsOptions> {
+        match self.tls_impl {
+            TlsImplementation::Nativetls => {
+                self.tls_options_builder.build_native_tls()
+            }
+            _ => {
+                self.tls_options_builder.build_rustls()
+            }
+        }
+    }
+
+    #[cfg(all(feature = "rustls", not(feature = "native-tls")))]
+    fn build_tls_options(&self) -> MqttResult<TlsOptions> {
+        return self.tls_options_builder.build_rustls();
+    }
+
+    #[cfg(all(not(feature = "rustls"), feature = "native-tls"))]
+    fn build_tls_options(&self) -> MqttResult<TlsOptions> {
+        return self.tls_options_builder.build_native_tls();
     }
 
     /// Creates a new MQTT5 client from all of the configuration options registered with the
@@ -628,7 +668,7 @@ impl AwsClientBuilder {
                 Mqtt5ClientOptionsBuilder::new().build()
             };
 
-        let tls_options = self.tls_options.clone();
+        let tls_options = self.build_tls_options()?;
 
         let mut builder = GenericClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
         builder.with_connect_options(final_connect_options)

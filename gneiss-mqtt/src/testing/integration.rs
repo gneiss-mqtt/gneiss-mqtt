@@ -10,7 +10,10 @@ pub(crate) enum TlsUsage {
     None,
 
     #[cfg(feature = "rustls")]
-    Rustls
+    Rustls,
+
+    #[cfg(feature = "native-tls")]
+    Nativetls
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]

@@ -15,6 +15,7 @@ readme = "README.md"
 default = [] # eventually tokio, rustls
 testing = [] # enables environmentally-controlled integration tests and long-running tests (30+ seconds) that check reconnect, backoff, etc...
 rustls = ["dep:rustls", "dep:rustls-native-certs", "dep:rustls-pemfile", "dep:rustls-pki-types", "dep:tokio-rustls"]
+native-tls = ["dep:native-tls", "dep:tokio-native-tls"]
 # Eventually: tokio, rustls, nativetls, async_std, threaded, http_proxy, websockets
 # Consider: mqtt311, mqtt5, log
 
@@ -27,6 +28,7 @@ http = { version = "0.2" }
 httparse = { version = "1" }
 lru = { version = "0.12" }
 log = { version = "0.4" }
+native-tls = { version = "0.2.11", optional = true, features = ["alpn"] }
 rand = { version = "0.8" }
 rustls = { version = "0.22", default-features = false, optional = true }
 rustls-native-certs = { version = "0.7", optional = true }
@@ -34,6 +36,7 @@ rustls-pemfile = { version = "2", optional = true }
 rustls-pki-types = { version = "1", optional = true }
 stream-ws = { version = "0.1.1", features = ["tungstenite", "tokio"] }
 tokio = { version = "1", features = ["full"] }
+tokio-native-tls = { version = "0.3.1", optional = true}
 tokio-rustls = { version = "0.25", optional = true }
 tokio-tungstenite = { version = "0.20" }
 tungstenite = { version = "0.20" }
