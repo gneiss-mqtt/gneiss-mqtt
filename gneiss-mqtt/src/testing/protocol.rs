@@ -614,9 +614,12 @@ impl ProtocolStateTestFixture {
     pub(crate) fn subscribe(&mut self, elapsed_millis: u64, subscribe: SubscribePacket, options: SubscribeOptions) -> MqttResult<AsyncOperationReceiver<SubscribeResult>> {
         let (sender, receiver) = AsyncOperationChannel::new().split();
         let packet = Box::new(MqttPacket::Subscribe(subscribe));
+        let handler: ResponseHandler<SubscribeResult> = Box::new(move |res| {
+            sender.send(res)
+        });
         let subscribe_options = SubscribeOptionsInternal {
             options,
-            response_sender : Some(sender)
+            response_handler : Some(handler)
         };
 
         let subscribe_event = UserEvent::Subscribe(packet, subscribe_options);
@@ -632,9 +635,12 @@ impl ProtocolStateTestFixture {
     pub(crate) fn unsubscribe(&mut self, elapsed_millis: u64, unsubscribe: UnsubscribePacket, options: UnsubscribeOptions) -> MqttResult<AsyncOperationReceiver<UnsubscribeResult>> {
         let (sender, receiver) = AsyncOperationChannel::new().split();
         let packet = Box::new(MqttPacket::Unsubscribe(unsubscribe));
+        let handler : ResponseHandler<UnsubscribeResult> = Box::new(move |res| {
+            sender.send(res)
+        });
         let unsubscribe_options = UnsubscribeOptionsInternal {
             options,
-            response_sender : Some(sender)
+            response_handler : Some(handler)
         };
 
         let unsubscribe_event = UserEvent::Unsubscribe(packet, unsubscribe_options);
@@ -650,9 +656,12 @@ impl ProtocolStateTestFixture {
     pub(crate) fn publish(&mut self, elapsed_millis: u64, publish: PublishPacket, options: PublishOptions) -> MqttResult<AsyncOperationReceiver<PublishResult>> {
         let (sender, receiver) = AsyncOperationChannel::new().split();
         let packet = Box::new(MqttPacket::Publish(publish));
+        let handler : ResponseHandler<PublishResult> = Box::new(move |res| {
+            sender.send(res)
+        });
         let publish_options = PublishOptionsInternal {
             options,
-            response_sender : Some(sender)
+            response_handler : Some(handler)
         };
 
         let publish_event = UserEvent::Publish(packet, publish_options);

@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Instant, Duration};
 use tokio::runtime;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, split, WriteHalf};
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 use tokio::time::{sleep};
 
@@ -36,9 +37,12 @@ macro_rules! submit_async_client_operation {
     ($self:ident, $operation_type:ident, $options_internal_type: ident, $options_value: expr, $packet_value: expr) => ({
 
         let (response_sender, rx) = AsyncOperationChannel::new().split();
+        let response_handler = Box::new(move |res| {
+           response_sender.send(res)
+        });
         let internal_options = $options_internal_type {
             options : $options_value.unwrap_or_default(),
-            response_sender : Some(response_sender)
+            response_handler : Some(response_handler)
         };
         let send_result = $self.user_state.try_send(OperationOptions::$operation_type($packet_value, internal_options));
         Box::pin(async move {
@@ -146,12 +150,12 @@ impl <T> AsyncOperationReceiver<T> {
 
 
 pub(crate) struct UserRuntimeState {
-    operation_sender: tokio::sync::mpsc::Sender<OperationOptions>
+    operation_sender: tokio::sync::mpsc::UnboundedSender<OperationOptions>
 }
 
 impl UserRuntimeState {
     pub(crate) fn try_send(&self, operation_options: OperationOptions) -> MqttResult<()> {
-        if self.operation_sender.try_send(operation_options).is_err() {
+        if self.operation_sender.send(operation_options).is_err() {
             return Err(MqttError::new_operation_channel_failure("failed to submit MQTT operation to client operation channel"));
         }
 
@@ -161,7 +165,7 @@ impl UserRuntimeState {
 
 pub(crate) struct ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
     tokio_config: TokioClientOptions<T>,
-    operation_receiver: tokio::sync::mpsc::Receiver<OperationOptions>,
+    operation_receiver: tokio::sync::mpsc::UnboundedReceiver<OperationOptions>,
     stream: Option<T>
 }
 
@@ -414,7 +418,7 @@ async fn conditional_write<'a, T>(directive: Option<WriteDirective<'a>>, writer:
 }
 
 pub(crate) fn create_runtime_states<T>(tokio_config: TokioClientOptions<T>) -> (UserRuntimeState, ClientRuntimeState<T>) where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
-    let (sender, receiver) = tokio::sync::mpsc::channel(100);
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let user_state = UserRuntimeState {
         operation_sender: sender
@@ -428,6 +432,7 @@ pub(crate) fn create_runtime_states<T>(tokio_config: TokioClientOptions<T>) -> (
 
     (user_state, impl_state)
 }
+
 
 async fn client_event_loop<T>(client_impl: &mut Mqtt5ClientImpl, async_state: &mut ClientRuntimeState<T>) where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
     let mut done = false;
@@ -502,7 +507,195 @@ impl Mqtt5Client {
     }
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// WIP - Experimental
+
+struct TokioClient {
+    pub(crate) operation_sender: UnboundedSender<OperationOptions>,
+
+    pub(crate) listener_id_allocator: Mutex<u64>
+}
+
+macro_rules! submit_tokio_operation {
+    ($self:ident, $operation_type:ident, $options_internal_type: ident, $options_value: expr, $packet_value: expr) => ({
+
+        let (response_sender, rx) = tokio::sync::oneshot::channel();
+        let response_handler = Box::new(move |res| {
+            if response_sender.send(res).is_err() {
+                return Err(MqttError::new_operation_channel_failure("Failed to submit operation to client channel"));
+            }
+
+            Ok(())
+        });
+        let internal_options = $options_internal_type {
+            options : $options_value.unwrap_or_default(),
+            response_handler : Some(response_handler)
+        };
+        let send_result = $self.operation_sender.send(OperationOptions::$operation_type($packet_value, internal_options));
+        Box::pin(async move {
+            match send_result {
+                Err(error) => {
+                    Err(MqttError::new_operation_channel_failure(error))
+                }
+                _ => {
+                    rx.await?
+                }
+            }
+        })
+    })
+}
+
+impl AsyncClient for TokioClient {
+    /// Signals the client that it should attempt to recurrently maintain a connection to
+    /// the broker endpoint it has been configured with.
+    fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> MqttResult<()> {
+        info!("client start invoked");
+        if let Err(send_error) = self.operation_sender.send(OperationOptions::Start(default_listener)) {
+            return Err(MqttError::new_operation_channel_failure(send_error));
+        }
+
+        Ok(())
+    }
+
+    /// Signals the client that it should close any current connection it has and enter the
+    /// Stopped state, where it does nothing.
+    fn stop(&self, options: Option<StopOptions>) -> MqttResult<()> {
+        info!("client stop invoked {} a disconnect packet", if options.as_ref().is_some_and(|opts| { opts.disconnect.is_some()}) { "with" } else { "without" });
+        let options = options.unwrap_or_default();
+
+        if let Some(disconnect) = &options.disconnect {
+            validate_disconnect_packet_outbound(disconnect)?;
+        }
+
+        let mut stop_options = StopOptionsInternal {
+            disconnect : None,
+        };
+
+        if options.disconnect.is_some() {
+            stop_options.disconnect = Some(Box::new(MqttPacket::Disconnect(options.disconnect.unwrap())));
+        }
+
+        if let Err(send_error) = self.operation_sender.send(OperationOptions::Stop(stop_options)) {
+            return Err(MqttError::new_operation_channel_failure(send_error));
+        }
+
+        Ok(())
+    }
+
+    /// Signals the client that it should clean up all internal resources (connection, channels,
+    /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.  Useful to ensure
+    /// a full resource wipe.  If just `stop()` is used then the client will continue to track
+    /// MQTT session state internally.
+    fn close(&self) -> MqttResult<()> {
+        info!("client close invoked; no further operations allowed");
+        if let Err(send_error) = self.operation_sender.send(OperationOptions::Shutdown()) {
+            return Err(MqttError::new_operation_channel_failure(send_error));
+        }
+
+        Ok(())
+    }
+
+    /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
+    /// the broker when it reaches the head of the queue and the client is connected.
+    fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> Pin<Box<PublishResultFuture>> {
+        debug!("Publish operation submitted");
+        let boxed_packet = Box::new(MqttPacket::Publish(packet));
+        if let Err(error) = validate_packet_outbound(&boxed_packet) {
+            return Box::pin(async move { Err(error) });
+        }
+
+        submit_tokio_operation!(self, Publish, PublishOptionsInternal, options, boxed_packet)
+    }
+
+    /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
+    /// the broker when it reaches the head of the queue and the client is connected.
+    fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> Pin<Box<SubscribeResultFuture>> {
+        debug!("Subscribe operation submitted");
+        let boxed_packet = Box::new(MqttPacket::Subscribe(packet));
+        if let Err(error) = validate_packet_outbound(&boxed_packet) {
+            return Box::pin(async move { Err(error) });
+        }
+
+        submit_tokio_operation!(self, Subscribe, SubscribeOptionsInternal, options, boxed_packet)
+    }
+
+    /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
+    /// the broker when it reaches the head of the queue and the client is connected.
+    fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> Pin<Box<UnsubscribeResultFuture>> {
+        debug!("Unsubscribe operation submitted");
+        let boxed_packet = Box::new(MqttPacket::Unsubscribe(packet));
+        if let Err(error) = validate_packet_outbound(&boxed_packet) {
+            return Box::pin(async move { Err(error) });
+        }
+
+        submit_tokio_operation!(self, Unsubscribe, UnsubscribeOptionsInternal, options, boxed_packet)
+    }
+
+    /// Adds an additional listener to the events emitted by this client.  This is useful when
+    /// multiple higher-level constructs are sharing the same MQTT client.
+    fn add_event_listener(&self, listener: ClientEventListener) -> MqttResult<ListenerHandle> {
+        debug!("AddListener operation submitted");
+        let mut current_id = self.listener_id_allocator.lock().unwrap();
+        let listener_id = *current_id;
+        *current_id += 1;
+
+        if let Err(send_error) = self.operation_sender.send(OperationOptions::AddListener(listener_id, listener)) {
+            return Err(MqttError::new_operation_channel_failure(send_error));
+        }
+
+        Ok(ListenerHandle {
+            id: listener_id
+        })
+    }
+
+    /// Removes a listener from this client's set of event listeners.
+    fn remove_event_listener(&self, listener: ListenerHandle) -> MqttResult<()> {
+        debug!("RemoveListener operation submitted");
+        if let Err(send_error) = self.operation_sender.send(OperationOptions::RemoveListener(listener.id)) {
+            return Err(MqttError::new_operation_channel_failure(send_error));
+        }
+
+        Ok(())
+    }
+}
+
+pub(crate) fn create_runtime_states2<T>(tokio_config: TokioClientOptions<T>) -> (UnboundedSender<OperationOptions>, ClientRuntimeState<T>) where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+
+    let impl_state = ClientRuntimeState {
+        tokio_config,
+        operation_receiver: receiver,
+        stream: None
+    };
+
+    (sender, impl_state)
+}
+
+impl Mqtt5Client {
+
+    /// Creates a new async MQTT5 client that will use the tokio async runtime
+    pub fn new_with_tokio_experimental<T>(client_config: Mqtt5ClientOptions, connect_config: ConnectOptions, tokio_config: TokioClientOptions<T>, runtime_handle: &runtime::Handle) -> MqttClient where T: AsyncRead + AsyncWrite + Send + Sync + 'static {
+        let (operation_sender, internal_state) = create_runtime_states2(tokio_config);
+
+        let client_impl = Mqtt5ClientImpl::new(client_config, connect_config);
+
+        spawn_client_impl(client_impl, internal_state, runtime_handle);
+
+        Arc::new(TokioClient{
+            operation_sender,
+            listener_id_allocator: Mutex::new(1),
+        })
+    }
+}
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 use crate::client::waiter::*;
+use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
+use crate::mqtt::{MqttPacket, PublishPacket, SubscribePacket, UnsubscribePacket};
+use crate::validate::validate_packet_outbound;
 
 #[derive(Clone)]
 /// Timestamped client event record

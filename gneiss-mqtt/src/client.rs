@@ -475,7 +475,7 @@ pub type ClientEventListener = Arc<ClientEventListenerCallback>;
 /// adding a listener and used to remove that same listener if needed.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ListenerHandle {
-    id: u64
+    pub(crate) id: u64
 }
 
 /// A network client that functions as a thin wrapper over the MQTT5 protocol.
@@ -604,20 +604,21 @@ impl Mqtt5Client {
     }
 }
 
+pub(crate) type ResponseHandler<T> = Box<dyn FnOnce(T) -> MqttResult<()> + Send + Sync>;
 
 pub(crate) struct PublishOptionsInternal {
     pub options: PublishOptions,
-    pub response_sender: Option<AsyncOperationSender<PublishResult>>,
+    pub response_handler: Option<ResponseHandler<PublishResult>>,
 }
 
 pub(crate) struct SubscribeOptionsInternal {
     pub options: SubscribeOptions,
-    pub response_sender: Option<AsyncOperationSender<SubscribeResult>>,
+    pub response_handler: Option<ResponseHandler<SubscribeResult>>,
 }
 
 pub(crate) struct UnsubscribeOptionsInternal {
     pub options: UnsubscribeOptions,
-    pub response_sender: Option<AsyncOperationSender<UnsubscribeResult>>,
+    pub response_handler: Option<ResponseHandler<UnsubscribeResult>>,
 }
 
 #[derive(Debug, Default)]
@@ -1195,3 +1196,47 @@ pub mod waiter {
         pub wait_type: ClientEventWaitType,
     }
 }
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+// WIP
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+pub trait AsyncClient {
+
+    /// Signals the client that it should attempt to recurrently maintain a connection to
+    /// the broker endpoint it has been configured with.
+    fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> MqttResult<()>;
+
+    /// Signals the client that it should close any current connection it has and enter the
+    /// Stopped state, where it does nothing.
+    fn stop(&self, options: Option<StopOptions>) -> MqttResult<()>;
+
+    /// Signals the client that it should clean up all internal resources (connection, channels,
+    /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.  Useful to ensure
+    /// a full resource wipe.  If just `stop()` is used then the client will continue to track
+    /// MQTT session state internally.
+    fn close(&self) -> MqttResult<()>;
+
+    /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
+    /// the broker when it reaches the head of the queue and the client is connected.
+    fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> Pin<Box<PublishResultFuture>>;
+
+    /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
+    /// the broker when it reaches the head of the queue and the client is connected.
+    fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> Pin<Box<SubscribeResultFuture>>;
+
+    /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
+    /// the broker when it reaches the head of the queue and the client is connected.
+    fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> Pin<Box<UnsubscribeResultFuture>>;
+
+    /// Adds an additional listener to the events emitted by this client.  This is useful when
+    /// multiple higher-level constructs are sharing the same MQTT client.
+    fn add_event_listener(&self, listener: ClientEventListener) -> MqttResult<ListenerHandle>;
+
+    /// Removes a listener from this client's set of event listeners.
+    fn remove_event_listener(&self, listener: ListenerHandle) -> MqttResult<()>;
+}
+
+pub type MqttClient = Arc<dyn AsyncClient>;
