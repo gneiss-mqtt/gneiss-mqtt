@@ -79,10 +79,11 @@ reason code vector to verify the success/failure result for each subscription in
 
 ```no_run
 use gneiss_mqtt::error::MqttResult;
-use gneiss_mqtt::client::{Mqtt5Client, SubscribeResult};
+use gneiss_mqtt::client::{AsyncClient, SubscribeResult};
 use gneiss_mqtt::mqtt::{QualityOfService, SubscribePacket, Subscription};
+use std::sync::Arc;
 
-async fn subscribe_to_topic(client: Mqtt5Client) {
+async fn subscribe_to_topic(client: Arc<dyn AsyncClient>) {
     let subscribe = SubscribePacket::builder()
         .with_subscription(Subscription::builder("hello/world/+".to_string(), QualityOfService::AtLeastOnce).build())
         .build();
@@ -120,11 +121,11 @@ operations in reaction to client events (the client's public API is immutable). 
 every time we receive a "Ping" publish:
 
 ```no_run
-use gneiss_mqtt::client::{ClientEvent, Mqtt5Client};
+use gneiss_mqtt::client::{ClientEvent, AsyncMqttClient};
 use gneiss_mqtt::mqtt::{PublishPacket, QualityOfService};
 use std::sync::Arc;
 
-pub fn client_event_callback(client: Arc<Mqtt5Client>, event: Arc<ClientEvent>) {
+pub fn client_event_callback(client: AsyncMqttClient, event: Arc<ClientEvent>) {
     if let ClientEvent::PublishReceived(publish_received_event) = event.as_ref() {
         let publish = &publish_received_event.publish;
         if let Some(payload) = publish.payload() {
@@ -156,9 +157,9 @@ use tokio::runtime::Handle;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // put the client in an Arc so we can capture an Arc clone in the event handler closure
-    let client =
-        Arc::new(GenericClientBuilder::new("127.0.0.1", 1883)
-            .build(&Handle::current())?);
+    let client : AsyncMqttClient =
+        GenericClientBuilder::new("127.0.0.1", 1883)
+            .build(&Handle::current())?;
 
     // make a client event handler closure
     let closure_client = client.clone();

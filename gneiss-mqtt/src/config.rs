@@ -37,7 +37,8 @@ use tokio_tungstenite::{client_async, WebSocketStream};
 use stream_ws::{tungstenite::WsMessageHandler, WsMessageHandle, WsByteStream};
 #[cfg(feature="websockets")]
 use tungstenite::{client::*, handshake::client::generate_key};
-
+#[cfg(feature="tokio")]
+use crate::features::gneiss_tokio::*;
 
 /// Configuration options related to establishing connections through HTTP proxies
 #[derive(Default, Clone)]
@@ -618,7 +619,7 @@ impl Default for ReconnectOptions {
 
 /// A structure that holds client-level behavioral configuration
 #[derive(Clone)]
-pub struct Mqtt5ClientOptions {
+pub struct MqttClientOptions {
     pub(crate) offline_queue_policy: OfflineQueuePolicy,
 
     pub(crate) connect_timeout: Duration,
@@ -629,9 +630,9 @@ pub struct Mqtt5ClientOptions {
     pub(crate) reconnect_options: ReconnectOptions,
 }
 
-impl Debug for Mqtt5ClientOptions {
+impl Debug for MqttClientOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mqtt5ClientOptions {{ ")?;
+        write!(f, "MqttClientOptions {{ ")?;
         write!(f, "offline_queue_policy: {:?}, ", self.offline_queue_policy)?;
         write!(f, "connect_timeout: {:?}, ", self.connect_timeout)?;
         write!(f, "ping_timeout: {:?}, ", self.ping_timeout)?;
@@ -646,9 +647,9 @@ impl Debug for Mqtt5ClientOptions {
     }
 }
 
-impl Default for Mqtt5ClientOptions {
+impl Default for MqttClientOptions {
     fn default() -> Self {
-        Mqtt5ClientOptions {
+        MqttClientOptions {
             offline_queue_policy: OfflineQueuePolicy::PreserveAcknowledged,
             connect_timeout: Duration::from_secs(30),
             ping_timeout: Duration::from_secs(10),
@@ -660,16 +661,16 @@ impl Default for Mqtt5ClientOptions {
 
 /// A builder for client-level behavior configuration options
 #[derive(Debug, Default)]
-pub struct Mqtt5ClientOptionsBuilder {
-    options: Mqtt5ClientOptions
+pub struct MqttClientOptionsBuilder {
+    options: MqttClientOptions
 }
 
-impl Mqtt5ClientOptionsBuilder {
+impl MqttClientOptionsBuilder {
 
-    /// Creates a new builder object for Mqtt5ClientOptions
+    /// Creates a new builder object for MqttClientOptions
     pub fn new() -> Self {
-        Mqtt5ClientOptionsBuilder {
-            options: Mqtt5ClientOptions {
+        MqttClientOptionsBuilder {
+            options: MqttClientOptions {
                 ..Default::default()
             }
         }
@@ -734,7 +735,7 @@ impl Mqtt5ClientOptionsBuilder {
     }
 
     /// Builds a new set of client options
-    pub fn build(&self) -> Mqtt5ClientOptions {
+    pub fn build(&self) -> MqttClientOptions {
         self.options.clone()
     }
 }
@@ -747,7 +748,7 @@ pub struct GenericClientBuilder {
 
     tls_options: Option<TlsOptions>,
     connect_options: Option<ConnectOptions>,
-    client_options: Option<Mqtt5ClientOptions>,
+    client_options: Option<MqttClientOptions>,
     #[cfg(feature="websockets")]
     websocket_options: Option<WebsocketOptions>,
     http_proxy_options: Option<HttpProxyOptions>
@@ -809,7 +810,7 @@ impl GenericClientBuilder {
     }
 
     /// Configures the client behavioral options.  If not specified, default values will be used.
-    pub fn with_client_options(&mut self, client_options: Mqtt5ClientOptions) -> &mut Self {
+    pub fn with_client_options(&mut self, client_options: MqttClientOptions) -> &mut Self {
         self.client_options = Some(client_options);
         self
     }
@@ -851,7 +852,7 @@ impl GenericClientBuilder {
 
     /// Builds a new MQTT client according to all the configuration options given to the builder.
     /// Does not consume self; can be called multiple times
-    pub fn build(&self, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    pub fn build(&self, runtime: &Handle) -> MqttResult<AsyncMqttClient> {
         let tls_impl = self.get_tls_impl();
         if tls_impl == TlsConfiguration::Mixed {
             return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));
@@ -868,7 +869,7 @@ impl GenericClientBuilder {
             if let Some(options) = &self.client_options {
                 options.clone()
             } else {
-                Mqtt5ClientOptionsBuilder::new().build()
+                MqttClientOptionsBuilder::new().build()
             };
 
         let http_proxy_options = self.http_proxy_options.clone();
@@ -909,7 +910,7 @@ fn make_addr(endpoint: &str, port: u16) -> std::io::Result<SocketAddr> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn make_direct_client(tls_impl: TlsConfiguration, endpoint: String, port: u16, _tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+fn make_direct_client(tls_impl: TlsConfiguration, endpoint: String, port: u16, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncMqttClient> {
     match tls_impl {
         TlsConfiguration::None => { make_direct_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, runtime) }
         #[cfg(feature = "rustls")]
@@ -935,7 +936,7 @@ fn compute_endpoints(endpoint: String, port: u16, http_proxy_options: &Option<Ht
     }
 }
 
-fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncMqttClient> {
     info!("make_direct_client_no_tls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
 
@@ -949,7 +950,7 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: Mqtt5C
         };
 
         info!("make_direct_client_no_tls - plaintext-to-proxy -> plaintext-to-broker");
-        Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+        Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
     } else {
         let tokio_options = TokioClientOptions {
             connection_factory: Box::new(move || {
@@ -958,12 +959,12 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: Mqtt5C
         };
 
         info!("make_direct_client_no_tls - plaintext-to-broker");
-        Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+        Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
     }
 }
 
 #[cfg(feature = "rustls")]
-fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncMqttClient> {
     info!("make_direct_client_rustls - creating async connection establishment closure");
 
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
@@ -982,7 +983,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
                 };
 
                 info!("make_direct_client_rustls - tls-to-proxy -> tls-to-broker");
-                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+                Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
             } else {
                 let tokio_options = TokioClientOptions {
                     connection_factory: Box::new(move || {
@@ -994,7 +995,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
                 };
 
                 info!("make_direct_client_rustls - plaintext-to-proxy -> tls-to-broker");
-                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+                Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
             }
         } else {
             let tokio_options = TokioClientOptions {
@@ -1005,7 +1006,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
             };
 
             info!("make_direct_client_rustls - tls-to-broker");
-            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
         if let Some(proxy_tls_options) = http_proxy_options.tls_options {
@@ -1019,7 +1020,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
             };
 
             info!("make_direct_client_rustls - tls-to-proxy -> plaintext-to-broker");
-            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
         } else {
             panic!("Tls direct client creation invoked without tls configuration")
         }
@@ -1029,7 +1030,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
 }
 
 #[cfg(feature = "native-tls")]
-fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncMqttClient> {
     info!("make_direct_client_native_tls - creating async connection establishment closure");
 
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
@@ -1048,7 +1049,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
                 };
 
                 info!("make_direct_client_native_tls - tls-to-proxy -> tls-to-broker");
-                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+                Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
             } else {
                 let tokio_options = TokioClientOptions {
                     connection_factory: Box::new(move || {
@@ -1060,7 +1061,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
                 };
 
                 info!("make_direct_client_native_tls - plaintext-to-proxy -> tls-to-broker");
-                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+                Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
             }
         } else {
             let tokio_options = TokioClientOptions {
@@ -1071,7 +1072,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
             };
 
             info!("make_direct_client_native_tls - tls-to-broker");
-            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
         if let Some(proxy_tls_options) = http_proxy_options.tls_options {
@@ -1085,7 +1086,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
             };
 
             info!("make_direct_client_native_tls - tls-to-proxy -> plaintext-to-broker");
-            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
         } else {
             panic!("Tls direct client creation invoked without tls configuration")
         }
@@ -1096,7 +1097,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
 
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature="websockets")]
-fn make_websocket_client(tls_impl: TlsConfiguration, endpoint: String, port: u16, websocket_options: WebsocketOptions, _tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+fn make_websocket_client(tls_impl: TlsConfiguration, endpoint: String, port: u16, websocket_options: WebsocketOptions, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncMqttClient> {
     match tls_impl {
         TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, websocket_options, client_options, connect_options, http_proxy_options, runtime) }
         #[cfg(feature = "rustls")]
@@ -1108,7 +1109,7 @@ fn make_websocket_client(tls_impl: TlsConfiguration, endpoint: String, port: u16
 }
 
 #[cfg(feature="websockets")]
-fn make_websocket_client_no_tls(endpoint: String, port: u16, websocket_options: WebsocketOptions, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+fn make_websocket_client_no_tls(endpoint: String, port: u16, websocket_options: WebsocketOptions, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncMqttClient> {
     info!("make_websocket_client_no_tls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
 
@@ -1123,7 +1124,7 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, websocket_options: 
         };
 
         info!("create_websocket_client_plaintext_to_proxy_plaintext_to_broker");
-        Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+        Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
     } else {
         let tokio_options = TokioClientOptions {
             connection_factory: Box::new(move || {
@@ -1133,13 +1134,13 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, websocket_options: 
         };
 
         info!("create_websocket_client_plaintext_to_broker");
-        Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+        Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
     }
 }
 
 #[allow(clippy::too_many_arguments)]
 #[cfg(all(feature = "rustls", feature = "websockets"))]
-fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncMqttClient> {
     info!("make_websocket_client_rustls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
 
@@ -1158,7 +1159,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: 
                 };
 
                 info!("make_websocket_client_rustls - tls-to-proxy -> tls-to-broker");
-                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+                Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
             } else {
                 let tokio_options = TokioClientOptions {
                     connection_factory: Box::new(move || {
@@ -1171,7 +1172,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: 
                 };
 
                 info!("make_websocket_client_rustls - plaintext-to-proxy -> tls-to-broker");
-                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+                Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
             }
         } else {
             let tokio_options = TokioClientOptions {
@@ -1183,7 +1184,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: 
             };
 
             info!("make_websocket_client_rustls - tls-to-broker");
-            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
         if let Some(proxy_tls_options) = http_proxy_options.tls_options {
@@ -1198,7 +1199,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: 
             };
 
             info!("make_websocket_client_rustls - tls-to-proxy -> plaintext-to-broker");
-            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
         } else {
             panic!("Tls websocket client creation invoked without tls configuration")
         }
@@ -1209,7 +1210,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: 
 
 #[allow(clippy::too_many_arguments)]
 #[cfg(all(feature = "native-tls", feature = "websockets"))]
-fn make_websocket_client_native_tls(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: Mqtt5ClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+fn make_websocket_client_native_tls(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncMqttClient> {
     info!("make_websocket_client_native_tls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
 
@@ -1228,7 +1229,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, websocket_optio
                 };
 
                 info!("make_websocket_client_native_tls - tls-to-proxy -> tls-to-broker");
-                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+                Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
             } else {
                 let tokio_options = TokioClientOptions {
                     connection_factory: Box::new(move || {
@@ -1241,7 +1242,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, websocket_optio
                 };
 
                 info!("make_websocket_client_native_tls - plaintext-to-proxy -> tls-to-broker");
-                Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+                Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
             }
         } else {
             let tokio_options = TokioClientOptions {
@@ -1253,7 +1254,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, websocket_optio
             };
 
             info!("make_websocket_client_native_tls - tls-to-broker");
-            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
         if let Some(proxy_tls_options) = http_proxy_options.tls_options {
@@ -1268,7 +1269,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, websocket_optio
             };
 
             info!("make_websocket_client_native_tls - tls-to-proxy -> plaintext-to-broker");
-            Ok(Mqtt5Client::new_with_tokio(client_options, connect_options, tokio_options, runtime))
+            Ok(new_with_tokio(client_options, connect_options, tokio_options, runtime))
         } else {
             panic!("Tls websocket client creation invoked without tls configuration")
         }

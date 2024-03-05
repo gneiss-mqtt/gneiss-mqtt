@@ -68,7 +68,7 @@ struct CommandLineArgs {
     signing_region: Option<String>
 }
 
-async fn build_client(connect_config: ConnectOptions, client_config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
+async fn build_client(connect_config: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&uri_string);
@@ -159,7 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let connect_options = ConnectOptionsBuilder::new().build();
 
-    let config = Mqtt5ClientOptionsBuilder::new()
+    let config = MqttClientOptionsBuilder::new()
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::Uniform)
         .build();

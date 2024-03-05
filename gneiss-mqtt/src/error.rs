@@ -502,6 +502,32 @@ impl From<tungstenite::error::Error> for MqttError {
     }
 }
 
+#[cfg(feature="tokio")]
+impl From<tokio::sync::oneshot::error::RecvError> for MqttError {
+    fn from(err: tokio::sync::oneshot::error::RecvError) -> Self {
+        MqttError::new_operation_channel_failure(err)
+    }
+}
+
+impl <T> From<std::sync::mpsc::SendError<T>> for MqttError where T : Send + Sync + 'static {
+    fn from(err: std::sync::mpsc::SendError<T>) -> Self {
+        MqttError::new_operation_channel_failure(err)
+    }
+}
+
+impl From<std::sync::mpsc::RecvError> for MqttError {
+    fn from(err: std::sync::mpsc::RecvError) -> Self {
+        MqttError::new_operation_channel_failure(err)
+    }
+}
+
+impl From<std::sync::mpsc::TryRecvError> for MqttError {
+    fn from(err: std::sync::mpsc::TryRecvError) -> Self {
+        MqttError::new_operation_channel_failure(err)
+    }
+}
+
+
 /// Crate-wide result type for functions that can fail
 pub type MqttResult<T> = Result<T, MqttError>;
 

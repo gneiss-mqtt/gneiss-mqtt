@@ -485,7 +485,7 @@ pub struct AwsClientBuilder {
     auth_type: AuthType,
     custom_auth_options: Option<AwsCustomAuthOptions>,
     connect_options: Option<ConnectOptions>,
-    client_options: Option<Mqtt5ClientOptions>,
+    client_options: Option<MqttClientOptions>,
     tls_options_builder: TlsOptionsBuilder,
     #[cfg(feature = "websockets")]
     websocket_sigv4_options: Option<WebsocketSigv4Options>,
@@ -629,7 +629,7 @@ impl AwsClientBuilder {
     }
 
     /// Registers a set of client configuration options with the builder.
-    pub fn with_client_options(mut self, client_options: Mqtt5ClientOptions) -> Self {
+    pub fn with_client_options(mut self, client_options: MqttClientOptions) -> Self {
         self.client_options = Some(client_options);
         self
     }
@@ -685,7 +685,7 @@ impl AwsClientBuilder {
             if let Some(options) = &self.client_options {
                 options.clone()
             } else {
-                Mqtt5ClientOptionsBuilder::new().build()
+                MqttClientOptionsBuilder::new().build()
             };
 
         let tls_options = self.build_tls_options()?;
