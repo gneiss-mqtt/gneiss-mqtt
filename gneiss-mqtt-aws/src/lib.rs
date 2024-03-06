@@ -245,8 +245,8 @@ different combinations expected by users.
 
 #![warn(missing_docs)]
 
+use gneiss_mqtt::client::{AsyncMqttClient};
 use gneiss_mqtt::config::*;
-use gneiss_mqtt::client::Mqtt5Client;
 #[allow(unused_imports)]
 use gneiss_mqtt::error::{MqttError, MqttResult};
 use std::fmt::Write;
@@ -671,7 +671,7 @@ impl AwsClientBuilder {
 
     /// Creates a new MQTT5 client from all of the configuration options registered with the
     /// builder.
-    pub fn build(&self, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    pub fn build(&self, runtime: &Handle) -> MqttResult<AsyncMqttClient> {
         let user_connect_options =
             if let Some(options) = &self.connect_options {
                 options.clone()
@@ -882,7 +882,7 @@ mod testing {
     }
 
     async fn do_connect_test(builder: AwsClientBuilder) -> MqttResult<()> {
-        let client = std::sync::Arc::new(builder.build(&Handle::current())?);
+        let client = builder.build(&Handle::current())?;
 
         let waiter_config = ClientEventWaiterOptions {
             wait_type: ClientEventWaitType::Predicate(Box::new(|ev| {

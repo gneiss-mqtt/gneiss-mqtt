@@ -6,7 +6,7 @@
 use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult, main_loop};
-use gneiss_mqtt::client::Mqtt5Client;
+use gneiss_mqtt::client::AsyncMqttClient;
 use gneiss_mqtt::config::*;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptionsBuilder, WebsocketSigv4OptionsBuilder};
 use simplelog::{LevelFilter, WriteLogger};
@@ -68,7 +68,7 @@ struct CommandLineArgs {
     signing_region: Option<String>
 }
 
-async fn build_client(connect_config: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
+async fn build_client(connect_config: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<AsyncMqttClient> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&uri_string);
