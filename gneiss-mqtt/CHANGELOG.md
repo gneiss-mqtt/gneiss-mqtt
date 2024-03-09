@@ -30,6 +30,9 @@ This document is currently hand-written and non-authoritative.
 * * timeout polish
 * * * remove connack timeout as a setting, connect timeout now covers the end-to-end interval from socket open to connack receipt
 * * * fixed an edge case when ping timeout is larger than half the keep alive setting
+* * AsyncClient interface trait added
+* * Mqtt5Client renamed
+* * Client construction yields an Arc-wrapped type
 * TLS
 * * alpn values changed to a string representation
 * * Rustls configuration build errors now a wrapped error
@@ -37,3 +40,4 @@ This document is currently hand-written and non-authoritative.
 * * Rustls support feature-gated
 * * Native-tls support added and feature-gated
 * * Websocket support feature-gated
+* * Tokio client feature-gated

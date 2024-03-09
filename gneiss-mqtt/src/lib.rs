@@ -46,26 +46,26 @@ supports all connection methods allowed by the AWS MQTT broker implementation,
 Assuming a default Mosquitto installation, you can connect locally by plaintext on port 1883:
 
 ```no_run
-use gneiss_mqtt::config::GenericClientBuilder;
-use tokio::runtime::Handle;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
-    // In the common case, you will not need a root CA certificate
-    let client =
-        GenericClientBuilder::new("127.0.0.1", 1883)
-            .build(&Handle::current())?;
-
-    // Once started, the client will recurrently maintain a connection to the endpoint until
-    // stop() is invoked
-    client.start(None)?;
-
-    // <do stuff with the client>
-
-    Ok(())
-}
-```
+* use gneiss_mqtt::config::GenericClientBuilder;
+* use tokio::runtime::Handle;
+*
+* #[tokio::main]
+* async fn main() -> Result<(), Box<dyn std::error::Error>> {
+*
+*     // In the common case, you will not need a root CA certificate
+*     let client =
+*         GenericClientBuilder::new("127.0.0.1", 1883)
+*             .build_tokio(&Handle::current())?;
+*
+*     // Once started, the client will recurrently maintain a connection to the endpoint until
+*     // stop() is invoked
+*     client.start(None)?;
+*
+*     // <do stuff with the client>
+*
+*     Ok(())
+* }
+* ```
 
 # Example: Subscribe to a topic
 
@@ -121,11 +121,11 @@ operations in reaction to client events (the client's public API is immutable). 
 every time we receive a "Ping" publish:
 
 ```no_run
-use gneiss_mqtt::client::{ClientEvent, AsyncMqttClient};
+use gneiss_mqtt::client::{ClientEvent, AsyncGneissClient};
 use gneiss_mqtt::mqtt::{PublishPacket, QualityOfService};
 use std::sync::Arc;
 
-pub fn client_event_callback(client: AsyncMqttClient, event: Arc<ClientEvent>) {
+pub fn client_event_callback(client: AsyncGneissClient, event: Arc<ClientEvent>) {
     if let ClientEvent::PublishReceived(publish_received_event) = event.as_ref() {
         let publish = &publish_received_event.publish;
         if let Some(payload) = publish.payload() {
@@ -157,7 +157,7 @@ use tokio::runtime::Handle;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // put the client in an Arc so we can capture an Arc clone in the event handler closure
-    let client : AsyncMqttClient =
+    let client : AsyncGneissClient =
         GenericClientBuilder::new("127.0.0.1", 1883)
             .build(&Handle::current())?;
 

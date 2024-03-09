@@ -6,7 +6,7 @@
 use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult, main_loop};
-use gneiss_mqtt::client::AsyncMqttClient;
+use gneiss_mqtt::client::AsyncGneissClient;
 use gneiss_mqtt::config::*;
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
@@ -48,7 +48,7 @@ struct CommandLineArgs {
     http_proxy_uri: Option<String>
 }
 
-fn build_client(connect_options: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<AsyncMqttClient> {
+fn build_client(connect_options: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<AsyncGneissClient> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&args.endpoint_uri);

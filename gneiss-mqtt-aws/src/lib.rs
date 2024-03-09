@@ -245,7 +245,7 @@ different combinations expected by users.
 
 #![warn(missing_docs)]
 
-use gneiss_mqtt::client::{AsyncMqttClient};
+use gneiss_mqtt::client::{AsyncGneissClient};
 use gneiss_mqtt::config::*;
 #[allow(unused_imports)]
 use gneiss_mqtt::error::{MqttError, MqttResult};
@@ -671,7 +671,7 @@ impl AwsClientBuilder {
 
     /// Creates a new MQTT5 client from all of the configuration options registered with the
     /// builder.
-    pub fn build(&self, runtime: &Handle) -> MqttResult<AsyncMqttClient> {
+    pub fn build(&self, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
         let user_connect_options =
             if let Some(options) = &self.connect_options {
                 options.clone()

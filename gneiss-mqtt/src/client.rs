@@ -23,9 +23,6 @@ use std::pin::Pin;
 use std::sync::{Arc};
 use std::time::{Duration, Instant};
 
-// async choice conditional
-//use crate::features::gneiss_tokio::*;
-
 /// Additional client options applicable to an MQTT Publish operation
 #[derive(Debug, Default)]
 pub struct PublishOptions {
@@ -1103,7 +1100,7 @@ pub mod waiter {
 /// Direct client construction is messy due to the different possibilities for TLS, async runtime,
 /// etc...  We encourage you to use the various client builders in this crate, or in other crates,
 /// to simplify this process.
-pub trait AsyncClient {
+pub trait AsyncMqttClient {
 
     /// Signals the client that it should attempt to recurrently maintain a connection to
     /// the broker endpoint it has been configured with.
@@ -1162,4 +1159,4 @@ pub trait AsyncClient {
 /// Direct client construction is messy due to the different possibilities for TLS, async runtime,
 /// etc...  We encourage you to use the various client builders in this crate, or in other crates,
 /// to simplify this process.
-pub type AsyncMqttClient = Arc<dyn AsyncClient + Send + Sync>;
+pub type AsyncGneissClient = Arc<dyn AsyncMqttClient + Send + Sync>;
