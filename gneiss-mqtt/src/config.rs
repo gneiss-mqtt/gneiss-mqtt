@@ -18,13 +18,11 @@ use std::fs::File;
 use std::io::Read;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
-use std::future::Future;
-use std::pin::Pin;
 
 #[cfg(feature="websockets")]
-use std::str::FromStr;
-#[cfg(feature="websockets")]
 use http::{Uri, Version};
+#[cfg(feature="websockets")]
+use std::{future::Future, pin::Pin, str::FromStr};
 #[cfg(feature="websockets")]
 use tungstenite::{client::*, handshake::client::generate_key};
 

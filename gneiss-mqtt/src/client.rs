@@ -529,7 +529,7 @@ impl Display for ClientImplState {
     }
 }
 
-pub(crate) type CallbackSpawnerFunction = Box<dyn Fn(Arc<ClientEvent>, Arc<ClientEventListenerCallback>) -> () + Send + Sync>;
+pub(crate) type CallbackSpawnerFunction = Box<dyn Fn(Arc<ClientEvent>, Arc<ClientEventListenerCallback>) + Send + Sync>;
 
 pub(crate) struct MqttClientImpl {
     protocol_state: ProtocolState,
