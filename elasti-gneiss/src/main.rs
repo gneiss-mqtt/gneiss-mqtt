@@ -132,7 +132,7 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
         _ => {}
     }
 
-    Ok(builder.build(runtime)?)
+    Ok(builder.build_tokio(runtime)?)
 }
 
 #[tokio::main]

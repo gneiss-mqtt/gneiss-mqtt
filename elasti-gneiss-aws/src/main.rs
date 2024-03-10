@@ -91,7 +91,7 @@ async fn build_client(connect_config: ConnectOptions, client_config: MqttClientO
                 Ok(AwsClientBuilder::new_direct_with_mtls_from_fs(&endpoint, args.cert.as_ref().unwrap(), args.key.as_ref().unwrap(), capath)?
                     .with_connect_options(connect_config)
                     .with_client_options(client_config)
-                    .build(runtime)?)
+                    .build_tokio(runtime)?)
             } else {
                 println!("ERROR: aws-mqtts scheme requires certification and private key fields for mTLS");
                 Err(ElastiError::MissingArguments("--cert, --key"))
@@ -123,7 +123,7 @@ async fn build_client(connect_config: ConnectOptions, client_config: MqttClientO
             Ok(AwsClientBuilder::new_direct_with_custom_auth(&endpoint, config.build(), capath)?
                 .with_connect_options(connect_config)
                 .with_client_options(client_config)
-                .build(runtime)?)
+                .build_tokio(runtime)?)
         }
         "aws-wss" => {
             let signing_region = args.signing_region.clone().unwrap_or("us-east-1".to_string());
@@ -133,7 +133,7 @@ async fn build_client(connect_config: ConnectOptions, client_config: MqttClientO
             Ok(AwsClientBuilder::new_websockets_with_sigv4(&endpoint, sigv4_options, capath)?
                 .with_connect_options(connect_config)
                 .with_client_options(client_config)
-                .build(runtime)?)
+                .build_tokio(runtime)?)
         }
         _ => {
             Err(ElastiError::UnsupportedUriScheme(scheme))

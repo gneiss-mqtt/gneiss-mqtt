@@ -9,10 +9,10 @@ use std::env;
 pub(crate) enum TlsUsage {
     None,
 
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "tokio-rustls")]
     Rustls,
 
-    #[cfg(feature = "native-tls")]
+    #[cfg(feature = "tokio-native-tls")]
     Nativetls
 }
 
@@ -20,7 +20,7 @@ pub(crate) enum TlsUsage {
 pub(crate) enum WebsocketUsage {
     None,
 
-    #[cfg(feature="websockets")]
+    #[cfg(feature="tokio-websockets")]
     Tungstenite
 }
 
@@ -30,7 +30,7 @@ pub(crate) enum ProxyUsage {
     Plaintext
 }
 
-#[cfg(feature = "rustls")]
+#[cfg(feature = "tokio-rustls")]
 pub(crate) fn get_ca_path() -> String {
     env::var("GNEISS_MQTT_TEST_BROKER_CA_PATH").unwrap()
 }

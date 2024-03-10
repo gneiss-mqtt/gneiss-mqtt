@@ -19,11 +19,11 @@ use std::io::Read;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
-#[cfg(feature="websockets")]
+#[cfg(feature="tokio-websockets")]
 use http::{Uri, Version};
-#[cfg(feature="websockets")]
+#[cfg(feature="tokio-websockets")]
 use std::{future::Future, pin::Pin, str::FromStr};
-#[cfg(feature="websockets")]
+#[cfg(feature="tokio-websockets")]
 use tungstenite::{client::*, handshake::client::generate_key};
 
 #[cfg(feature="tokio")]
@@ -71,28 +71,28 @@ impl HttpProxyOptionsBuilder {
 }
 
 /// Return type for a websocket handshake transformation function
-#[cfg(feature="websockets")]
+#[cfg(feature="tokio-websockets")]
 pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = MqttResult<http::request::Builder>> + Send >>;
 
 /// Async websocket handshake transformation function type
-#[cfg(feature="websockets")]
+#[cfg(feature="tokio-websockets")]
 pub type WebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -> WebsocketHandshakeTransformReturnType + Send + Sync>;
 
 /// Configuration options related to establishing an MQTT over websockets
 #[derive(Default, Clone)]
-#[cfg(feature="websockets")]
+#[cfg(feature="tokio-websockets")]
 pub struct WebsocketOptions {
     pub(crate) handshake_transform: std::sync::Arc<Option<WebsocketHandshakeTransform>>
 }
 
 /// Builder type for constructing Websockets-related configuration.
 #[derive(Default)]
-#[cfg(feature="websockets")]
+#[cfg(feature="tokio-websockets")]
 pub struct WebsocketOptionsBuilder {
     options : WebsocketOptions
 }
 
-#[cfg(feature="websockets")]
+#[cfg(feature="tokio-websockets")]
 impl WebsocketOptionsBuilder {
 
     /// Creates a new builder object with default options.
@@ -128,10 +128,10 @@ pub(crate) enum TlsData {
     #[allow(dead_code)]
     Invalid,
 
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "tokio-rustls")]
     Rustls(TlsMode, std::sync::Arc<rustls::ClientConfig>),
 
-    #[cfg(feature = "native-tls")]
+    #[cfg(feature = "tokio-native-tls")]
     NativeTls(TlsMode, std::sync::Arc<native_tls::TlsConnectorBuilder>)
 }
 
@@ -740,7 +740,7 @@ pub struct GenericClientBuilder {
     tls_options: Option<TlsOptions>,
     connect_options: Option<ConnectOptions>,
     client_options: Option<MqttClientOptions>,
-    #[cfg(feature="websockets")]
+    #[cfg(feature="tokio-websockets")]
     websocket_options: Option<WebsocketOptions>,
     http_proxy_options: Option<HttpProxyOptions>
 }
@@ -748,9 +748,9 @@ pub struct GenericClientBuilder {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum TlsConfiguration {
     None,
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "tokio-rustls")]
     Rustls,
-    #[cfg(feature = "native-tls")]
+    #[cfg(feature = "tokio-native-tls")]
     Nativetls,
     Mixed
 }
@@ -759,9 +759,9 @@ fn get_tls_impl_from_options(tls_options: Option<&TlsOptions>) -> TlsConfigurati
     if let Some(tls_opts) = tls_options {
         return
             match &tls_opts.options {
-                #[cfg(feature = "rustls")]
+                #[cfg(feature = "tokio-rustls")]
                 TlsData::Rustls(_, _) => { TlsConfiguration::Rustls }
-                #[cfg(feature = "native-tls")]
+                #[cfg(feature = "tokio-native-tls")]
                 TlsData::NativeTls(_, _) => { TlsConfiguration::Nativetls }
                 _ => { TlsConfiguration::None }
             };
@@ -780,7 +780,7 @@ impl GenericClientBuilder {
             tls_options: None,
             connect_options: None,
             client_options: None,
-            #[cfg(feature="websockets")]
+            #[cfg(feature="tokio-websockets")]
             websocket_options: None,
             http_proxy_options: None
         }
@@ -807,7 +807,7 @@ impl GenericClientBuilder {
     }
 
     /// Configures the client to connect over websockets
-    #[cfg(feature="websockets")]
+    #[cfg(feature="tokio-websockets")]
     pub fn with_websocket_options(&mut self, websocket_options: WebsocketOptions) -> &mut Self {
         self.websocket_options = Some(websocket_options);
         self
@@ -868,7 +868,7 @@ impl GenericClientBuilder {
         let tls_options = self.tls_options.clone();
         let endpoint = self.endpoint.clone();
 
-        #[cfg(feature="websockets")]
+        #[cfg(feature="tokio-websockets")]
         {
             let websocket_options = self.websocket_options.clone();
             if let Some(websocket_options) = websocket_options {
@@ -916,12 +916,12 @@ pub(crate) fn compute_endpoints(endpoint: String, port: u16, http_proxy_options:
     }
 }
 
-#[cfg(feature="websockets")]
+#[cfg(feature="tokio-websockets")]
 pub(crate) struct HandshakeRequest {
     pub(crate) handshake_builder: http::request::Builder,
 }
 
-#[cfg(feature="websockets")]
+#[cfg(feature="tokio-websockets")]
 impl IntoClientRequest for HandshakeRequest {
     fn into_client_request(self) -> tungstenite::Result<tungstenite::handshake::client::Request> {
         let final_request = self.handshake_builder.body(()).unwrap();
@@ -929,7 +929,7 @@ impl IntoClientRequest for HandshakeRequest {
     }
 }
 
-#[cfg(feature="websockets")]
+#[cfg(feature="tokio-websockets")]
 pub(crate) fn create_default_websocket_handshake_request(uri: String) -> MqttResult<http::request::Builder> {
     let uri = Uri::from_str(uri.as_str()).unwrap();
 

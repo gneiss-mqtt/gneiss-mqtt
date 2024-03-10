@@ -16,11 +16,10 @@ features = []
 all-features = true
 
 [features]
-default = [] # remove soon
 testing = [] # enables environmentally-controlled integration tests and long-running tests (30+ seconds) that check reconnect, backoff, etc...
-rustls = ["dep:rustls", "dep:rustls-native-certs", "dep:rustls-pemfile", "dep:rustls-pki-types", "dep:tokio-rustls"]
-native-tls = ["dep:native-tls", "dep:tokio-native-tls"]
-websockets = ["dep:http", "dep:tungstenite", "dep:tokio-tungstenite", "dep:stream-ws"]
+tokio-rustls = ["tokio", "dep:rustls", "dep:rustls-native-certs", "dep:rustls-pemfile", "dep:rustls-pki-types", "dep:tokio-rustls"]
+tokio-native-tls = ["tokio", "dep:native-tls", "dep:tokio-native-tls"]
+tokio-websockets = ["tokio", "dep:http", "dep:tungstenite", "dep:tokio-tungstenite", "dep:stream-ws"]
 tokio = ["dep:tokio"]
 
 [dev-dependencies]
