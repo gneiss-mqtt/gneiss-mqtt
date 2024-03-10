@@ -112,8 +112,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
         let (stream_reader, mut stream_writer) = split(stream);
         tokio::pin!(stream_reader);
 
-        let mut should_flush = false;
-        let mut write_directive : Option<WriteDirective>;
+        let mut write_directive : Option<&[u8]>;
 
         let mut next_state = None;
         while next_state.is_none() {
@@ -129,12 +128,10 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                     None
                 };
 
-            if should_flush {
-                debug!("tokio - process_connected - flushing previous write");
-                write_directive = Some(WriteDirective::Flush);
-            } else if let Some(outbound_slice) = outbound_slice_option {
+            let mut should_flush = false;
+            if let Some(outbound_slice) = outbound_slice_option {
                 debug!("tokio - process_connected - {} bytes to write", outbound_slice.len());
-                write_directive = Some(WriteDirective::Bytes(outbound_slice))
+                write_directive = Some(outbound_slice)
             } else {
                 debug!("tokio - process_connected - nothing to write");
                 write_directive = None;
@@ -188,20 +185,11 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                     match bytes_written_result {
                         Ok(bytes_written) => {
                             debug!("tokio - process_connected - wrote {} bytes to connection stream", bytes_written);
-                            if should_flush {
-                                should_flush = false;
-                                if let Err(error) = client.handle_write_completion() {
-                                    info!("tokio - process_connected - stream write completion handler failed: {:?}", error);
-                                    client.apply_error(error);
-                                    next_state = Some(ClientImplState::PendingReconnect);
-                                }
-                            } else {
-                                cumulative_bytes_written += bytes_written;
-                                if cumulative_bytes_written == outbound_data.len() {
-                                    outbound_data.clear();
-                                    cumulative_bytes_written = 0;
-                                    should_flush = true;
-                                }
+                            cumulative_bytes_written += bytes_written;
+                            if cumulative_bytes_written == outbound_data.len() {
+                                outbound_data.clear();
+                                cumulative_bytes_written = 0;
+                                should_flush = true;
                             }
                         }
                         Err(error) => {
@@ -213,6 +201,28 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                             }
                             next_state = Some(ClientImplState::PendingReconnect);
                         }
+                    }
+                }
+            }
+
+            if should_flush {
+                let flush_result = stream_writer.flush().await;
+                match flush_result {
+                    Ok(()) => {
+                        if let Err(error) = client.handle_write_completion() {
+                            info!("tokio - process_connected - stream write completion handler failed: {:?}", error);
+                            client.apply_error(error);
+                            next_state = Some(ClientImplState::PendingReconnect);
+                        }
+                    }
+                    Err(error) => {
+                        info!("tokio - process_connected - connection stream flush failed: {:?}", error);
+                        if is_connection_established(client.get_protocol_state()) {
+                            client.apply_error(MqttError::new_connection_closed(error));
+                        } else {
+                            client.apply_error(MqttError::new_connection_establishment_failure(error));
+                        }
+                        next_state = Some(ClientImplState::PendingReconnect);
                     }
                 }
             }
@@ -266,22 +276,10 @@ async fn conditional_wait(wait_option: Option<tokio::time::Sleep>) -> Option<()>
     }
 }
 
-enum WriteDirective<'a> {
-    Bytes(&'a[u8]),
-    Flush
-}
-
-async fn conditional_write<'a, T>(directive: Option<WriteDirective<'a>>, writer: &mut WriteHalf<T>) -> Option<std::io::Result<usize>> where T : AsyncRead + AsyncWrite {
-    match directive {
-        Some(WriteDirective::Bytes(bytes)) => {
+async fn conditional_write<T>(data: Option<&[u8]>, writer: &mut WriteHalf<T>) -> Option<std::io::Result<usize>> where T : AsyncRead + AsyncWrite {
+    match data {
+        Some(bytes) => {
             Some(writer.write(bytes).await)
-        }
-        Some(WriteDirective::Flush) => {
-            if let Err(error) = writer.flush().await {
-                Some(Err(error))
-            } else {
-                Some(Ok(0))
-            }
         }
         _ => { None }
     }

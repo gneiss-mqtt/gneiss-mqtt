@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_direct_with_mtls_from_fs(endpoint, cert_path, key_path, None)?
-            .build(&Handle::current())?;
+            .build_tokio(&Handle::current())?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
