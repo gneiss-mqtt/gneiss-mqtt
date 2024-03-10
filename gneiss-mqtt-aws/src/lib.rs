@@ -37,7 +37,9 @@ tokio = { version = "1", features = ["full"] }
 
 Future releases will support other async runtimes as well as a client that runs in a background
 thread and does not need an async runtime.  For now, [`tokio`](https://crates.io/crates/tokio) is required.
+*/
 
+#![cfg_attr(any(feature = "tokio-rustls", feature = "tokio-native-tls"), doc = r##"
 # Example: Connect to AWS IoT Core via mTLS (with tokio runtime)
 
 You'll need to create and register an X509 device certificate with IoT Core and associate an IAM
@@ -60,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_direct_with_mtls_from_fs(endpoint, cert_path, key_path, None)?
-            .build(&Handle::current())?;
+            .build_tokio(&Handle::current())?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -70,10 +72,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-```
-*/
+```"##)]
 
-#![cfg_attr(feature = "websockets", doc = r##"
+#![cfg_attr(all(any(feature = "tokio-rustls", feature = "tokio-native-tls"), feature = "tokio-websockets"), doc = r##"
 # Example: Connect to AWS IoT Core via Websockets (with tokio runtime)
 You'll need to configure your runtime environment to source AWS credentials whose IAM policy allows
 IoT usage.  This crate uses the AWS SDK for Rust to source the credentials necessary
@@ -98,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_websockets_with_sigv4(endpoint, sigv4_options, None)?
-            .build(&Handle::current())?;
+            .build_tokio(&Handle::current())?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -125,7 +126,8 @@ supported custom authentication modes:
 
 * Unsigned Custom Authentication - Anyone can invoke the authorizer's lambda if they know its ARN.  This is not recommended for production since it is not protected from external abuse that may run up your AWS bill.
 * Signed Custom Authentication - Your Lambda function will only be invoked (and billed) if the Connect packet includes the cryptographic signature (based on an IoT Core registered public key) of a controllable value.  Recommended for production.
-
+*/
+#![cfg_attr(any(feature = "tokio-rustls", feature = "tokio-native-tls"), doc = r##"
 ### Unsigned Custom Authentication
 
 For an unsigned custom authorizer (for testing/internal purposes only, not recommended for production):
@@ -151,7 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_direct_with_custom_auth(endpoint, custom_auth_options_builder.build(), None)?
-            .build(&Handle::current())?;
+            .build_tokio(&Handle::current())?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -161,8 +163,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-```
-
+```"##)]
+#![cfg_attr(any(feature = "tokio-rustls", feature = "tokio-native-tls"), doc = r##"
 ### Signed Custom Authentication
 
 For a signed custom authorizer (recommended for production):
@@ -194,7 +196,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_direct_with_custom_auth(endpoint, custom_auth_options_builder.build(), None)?
-            .build(&Handle::current())?;
+            .build_tokio(&Handle::current())?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -204,8 +206,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-```
-
+```"##)]
+/*!
 You must be careful with the encodings of `authorizer`, `authorizer_signature`, and
 `authorizer_token_key_name`.  Because
 custom authentication is supported over HTTP, these values must be URI-safe.  It is up to
@@ -245,28 +247,28 @@ different combinations expected by users.
 
 #![warn(missing_docs)]
 
+use gneiss_mqtt::client::{AsyncGneissClient};
 use gneiss_mqtt::config::*;
-use gneiss_mqtt::client::Mqtt5Client;
 #[allow(unused_imports)]
 use gneiss_mqtt::error::{MqttError, MqttResult};
 use std::fmt::Write;
 use tokio::runtime::Handle;
 
-#[cfg(feature = "websockets")]
-use std::time::{Duration, SystemTime};
-#[cfg(feature = "websockets")]
+#[cfg(feature = "tokio-websockets")]
 use aws_credential_types::provider::ProvideCredentials;
-#[cfg(feature = "websockets")]
+#[cfg(feature = "tokio-websockets")]
 use aws_sigv4::http_request::{SessionTokenMode, sign, SignableBody, SignableRequest, SignatureLocation};
-#[cfg(feature = "websockets")]
+#[cfg(feature = "tokio-websockets")]
 use aws_sigv4::sign::v4;
-#[cfg(feature = "websockets")]
+#[cfg(feature = "tokio-websockets")]
 use aws_smithy_runtime_api::client::identity::Identity;
+#[cfg(feature = "tokio-websockets")]
+use std::time::{Duration, SystemTime};
 
 /// Struct holding all configuration relevant to connecting an MQTT client to AWS IoT Core
 /// over websockets using a Sigv4-signed websocket handshake for authentication
 #[derive(Clone, Debug)]
-#[cfg(feature = "websockets")]
+#[cfg(feature = "tokio-websockets")]
 pub struct WebsocketSigv4Options {
     signing_region: String,
     credentials_provider: std::sync::Arc<dyn ProvideCredentials>
@@ -274,12 +276,12 @@ pub struct WebsocketSigv4Options {
 
 /// A builder type that configures all relevant AWS signing options for connecting over websockets
 /// using Sigv4 request signing.
-#[cfg(feature = "websockets")]
+#[cfg(feature = "tokio-websockets")]
 pub struct WebsocketSigv4OptionsBuilder {
     options: WebsocketSigv4Options
 }
 
-#[cfg(feature = "websockets")]
+#[cfg(feature = "tokio-websockets")]
 impl WebsocketSigv4OptionsBuilder {
 
     /// Creates a new builder
@@ -462,18 +464,18 @@ pub enum TlsImplementation {
     Default,
 
     /// Use rustls as the TLS implementation
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "tokio-rustls")]
     Rustls,
 
     /// Use native-tls as the TLS implementation
-    #[cfg(feature = "native-tls")]
+    #[cfg(feature = "tokio-native-tls")]
     Nativetls,
 }
 
 #[derive(PartialEq, Eq)]
 enum AuthType {
     Mtls,
-    #[cfg(feature = "websockets")]
+    #[cfg(feature = "tokio-websockets")]
     Sigv4Websockets,
     CustomAuth
 }
@@ -485,9 +487,9 @@ pub struct AwsClientBuilder {
     auth_type: AuthType,
     custom_auth_options: Option<AwsCustomAuthOptions>,
     connect_options: Option<ConnectOptions>,
-    client_options: Option<Mqtt5ClientOptions>,
+    client_options: Option<MqttClientOptions>,
     tls_options_builder: TlsOptionsBuilder,
-    #[cfg(feature = "websockets")]
+    #[cfg(feature = "tokio-websockets")]
     websocket_sigv4_options: Option<WebsocketSigv4Options>,
     endpoint: String,
     tls_impl: TlsImplementation
@@ -522,7 +524,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options_builder,
-            #[cfg(feature = "websockets")]
+            #[cfg(feature = "tokio-websockets")]
             websocket_sigv4_options: None,
             endpoint: endpoint.to_string(),
             tls_impl: TlsImplementation::Default,
@@ -553,7 +555,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options_builder,
-            #[cfg(feature = "websockets")]
+            #[cfg(feature = "tokio-websockets")]
             websocket_sigv4_options: None,
             endpoint: endpoint.to_string(),
             tls_impl: TlsImplementation::Default,
@@ -582,7 +584,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options_builder,
-            #[cfg(feature = "websockets")]
+            #[cfg(feature = "tokio-websockets")]
             websocket_sigv4_options: None,
             endpoint: endpoint.to_string(),
             tls_impl: TlsImplementation::Default,
@@ -598,7 +600,7 @@ impl AwsClientBuilder {
     ///
     /// `root_ca_path` - path to a root CA to use in the TLS context of the connection.  Generally
     /// not needed unless a custom domain is involved.
-    #[cfg(feature = "websockets")]
+    #[cfg(feature = "tokio-websockets")]
     pub fn new_websockets_with_sigv4(endpoint: &str, sigv4_options: WebsocketSigv4Options, root_ca_path: Option<&str>) -> MqttResult<Self> {
         let mut tls_options_builder = TlsOptionsBuilder::new();
         if let Some(root_ca) = root_ca_path {
@@ -611,7 +613,7 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options_builder,
-            #[cfg(feature = "websockets")]
+            #[cfg(feature = "tokio-websockets")]
             websocket_sigv4_options: Some(sigv4_options),
             endpoint: endpoint.to_string(),
             tls_impl: TlsImplementation::Default,
@@ -629,7 +631,7 @@ impl AwsClientBuilder {
     }
 
     /// Registers a set of client configuration options with the builder.
-    pub fn with_client_options(mut self, client_options: Mqtt5ClientOptions) -> Self {
+    pub fn with_client_options(mut self, client_options: MqttClientOptions) -> Self {
         self.client_options = Some(client_options);
         self
     }
@@ -641,13 +643,13 @@ impl AwsClientBuilder {
         self
     }
 
-    #[cfg(not(any(feature = "rustls", feature = "native-tls")))]
+    #[cfg(not(any(feature = "tokio-rustls", feature = "tokio-native-tls")))]
     fn build_tls_options(&self) -> MqttResult<TlsOptions> {
         compile_error!("gneiss-mqtt-aws must be built with a TLS feature (rustls, native-tls) enabled");
         Err(MqttError::new_tls_error("Connecting to AWS IoT Core requires a TLS implementation feature to be configured"))
     }
 
-    #[cfg(all(feature = "rustls", feature = "native-tls"))]
+    #[cfg(all(feature = "tokio-rustls", feature = "tokio-native-tls"))]
     fn build_tls_options(&self) -> MqttResult<TlsOptions> {
         match self.tls_impl {
             TlsImplementation::Nativetls => {
@@ -659,19 +661,19 @@ impl AwsClientBuilder {
         }
     }
 
-    #[cfg(all(feature = "rustls", not(feature = "native-tls")))]
+    #[cfg(all(feature = "tokio-rustls", not(feature = "tokio-native-tls")))]
     fn build_tls_options(&self) -> MqttResult<TlsOptions> {
         return self.tls_options_builder.build_rustls();
     }
 
-    #[cfg(all(not(feature = "rustls"), feature = "native-tls"))]
+    #[cfg(all(not(feature = "tokio-rustls"), feature = "tokio-native-tls"))]
     fn build_tls_options(&self) -> MqttResult<TlsOptions> {
         return self.tls_options_builder.build_native_tls();
     }
 
     /// Creates a new MQTT5 client from all of the configuration options registered with the
     /// builder.
-    pub fn build(&self, runtime: &Handle) -> MqttResult<Mqtt5Client> {
+    pub fn build_tokio(&self, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
         let user_connect_options =
             if let Some(options) = &self.connect_options {
                 options.clone()
@@ -685,7 +687,7 @@ impl AwsClientBuilder {
             if let Some(options) = &self.client_options {
                 options.clone()
             } else {
-                Mqtt5ClientOptionsBuilder::new().build()
+                MqttClientOptionsBuilder::new().build()
             };
 
         let tls_options = self.build_tls_options()?;
@@ -695,7 +697,7 @@ impl AwsClientBuilder {
             .with_client_options(client_options)
             .with_tls_options(tls_options);
 
-        #[cfg(feature = "websockets")]
+        #[cfg(feature = "tokio-websockets")]
         if self.auth_type == AuthType::Sigv4Websockets {
             let sigv4_options = self.websocket_sigv4_options.as_ref().unwrap().clone();
 
@@ -712,7 +714,7 @@ impl AwsClientBuilder {
             builder.with_websocket_options(websocket_options);
         }
 
-        builder.build(runtime)
+        builder.build_tokio(runtime)
     }
 
     fn build_final_connect_options(&self, connect_options: ConnectOptions) -> ConnectOptions {
@@ -738,7 +740,7 @@ impl AwsClientBuilder {
     }
 }
 
-#[cfg(feature = "websockets")]
+#[cfg(feature = "tokio-websockets")]
 async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, signing_region: String, credentials_provider: std::sync::Arc<dyn ProvideCredentials>) -> MqttResult<http::request::Builder> {
     let credentials = credentials_provider.provide_credentials().await.map_err(|e| { MqttError::new_other_error(e) })?;
     let session_token = credentials.session_token().map(|st| { st.to_string() });
@@ -800,7 +802,7 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     Ok(signed_request_builder)
 }
 
-#[cfg(feature = "testing")]
+#[cfg(all(feature = "testing", feature = "tokio"))]
 #[cfg(test)]
 mod testing {
     use gneiss_mqtt::error::MqttResult;
@@ -824,17 +826,17 @@ mod testing {
         env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_MTLS_KEY_PATH").unwrap()
     }
 
-    #[cfg(feature = "native-tls")]
+    #[cfg(feature = "tokio-native-tls")]
     fn get_iot_core_cert_path_pkcs8() -> String {
         env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_MTLS_CERT_PATH_PKCS8").unwrap()
     }
 
-    #[cfg(feature = "native-tls")]
+    #[cfg(feature = "tokio-native-tls")]
     fn get_iot_core_key_path_pkcs8() -> String {
         env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_MTLS_KEY_PATH_PKCS8").unwrap()
     }
 
-    #[cfg(feature = "websockets")]
+    #[cfg(feature = "tokio-websockets")]
     fn get_iot_core_sigv4_region() -> String {
         env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_SIGV4_REGION").unwrap()
     }
@@ -882,7 +884,7 @@ mod testing {
     }
 
     async fn do_connect_test(builder: AwsClientBuilder) -> MqttResult<()> {
-        let client = std::sync::Arc::new(builder.build(&Handle::current())?);
+        let client = builder.build_tokio(&Handle::current())?;
 
         let waiter_config = ClientEventWaiterOptions {
             wait_type: ClientEventWaitType::Predicate(Box::new(|ev| {
@@ -921,7 +923,7 @@ mod testing {
 
         let mut builder =
             match tls_impl {
-                #[cfg(feature = "native-tls")]
+                #[cfg(feature = "tokio-native-tls")]
                 TlsImplementation::Nativetls => {
                     // native-tls only supports pkcs8/12 private keys
                     let cert_path_pkcs8 = get_iot_core_cert_path_pkcs8();
@@ -941,7 +943,7 @@ mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "tokio-rustls")]
     fn connect_success_aws_iot_core_mtls_rustls() {
         do_builder_test(Box::new(||{
             Box::pin(do_mtls_builder_test(TlsImplementation::Rustls))
@@ -949,14 +951,14 @@ mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(feature = "tokio-native-tls")]
     fn connect_success_aws_iot_core_mtls_native_tls() {
         do_builder_test(Box::new(||{
             Box::pin(do_mtls_builder_test(TlsImplementation::Nativetls))
         }))
     }
 
-    #[cfg(feature = "websockets")]
+    #[cfg(feature = "tokio-websockets")]
     async fn do_sigv4_builder_test(tls_impl: TlsImplementation) -> MqttResult<()> {
         let signing_region = get_iot_core_sigv4_region();
         let endpoint = get_iot_core_endpoint();
@@ -971,7 +973,7 @@ mod testing {
     }
 
     #[test]
-    #[cfg(all(feature = "rustls", feature = "websockets"))]
+    #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
     fn connect_success_aws_iot_core_ws_sigv4_rustls() {
         do_builder_test(Box::new(||{
             Box::pin(do_sigv4_builder_test(TlsImplementation::Rustls))
@@ -979,7 +981,7 @@ mod testing {
     }
 
     #[test]
-    #[cfg(all(feature = "native-tls", feature = "websockets"))]
+    #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
     fn connect_success_aws_iot_core_ws_sigv4_native_tls() {
         do_builder_test(Box::new(||{
             Box::pin(do_sigv4_builder_test(TlsImplementation::Nativetls))
@@ -1007,7 +1009,7 @@ mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "tokio-rustls")]
     fn connect_success_aws_iot_core_custom_auth_unsigned_rustls() {
         do_builder_test(Box::new(||{
             Box::pin(do_unsigned_custom_auth_test(TlsImplementation::Rustls))
@@ -1015,7 +1017,7 @@ mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(feature = "tokio-native-tls")]
     fn connect_success_aws_iot_core_custom_auth_unsigned_native_tls() {
         do_builder_test(Box::new(||{
             Box::pin(do_unsigned_custom_auth_test(TlsImplementation::Nativetls))
@@ -1055,7 +1057,7 @@ mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "tokio-rustls")]
     fn connect_success_aws_iot_core_custom_auth_signed_preencoded_rustls() {
         do_builder_test(Box::new(||{
             Box::pin(do_signed_custom_auth_test(TlsImplementation::Rustls, false))
@@ -1063,7 +1065,7 @@ mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(feature = "tokio-native-tls")]
     fn connect_success_aws_iot_core_custom_auth_signed_preencoded_native_tls() {
         do_builder_test(Box::new(||{
             Box::pin(do_signed_custom_auth_test(TlsImplementation::Nativetls, false))
@@ -1071,7 +1073,7 @@ mod testing {
     }
 
     #[test]
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "tokio-rustls")]
     fn connect_success_aws_iot_core_custom_auth_signed_unencoded_rustls() {
         do_builder_test(Box::new(||{
             Box::pin(do_signed_custom_auth_test(TlsImplementation::Rustls, true))
@@ -1079,7 +1081,7 @@ mod testing {
     }
 
     #[test]
-    #[cfg(feature = "native-tls")]
+    #[cfg(feature = "tokio-native-tls")]
     fn connect_success_aws_iot_core_custom_auth_signed_unencoded_native_tls() {
         do_builder_test(Box::new(||{
             Box::pin(do_signed_custom_auth_test(TlsImplementation::Nativetls, true))

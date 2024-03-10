@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 elasti-gneiss-core = { path = "../elasti-gneiss-core" }
-gneiss-mqtt = { path = "../gneiss-mqtt" }
-gneiss-mqtt-aws = { path = "../gneiss-mqtt-aws" }
+gneiss-mqtt = { path = "../gneiss-mqtt", features = ["tokio-rustls", "tokio-native-tls", "tokio-websockets"] }
+gneiss-mqtt-aws = { path = "../gneiss-mqtt-aws", features = ["tokio-rustls", "tokio-native-tls", "tokio-websockets"] }
 tokio = { version = "1", features = ["full"] }
 simplelog = { version = "0.12" }
 argh = { version = "0.1" }

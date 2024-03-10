@@ -6,7 +6,7 @@
 use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult, main_loop};
-use gneiss_mqtt::client::Mqtt5Client;
+use gneiss_mqtt::client::AsyncGneissClient;
 use gneiss_mqtt::config::*;
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
@@ -48,7 +48,7 @@ struct CommandLineArgs {
     http_proxy_uri: Option<String>
 }
 
-fn build_client(connect_options: ConnectOptions, client_config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
+fn build_client(connect_options: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<AsyncGneissClient> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&args.endpoint_uri);
@@ -132,7 +132,7 @@ fn build_client(connect_options: ConnectOptions, client_config: Mqtt5ClientOptio
         _ => {}
     }
 
-    Ok(builder.build(runtime)?)
+    Ok(builder.build_tokio(runtime)?)
 }
 
 #[tokio::main]
@@ -157,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
         .build();
 
-    let config = Mqtt5ClientOptionsBuilder::new()
+    let config = MqttClientOptionsBuilder::new()
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::None)
         .with_outbound_alias_resolver_factory(OutboundAliasResolverFactory::new_lru_factory(10))

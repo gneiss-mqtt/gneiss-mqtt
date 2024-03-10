@@ -474,33 +474,59 @@ impl From<core::str::Utf8Error> for MqttError {
     }
 }
 
-#[cfg(feature = "rustls")]
+#[cfg(feature = "tokio-rustls")]
 impl From<rustls_pki_types::InvalidDnsNameError> for MqttError {
     fn from(err: rustls_pki_types::InvalidDnsNameError) -> Self {
         MqttError::new_connection_establishment_failure(err)
     }
 }
 
-#[cfg(feature = "rustls")]
+#[cfg(feature = "tokio-rustls")]
 impl From<rustls::Error> for MqttError {
     fn from(err: rustls::Error) -> Self {
         MqttError::new_tls_error(err)
     }
 }
 
-#[cfg(feature = "native-tls")]
+#[cfg(feature = "tokio-native-tls")]
 impl From<native_tls::Error> for MqttError {
     fn from(err: native_tls::Error) -> Self {
         MqttError::new_tls_error(err)
     }
 }
 
-#[cfg(feature="websockets")]
+#[cfg(feature="tokio-websockets")]
 impl From<tungstenite::error::Error> for MqttError {
     fn from(err: tungstenite::error::Error) -> Self {
         MqttError::new_transport_error(err)
     }
 }
+
+#[cfg(feature="tokio")]
+impl From<tokio::sync::oneshot::error::RecvError> for MqttError {
+    fn from(err: tokio::sync::oneshot::error::RecvError) -> Self {
+        MqttError::new_operation_channel_failure(err)
+    }
+}
+
+impl <T> From<std::sync::mpsc::SendError<T>> for MqttError where T : Send + Sync + 'static {
+    fn from(err: std::sync::mpsc::SendError<T>) -> Self {
+        MqttError::new_operation_channel_failure(err)
+    }
+}
+
+impl From<std::sync::mpsc::RecvError> for MqttError {
+    fn from(err: std::sync::mpsc::RecvError) -> Self {
+        MqttError::new_operation_channel_failure(err)
+    }
+}
+
+impl From<std::sync::mpsc::TryRecvError> for MqttError {
+    fn from(err: std::sync::mpsc::TryRecvError) -> Self {
+        MqttError::new_operation_channel_failure(err)
+    }
+}
+
 
 /// Crate-wide result type for functions that can fail
 pub type MqttResult<T> = Result<T, MqttError>;

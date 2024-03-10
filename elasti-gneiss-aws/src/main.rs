@@ -6,7 +6,7 @@
 use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult, main_loop};
-use gneiss_mqtt::client::Mqtt5Client;
+use gneiss_mqtt::client::AsyncGneissClient;
 use gneiss_mqtt::config::*;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptionsBuilder, WebsocketSigv4OptionsBuilder};
 use simplelog::{LevelFilter, WriteLogger};
@@ -68,7 +68,7 @@ struct CommandLineArgs {
     signing_region: Option<String>
 }
 
-async fn build_client(connect_config: ConnectOptions, client_config: Mqtt5ClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<Mqtt5Client> {
+async fn build_client(connect_config: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<AsyncGneissClient> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&uri_string);
@@ -91,7 +91,7 @@ async fn build_client(connect_config: ConnectOptions, client_config: Mqtt5Client
                 Ok(AwsClientBuilder::new_direct_with_mtls_from_fs(&endpoint, args.cert.as_ref().unwrap(), args.key.as_ref().unwrap(), capath)?
                     .with_connect_options(connect_config)
                     .with_client_options(client_config)
-                    .build(runtime)?)
+                    .build_tokio(runtime)?)
             } else {
                 println!("ERROR: aws-mqtts scheme requires certification and private key fields for mTLS");
                 Err(ElastiError::MissingArguments("--cert, --key"))
@@ -123,7 +123,7 @@ async fn build_client(connect_config: ConnectOptions, client_config: Mqtt5Client
             Ok(AwsClientBuilder::new_direct_with_custom_auth(&endpoint, config.build(), capath)?
                 .with_connect_options(connect_config)
                 .with_client_options(client_config)
-                .build(runtime)?)
+                .build_tokio(runtime)?)
         }
         "aws-wss" => {
             let signing_region = args.signing_region.clone().unwrap_or("us-east-1".to_string());
@@ -133,7 +133,7 @@ async fn build_client(connect_config: ConnectOptions, client_config: Mqtt5Client
             Ok(AwsClientBuilder::new_websockets_with_sigv4(&endpoint, sigv4_options, capath)?
                 .with_connect_options(connect_config)
                 .with_client_options(client_config)
-                .build(runtime)?)
+                .build_tokio(runtime)?)
         }
         _ => {
             Err(ElastiError::UnsupportedUriScheme(scheme))
@@ -159,7 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let connect_options = ConnectOptionsBuilder::new().build();
 
-    let config = Mqtt5ClientOptionsBuilder::new()
+    let config = MqttClientOptionsBuilder::new()
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::Uniform)
         .build();

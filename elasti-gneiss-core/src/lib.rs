@@ -175,14 +175,14 @@ pub fn client_event_callback(event: Arc<ClientEvent>) {
     }
 }
 
-fn handle_start(client: &Mqtt5Client, _: StartArgs) {
+fn handle_start(client: &AsyncGneissClient, _: StartArgs) {
     let function = |event|{ client_event_callback(event) };
     let listener_callback = Arc::new(function);
 
     let _ = client.start(Some(listener_callback));
 }
 
-fn handle_stop(client: &Mqtt5Client, args: StopArgs) {
+fn handle_stop(client: &AsyncGneissClient, args: StopArgs) {
     let mut stop_options_builder = StopOptionsBuilder::new();
 
     if let Some(reason_code_u8) = args.reason_code {
@@ -197,11 +197,11 @@ fn handle_stop(client: &Mqtt5Client, args: StopArgs) {
     let _ = client.stop(Some(stop_options_builder.build()));
 }
 
-fn handle_close(client: &Mqtt5Client, _ : CloseArgs) {
+fn handle_close(client: &AsyncGneissClient, _ : CloseArgs) {
     let _ = client.close();
 }
 
-async fn handle_publish(client: &Mqtt5Client, args: PublishArgs) {
+async fn handle_publish(client: &AsyncGneissClient, args: PublishArgs) {
 
     let qos_result = QualityOfService::try_from(args.qos);
     if qos_result.is_err() {
@@ -229,7 +229,7 @@ async fn handle_publish(client: &Mqtt5Client, args: PublishArgs) {
     }
 }
 
-async fn handle_subscribe(client: &Mqtt5Client, args: SubscribeArgs) {
+async fn handle_subscribe(client: &AsyncGneissClient, args: SubscribeArgs) {
     let qos_result = QualityOfService::try_from(args.qos);
     if qos_result.is_err() {
         println!("Invalid input!  Qos must be 0, 1, or 2");
@@ -252,7 +252,7 @@ async fn handle_subscribe(client: &Mqtt5Client, args: SubscribeArgs) {
     }
 }
 
-async fn handle_unsubscribe(client: &Mqtt5Client, args: UnsubscribeArgs) {
+async fn handle_unsubscribe(client: &AsyncGneissClient, args: UnsubscribeArgs) {
 
     let unsubscribe = UnsubscribePacket::builder().with_topic_filter(args.topic_filter).build();
 
@@ -268,7 +268,7 @@ async fn handle_unsubscribe(client: &Mqtt5Client, args: UnsubscribeArgs) {
     }
 }
 
-async fn handle_input(value: String, client: &Mqtt5Client) -> bool {
+async fn handle_input(value: String, client: &AsyncGneissClient) -> bool {
     let args : Vec<&str> = value.split_whitespace().collect();
     if args.is_empty() {
         println!("Invalid input!");
@@ -295,7 +295,7 @@ async fn handle_input(value: String, client: &Mqtt5Client) -> bool {
     false
 }
 
-pub async fn main_loop(client: Mqtt5Client) {
+pub async fn main_loop(client: AsyncGneissClient) {
 
     let stdin = tokio::io::stdin();
     let mut lines = BufReader::new(stdin).lines();

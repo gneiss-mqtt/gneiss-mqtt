@@ -31,7 +31,7 @@ fn is_reconnect_related_event(event: &Arc<ClientEvent>) -> bool {
 type ReconnectEventTestValidatorFn = Box<dyn Fn(&Vec<ClientEventRecord>) -> MqttResult<()> + Send + Sync>;
 
 async fn simple_reconnect_test(builder : GenericClientBuilder, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> MqttResult<()> {
-    let client = Arc::new(builder.build(&tokio::runtime::Handle::current()).unwrap());
+    let client = builder.build_tokio(&tokio::runtime::Handle::current()).unwrap();
 
     let wait_options = ClientEventWaiterOptions {
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
@@ -179,7 +179,7 @@ fn build_reconnect_reset_test_options() -> ClientTestOptions {
 }
 
 async fn reconnect_backoff_reset_test(builder : GenericClientBuilder, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> MqttResult<()> {
-    let client = Arc::new(builder.build(&tokio::runtime::Handle::current()).unwrap());
+    let client = builder.build_tokio(&tokio::runtime::Handle::current()).unwrap();
 
     let first_wait_options = ClientEventWaiterOptions {
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))

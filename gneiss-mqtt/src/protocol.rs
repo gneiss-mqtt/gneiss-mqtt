@@ -2006,23 +2006,23 @@ fn complete_operation_with_result(operation_options: &mut MqttOperationOptions, 
                 }
             }
 
-            let sender = publish_options.response_sender.take().unwrap();
-            let _ = sender.send(Ok(publish_response));
+            let handler = publish_options.response_handler.take().unwrap();
+            let _ = handler(Ok(publish_response));
 
             return Ok(());
         }
         MqttOperationOptions::Subscribe(subscribe_options) => {
             if let OperationResponse::Subscribe(suback) = completion_result.unwrap() {
-                let sender = subscribe_options.response_sender.take().unwrap();
-                let _ = sender.send(Ok(suback));
+                let handler = subscribe_options.response_handler.take().unwrap();
+                let _ = handler(Ok(suback));
 
                 return Ok(());
             }
         }
         MqttOperationOptions::Unsubscribe(unsubscribe_options) => {
             if let OperationResponse::Unsubscribe(unsuback) = completion_result.unwrap() {
-                let sender = unsubscribe_options.response_sender.take().unwrap();
-                let _ = sender.send(Ok(unsuback));
+                let handler = unsubscribe_options.response_handler.take().unwrap();
+                let _ = handler(Ok(unsuback));
 
                 return Ok(());
             }
@@ -2035,16 +2035,16 @@ fn complete_operation_with_result(operation_options: &mut MqttOperationOptions, 
 fn complete_operation_with_error(operation_options: &mut MqttOperationOptions, error: MqttError) -> MqttResult<()> {
     match operation_options {
         MqttOperationOptions::Publish(publish_options) => {
-            let sender = publish_options.response_sender.take().unwrap();
-            let _ = sender.send(Err(error));
+            let handler = publish_options.response_handler.take().unwrap();
+            let _ = handler(Err(error));
         }
         MqttOperationOptions::Subscribe(subscribe_options) => {
-            let sender = subscribe_options.response_sender.take().unwrap();
-            let _ = sender.send(Err(error));
+            let handler = subscribe_options.response_handler.take().unwrap();
+            let _ = handler(Err(error));
         }
         MqttOperationOptions::Unsubscribe(unsubscribe_options) => {
-            let sender = unsubscribe_options.response_sender.take().unwrap();
-            let _ = sender.send(Err(error));
+            let handler = unsubscribe_options.response_handler.take().unwrap();
+            let _ = handler(Err(error));
         }
     }
 

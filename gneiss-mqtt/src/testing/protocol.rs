@@ -6,7 +6,6 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
-use crate::features::gneiss_tokio::*;
 use crate::protocol::*;
 use assert_matches::assert_matches;
 use crate::alias::{OutboundAliasResolution, OutboundAliasResolverFactory};
@@ -611,12 +610,16 @@ impl ProtocolStateTestFixture {
         None
     }
 
-    pub(crate) fn subscribe(&mut self, elapsed_millis: u64, subscribe: SubscribePacket, options: SubscribeOptions) -> MqttResult<AsyncOperationReceiver<SubscribeResult>> {
-        let (sender, receiver) = AsyncOperationChannel::new().split();
+    pub(crate) fn subscribe(&mut self, elapsed_millis: u64, subscribe: SubscribePacket, options: SubscribeOptions) -> MqttResult<std::sync::mpsc::Receiver<SubscribeResult>> {
+        let (sender, receiver) = std::sync::mpsc::channel();
         let packet = Box::new(MqttPacket::Subscribe(subscribe));
+        let handler: ResponseHandler<SubscribeResult> = Box::new(move |res| {
+            sender.send(res)?;
+            Ok(())
+        });
         let subscribe_options = SubscribeOptionsInternal {
             options,
-            response_sender : Some(sender)
+            response_handler : Some(handler)
         };
 
         let subscribe_event = UserEvent::Subscribe(packet, subscribe_options);
@@ -629,12 +632,16 @@ impl ProtocolStateTestFixture {
         Ok(receiver)
     }
 
-    pub(crate) fn unsubscribe(&mut self, elapsed_millis: u64, unsubscribe: UnsubscribePacket, options: UnsubscribeOptions) -> MqttResult<AsyncOperationReceiver<UnsubscribeResult>> {
-        let (sender, receiver) = AsyncOperationChannel::new().split();
+    pub(crate) fn unsubscribe(&mut self, elapsed_millis: u64, unsubscribe: UnsubscribePacket, options: UnsubscribeOptions) -> MqttResult<std::sync::mpsc::Receiver<UnsubscribeResult>> {
+        let (sender, receiver) = std::sync::mpsc::channel();
         let packet = Box::new(MqttPacket::Unsubscribe(unsubscribe));
+        let handler : ResponseHandler<UnsubscribeResult> = Box::new(move |res| {
+            sender.send(res)?;
+            Ok(())
+        });
         let unsubscribe_options = UnsubscribeOptionsInternal {
             options,
-            response_sender : Some(sender)
+            response_handler : Some(handler)
         };
 
         let unsubscribe_event = UserEvent::Unsubscribe(packet, unsubscribe_options);
@@ -647,12 +654,16 @@ impl ProtocolStateTestFixture {
         Ok(receiver)
     }
 
-    pub(crate) fn publish(&mut self, elapsed_millis: u64, publish: PublishPacket, options: PublishOptions) -> MqttResult<AsyncOperationReceiver<PublishResult>> {
-        let (sender, receiver) = AsyncOperationChannel::new().split();
+    pub(crate) fn publish(&mut self, elapsed_millis: u64, publish: PublishPacket, options: PublishOptions) -> MqttResult<std::sync::mpsc::Receiver<PublishResult>> {
+        let (sender, receiver) = std::sync::mpsc::channel();
         let packet = Box::new(MqttPacket::Publish(publish));
+        let handler : ResponseHandler<PublishResult> = Box::new(move |res| {
+            sender.send(res)?;
+            Ok(())
+        });
         let publish_options = PublishOptionsInternal {
             options,
-            response_sender : Some(sender)
+            response_handler : Some(handler)
         };
 
         let publish_event = UserEvent::Publish(packet, publish_options);
@@ -1364,7 +1375,7 @@ fn do_subscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_ti
         panic!("Expected subscribe");
     }
 
-    let result = subscribe_result_receiver.blocking_recv();
+    let result = subscribe_result_receiver.recv();
     assert!(!result.is_err());
 
     let subscribe_result = result.unwrap();
@@ -1409,7 +1420,7 @@ fn do_publish_success(fixture : &mut ProtocolStateTestFixture, qos: QualityOfSer
         assert!(fixture.service_round_trip(response_time, response_time, 4096).is_ok());
     }
 
-    let result = publish_result_receiver.blocking_recv();
+    let result = publish_result_receiver.recv();
     assert!(!result.is_err());
 
     let op_result = result.unwrap();
@@ -1482,7 +1493,7 @@ fn do_unsubscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_
         panic!("Expected unsubscribe");
     }
 
-    let result = unsubscribe_result_receiver.blocking_recv();
+    let result = unsubscribe_result_receiver.recv();
     assert!(!result.is_err());
 
     let unsubscribe_result = result.unwrap();
@@ -1673,7 +1684,7 @@ macro_rules! define_operation_success_reconnect_while_in_user_queue_test {
 
                 let operation = $build_operation_function_name();
 
-                let mut operation_result_receiver = fixture.$operation_api(0, operation.clone(), $operation_options_type{ ..Default::default()}).unwrap();
+                let operation_result_receiver = fixture.$operation_api(0, operation.clone(), $operation_options_type{ ..Default::default()}).unwrap();
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
 
@@ -1688,7 +1699,7 @@ macro_rules! define_operation_success_reconnect_while_in_user_queue_test {
                 assert!(fixture.service_round_trip(10, 20, 4096).is_ok());
                 assert!(fixture.service_round_trip(30, 40, 4096).is_ok()); // qos 2
 
-                if let Ok(Ok(ack)) = operation_result_receiver.blocking_recv() {
+                if let Ok(Ok(ack)) = operation_result_receiver.recv() {
                     $verify_function_name(&ack);
                 } else {
                     panic!("Expected ack result");
@@ -1860,7 +1871,7 @@ macro_rules! define_operation_success_reconnect_while_current_operation_test {
 
                 let operation = $build_operation_function_name();
 
-                let mut operation_result_receiver = fixture.$operation_api(0, operation.clone(), $operation_options_type{ ..Default::default()}).unwrap();
+                let operation_result_receiver = fixture.$operation_api(0, operation.clone(), $operation_options_type{ ..Default::default()}).unwrap();
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
 
@@ -1881,7 +1892,7 @@ macro_rules! define_operation_success_reconnect_while_current_operation_test {
                 assert!(fixture.service_round_trip(10, 20, 4096).is_ok());
                 assert!(fixture.service_round_trip(30, 40, 4096).is_ok()); // qos 2
 
-                if let Ok(Ok(ack)) = operation_result_receiver.blocking_recv() {
+                if let Ok(Ok(ack)) = operation_result_receiver.recv() {
                     $verify_function_name(&ack);
                 } else {
                     panic!("Expected ack result");
@@ -1973,7 +1984,7 @@ macro_rules! define_operation_success_reconnect_no_session_while_pending_test {
 
                 let operation = $build_operation_function_name();
 
-                let mut operation_result_receiver = fixture.$operation_api(0, operation.clone(), $operation_options_type{ ..Default::default()}).unwrap();
+                let operation_result_receiver = fixture.$operation_api(0, operation.clone(), $operation_options_type{ ..Default::default()}).unwrap();
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
 
@@ -1999,7 +2010,7 @@ macro_rules! define_operation_success_reconnect_no_session_while_pending_test {
                 assert!(fixture.service_round_trip(10, 20, 4096).is_ok());
                 assert!(fixture.service_round_trip(30, 40, 4096).is_ok()); // qos 2
 
-                if let Ok(Ok(ack)) = operation_result_receiver.blocking_recv() {
+                if let Ok(Ok(ack)) = operation_result_receiver.recv() {
                     $verify_function_name(&ack);
                 } else {
                     panic!("Expected ack result");
@@ -2152,7 +2163,7 @@ macro_rules! define_operation_failure_validation_helper {
                 let operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type{ ..Default::default() }).unwrap();
                 assert!(fixture.service_round_trip(0, 0, 4096).is_ok());
 
-                let result = operation_result_receiver.blocking_recv();
+                let result = operation_result_receiver.recv();
                 assert!(!result.is_err());
 
                 let operation_result = result.unwrap();
@@ -2288,7 +2299,7 @@ macro_rules! define_operation_failure_timeout_helper {
 
                 let packet = $build_operation_function_name();
 
-                let mut operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type_builder::new().with_timeout(Duration::from_secs(30)).build()).unwrap();
+                let operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type_builder::new().with_timeout(Duration::from_secs(30)).build()).unwrap();
                 assert!(fixture.service_round_trip(0, 0, 4096).is_ok());
 
                 let (index, _) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::$packet_type, 1, None, None).unwrap();
@@ -2300,11 +2311,14 @@ macro_rules! define_operation_failure_timeout_helper {
                     let elapsed_millis = i * 1000;
                     assert_eq!(Some(30000), fixture.get_next_service_time(elapsed_millis));
                     assert!(fixture.service_round_trip(elapsed_millis, elapsed_millis, 4096).is_ok());
-                    assert_matches!(operation_result_receiver.try_recv(), Err(MqttError::OperationChannelFailure(_)));
+                    let recv_result = operation_result_receiver.try_recv();
+                    assert!(recv_result.is_err());
+                    let mqtt_error = MqttError::from(recv_result.unwrap_err());
+                    assert_matches!(mqtt_error, MqttError::OperationChannelFailure(_));
                 }
 
                 assert!(fixture.service_round_trip(30000, 30000, 4096).is_ok());
-                let result = operation_result_receiver.blocking_recv();
+                let result = operation_result_receiver.recv();
                 assert_matches!(result.unwrap().unwrap_err(), MqttError::AckTimeout(_));
                 verify_protocol_state_empty(&fixture);
             }
@@ -2372,7 +2386,7 @@ fn connected_state_qos2_publish_failure_pubrel_timeout() {
 
     let packet = build_qos2_publish_success_packet();
 
-    let mut operation_result_receiver = fixture.publish(0, packet, PublishOptionsBuilder::new().with_timeout(Duration::from_secs(30)).build()).unwrap();
+    let operation_result_receiver = fixture.publish(0, packet, PublishOptionsBuilder::new().with_timeout(Duration::from_secs(30)).build()).unwrap();
     assert!(fixture.service_round_trip(0, 0, 4096).is_ok());
     assert!(fixture.service_round_trip(10, 10, 4096).is_ok());
 
@@ -2388,11 +2402,12 @@ fn connected_state_qos2_publish_failure_pubrel_timeout() {
         let elapsed_millis = i * 1000;
         assert_eq!(Some(30000), fixture.get_next_service_time(elapsed_millis));
         assert!(fixture.service_round_trip(elapsed_millis, elapsed_millis, 4096).is_ok());
-        assert_matches!(operation_result_receiver.try_recv(), Err(MqttError::OperationChannelFailure(_)));
+        let error = MqttError::from(operation_result_receiver.try_recv().unwrap_err());
+        assert_matches!(error, MqttError::OperationChannelFailure(_));
     }
 
     assert!(fixture.service_round_trip(30000, 30000, 4096).is_ok());
-    let result = operation_result_receiver.blocking_recv();
+    let result = operation_result_receiver.recv();
     assert_matches!(result.unwrap().unwrap_err(), MqttError::AckTimeout(_));
     assert!(fixture.service_round_trip(30010, 30010, 4096).is_ok());
     verify_protocol_state_empty(&fixture);
@@ -2410,7 +2425,7 @@ macro_rules! define_operation_failure_offline_submit_and_policy_fail_helper {
 
                 let operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type{ ..Default::default() }).unwrap();
 
-                let result = operation_result_receiver.blocking_recv();
+                let result = operation_result_receiver.recv();
                 assert!(!result.is_err());
 
                 let operation_result = result.unwrap();
@@ -2498,7 +2513,7 @@ macro_rules! define_operation_failure_disconnect_user_queue_with_failing_offline
 
                 let packet = $build_operation_function_name();
 
-                let mut operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type{ ..Default::default() }).unwrap();
+                let operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type{ ..Default::default() }).unwrap();
 
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
@@ -2506,7 +2521,7 @@ macro_rules! define_operation_failure_disconnect_user_queue_with_failing_offline
                 assert!(fixture.on_connection_closed(0).is_ok());
                 verify_protocol_state_empty(&fixture);
 
-                let result = operation_result_receiver.blocking_recv();
+                let result = operation_result_receiver.recv();
                 assert!(!result.is_err());
 
                 let operation_result = result.unwrap();
@@ -2594,7 +2609,7 @@ macro_rules! define_operation_failure_disconnect_current_operation_with_failing_
 
                 let packet = $build_operation_function_name();
 
-                let mut operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type{ ..Default::default() }).unwrap();
+                let operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type{ ..Default::default() }).unwrap();
 
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
@@ -2608,7 +2623,7 @@ macro_rules! define_operation_failure_disconnect_current_operation_with_failing_
                 assert!(fixture.on_connection_closed(0).is_ok());
                 verify_protocol_state_empty(&fixture);
 
-                let result = operation_result_receiver.blocking_recv();
+                let result = operation_result_receiver.recv();
                 assert!(!result.is_err());
 
                 let operation_result = result.unwrap();
@@ -2696,7 +2711,7 @@ macro_rules! define_operation_failure_disconnect_pending_with_failing_offline_po
 
                 let packet = $build_operation_function_name();
 
-                let mut operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type{ ..Default::default() }).unwrap();
+                let operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type{ ..Default::default() }).unwrap();
 
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
@@ -2714,7 +2729,7 @@ macro_rules! define_operation_failure_disconnect_pending_with_failing_offline_po
                 assert!(fixture.on_connection_closed(0).is_ok());
                 verify_protocol_state_empty(&fixture);
 
-                let result = operation_result_receiver.blocking_recv();
+                let result = operation_result_receiver.recv();
                 assert!(!result.is_err());
 
                 let operation_result = result.unwrap();
@@ -2776,7 +2791,7 @@ macro_rules! define_acked_publish_failure_disconnect_pending_no_session_resumpti
 
                 let packet = $build_operation_function_name();
 
-                let mut operation_result_receiver = fixture.publish(0, packet, PublishOptions{ ..Default::default() }).unwrap();
+                let operation_result_receiver = fixture.publish(0, packet, PublishOptions{ ..Default::default() }).unwrap();
 
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
@@ -2810,7 +2825,7 @@ macro_rules! define_acked_publish_failure_disconnect_pending_no_session_resumpti
                 assert!(fixture.service_round_trip(20, 30, 4096).is_ok());
                 assert!(fixture.service_round_trip(40, 50, 4096).is_ok());
 
-                let result = operation_result_receiver.blocking_recv();
+                let result = operation_result_receiver.recv();
                 assert!(!result.is_err());
 
                 let operation_result = result.unwrap();
@@ -2868,7 +2883,7 @@ macro_rules! define_acked_publish_success_disconnect_pending_with_session_resump
 
                 let packet = $build_operation_function_name();
 
-                let mut operation_result_receiver = fixture.publish(0, packet, PublishOptions{ ..Default::default() }).unwrap();
+                let operation_result_receiver = fixture.publish(0, packet, PublishOptions{ ..Default::default() }).unwrap();
 
                 assert!(operation_result_receiver.try_recv().is_err());
                 assert_eq!(1, fixture.client_state.user_operation_queue.len());
@@ -2907,7 +2922,7 @@ macro_rules! define_acked_publish_success_disconnect_pending_with_session_resump
                 assert!(fixture.service_round_trip(40, 50, 4096).is_ok()); // publish -> puback/pubrec
                 assert!(fixture.service_round_trip(60, 70, 4096).is_ok()); // Optional: pubrel -> pubcomp
 
-                let result = operation_result_receiver.blocking_recv();
+                let result = operation_result_receiver.recv();
                 assert!(!result.is_err());
 
                 let operation_result = result.unwrap().unwrap();
@@ -3298,9 +3313,9 @@ fn connected_state_maximum_inflight_publish_limit_respected() {
         ..Default::default()
     };
 
-    let mut result1 = fixture.publish(10, publish1, PublishOptions{ ..Default::default() }).unwrap();
-    let mut result2 = fixture.publish(10, publish2, PublishOptions{ ..Default::default() }).unwrap();
-    let mut result3 = fixture.publish(10, publish3, PublishOptions{ ..Default::default() }).unwrap();
+    let result1 = fixture.publish(10, publish1, PublishOptions{ ..Default::default() }).unwrap();
+    let result2 = fixture.publish(10, publish2, PublishOptions{ ..Default::default() }).unwrap();
+    let result3 = fixture.publish(10, publish3, PublishOptions{ ..Default::default() }).unwrap();
 
     let response1a_bytes = fixture.service_with_drain(20, 4096).unwrap();
     assert!(fixture.get_next_service_time(20).is_none());
@@ -3543,9 +3558,9 @@ struct MultiOperationContext {
     outbound_packets: Vec<MqttPacket>,
     to_client_bytes: Vec<u8>,
 
-    publish_receivers: HashMap<u64, AsyncOperationReceiver<PublishResult>>,
-    subscribe_receivers: HashMap<u64, AsyncOperationReceiver<SubscribeResult>>,
-    unsubscribe_receivers: HashMap<u64, AsyncOperationReceiver<UnsubscribeResult>>,
+    publish_receivers: HashMap<u64, std::sync::mpsc::Receiver<PublishResult>>,
+    subscribe_receivers: HashMap<u64, std::sync::mpsc::Receiver<SubscribeResult>>,
+    unsubscribe_receivers: HashMap<u64, std::sync::mpsc::Receiver<UnsubscribeResult>>,
 }
 
 impl MultiOperationContext {
@@ -4136,7 +4151,7 @@ fn connected_state_disconnect_with_high_priority_pubrel() {
         ..Default::default()
     };
 
-    let mut receiver = fixture.publish(100, publish, PublishOptions{ ..Default::default() }).unwrap();
+    let receiver = fixture.publish(100, publish, PublishOptions{ ..Default::default() }).unwrap();
 
     assert!(fixture.service_round_trip(150, 200, 4096).is_ok());
     assert_eq!(1, fixture.client_state.high_priority_operation_queue.len());

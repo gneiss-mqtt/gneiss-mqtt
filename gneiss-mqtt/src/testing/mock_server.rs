@@ -14,7 +14,7 @@ use std::io::ErrorKind::{TimedOut, WouldBlock, Interrupted};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::time::Duration;
 use crate::alias::OutboundAliasResolution;
-use crate::config::{ConnectOptionsBuilder, GenericClientBuilder, Mqtt5ClientOptionsBuilder};
+use crate::config::{ConnectOptionsBuilder, GenericClientBuilder, MqttClientOptionsBuilder};
 use crate::mqtt::utils::mqtt_packet_to_packet_type;
 use crate::testing::protocol::*;
 use std::sync::{Arc, Mutex};
@@ -207,7 +207,7 @@ impl MockBroker {
 pub(crate) struct ClientTestOptions {
     pub(crate) packet_handler_set_factory_fn: Option<PacketHandlerSetFactory>,
 
-    pub(crate) client_options_mutator_fn: Option<Box<dyn Fn(&mut Mqtt5ClientOptionsBuilder)>>,
+    pub(crate) client_options_mutator_fn: Option<Box<dyn Fn(&mut MqttClientOptionsBuilder)>>,
 
     pub(crate) connect_options_mutator_fn: Option<Box<dyn Fn(&mut ConnectOptionsBuilder)>>
 }
@@ -222,7 +222,7 @@ pub(crate) fn build_mock_client_server(mut config: ClientTestOptions) -> (Generi
 
     let broker = MockBroker::new(handler_set_factory);
 
-    let mut client_options_builder = Mqtt5ClientOptionsBuilder::new();
+    let mut client_options_builder = MqttClientOptionsBuilder::new();
     client_options_builder.with_connect_timeout(Duration::from_secs(3));
 
     if let Some(client_options_mutator) = config.client_options_mutator_fn {
