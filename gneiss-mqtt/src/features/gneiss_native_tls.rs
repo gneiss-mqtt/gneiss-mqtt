@@ -37,7 +37,16 @@ impl TlsOptionsBuilder {
         builder.use_sni(self.verify_peer);
 
         Ok(TlsOptions {
-            options: TlsData::NativeTls(self.mode, Arc::new(builder))
+            options: TlsData::NativeTls(Arc::new(builder))
         })
+    }
+
+    /// Builds client TLS options directly from a native-tls TlsConnectorBuilder instance
+    ///
+    /// This factory is useful when you need TLS properties that TlsOptionsBuilder does not support.
+    pub fn build_native_tls_from_tls_connector_builder(builder: native_tls::TlsConnectorBuilder) -> TlsOptions {
+        TlsOptions {
+            options: TlsData::NativeTls(Arc::new(builder))
+        }
     }
 }

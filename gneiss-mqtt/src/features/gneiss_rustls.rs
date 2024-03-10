@@ -46,8 +46,17 @@ impl TlsOptionsBuilder {
         config.enable_sni = self.verify_peer;
 
         Ok(TlsOptions {
-            options: TlsData::Rustls(self.mode, Arc::new(config))
+            options: TlsData::Rustls(Arc::new(config))
         })
+    }
+
+    /// Builds client TLS options directly from a Rustls ClientConfig instance
+    ///
+    /// This factory is useful when you need TLS properties that TlsOptionsBuilder does not support.
+    pub fn build_rustls_from_client_config(config: rustls::ClientConfig) -> TlsOptions {
+        TlsOptions {
+            options: TlsData::Rustls(Arc::new(config))
+        }
     }
 }
 

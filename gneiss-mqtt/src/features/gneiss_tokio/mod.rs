@@ -896,7 +896,7 @@ async fn wrap_stream_with_tls_rustls<S>(stream : Pin<Box<impl Future<Output=Mqtt
 
     let connector =
         match tls_options.options {
-            TlsData::Rustls(_, config) => { tokio_rustls::TlsConnector::from(config.clone()) }
+            TlsData::Rustls(config) => { tokio_rustls::TlsConnector::from(config.clone()) }
             _ => { panic!("Rustls stream wrapper invoked without Rustls configuration"); }
         };
 
@@ -913,7 +913,7 @@ async fn wrap_stream_with_tls_native_tls<S>(stream : Pin<Box<impl Future<Output=
 
     let connector =
         match tls_options.options {
-            TlsData::NativeTls(_, ntls_builder) => {
+            TlsData::NativeTls(ntls_builder) => {
                 let cx = ntls_builder.build()?;
                 tokio_native_tls::TlsConnector::from(cx)
             }

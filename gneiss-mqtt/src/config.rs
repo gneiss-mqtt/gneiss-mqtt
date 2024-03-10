@@ -129,10 +129,10 @@ pub(crate) enum TlsData {
     Invalid,
 
     #[cfg(feature = "tokio-rustls")]
-    Rustls(TlsMode, std::sync::Arc<rustls::ClientConfig>),
+    Rustls(std::sync::Arc<rustls::ClientConfig>),
 
     #[cfg(feature = "tokio-native-tls")]
-    NativeTls(TlsMode, std::sync::Arc<native_tls::TlsConnectorBuilder>)
+    NativeTls(std::sync::Arc<native_tls::TlsConnectorBuilder>)
 }
 
 /// Opaque struct containing TLS configuration data, assuming TLS has been enabled as a feature
@@ -760,9 +760,9 @@ fn get_tls_impl_from_options(tls_options: Option<&TlsOptions>) -> TlsConfigurati
         return
             match &tls_opts.options {
                 #[cfg(feature = "tokio-rustls")]
-                TlsData::Rustls(_, _) => { TlsConfiguration::Rustls }
+                TlsData::Rustls(_) => { TlsConfiguration::Rustls }
                 #[cfg(feature = "tokio-native-tls")]
-                TlsData::NativeTls(_, _) => { TlsConfiguration::Nativetls }
+                TlsData::NativeTls(_) => { TlsConfiguration::Nativetls }
                 _ => { TlsConfiguration::None }
             };
     }
