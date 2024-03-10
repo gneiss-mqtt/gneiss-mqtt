@@ -41,32 +41,36 @@ Currently, these crates include:
 supports all connection methods allowed by the AWS MQTT broker implementation,
 [AWS IoT Core](https://docs.aws.amazon.com/iot/latest/developerguide/iot-gs.html).
 
+*/
+
+#![cfg_attr(feature = "tokio", doc = r##"
 # Example: Connect to a local Mosquitto server
 
 Assuming a default Mosquitto installation, you can connect locally by plaintext on port 1883:
 
 ```no_run
-* use gneiss_mqtt::config::GenericClientBuilder;
-* use tokio::runtime::Handle;
-*
-* #[tokio::main]
-* async fn main() -> Result<(), Box<dyn std::error::Error>> {
-*
-*     // In the common case, you will not need a root CA certificate
-*     let client =
-*         GenericClientBuilder::new("127.0.0.1", 1883)
-*             .build_tokio(&Handle::current())?;
-*
-*     // Once started, the client will recurrently maintain a connection to the endpoint until
-*     // stop() is invoked
-*     client.start(None)?;
-*
-*     // <do stuff with the client>
-*
-*     Ok(())
-* }
-* ```
+use gneiss_mqtt::config::GenericClientBuilder;
+use tokio::runtime::Handle;
 
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+
+    // In the common case, you will not need a root CA certificate
+    let client =
+        GenericClientBuilder::new("127.0.0.1", 1883)
+            .build_tokio(&Handle::current())?;
+
+    // Once started, the client will recurrently maintain a connection to the endpoint until
+    // stop() is invoked
+    client.start(None)?;
+
+    // <do stuff with the client>
+
+    Ok(())
+}
+```"##)]
+
+/*!
 # Example: Subscribe to a topic
 
 In order to receive messages, you must first subscribe to the topics you want to receive messages for.  Subscribing
@@ -79,13 +83,13 @@ reason code vector to verify the success/failure result for each subscription in
 
 ```no_run
 use gneiss_mqtt::error::MqttResult;
-use gneiss_mqtt::client::{AsyncClient, SubscribeResult};
+use gneiss_mqtt::client::{AsyncGneissClient, SubscribeResult};
 use gneiss_mqtt::mqtt::{QualityOfService, SubscribePacket, Subscription};
 use std::sync::Arc;
 
-async fn subscribe_to_topic(client: Arc<dyn AsyncClient>) {
+async fn subscribe_to_topic(client: AsyncGneissClient) {
     let subscribe = SubscribePacket::builder()
-        .with_subscription(Subscription::builder("hello/world/+".to_string(), QualityOfService::AtLeastOnce).build())
+        .with_subscription(Subscription::new_simple("hello/world/+".to_string(), QualityOfService::AtLeastOnce))
         .build();
 
     let subscribe_result = client.subscribe(subscribe, None).await;
@@ -108,6 +112,9 @@ TODO
 
 TODO
 
+*/
+
+#![cfg_attr(feature = "tokio", doc = r##"
 # Example: React to client events
 In addition to performing MQTT operations with the client, you can also react to events emitted by the
 client.  The client emits events when connectivity changes (successful connection, failed connection, disconnection,
@@ -159,7 +166,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // put the client in an Arc so we can capture an Arc clone in the event handler closure
     let client : AsyncGneissClient =
         GenericClientBuilder::new("127.0.0.1", 1883)
-            .build(&Handle::current())?;
+            .build_tokio(&Handle::current())?;
 
     // make a client event handler closure
     let closure_client = client.clone();
@@ -173,8 +180,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-```
+```"##)]
 
+/*!
 # Additional Notes
 
 The intention is that this crate will eventually be as agnostic as possible of underlying

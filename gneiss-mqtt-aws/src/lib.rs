@@ -37,7 +37,9 @@ tokio = { version = "1", features = ["full"] }
 
 Future releases will support other async runtimes as well as a client that runs in a background
 thread and does not need an async runtime.  For now, [`tokio`](https://crates.io/crates/tokio) is required.
+*/
 
+#![cfg_attr(any(feature = "tokio-rustls", feature = "tokio-native-tls"), doc = r##"
 # Example: Connect to AWS IoT Core via mTLS (with tokio runtime)
 
 You'll need to create and register an X509 device certificate with IoT Core and associate an IAM
@@ -70,10 +72,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-```
-*/
+```"##)]
 
-#![cfg_attr(feature = "websockets", doc = r##"
+#![cfg_attr(all(any(feature = "tokio-rustls", feature = "tokio-native-tls"), feature = "tokio-websockets"), doc = r##"
 # Example: Connect to AWS IoT Core via Websockets (with tokio runtime)
 You'll need to configure your runtime environment to source AWS credentials whose IAM policy allows
 IoT usage.  This crate uses the AWS SDK for Rust to source the credentials necessary
@@ -98,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_websockets_with_sigv4(endpoint, sigv4_options, None)?
-            .build(&Handle::current())?;
+            .build_tokio(&Handle::current())?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -125,7 +126,8 @@ supported custom authentication modes:
 
 * Unsigned Custom Authentication - Anyone can invoke the authorizer's lambda if they know its ARN.  This is not recommended for production since it is not protected from external abuse that may run up your AWS bill.
 * Signed Custom Authentication - Your Lambda function will only be invoked (and billed) if the Connect packet includes the cryptographic signature (based on an IoT Core registered public key) of a controllable value.  Recommended for production.
-
+*/
+#![cfg_attr(any(feature = "tokio-rustls", feature = "tokio-native-tls"), doc = r##"
 ### Unsigned Custom Authentication
 
 For an unsigned custom authorizer (for testing/internal purposes only, not recommended for production):
@@ -151,7 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_direct_with_custom_auth(endpoint, custom_auth_options_builder.build(), None)?
-            .build(&Handle::current())?;
+            .build_tokio(&Handle::current())?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -161,8 +163,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-```
-
+```"##)]
+#![cfg_attr(any(feature = "tokio-rustls", feature = "tokio-native-tls"), doc = r##"
 ### Signed Custom Authentication
 
 For a signed custom authorizer (recommended for production):
@@ -194,7 +196,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_direct_with_custom_auth(endpoint, custom_auth_options_builder.build(), None)?
-            .build(&Handle::current())?;
+            .build_tokio(&Handle::current())?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -204,8 +206,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-```
-
+```"##)]
+/*!
 You must be careful with the encodings of `authorizer`, `authorizer_signature`, and
 `authorizer_token_key_name`.  Because
 custom authentication is supported over HTTP, these values must be URI-safe.  It is up to
@@ -800,7 +802,7 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     Ok(signed_request_builder)
 }
 
-#[cfg(feature = "testing")]
+#[cfg(all(feature = "testing", feature = "tokio"))]
 #[cfg(test)]
 mod testing {
     use gneiss_mqtt::error::MqttResult;
@@ -882,7 +884,7 @@ mod testing {
     }
 
     async fn do_connect_test(builder: AwsClientBuilder) -> MqttResult<()> {
-        let client = builder.build(&Handle::current())?;
+        let client = builder.build_tokio(&Handle::current())?;
 
         let waiter_config = ClientEventWaiterOptions {
             wait_type: ClientEventWaitType::Predicate(Box::new(|ev| {

@@ -686,6 +686,11 @@ impl Subscription {
         SubscriptionBuilder::new(topic_filter, qos)
     }
 
+    /// Creates a new subscription using only required options
+    pub fn new_simple(topic_filter: String, qos: QualityOfService) -> Subscription {
+        SubscriptionBuilder::new(topic_filter, qos).build()
+    }
+
     /// Returns the topic filter to subscribe to
     ///
     /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
