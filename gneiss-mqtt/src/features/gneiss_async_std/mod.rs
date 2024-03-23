@@ -9,7 +9,7 @@ runtime implementation.
  */
 
 use std::future::Future;
-use std::pin::{Pin, pin};
+use std::pin::{Pin};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use log::{debug, error, info, trace};
@@ -25,7 +25,8 @@ use crate::config::*;
 use crate::error::{MqttError, MqttResult};
 use crate::protocol::is_connection_established;
 
-use futures::{select, FutureExt, pin_mut};
+use futures::{AsyncReadExt, select, FutureExt};
+use futures::io::WriteHalf;
 use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
 use crate::mqtt::{MqttPacket, PublishPacket, SubscribePacket, UnsubscribePacket};
 use crate::validate::validate_packet_outbound;
@@ -112,7 +113,9 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + Unpin + 'st
         let mut inbound_data: [u8; 4096] = [0; 4096];
 
         let mut stream = self.stream.take().unwrap();
-        let (reader, writer) = (&mut stream, &mut stream);
+
+        let (mut reader, mut writer) = (&mut stream).split();
+        //.let (mut reader, mut writer) = (&stream, &stream);
 
         let mut write_directive : Option<&[u8]>;
 
@@ -152,7 +155,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + Unpin + 'st
                     }
                 },
                 // incoming data on the socket future
-                read_result = reader.read(inbound_data.as_mut_slice()).fuse() => {
+                read_result = futures::AsyncReadExt::read(&mut reader, inbound_data.as_mut_slice()).fuse() => {
                     match read_result {
                         Ok(bytes_read) => {
                             debug!("async-std - process_connected - read {} bytes from connection stream", bytes_read);
@@ -179,7 +182,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + Unpin + 'st
                     }
                 },
                 // client service future (if relevant)
-                Some(_) = conditional_wait(service_wait).fuse() => {
+                () = conditional_wait(service_wait).fuse() => {
                     debug!("async-std - process_connected - running client service task");
                     if let Err(error) = client.handle_service(&mut outbound_data) {
                         client.apply_error(error);
@@ -187,7 +190,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + Unpin + 'st
                     }
                 },
                 // outbound data future (if relevant)
-                Some(bytes_written_result) = conditional_write(write_directive, writer).fuse() => {
+                bytes_written_result = conditional_write(write_directive, &mut writer).fuse() => {
                     match bytes_written_result {
                         Ok(bytes_written) => {
                             debug!("async-std - process_connected - wrote {} bytes to connection stream", bytes_written);
@@ -381,9 +384,6 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + Unpin + 'st
 
      */
     pub(crate) async fn process_pending_reconnect(&mut self, client: &mut MqttClientImpl, wait: Duration) -> MqttResult<ClientImplState> {
-
-        let derp = sleep(wait);
-
         let mut reconnect_timer = Box::pin(sleep(wait).fuse());
 
         loop {
@@ -412,22 +412,27 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + Unpin + 'st
     }
 }
 
-async fn conditional_wait(wait_option: Option<impl Future<Output=()> + Sized>) -> Option<()> {
+async fn conditional_wait(wait_option: Option<impl Future<Output=()> + Sized>) -> () {
     match wait_option {
         Some(timer) => {
             timer.await;
-            Some(())
+            ()
         },
-        None => None,
+        None => {
+            std::future::pending().await
+        },
     }
 }
 
-async fn conditional_write<T>(data: Option<&[u8]>, writer: &mut T) -> Option<std::io::Result<usize>> where T : Write + Unpin {
+async fn conditional_write<T>(data: Option<&[u8]>, writer: &mut WriteHalf<&mut T>) -> std::io::Result<usize> where T : Write + Unpin {
     match data {
         Some(bytes) => {
-            Some(writer.write(bytes).await)
+            writer.write(bytes).await
         }
-        _ => { None }
+        _ => {
+            std::future::pending::<()>().await;
+            Ok(0)
+        }
     }
 }
 
@@ -731,7 +736,7 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Mq
     let mut response_bytes = Vec::new();
 
     loop {
-        let bytes_read = inner_stream.read(&mut inbound_data).await?;
+        let bytes_read = futures::AsyncReadExt::read(&mut inner_stream, &mut inbound_data).await?;
         if bytes_read == 0 {
             info!("apply_proxy_connect_to_stream - proxy connect stream closed with zero byte read");
             return Err(MqttError::new_connection_establishment_failure("proxy connect stream closed"));
