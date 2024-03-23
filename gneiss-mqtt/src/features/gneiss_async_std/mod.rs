@@ -244,145 +244,6 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + Unpin + 'st
         Ok(next_state.unwrap())
     }
 
-    /*
-   pub(crate) async fn process_connected(&mut self, client: &mut MqttClientImpl) -> MqttResult<ClientImplState> {
-        let mut outbound_data: Vec<u8> = Vec::with_capacity(4096);
-        let mut cumulative_bytes_written : usize = 0;
-
-        let mut inbound_data: [u8; 4096] = [0; 4096];
-
-        let stream = self.stream.take().unwrap();
-        let (stream_reader, mut stream_writer) = split(stream);
-        tokio::pin!(stream_reader);
-
-        let mut write_directive : Option<&[u8]>;
-
-        let mut next_state = None;
-        while next_state.is_none() {
-            trace!("tokio - process_connected loop");
-
-            let next_service_time_option = client.get_next_connected_service_time();
-            let service_wait: Option<tokio::time::Sleep> = next_service_time_option.map(|next_service_time| sleep(next_service_time - Instant::now()));
-
-            let outbound_slice_option: Option<&[u8]> =
-                if cumulative_bytes_written < outbound_data.len() {
-                    Some(&outbound_data[cumulative_bytes_written..])
-                } else {
-                    None
-                };
-
-            let mut should_flush = false;
-            if let Some(outbound_slice) = outbound_slice_option {
-                debug!("tokio - process_connected - {} bytes to write", outbound_slice.len());
-                write_directive = Some(outbound_slice)
-            } else {
-                debug!("tokio - process_connected - nothing to write");
-                write_directive = None;
-            }
-
-            tokio::select! {
-                // incoming user operations future
-                operation_result = self.operation_receiver.recv() => {
-                    if let Some(operation_options) = operation_result {
-                        debug!("tokio - process_connected - user operation received");
-                        client.handle_incoming_operation(operation_options);
-                    }
-                }
-                // incoming data on the socket future
-                read_result = stream_reader.read(inbound_data.as_mut_slice()) => {
-                    match read_result {
-                        Ok(bytes_read) => {
-                            debug!("tokio - process_connected - read {} bytes from connection stream", bytes_read);
-
-                            if bytes_read == 0 {
-                                info!("tokio - process_connected - connection closed for read (0 bytes)");
-                                client.apply_error(MqttError::new_connection_closed("network stream closed"));
-                                next_state = Some(ClientImplState::PendingReconnect);
-                            } else if let Err(error) = client.handle_incoming_bytes(&inbound_data[..bytes_read]) {
-                                info!("tokio - process_connected - error handling incoming bytes: {:?}", error);
-                                client.apply_error(error);
-                                next_state = Some(ClientImplState::PendingReconnect);
-                            }
-                        }
-                        Err(error) => {
-                            info!("tokio - process_connected - connection stream read failed: {:?}", error);
-                            if is_connection_established(client.get_protocol_state()) {
-                                client.apply_error(MqttError::new_connection_closed(error));
-                            } else {
-                                client.apply_error(MqttError::new_connection_establishment_failure(error));
-                            }
-                            next_state = Some(ClientImplState::PendingReconnect);
-                        }
-                    }
-                }
-                // client service future (if relevant)
-                Some(_) = conditional_wait(service_wait) => {
-                    debug!("tokio - process_connected - running client service task");
-                    if let Err(error) = client.handle_service(&mut outbound_data) {
-                        client.apply_error(error);
-                        next_state = Some(ClientImplState::PendingReconnect);
-                    }
-                }
-                // outbound data future (if relevant)
-                Some(bytes_written_result) = conditional_write(write_directive, &mut stream_writer) => {
-                    match bytes_written_result {
-                        Ok(bytes_written) => {
-                            debug!("tokio - process_connected - wrote {} bytes to connection stream", bytes_written);
-                            cumulative_bytes_written += bytes_written;
-                            if cumulative_bytes_written == outbound_data.len() {
-                                outbound_data.clear();
-                                cumulative_bytes_written = 0;
-                                should_flush = true;
-                            }
-                        }
-                        Err(error) => {
-                            info!("tokio - process_connected - connection stream write failed: {:?}", error);
-                            if is_connection_established(client.get_protocol_state()) {
-                                client.apply_error(MqttError::new_connection_closed(error));
-                            } else {
-                                client.apply_error(MqttError::new_connection_establishment_failure(error));
-                            }
-                            next_state = Some(ClientImplState::PendingReconnect);
-                        }
-                    }
-                }
-            }
-
-            if should_flush {
-                let flush_result = stream_writer.flush().await;
-                match flush_result {
-                    Ok(()) => {
-                        if let Err(error) = client.handle_write_completion() {
-                            info!("tokio - process_connected - stream write completion handler failed: {:?}", error);
-                            client.apply_error(error);
-                            next_state = Some(ClientImplState::PendingReconnect);
-                        }
-                    }
-                    Err(error) => {
-                        info!("tokio - process_connected - connection stream flush failed: {:?}", error);
-                        if is_connection_established(client.get_protocol_state()) {
-                            client.apply_error(MqttError::new_connection_closed(error));
-                        } else {
-                            client.apply_error(MqttError::new_connection_establishment_failure(error));
-                        }
-                        next_state = Some(ClientImplState::PendingReconnect);
-                    }
-                }
-            }
-
-            if next_state.is_none() {
-                next_state = client.compute_optional_state_transition();
-            }
-        }
-
-        info!("tokio - process_connected - shutting down stream");
-        let _ = stream_writer.shutdown().await;
-        info!("tokio - process_connected - stream fully closed");
-
-        Ok(next_state.unwrap())
-    }
-
-     */
     pub(crate) async fn process_pending_reconnect(&mut self, client: &mut MqttClientImpl, wait: Duration) -> MqttResult<ClientImplState> {
         let mut reconnect_timer = Box::pin(sleep(wait).fuse());
 
@@ -461,6 +322,36 @@ pub(crate) fn create_runtime_states<T>(async_std_config: AsyncStdClientOptions<T
     (sender, impl_state)
 }
 
+macro_rules! submit_async_std_operation {
+    ($self:ident, $operation_type:ident, $options_internal_type: ident, $options_value: expr, $packet_value: expr) => ({
+
+        let (rx, tx) = async_std::channel::bounded(1);
+        let response_handler = Box::new(move |res| {
+            if rx.try_send(res).is_err() {
+                return Err(MqttError::new_operation_channel_failure("Failed to send operation result on result channel"));
+            }
+
+            Ok(())
+        });
+
+        let internal_options = $options_internal_type {
+            options : $options_value.unwrap_or_default(),
+            response_handler : Some(response_handler)
+        };
+        let send_result = $self.operation_sender.try_send(OperationOptions::$operation_type($packet_value, internal_options));
+        Box::pin(async move {
+            match send_result {
+                Err(error) => {
+                    Err(MqttError::new_operation_channel_failure(error))
+                }
+                _ => {
+                    tx.recv().await?
+                }
+            }
+        })
+    })
+}
+
 struct AsyncStdClient {
     pub(crate) operation_sender: Sender<OperationOptions>,
 
@@ -519,6 +410,7 @@ impl AsyncMqttClient for AsyncStdClient {
         Ok(())
     }
 
+
     /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
     fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> Pin<Box<PublishResultFuture>> {
@@ -528,7 +420,7 @@ impl AsyncMqttClient for AsyncStdClient {
             return Box::pin(async move { Err(error) });
         }
 
-        return Box::pin(async move { Err(MqttError::new_unimplemented("async-std publish NYI")) });
+        submit_async_std_operation!(self, Publish, PublishOptionsInternal, options, boxed_packet)
     }
 
     /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
@@ -540,7 +432,7 @@ impl AsyncMqttClient for AsyncStdClient {
             return Box::pin(async move { Err(error) });
         }
 
-        return Box::pin(async move { Err(MqttError::new_unimplemented("async-std subscribe NYI")) });
+        submit_async_std_operation!(self, Subscribe, SubscribeOptionsInternal, options, boxed_packet)
     }
 
     /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
@@ -552,7 +444,7 @@ impl AsyncMqttClient for AsyncStdClient {
             return Box::pin(async move { Err(error) });
         }
 
-        return Box::pin(async move { Err(MqttError::new_unimplemented("async-std unsubscribe NYI")) });
+        submit_async_std_operation!(self, Unsubscribe, UnsubscribeOptionsInternal, options, boxed_packet)
     }
 
     /// Adds an additional listener to the events emitted by this client.  This is useful when

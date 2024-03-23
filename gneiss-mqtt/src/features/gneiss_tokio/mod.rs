@@ -353,7 +353,7 @@ macro_rules! submit_tokio_operation {
         let (response_sender, rx) = tokio::sync::oneshot::channel();
         let response_handler = Box::new(move |res| {
             if response_sender.send(res).is_err() {
-                return Err(MqttError::new_operation_channel_failure("Failed to submit operation to client channel"));
+                return Err(MqttError::new_operation_channel_failure("Failed to send operation result on result channel"));
             }
 
             Ok(())
