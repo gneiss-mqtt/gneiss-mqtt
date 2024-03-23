@@ -341,10 +341,6 @@ pub struct TokioClientOptions<T> where T : AsyncRead + AsyncWrite + Send + Sync 
     pub connection_factory: Box<dyn Fn() -> TokioConnectionFactoryReturnType<T> + Send + Sync>,
 }
 
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// WIP - Experimental
-
 struct TokioClient {
     pub(crate) operation_sender: UnboundedSender<OperationOptions>,
 
@@ -527,7 +523,7 @@ pub fn new_with_tokio<T>(client_config: MqttClientOptions, connect_config: Conne
 
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn make_direct_client(tls_impl: TlsConfiguration, endpoint: String, port: u16, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
+pub(crate) fn make_direct_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
     match tls_impl {
         TlsConfiguration::None => { make_direct_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, runtime) }
         #[cfg(feature = "tokio-rustls")]
@@ -699,7 +695,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
 
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature="tokio-websockets")]
-pub(crate) fn make_websocket_client(tls_impl: crate::config::TlsConfiguration, endpoint: String, port: u16, websocket_options: WebsocketOptions, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
+pub(crate) fn make_websocket_client_tokio(tls_impl: crate::config::TlsConfiguration, endpoint: String, port: u16, websocket_options: WebsocketOptions, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
     match tls_impl {
         crate::config::TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, websocket_options, client_options, connect_options, http_proxy_options, runtime) }
         #[cfg(feature = "tokio-rustls")]

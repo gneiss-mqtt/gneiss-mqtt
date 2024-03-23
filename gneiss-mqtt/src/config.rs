@@ -31,6 +31,9 @@ use crate::features::gneiss_tokio::*;
 #[cfg(feature="tokio")]
 use tokio::runtime::Handle;
 
+#[cfg(feature="async-std")]
+use crate::features::gneiss_async_std::*;
+
 /// Configuration options related to establishing connections through HTTP proxies
 #[derive(Default, Clone)]
 pub struct HttpProxyOptions {
@@ -872,11 +875,49 @@ impl GenericClientBuilder {
         {
             let websocket_options = self.websocket_options.clone();
             if let Some(websocket_options) = websocket_options {
-                return make_websocket_client(tls_impl, endpoint, self.port, websocket_options, tls_options, client_options, connect_options, http_proxy_options, runtime);
+                return make_websocket_client_tokio(tls_impl, endpoint, self.port, websocket_options, tls_options, client_options, connect_options, http_proxy_options, runtime);
             }
         }
 
-        make_direct_client(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, runtime)
+        make_direct_client_tokio(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, runtime)
+    }
+
+    /// Builds a new MQTT client according to all the configuration options given to the builder.
+    /// Does not consume self; can be called multiple times
+    #[cfg(feature="async-std")]
+    pub fn build_async_std(&self) -> MqttResult<AsyncGneissClient> {
+        let tls_impl = self.get_tls_impl();
+        if tls_impl == TlsConfiguration::Mixed {
+            return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));
+        }
+
+        let connect_options =
+            if let Some(options) = &self.connect_options {
+                options.clone()
+            } else {
+                ConnectOptionsBuilder::new().build()
+            };
+
+        let client_options =
+            if let Some(options) = &self.client_options {
+                options.clone()
+            } else {
+                MqttClientOptionsBuilder::new().build()
+            };
+
+        let http_proxy_options = self.http_proxy_options.clone();
+        let tls_options = self.tls_options.clone();
+        let endpoint = self.endpoint.clone();
+
+        #[cfg(feature="async-std-websockets")]
+        {
+            let websocket_options = self.websocket_options.clone();
+            if let Some(websocket_options) = websocket_options {
+                return make_websocket_client_async_std(tls_impl, endpoint, self.port, websocket_options, tls_options, client_options, connect_options, http_proxy_options);
+            }
+        }
+
+        make_direct_client_async_std(endpoint, self.port, tls_impl, tls_options, client_options, connect_options, http_proxy_options)
     }
 }
 
