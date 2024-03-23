@@ -30,13 +30,13 @@ use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
 use crate::mqtt::{MqttPacket, PublishPacket, SubscribePacket, UnsubscribePacket};
 use crate::validate::validate_packet_outbound;
 
-pub(crate) struct ClientRuntimeState<T> where T : Read + Write + Send + Sync + 'static {
+pub(crate) struct ClientRuntimeState<T> where T : Read + Write + Send + Sync + Unpin + 'static {
     async_std_config: AsyncStdClientOptions<T>,
     operation_receiver: Receiver<OperationOptions>,
     stream: Option<T>
 }
 
-impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + 'static {
+impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + Unpin + 'static {
     pub(crate) async fn process_stopped(&mut self, client: &mut MqttClientImpl) -> MqttResult<ClientImplState> {
         loop {
             trace!("async-std - process_stopped loop");
@@ -111,8 +111,8 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + 'static {
 
         let mut inbound_data: [u8; 4096] = [0; 4096];
 
-        let stream = self.stream.take().unwrap();
-        let (mut reader, mut writer) = (&stream, &stream);
+        let mut stream = self.stream.take().unwrap();
+        let (reader, writer) = (&mut stream, &mut stream);
 
         let mut write_directive : Option<&[u8]>;
 
@@ -140,7 +140,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + 'static {
             }
 
             select! {
-                operation_result = self.operation_receiver.recv() => {
+                operation_result = self.operation_receiver.recv().fuse() => {
                     match operation_result {
                         Ok(operation_options) => {
                             debug!("async-std - process_connected - user operation received");
@@ -152,7 +152,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + 'static {
                     }
                 },
                 // incoming data on the socket future
-                read_result = reader.read(inbound_data.as_mut_slice()) => {
+                read_result = reader.read(inbound_data.as_mut_slice()).fuse() => {
                     match read_result {
                         Ok(bytes_read) => {
                             debug!("async-std - process_connected - read {} bytes from connection stream", bytes_read);
@@ -179,7 +179,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + 'static {
                     }
                 },
                 // client service future (if relevant)
-                Some(_) = conditional_wait(service_wait) => {
+                Some(_) = conditional_wait(service_wait).fuse() => {
                     debug!("async-std - process_connected - running client service task");
                     if let Err(error) = client.handle_service(&mut outbound_data) {
                         client.apply_error(error);
@@ -187,7 +187,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + 'static {
                     }
                 },
                 // outbound data future (if relevant)
-                Some(bytes_written_result) = conditional_write(write_directive, &mut writer).fuse() => {
+                Some(bytes_written_result) = conditional_write(write_directive, writer).fuse() => {
                     match bytes_written_result {
                         Ok(bytes_written) => {
                             debug!("async-std - process_connected - wrote {} bytes to connection stream", bytes_written);
@@ -208,7 +208,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync + 'static {
                             next_state = Some(ClientImplState::PendingReconnect);
                         }
                     }
-                }
+                },
             }
 
             if should_flush {
@@ -434,7 +434,7 @@ async fn conditional_write<T>(data: Option<&[u8]>, writer: &mut T) -> Option<std
 type AsyncStdConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = MqttResult<T>> + Send>>;
 
 /// Tokio-specific client configuration
-pub struct AsyncStdClientOptions<T> where T : Read + Write + Send + Sync {
+pub struct AsyncStdClientOptions<T> where T : Read + Write + Send + Sync + Unpin {
 
     /// Factory function for creating the final connection object based on all the various
     /// configuration options and features.  It might be a TcpStream, it might be a TlsStream,
@@ -444,7 +444,7 @@ pub struct AsyncStdClientOptions<T> where T : Read + Write + Send + Sync {
     pub connection_factory: Box<dyn Fn() -> AsyncStdConnectionFactoryReturnType<T> + Send + Sync>,
 }
 
-pub(crate) fn create_runtime_states<T>(async_std_config: AsyncStdClientOptions<T>) -> (Sender<OperationOptions>, ClientRuntimeState<T>) where T : Read + Write + Send + Sync + 'static {
+pub(crate) fn create_runtime_states<T>(async_std_config: AsyncStdClientOptions<T>) -> (Sender<OperationOptions>, ClientRuntimeState<T>) where T : Read + Write + Send + Sync + Unpin + 'static {
     let (sender, receiver) = async_std::channel::unbounded();
 
     let impl_state = ClientRuntimeState {
@@ -578,7 +578,7 @@ impl AsyncMqttClient for AsyncStdClient {
     }
 }
 
-async fn client_event_loop<T>(client_impl: &mut MqttClientImpl, async_state: &mut ClientRuntimeState<T>) where T : Read + Write + Send + Sync + 'static {
+async fn client_event_loop<T>(client_impl: &mut MqttClientImpl, async_state: &mut ClientRuntimeState<T>) where T : Read + Write + Send + Sync + Unpin + 'static {
     let mut done = false;
     while !done {
         let current_state = client_impl.get_current_state();
@@ -608,7 +608,7 @@ async fn client_event_loop<T>(client_impl: &mut MqttClientImpl, async_state: &mu
 pub(crate) fn spawn_client_impl<T>(
     mut client_impl: MqttClientImpl,
     mut runtime_state: ClientRuntimeState<T>,
-) where T : Read + Write + Send + Sync + 'static {
+) where T : Read + Write + Send + Sync + Unpin + 'static {
     task::spawn(async move {
         client_event_loop(&mut client_impl, &mut runtime_state).await;
     });
@@ -621,7 +621,7 @@ pub(crate) fn spawn_event_callback(event: Arc<ClientEvent>, callback: Arc<Client
 }
 
 /// Creates a new async MQTT5 client that will use the async-std async runtime
-pub fn new_with_async_std<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, async_std_config: AsyncStdClientOptions<T>) -> AsyncGneissClient where T: Read + Write + Send + Sync + 'static {
+pub fn new_with_async_std<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, async_std_config: AsyncStdClientOptions<T>) -> AsyncGneissClient where T: Read + Write + Send + Sync + Unpin + 'static {
     let (operation_sender, internal_state) = create_runtime_states(async_std_config);
 
     let callback_spawner : CallbackSpawnerFunction = Box::new(|event, callback| {
@@ -650,7 +650,7 @@ pub(crate) fn make_direct_client_async_std(endpoint: String, port: u16, tls_impl
     }
 }
 
-fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>,) -> MqttResult<AsyncGneissClient> {
+fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>) -> MqttResult<AsyncGneissClient> {
     info!("make_direct_client_no_tls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
 
