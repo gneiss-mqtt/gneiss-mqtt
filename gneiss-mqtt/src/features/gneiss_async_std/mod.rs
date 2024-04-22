@@ -27,6 +27,7 @@ use crate::protocol::is_connection_established;
 
 use futures::{AsyncReadExt, select, FutureExt};
 use futures::io::WriteHalf;
+use crate::client::waiter::{AsyncClientEventWaiter, client_event_matches, ClientEventRecord, ClientEventType, ClientEventWaiterOptions, ClientEventWaitFuture, ClientEventWaitType};
 use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
 use crate::mqtt::{MqttPacket, PublishPacket, SubscribePacket, UnsubscribePacket};
 use crate::validate::validate_packet_outbound;
@@ -299,7 +300,7 @@ async fn conditional_write<T>(data: Option<&[u8]>, writer: &mut WriteHalf<&mut T
 
 type AsyncStdConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = MqttResult<T>> + Send>>;
 
-/// Tokio-specific client configuration
+/// Async-std-specific client configuration
 pub struct AsyncStdClientOptions<T> where T : Read + Write + Send + Sync + Unpin {
 
     /// Factory function for creating the final connection object based on all the various
@@ -590,12 +591,12 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
 
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature="async-std-websockets")]
-pub(crate) fn make_websocket_client_tokio(tls_impl: crate::config::TlsConfiguration, endpoint: String, port: u16, websocket_options: WebsocketOptions, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>) -> MqttResult<AsyncGneissClient> {
+pub(crate) fn make_websocket_client_async_std(tls_impl: crate::config::TlsConfiguration, endpoint: String, port: u16, websocket_options: WebsocketOptions, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>) -> MqttResult<AsyncGneissClient> {
     match tls_impl {
         crate::config::TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, websocket_options, client_options, connect_options, http_proxy_options, runtime) }
-        #[cfg(feature = "tokio-rustls")]
+        #[cfg(feature = "async-std-rustls")]
         crate::config::TlsConfiguration::Rustls => { make_websocket_client_rustls(endpoint, port, websocket_options, _tls_options, client_options, connect_options, http_proxy_options, runtime) }
-        #[cfg(feature = "tokio-native-tls")]
+        #[cfg(feature = "async-std-native-tls")]
         crate::config::TlsConfiguration::Nativetls => { make_websocket_client_native_tls(endpoint, port, websocket_options, _tls_options, client_options, connect_options, http_proxy_options, runtime) }
         _ => { panic!("Illegal state"); }
     }
@@ -662,5 +663,247 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Mq
             }
             Ok(httparse::Status::Partial) => {}
         }
+    }
+}
+
+
+
+/// Simple debug type that uses the client listener framework to allow tests to asynchronously wait for
+/// configurable client event sequences.  May be useful outside of tests.  May need polish.  Currently public
+/// because we use it across crates.  May eventually go internal.
+///
+/// Requires the client to be Arc-wrapped.
+pub struct AsyncStdClientEventWaiter {
+    event_count: usize,
+
+    client: AsyncGneissClient,
+
+    listener: Option<ListenerHandle>,
+
+    event_receiver: Receiver<ClientEventRecord>,
+
+    events: Vec<ClientEventRecord>,
+}
+
+impl AsyncStdClientEventWaiter {
+
+    /// Creates a new ClientEventWaiter instance from full configuration
+    pub fn new(client: AsyncGneissClient, config: ClientEventWaiterOptions, event_count: usize) -> Self {
+        let (tx, rx) = async_std::channel::unbounded();
+
+        let mut waiter = AsyncStdClientEventWaiter {
+            event_count,
+            client: client.clone(),
+            listener: None,
+            event_receiver: rx,
+            events: Vec::new(),
+        };
+
+        let listener_fn = move |event: Arc<ClientEvent>| {
+            match &config.wait_type {
+                ClientEventWaitType::Type(event_type) => {
+                    if !client_event_matches(&event, *event_type) {
+                        return;
+                    }
+                }
+                ClientEventWaitType::Predicate(event_predicate) => {
+                    if !(*event_predicate)(&event) {
+                        return;
+                    }
+                }
+            }
+
+            let event_record = ClientEventRecord {
+                event: event.clone(),
+                timestamp: Instant::now(),
+            };
+
+            let _ = tx.try_send(event_record);
+        };
+
+        waiter.listener = Some(client.add_event_listener(Arc::new(listener_fn)).unwrap());
+        waiter
+    }
+
+    /// Creates a new ClientEventWaiter instance that will wait for a single occurrence of a single event type
+    pub fn new_single(client: AsyncGneissClient, event_type: ClientEventType) -> Self {
+        let config = ClientEventWaiterOptions {
+            wait_type: ClientEventWaitType::Type(event_type),
+        };
+
+        Self::new(client, config, 1)
+    }
+}
+
+impl AsyncClientEventWaiter for AsyncStdClientEventWaiter {
+
+    /// Waits for and returns an event sequence that matches the original configuration
+    fn wait(mut self) -> Pin<Box<ClientEventWaitFuture>> {
+        Box::pin(async move {
+            while self.events.len() < self.event_count {
+                match self.event_receiver.recv().await {
+                    Err(e) => {
+                        return Err(MqttError::new_other_error(e));
+                    }
+                    Ok(event) => {
+                        self.events.push(event);
+                    }
+                }
+            }
+
+            Ok(self.events.clone())
+        })
+    }
+}
+
+impl Drop for AsyncStdClientEventWaiter {
+    fn drop(&mut self) {
+        let listener_handler = self.listener.take().unwrap();
+
+        let _ = self.client.remove_event_listener(listener_handler);
+    }
+}
+
+#[cfg(all(test, feature = "testing"))]
+pub(crate) mod testing {
+    use assert_matches::assert_matches;
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::time::Duration;
+    use crate::client::waiter::*;
+    use crate::config::*;
+    use crate::error::*;
+    use crate::mqtt::*;
+    use super::*;
+    use crate::testing::integration::*;
+
+    fn create_client_builder_internal(connect_options: ConnectOptions, _tls_usage: TlsUsage, ws_config: WebsocketUsage, proxy_config: ProxyUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
+        let client_config = MqttClientOptionsBuilder::new()
+            .with_connect_timeout(Duration::from_secs(5))
+            .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
+            .build();
+
+        let endpoint = get_broker_endpoint(tls_endpoint, ws_endpoint);
+        let port = get_broker_port(tls_endpoint, ws_endpoint);
+
+        let mut builder = GenericClientBuilder::new(&endpoint, port);
+        builder.with_connect_options(connect_options);
+        builder.with_client_options(client_config);
+
+        /*
+
+        #[cfg(feature = "async-std-rustls")]
+        if _tls_usage == TlsUsage::Rustls {
+            let mut tls_options_builder = TlsOptionsBuilder::new();
+            tls_options_builder.with_verify_peer(false);
+            tls_options_builder.with_root_ca_from_path(&get_ca_path()).unwrap();
+
+            builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
+        }
+
+        #[cfg(feature = "async-std-native-tls")]
+        if _tls_usage == TlsUsage::Nativetls {
+            let mut tls_options_builder = TlsOptionsBuilder::new();
+            tls_options_builder.with_verify_peer(false);
+            tls_options_builder.with_root_ca_from_path(&get_ca_path()).unwrap();
+
+            builder.with_tls_options(tls_options_builder.build_native_tls().unwrap());
+        }
+
+        #[cfg(feature = "async-std-websockets")]
+        if ws_config != WebsocketUsage::None {
+            let websocket_options = WebsocketOptionsBuilder::new().build();
+            builder.with_websocket_options(websocket_options);
+        }
+
+        if proxy_config != ProxyUsage::None {
+            let proxy_endpoint = get_proxy_endpoint();
+            let proxy_port = get_proxy_port();
+            let proxy_options = HttpProxyOptionsBuilder::new(&proxy_endpoint, proxy_port).build();
+            builder.with_http_proxy_options(proxy_options);
+        }
+
+         */
+
+        builder
+    }
+
+    fn create_good_client_builder(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage) -> GenericClientBuilder {
+        let connect_options = ConnectOptionsBuilder::new()
+            .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
+            .with_session_expiry_interval_seconds(3600)
+            .build();
+
+        create_client_builder_internal(connect_options, tls, ws, proxy, tls, ws)
+    }
+
+    type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output=MqttResult<()>> + Send>>;
+    type AsyncTestFactory = Box<dyn Fn(GenericClientBuilder) -> AsyncTestFactoryReturnType + Send + Sync>;
+
+    fn do_good_client_test(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: AsyncTestFactory) {
+        let test_future = (*test_factory)(create_good_client_builder(tls, ws, proxy));
+        task::block_on(test_future).unwrap();
+    }
+
+    pub(crate) fn do_builder_test(test_factory: AsyncTestFactory, builder: GenericClientBuilder) {
+        let test_future = (*test_factory)(builder);
+        task::block_on(test_future).unwrap();
+    }
+
+    async fn start_client(client: &AsyncGneissClient) -> MqttResult<()> {
+        let mut connection_attempt_waiter = AsyncStdClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionAttempt);
+        let mut connection_success_waiter = AsyncStdClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
+
+        client.start(None)?;
+
+        connection_attempt_waiter.wait().await?;
+        let connection_success_events = connection_success_waiter.wait().await?;
+        assert_eq!(1, connection_success_events.len());
+        let connection_success_event = &connection_success_events[0].event;
+        assert_matches!(**connection_success_event, ClientEvent::ConnectionSuccess(_));
+        if let ClientEvent::ConnectionSuccess(success_event) = &**connection_success_event {
+            assert_eq!(ConnectReasonCode::Success, success_event.connack.reason_code);
+        } else {
+            panic!("impossible");
+        }
+
+        Ok(())
+    }
+
+    async fn stop_client(client: &AsyncGneissClient) -> MqttResult<()> {
+        let mut disconnection_waiter = AsyncStdClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
+        let mut stopped_waiter = AsyncStdClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
+
+        client.stop(None)?;
+
+        let disconnect_events = disconnection_waiter.wait().await?;
+        assert_eq!(1, disconnect_events.len());
+        let disconnect_event = &disconnect_events[0].event;
+        assert_matches!(**disconnect_event, ClientEvent::Disconnection(_));
+        if let ClientEvent::Disconnection(event) = &**disconnect_event {
+            assert_matches!(event.error, MqttError::UserInitiatedDisconnect(_));
+        } else {
+            panic!("impossible");
+        }
+
+        stopped_waiter.wait().await?;
+
+        Ok(())
+    }
+
+    async fn async_std_connect_disconnect_test(builder: GenericClientBuilder) -> MqttResult<()> {
+        let client = builder.build_async_std().unwrap();
+
+        start_client(&client).await?;
+        stop_client(&client).await?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn client_connect_disconnect_direct_plaintext_no_proxy() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder| {
+            Box::pin(async_std_connect_disconnect_test(builder))
+        }));
     }
 }

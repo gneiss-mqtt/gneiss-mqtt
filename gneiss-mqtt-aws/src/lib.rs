@@ -810,8 +810,8 @@ mod testing {
     use std::future::Future;
     use std::pin::Pin;
     use gneiss_mqtt::client::{ClientEvent};
-    use gneiss_mqtt::client::waiter::{ClientEventWaiterOptions, ClientEventWaitType};
-    use gneiss_mqtt::features::gneiss_tokio::ClientEventWaiter;
+    use gneiss_mqtt::client::waiter::{ClientEventWaiterOptions, ClientEventWaitType, AsyncClientEventWaiter};
+    use gneiss_mqtt::features::gneiss_tokio::TokioClientEventWaiter;
     use super::*;
 
     fn get_iot_core_endpoint() -> String {
@@ -897,7 +897,7 @@ mod testing {
             })),
         };
 
-        let mut connection_result_waiter = ClientEventWaiter::new(client.clone(), waiter_config, 1);
+        let mut connection_result_waiter = TokioClientEventWaiter::new(client.clone(), waiter_config, 1);
 
         client.start(None)?;
 

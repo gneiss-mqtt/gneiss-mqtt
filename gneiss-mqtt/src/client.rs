@@ -1070,6 +1070,23 @@ pub mod waiter {
         /// How the waiter should filter client events
         pub wait_type: ClientEventWaitType,
     }
+
+    #[derive(Clone)]
+    /// Timestamped client event record
+    pub struct ClientEventRecord {
+
+        /// The event emitted by the client
+        pub event : Arc<ClientEvent>,
+
+        /// What time the event occurred at
+        pub timestamp: Instant
+    }
+
+    pub type ClientEventWaitFuture = dyn Future<Output = MqttResult<Vec<ClientEventRecord>>> + Send;
+
+    pub trait AsyncClientEventWaiter {
+        fn wait(self) -> Pin<Box<ClientEventWaitFuture>>;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
