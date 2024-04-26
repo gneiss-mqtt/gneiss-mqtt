@@ -764,98 +764,17 @@ impl Drop for AsyncStdClientEventWaiter {
     }
 }
 
-use crate::client::waiter::*;
-
-/*
-fn async_std_client_event_waiter_factory_new() -> AsyncClientEventWaiterFactory {
-    return Box::new(|client, config, event_count| {
-        Box::new(AsyncStdClientEventWaiter::new(client, config, event_count))
-    });
-}
-
-fn async_std_client_event_waiter_factory_new_single() -> AsyncSingleClientEventWaiterFactory {
-    return Box::new(|client, event_type| {
-        Box::new(AsyncStdClientEventWaiter::new_single(client, event_type))
-    });
-}
-
-*/
-
 #[cfg(all(test, feature = "testing"))]
 pub(crate) mod testing {
-    use assert_matches::assert_matches;
-    use std::future::Future;
-    use std::pin::Pin;
-    use std::time::Duration;
-    use crate::client::waiter::*;
     use crate::config::*;
     use crate::error::*;
     use crate::mqtt::*;
-    use super::*;
     use crate::testing::integration::*;
+    use super::*;
 
-    fn create_client_builder_internal(connect_options: ConnectOptions, _tls_usage: TlsUsage, ws_config: WebsocketUsage, proxy_config: ProxyUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
-        let client_config = MqttClientOptionsBuilder::new()
-            .with_connect_timeout(Duration::from_secs(5))
-            .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
-            .build();
-
-        let endpoint = get_broker_endpoint(tls_endpoint, ws_endpoint);
-        let port = get_broker_port(tls_endpoint, ws_endpoint);
-
-        let mut builder = GenericClientBuilder::new(&endpoint, port);
-        builder.with_connect_options(connect_options);
-        builder.with_client_options(client_config);
-
-        /*
-
-        #[cfg(feature = "async-std-rustls")]
-        if _tls_usage == TlsUsage::Rustls {
-            let mut tls_options_builder = TlsOptionsBuilder::new();
-            tls_options_builder.with_verify_peer(false);
-            tls_options_builder.with_root_ca_from_path(&get_ca_path()).unwrap();
-
-            builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
-        }
-
-        #[cfg(feature = "async-std-native-tls")]
-        if _tls_usage == TlsUsage::Nativetls {
-            let mut tls_options_builder = TlsOptionsBuilder::new();
-            tls_options_builder.with_verify_peer(false);
-            tls_options_builder.with_root_ca_from_path(&get_ca_path()).unwrap();
-
-            builder.with_tls_options(tls_options_builder.build_native_tls().unwrap());
-        }
-
-        #[cfg(feature = "async-std-websockets")]
-        if ws_config != WebsocketUsage::None {
-            let websocket_options = WebsocketOptionsBuilder::new().build();
-            builder.with_websocket_options(websocket_options);
-        }
-
-        if proxy_config != ProxyUsage::None {
-            let proxy_endpoint = get_proxy_endpoint();
-            let proxy_port = get_proxy_port();
-            let proxy_options = HttpProxyOptionsBuilder::new(&proxy_endpoint, proxy_port).build();
-            builder.with_http_proxy_options(proxy_options);
-        }
-
-         */
-
-        builder
+    fn build_async_std_client(builder: GenericClientBuilder) -> AsyncGneissClient {
+        builder.build_async_std().unwrap()
     }
-
-    fn create_good_client_builder(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage) -> GenericClientBuilder {
-        let connect_options = ConnectOptionsBuilder::new()
-            .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
-            .with_session_expiry_interval_seconds(3600)
-            .build();
-
-        create_client_builder_internal(connect_options, tls, ws, proxy, tls, ws)
-    }
-
-    type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output=MqttResult<()>> + Send>>;
-    type AsyncTestFactory = Box<dyn Fn(GenericClientBuilder) -> AsyncTestFactoryReturnType + Send + Sync>;
 
     fn do_good_client_test(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: AsyncTestFactory) {
         let test_future = (*test_factory)(create_good_client_builder(tls, ws, proxy));
@@ -885,6 +804,7 @@ pub(crate) mod testing {
 
     //// All Other connection variants
 
+    ///////////////////////////////////
 
 
     async fn async_std_subscribe_unsubscribe_test(builder: GenericClientBuilder) -> MqttResult<()> {
@@ -895,6 +815,55 @@ pub(crate) mod testing {
     fn client_subscribe_unsubscribe() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
             Box::pin(async_std_subscribe_unsubscribe_test(builder))
+        }));
+    }
+
+    async fn async_std_subscribe_publish_test(builder: GenericClientBuilder, qos: QualityOfService) -> MqttResult<()> {
+        let client = builder.build_async_std().unwrap();
+        async_subscribe_publish_test(client, qos, AsyncStdClientEventWaiter::new_single).await
+    }
+
+    #[test]
+    fn client_subscribe_publish_qos0() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+            Box::pin(async_std_subscribe_publish_test(builder, QualityOfService::AtMostOnce))
+        }));
+    }
+
+    #[test]
+    fn client_subscribe_publish_qos1() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+            Box::pin(async_std_subscribe_publish_test(builder, QualityOfService::AtLeastOnce))
+        }));
+    }
+
+    #[test]
+    fn client_subscribe_publish_qos2() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+            Box::pin(async_std_subscribe_publish_test(builder, QualityOfService::ExactlyOnce))
+        }));
+    }
+
+    async fn async_std_will_test(builder: GenericClientBuilder) -> MqttResult<()> {
+        async_will_test(builder, build_async_std_client, AsyncStdClientEventWaiter::new_single).await
+    }
+
+    #[test]
+    fn client_will_sent() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+            Box::pin(async_std_will_test(builder))
+        }));
+    }
+
+    async fn async_std_connect_disconnect_cycle_session_rejoin_test(builder: GenericClientBuilder) -> MqttResult<()> {
+        let client = builder.build_async_std().unwrap();
+        async_connect_disconnect_cycle_session_rejoin_test(client, AsyncStdClientEventWaiter::new_single, AsyncStdClientEventWaiter::new).await
+    }
+
+    #[test]
+    fn connect_disconnect_cycle_session_rejoin() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+            Box::pin(async_std_connect_disconnect_cycle_session_rejoin_test(builder))
         }));
     }
 }
