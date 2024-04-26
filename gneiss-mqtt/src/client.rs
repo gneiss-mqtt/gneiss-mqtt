@@ -1087,6 +1087,9 @@ pub mod waiter {
     pub trait AsyncClientEventWaiter {
         fn wait(self) -> Pin<Box<ClientEventWaitFuture>>;
     }
+
+    //pub type AsyncClientEventWaiterFactory = Box<dyn Fn(AsyncGneissClient, ClientEventWaiterOptions, usize) -> Box<dyn AsyncClientEventWaiter>>;
+    //pub type AsyncSingleClientEventWaiterFactory = Box<dyn Fn(AsyncGneissClient, ClientEventType) -> Box<dyn AsyncClientEventWaiter>>;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////

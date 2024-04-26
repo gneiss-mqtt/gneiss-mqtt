@@ -764,6 +764,23 @@ impl Drop for AsyncStdClientEventWaiter {
     }
 }
 
+use crate::client::waiter::*;
+
+/*
+fn async_std_client_event_waiter_factory_new() -> AsyncClientEventWaiterFactory {
+    return Box::new(|client, config, event_count| {
+        Box::new(AsyncStdClientEventWaiter::new(client, config, event_count))
+    });
+}
+
+fn async_std_client_event_waiter_factory_new_single() -> AsyncSingleClientEventWaiterFactory {
+    return Box::new(|client, event_type| {
+        Box::new(AsyncStdClientEventWaiter::new_single(client, event_type))
+    });
+}
+
+*/
+
 #[cfg(all(test, feature = "testing"))]
 pub(crate) mod testing {
     use assert_matches::assert_matches;
@@ -850,52 +867,11 @@ pub(crate) mod testing {
         task::block_on(test_future).unwrap();
     }
 
-    async fn start_client(client: &AsyncGneissClient) -> MqttResult<()> {
-        let mut connection_attempt_waiter = AsyncStdClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionAttempt);
-        let mut connection_success_waiter = AsyncStdClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
-
-        client.start(None)?;
-
-        connection_attempt_waiter.wait().await?;
-        let connection_success_events = connection_success_waiter.wait().await?;
-        assert_eq!(1, connection_success_events.len());
-        let connection_success_event = &connection_success_events[0].event;
-        assert_matches!(**connection_success_event, ClientEvent::ConnectionSuccess(_));
-        if let ClientEvent::ConnectionSuccess(success_event) = &**connection_success_event {
-            assert_eq!(ConnectReasonCode::Success, success_event.connack.reason_code);
-        } else {
-            panic!("impossible");
-        }
-
-        Ok(())
-    }
-
-    async fn stop_client(client: &AsyncGneissClient) -> MqttResult<()> {
-        let mut disconnection_waiter = AsyncStdClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
-        let mut stopped_waiter = AsyncStdClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
-
-        client.stop(None)?;
-
-        let disconnect_events = disconnection_waiter.wait().await?;
-        assert_eq!(1, disconnect_events.len());
-        let disconnect_event = &disconnect_events[0].event;
-        assert_matches!(**disconnect_event, ClientEvent::Disconnection(_));
-        if let ClientEvent::Disconnection(event) = &**disconnect_event {
-            assert_matches!(event.error, MqttError::UserInitiatedDisconnect(_));
-        } else {
-            panic!("impossible");
-        }
-
-        stopped_waiter.wait().await?;
-
-        Ok(())
-    }
-
     async fn async_std_connect_disconnect_test(builder: GenericClientBuilder) -> MqttResult<()> {
         let client = builder.build_async_std().unwrap();
 
-        start_client(&client).await?;
-        stop_client(&client).await?;
+        start_client(&client, AsyncStdClientEventWaiter::new_single).await?;
+        stop_client(&client, AsyncStdClientEventWaiter::new_single).await?;
 
         Ok(())
     }
@@ -904,6 +880,21 @@ pub(crate) mod testing {
     fn client_connect_disconnect_direct_plaintext_no_proxy() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder| {
             Box::pin(async_std_connect_disconnect_test(builder))
+        }));
+    }
+
+    //// All Other connection variants
+
+
+
+    async fn async_std_subscribe_unsubscribe_test(builder: GenericClientBuilder) -> MqttResult<()> {
+        async_subscribe_unsubscribe_test(builder.build_async_std().unwrap(), AsyncStdClientEventWaiter::new_single).await
+    }
+
+    #[test]
+    fn client_subscribe_unsubscribe() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+            Box::pin(async_std_subscribe_unsubscribe_test(builder))
         }));
     }
 }
