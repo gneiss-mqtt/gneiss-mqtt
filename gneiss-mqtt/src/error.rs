@@ -509,20 +509,6 @@ impl From<tokio::sync::oneshot::error::RecvError> for MqttError {
     }
 }
 
-#[cfg(feature="async-std")]
-impl From<async_std::channel::RecvError> for MqttError {
-    fn from(err: async_std::channel::RecvError) -> Self {
-        MqttError::new_operation_channel_failure(err)
-    }
-}
-
-#[cfg(feature="async-std")]
-impl <T> From<async_std::channel::TrySendError<T>> for MqttError where T : Send + Sync + 'static {
-    fn from(err: async_std::channel::TrySendError<T>) -> Self {
-        MqttError::new_operation_channel_failure(err)
-    }
-}
-
 
 impl <T> From<std::sync::mpsc::SendError<T>> for MqttError where T : Send + Sync + 'static {
     fn from(err: std::sync::mpsc::SendError<T>) -> Self {

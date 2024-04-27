@@ -1082,9 +1082,13 @@ pub mod waiter {
         pub timestamp: Instant
     }
 
+    /// Result type for calling wait() on an async client event waiter
     pub type ClientEventWaitFuture = dyn Future<Output = MqttResult<Vec<ClientEventRecord>>> + Send;
 
+    /// Trait API for waiting for a set of client events to be emitted by an async client
     pub trait AsyncClientEventWaiter {
+
+        /// Waits for and returns an event sequence that matches the configuration the waiter was created with
         fn wait(self) -> Pin<Box<ClientEventWaitFuture>>;
     }
 }

@@ -14,7 +14,6 @@ Feedback is always welcome.
 * 0.3.0 Release (April 2024)
 * * Internal refactoring and unit/integration tests that were delayed once "it worked"
 * * Background thread client for no-async support
-* * Support async-std as a runtime option
 * * Support native-tls as a TLS option
 * * CI/CD
 * * Misc chores: error unification and polish

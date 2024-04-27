@@ -21,14 +21,12 @@ tokio-rustls = ["tokio", "dep:rustls", "dep:rustls-native-certs", "dep:rustls-pe
 tokio-native-tls = ["tokio", "dep:native-tls", "dep:tokio-native-tls"]
 tokio-websockets = ["tokio", "dep:http", "dep:tungstenite", "dep:tokio-tungstenite", "dep:stream-ws"]
 tokio = ["dep:tokio"]
-async-std = ["dep:async-std", "dep:futures"]
 
 [dev-dependencies]
 assert_matches = "1.5.0"
 uuid = { version = "1", features = [ "v4", "fast-rng" ] }
 
 [dependencies]
-async-std = { version = "1", optional = true }
 futures = {  version = "0.3.30", optional = true }
 http = { version = "0.2", optional = true }
 httparse = { version = "1" }

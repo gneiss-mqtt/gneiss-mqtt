@@ -15,6 +15,3 @@ pub mod gneiss_tokio;
 
 #[cfg(feature = "tokio-native-tls")]
 mod gneiss_native_tls;
-
-#[cfg(feature = "async-std")]
-pub mod gneiss_async_std;

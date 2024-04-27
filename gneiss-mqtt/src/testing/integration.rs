@@ -103,7 +103,7 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
     builder.with_connect_options(connect_options);
     builder.with_client_options(client_config);
 
-    #[cfg(any(feature = "tokio-rustls", feature = "async-std-rustls"))]
+    #[cfg(feature = "tokio-rustls")]
     if _tls_usage == TlsUsage::Rustls {
         let mut tls_options_builder = TlsOptionsBuilder::new();
         tls_options_builder.with_verify_peer(false);
@@ -112,7 +112,7 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
         builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
     }
 
-    #[cfg(any(feature = "tokio-native-tls", feature = "async-std-native-tls"))]
+    #[cfg(feature = "tokio-native-tls")]
     if _tls_usage == TlsUsage::Nativetls {
         let mut tls_options_builder = TlsOptionsBuilder::new();
         tls_options_builder.with_verify_peer(false);
@@ -121,7 +121,7 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
         builder.with_tls_options(tls_options_builder.build_native_tls().unwrap());
     }
 
-    #[cfg(any(feature="tokio-websockets", feature="async-std-websockets"))]
+    #[cfg(feature="tokio-websockets")]
     if ws_config != WebsocketUsage::None {
         let websocket_options = WebsocketOptionsBuilder::new().build();
         builder.with_websocket_options(websocket_options);
