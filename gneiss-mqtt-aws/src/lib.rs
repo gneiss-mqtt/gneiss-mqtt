@@ -811,7 +811,7 @@ mod testing {
     use std::pin::Pin;
     use gneiss_mqtt::client::{ClientEvent};
     use gneiss_mqtt::client::waiter::{ClientEventWaiterOptions, ClientEventWaitType, AsyncClientEventWaiter};
-    use gneiss_mqtt::features::gneiss_tokio::TokioClientEventWaiter;
+    use gneiss_mqtt::features::tokio::TokioClientEventWaiter;
     use super::*;
 
     fn get_iot_core_endpoint() -> String {

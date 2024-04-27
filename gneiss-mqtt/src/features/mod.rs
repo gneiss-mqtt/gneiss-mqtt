@@ -8,10 +8,10 @@ Module that encompasses feature-specific logic (primarily TLS and Async runtime)
  */
 
 #[cfg(feature = "tokio-rustls")]
-pub mod gneiss_rustls;
+pub mod rustls;
 
 #[cfg(feature = "tokio")]
-pub mod gneiss_tokio;
+pub mod tokio;
 
 #[cfg(feature = "tokio-native-tls")]
-mod gneiss_native_tls;
+pub mod native_tls;
