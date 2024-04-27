@@ -27,22 +27,24 @@ assert_matches = "1.5.0"
 uuid = { version = "1", features = [ "v4", "fast-rng" ] }
 
 [dependencies]
+futures = {  version = "0.3.30", optional = true }
 http = { version = "0.2", optional = true }
 httparse = { version = "1" }
 lru = { version = "0.12" }
 log = { version = "0.4" }
 native-tls = { version = "0.2.11", optional = true, features = ["alpn"] }
 rand = { version = "0.8" }
-rustls = { version = "0.22", default-features = false, optional = true }
+rustls = { version = "0.23", default-features = false, optional = true }
 rustls-native-certs = { version = "0.7", optional = true }
 rustls-pemfile = { version = "2", optional = true }
 rustls-pki-types = { version = "1", optional = true }
 stream-ws = { version = "0.1.1", features = ["tungstenite", "tokio"], optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 tokio-native-tls = { version = "0.3.1", optional = true}
-tokio-rustls = { version = "0.25", optional = true }
+tokio-rustls = { version = "0.26", optional = true }
 tokio-tungstenite = { version = "0.20" , optional = true }
 tungstenite = { version = "0.20", optional = true }
+
 
 
 

@@ -31,13 +31,16 @@ This document is currently hand-written and non-authoritative.
 * * * remove connack timeout as a setting, connect timeout now covers the end-to-end interval from socket open to connack receipt
 * * * fixed an edge case when ping timeout is larger than half the keep alive setting
 * * AsyncClient interface trait added
-* * Mqtt5Client renamed
+* * Mqtt5Client renamed/refactored
 * * Client construction yields an Arc-wrapped type
 * TLS
 * * alpn values changed to a string representation
 * * Rustls configuration build errors now a wrapped error
+* * Added static TlsOptions constructors that take implementation configuration values directly
 * Features
 * * Rustls support feature-gated
 * * Native-tls support added and feature-gated
 * * Websocket support feature-gated
 * * Tokio client feature-gated
+* Bug fixes
+* * Tokio client - fixed an issue where an assert would trigger a panic if another future was executed in-between a socket write and socket flush

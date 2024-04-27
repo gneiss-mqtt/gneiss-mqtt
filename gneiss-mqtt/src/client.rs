@@ -1070,6 +1070,27 @@ pub mod waiter {
         /// How the waiter should filter client events
         pub wait_type: ClientEventWaitType,
     }
+
+    #[derive(Clone)]
+    /// Timestamped client event record
+    pub struct ClientEventRecord {
+
+        /// The event emitted by the client
+        pub event : Arc<ClientEvent>,
+
+        /// What time the event occurred at
+        pub timestamp: Instant
+    }
+
+    /// Result type for calling wait() on an async client event waiter
+    pub type ClientEventWaitFuture = dyn Future<Output = MqttResult<Vec<ClientEventRecord>>> + Send;
+
+    /// Trait API for waiting for a set of client events to be emitted by an async client
+    pub trait AsyncClientEventWaiter {
+
+        /// Waits for and returns an event sequence that matches the configuration the waiter was created with
+        fn wait(self) -> Pin<Box<ClientEventWaitFuture>>;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1091,7 +1112,7 @@ pub mod waiter {
 /// whether or not they are rejected (due to no connection) is a function of client configuration.
 ///
 /// There are no mutable functions in the client API, so you can safely share it amongst threads,
-/// runtimes/tasks, etc... by wrapping a newly-constructed client in an Arc.
+/// runtimes/tasks, etc...
 ///
 /// Submitted operations are placed in a queue where they remain until they reach the head.  At
 /// that point, the operation's packet is assigned a packet id (if appropriate) and encoded and
@@ -1150,7 +1171,7 @@ pub trait AsyncMqttClient {
 /// whether or not they are rejected (due to no connection) is a function of client configuration.
 ///
 /// There are no mutable functions in the client API, so you can safely share it amongst threads,
-/// runtimes/tasks, etc... by wrapping a newly-constructed client in an Arc.
+/// runtimes/tasks, etc...
 ///
 /// Submitted operations are placed in a queue where they remain until they reach the head.  At
 /// that point, the operation's packet is assigned a packet id (if appropriate) and encoded and

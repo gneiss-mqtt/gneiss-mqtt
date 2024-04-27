@@ -872,11 +872,11 @@ impl GenericClientBuilder {
         {
             let websocket_options = self.websocket_options.clone();
             if let Some(websocket_options) = websocket_options {
-                return make_websocket_client(tls_impl, endpoint, self.port, websocket_options, tls_options, client_options, connect_options, http_proxy_options, runtime);
+                return make_websocket_client_tokio(tls_impl, endpoint, self.port, websocket_options, tls_options, client_options, connect_options, http_proxy_options, runtime);
             }
         }
 
-        make_direct_client(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, runtime)
+        make_direct_client_tokio(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, runtime)
     }
 }
 
