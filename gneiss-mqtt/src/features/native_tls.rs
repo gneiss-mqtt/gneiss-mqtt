@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+/*!
+Functionality for using [`rustls`](https://crates.io/crates/native-tls) as an MQTT client's TLS
+implementation.
+ */
 
 use std::sync::Arc;
 use crate::config::{TlsData, TlsMode, TlsOptions, TlsOptionsBuilder};

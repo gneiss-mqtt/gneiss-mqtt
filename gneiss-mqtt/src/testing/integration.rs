@@ -12,7 +12,6 @@ use crate::client::{AsyncGneissClient, ClientEvent, PublishReceivedEvent, Publis
 use crate::client::waiter::{AsyncClientEventWaiter, ClientEventType, ClientEventWaiterOptions, ClientEventWaitType};
 use crate::config::{ConnectOptions, ConnectOptionsBuilder, GenericClientBuilder, HttpProxyOptionsBuilder, MqttClientOptionsBuilder, OfflineQueuePolicy, RejoinSessionPolicy, TlsOptionsBuilder, WebsocketOptionsBuilder};
 use crate::error::{MqttError, MqttResult};
-use crate::features::gneiss_tokio::TokioClientEventWaiter;
 use crate::mqtt::{ConnectReasonCode, PubackReasonCode, PubcompReasonCode, PublishPacket, QualityOfService, SubackReasonCode, SubscribePacket, UnsubackReasonCode, UnsubscribePacket};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -150,8 +149,8 @@ pub(crate) type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output=MqttResul
 pub(crate) type AsyncTestFactory = Box<dyn Fn(GenericClientBuilder) -> AsyncTestFactoryReturnType + Send + Sync>;
 
 pub(crate) async fn start_client<T : AsyncClientEventWaiter>(client: &AsyncGneissClient, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
-    let mut connection_attempt_waiter = waiter_factory(client.clone(), ClientEventType::ConnectionAttempt);
-    let mut connection_success_waiter = waiter_factory(client.clone(), ClientEventType::ConnectionSuccess);
+    let connection_attempt_waiter = waiter_factory(client.clone(), ClientEventType::ConnectionAttempt);
+    let connection_success_waiter = waiter_factory(client.clone(), ClientEventType::ConnectionSuccess);
 
     client.start(None)?;
 
@@ -170,8 +169,8 @@ pub(crate) async fn start_client<T : AsyncClientEventWaiter>(client: &AsyncGneis
 }
 
 pub(crate) async fn stop_client<T : AsyncClientEventWaiter>(client: &AsyncGneissClient, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
-    let mut disconnection_waiter = waiter_factory(client.clone(), ClientEventType::Disconnection);
-    let mut stopped_waiter = waiter_factory(client.clone(), ClientEventType::Stopped);
+    let disconnection_waiter = waiter_factory(client.clone(), ClientEventType::Disconnection);
+    let stopped_waiter = waiter_factory(client.clone(), ClientEventType::Stopped);
 
     client.stop(None)?;
 
@@ -261,7 +260,7 @@ pub(crate) async fn async_subscribe_publish_test<T : AsyncClientEventWaiter>(cli
 
     let _ = client.subscribe(subscribe, None).await?;
 
-    let mut publish_received_waiter = waiter_factory(client.clone(), ClientEventType::PublishReceived);
+    let publish_received_waiter = waiter_factory(client.clone(), ClientEventType::PublishReceived);
 
     let publish = PublishPacket::builder(topic.clone(), qos)
         .with_payload(payload.clone())
@@ -314,7 +313,7 @@ pub(crate) async fn async_will_test<T : AsyncClientEventWaiter>(base_client_opti
         .build();
     let _ = client.subscribe(subscribe, None).await?;
 
-    let mut publish_received_waiter = waiter_factory(client.clone(), ClientEventType::PublishReceived);
+    let publish_received_waiter = waiter_factory(client.clone(), ClientEventType::PublishReceived);
 
     // no stop options, so we just close the socket locally; the broker should send the will
     stop_client(&will_client, waiter_factory).await?;
@@ -350,7 +349,7 @@ pub(crate) async fn async_connect_disconnect_cycle_session_rejoin_test<T : Async
                 false
             })),
         };
-        let mut connection_success_waiter = waiter_factory(client.clone(), waiter_config, 1);
+        let connection_success_waiter = waiter_factory(client.clone(), waiter_config, 1);
 
         client.start(None)?;
 

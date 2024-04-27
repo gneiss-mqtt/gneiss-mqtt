@@ -11,7 +11,7 @@ use crate::client::ClientEvent;
 use crate::client::waiter::{ClientEventType, ClientEventWaiterOptions, ClientEventWaitType, AsyncClientEventWaiter};
 use crate::config::{ExponentialBackoffJitterType, GenericClientBuilder};
 use crate::error::MqttResult;
-use crate::features::gneiss_tokio::{ClientEventRecord, TokioClientEventWaiter};
+use crate::features::tokio::{ClientEventRecord, TokioClientEventWaiter};
 use crate::mqtt::{ConnackPacket, ConnectReasonCode, DisconnectPacket, DisconnectReasonCode, MqttPacket, PacketType, PublishPacket, QualityOfService};
 use crate::testing::mock_server::{build_mock_client_server, ClientTestOptions};
 use crate::testing::protocol::{BrokerTestContext, create_default_packet_handlers};
@@ -37,7 +37,7 @@ async fn simple_reconnect_test(builder : GenericClientBuilder, event_count: usiz
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
     };
 
-    let mut reconnect_waiter = TokioClientEventWaiter::new(client.clone(), wait_options, event_count);
+    let reconnect_waiter = TokioClientEventWaiter::new(client.clone(), wait_options, event_count);
 
     client.start(None)?;
 
@@ -110,7 +110,7 @@ fn validate_reconnect_failure_sequence(events: &Vec<ClientEventRecord>) -> MqttR
 fn client_reconnect_with_backoff() {
     let (builder, server) = build_mock_client_server(build_reconnect_test_options());
 
-    crate::features::gneiss_tokio::testing::do_builder_test(Box::new(|builder| {
+    crate::features::tokio::testing::do_builder_test(Box::new(|builder| {
         Box::pin(simple_reconnect_test(builder, 14, Box::new(|events|{validate_reconnect_failure_sequence(events)})))
     }), builder);
 
@@ -185,8 +185,8 @@ async fn reconnect_backoff_reset_test(builder : GenericClientBuilder, first_even
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
     };
 
-    let mut first_reconnect_waiter = TokioClientEventWaiter::new(client.clone(), first_wait_options, 12);
-    let mut success_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
+    let first_reconnect_waiter = TokioClientEventWaiter::new(client.clone(), first_wait_options, 12);
+    let success_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
 
     client.start(None)?;
 
@@ -197,7 +197,7 @@ async fn reconnect_backoff_reset_test(builder : GenericClientBuilder, first_even
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
     };
 
-    let mut final_reconnect_waiter = TokioClientEventWaiter::new(client.clone(), final_wait_options, 3);
+    let final_reconnect_waiter = TokioClientEventWaiter::new(client.clone(), final_wait_options, 3);
 
     tokio::time::sleep(Duration::from_millis(connection_success_wait_millis)).await;
 
@@ -252,7 +252,7 @@ fn validate_reconnect_backoff_reset_sequence(events: &Vec<ClientEventRecord>, ex
 fn client_reconnect_with_backoff_and_backoff_reset() {
     let (builder, server) = build_mock_client_server(build_reconnect_reset_test_options());
 
-    crate::features::gneiss_tokio::testing::do_builder_test(Box::new(|builder| {
+    crate::features::tokio::testing::do_builder_test(Box::new(|builder| {
         Box::pin(reconnect_backoff_reset_test(builder,
                                               Box::new(|events|{validate_reconnect_backoff_failure_sequence(events)}),
                                               Box::new(|events|{validate_reconnect_backoff_reset_sequence(events, Duration::from_millis(500))}),
@@ -266,7 +266,7 @@ fn client_reconnect_with_backoff_and_backoff_reset() {
 fn client_reconnect_with_backoff_and_no_backoff_reset() {
     let (builder, server) = build_mock_client_server(build_reconnect_reset_test_options());
 
-    crate::features::gneiss_tokio::testing::do_builder_test(Box::new(|builder| {
+    crate::features::tokio::testing::do_builder_test(Box::new(|builder| {
         Box::pin(reconnect_backoff_reset_test(builder,
                                               Box::new(|events|{validate_reconnect_backoff_failure_sequence(events)}),
                                               Box::new(|events|{validate_reconnect_backoff_reset_sequence(events, Duration::from_millis(6000))}),

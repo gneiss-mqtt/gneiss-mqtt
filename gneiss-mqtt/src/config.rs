@@ -27,7 +27,7 @@ use std::{future::Future, pin::Pin, str::FromStr};
 use tungstenite::{client::*, handshake::client::generate_key};
 
 #[cfg(feature="tokio")]
-use crate::features::gneiss_tokio::*;
+use crate::features::tokio::*;
 #[cfg(feature="tokio")]
 use tokio::runtime::Handle;
 

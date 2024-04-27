@@ -1297,7 +1297,7 @@ pub(crate) mod testing {
 
     async fn connection_failure_test(builder : GenericClientBuilder) -> MqttResult<()> {
         let client = builder.build_tokio(&tokio::runtime::Handle::current()).unwrap();
-        let mut connection_failure_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
+        let connection_failure_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
 
         client.start(None)?;
 
