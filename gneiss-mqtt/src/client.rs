@@ -1087,9 +1087,6 @@ pub mod waiter {
     pub trait AsyncClientEventWaiter {
         fn wait(self) -> Pin<Box<ClientEventWaitFuture>>;
     }
-
-    //pub type AsyncClientEventWaiterFactory = Box<dyn Fn(AsyncGneissClient, ClientEventWaiterOptions, usize) -> Box<dyn AsyncClientEventWaiter>>;
-    //pub type AsyncSingleClientEventWaiterFactory = Box<dyn Fn(AsyncGneissClient, ClientEventType) -> Box<dyn AsyncClientEventWaiter>>;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1111,7 +1108,7 @@ pub mod waiter {
 /// whether or not they are rejected (due to no connection) is a function of client configuration.
 ///
 /// There are no mutable functions in the client API, so you can safely share it amongst threads,
-/// runtimes/tasks, etc... by wrapping a newly-constructed client in an Arc.
+/// runtimes/tasks, etc...
 ///
 /// Submitted operations are placed in a queue where they remain until they reach the head.  At
 /// that point, the operation's packet is assigned a packet id (if appropriate) and encoded and
@@ -1170,7 +1167,7 @@ pub trait AsyncMqttClient {
 /// whether or not they are rejected (due to no connection) is a function of client configuration.
 ///
 /// There are no mutable functions in the client API, so you can safely share it amongst threads,
-/// runtimes/tasks, etc... by wrapping a newly-constructed client in an Arc.
+/// runtimes/tasks, etc...
 ///
 /// Submitted operations are placed in a queue where they remain until they reach the head.  At
 /// that point, the operation's packet is assigned a packet id (if appropriate) and encoded and
