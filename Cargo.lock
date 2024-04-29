@@ -643,7 +643,7 @@ version = "0.1.0"
 dependencies = [
  "argh",
  "elasti-gneiss-core",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.3.0",
  "simplelog",
  "tokio",
  "url",
@@ -655,7 +655,7 @@ version = "0.1.0"
 dependencies = [
  "argh",
  "elasti-gneiss-core",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.3.0",
  "gneiss-mqtt-aws",
  "simplelog",
  "tokio",
@@ -667,7 +667,7 @@ name = "elasti-gneiss-core"
 version = "0.1.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.3.0",
  "tokio",
 ]
 
@@ -877,14 +877,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "gneiss-mqtt"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aa3c00e12e671ccc02edb8906534c2be3f339da153624d950ca5748f09c8168"
+dependencies = [
+ "http",
+ "httparse",
+ "log",
+ "lru",
+ "native-tls",
+ "rand",
+ "rustls 0.23.5",
+ "rustls-native-certs 0.7.0",
+ "rustls-pemfile 2.0.0",
+ "rustls-pki-types",
+ "stream-ws",
+ "tokio",
+ "tokio-native-tls",
+ "tokio-rustls 0.26.0",
+ "tokio-tungstenite",
+ "tungstenite",
+]
+
+[[package]]
 name = "gneiss-mqtt-aws"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "aws-config",
  "aws-credential-types",
  "aws-sigv4",
  "aws-smithy-runtime-api",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "http",
  "tokio",
  "urlencoding",
