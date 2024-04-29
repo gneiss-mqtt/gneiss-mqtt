@@ -13,14 +13,15 @@ Feedback is always welcome.
 ### Tentative User-Facing Roadmap (dates non-binding)
 * 0.3.0 Release (April 2024)
 * * Internal refactoring and unit/integration tests that were delayed once "it worked"
-* * Background thread client for no-async support
 * * Support native-tls as a TLS option
-* * CI/CD
 * * Misc chores: error unification and polish
 * * Misc chores: conversion impls
 * * Misc chores: logging/display/debug polish
-* 0.4.0 Release (July 2024)
+* 0.4.0 Release (May 2024)
+* * Background thread client for no-async support
+* 0.5.0 Release (July 2024)
 * * MQTT311 support
+* * CI/CD
 * 1.0.0 Release (GA, September 2024)
 * * Public API finalization
 * * Performance measurements and tuning
