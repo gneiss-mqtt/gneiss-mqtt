@@ -431,7 +431,7 @@ impl AsyncMqttClient for TokioClient {
 
     /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
-    fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> Pin<Box<PublishResultFuture>> {
+    fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> AsyncPublishResult {
         debug!("Publish operation submitted");
         let boxed_packet = Box::new(MqttPacket::Publish(packet));
         if let Err(error) = validate_packet_outbound(&boxed_packet) {
@@ -443,7 +443,7 @@ impl AsyncMqttClient for TokioClient {
 
     /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
-    fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> Pin<Box<SubscribeResultFuture>> {
+    fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> AsyncSubscribeResult {
         debug!("Subscribe operation submitted");
         let boxed_packet = Box::new(MqttPacket::Subscribe(packet));
         if let Err(error) = validate_packet_outbound(&boxed_packet) {
@@ -455,7 +455,7 @@ impl AsyncMqttClient for TokioClient {
 
     /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
-    fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> Pin<Box<UnsubscribeResultFuture>> {
+    fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> AsyncUnsubscribeResult {
         debug!("Unsubscribe operation submitted");
         let boxed_packet = Box::new(MqttPacket::Unsubscribe(packet));
         if let Err(error) = validate_packet_outbound(&boxed_packet) {

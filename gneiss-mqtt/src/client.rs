@@ -126,6 +126,8 @@ pub type PublishResult = MqttResult<PublishResponse>;
 /// to await to get the final result of performing it).
 pub type PublishResultFuture = dyn Future<Output = PublishResult> + Send;
 
+pub type AsyncPublishResult = Pin<Box<PublishResultFuture>>;
+
 /// Additional client options applicable to an MQTT Subscribe operation
 #[derive(Debug, Default)]
 pub struct SubscribeOptions {
@@ -171,6 +173,8 @@ pub type SubscribeResult = MqttResult<SubackPacket>;
 /// to await to get the final result of performing it).
 pub type SubscribeResultFuture = dyn Future<Output = SubscribeResult> + Send;
 
+pub type AsyncSubscribeResult = Pin<Box<SubscribeResultFuture>;
+
 /// Additional client options applicable to an MQTT Unsubscribe operation
 #[derive(Debug, Default)]
 pub struct UnsubscribeOptions {
@@ -215,6 +219,8 @@ pub type UnsubscribeResult = MqttResult<UnsubackPacket>;
 /// the use of `.await` (you don't need to await for the operation to be performed, you only need
 /// to await to get the final result of performing it).
 pub type UnsubscribeResultFuture = dyn Future<Output = UnsubscribeResult> + Send;
+
+pub type AsyncUnsubscribeResult = Pin<Box<UnsubscribeResultFuture>>;
 
 /// Additional client options applicable to client Stop operation
 #[derive(Debug, Default)]
@@ -1139,15 +1145,15 @@ pub trait AsyncMqttClient {
 
     /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
-    fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> Pin<Box<PublishResultFuture>>;
+    fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> AsyncPublishResult;
 
     /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
-    fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> Pin<Box<SubscribeResultFuture>>;
+    fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> AsyncSubscribeResult;
 
     /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
-    fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> Pin<Box<UnsubscribeResultFuture>>;
+    fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> AsyncUnsubscribeResult;
 
     /// Adds an additional listener to the events emitted by this client.  This is useful when
     /// multiple higher-level constructs are sharing the same MQTT client.
@@ -1181,3 +1187,104 @@ pub trait AsyncMqttClient {
 /// etc...  We encourage you to use the various client builders in this crate, or in other crates,
 /// to simplify this process.
 pub type AsyncGneissClient = Arc<dyn AsyncMqttClient + Send + Sync>;
+
+
+struct SyncResult<T> {
+    result: Mutex<Option<T>>,
+}
+
+impl<T> SyncResult<T> {
+    pub fn recv() -> MqttResult<T> {
+
+    }
+
+    pub fn try_recv() -> Option<MqttResult<T>> {
+
+    }
+}
+
+type SyncPublishResult = Arc<SyncResult<PublishResult>>;
+
+/// An async network client that functions as a thin wrapper over the MQTT5 protocol.
+///
+/// A client is always in one of two states:
+/// * Stopped - the client is not connected and will perform no work
+/// * Not Stopped - the client will continually attempt to maintain a connection to the configured broker.
+///
+/// The start() and stop() APIs toggle between these two states.
+///
+/// The client will use configurable exponential backoff with jitter when re-establishing connections.
+///
+/// Regardless of the client's state, you may always safely invoke MQTT operations on it, but
+/// whether or not they are rejected (due to no connection) is a function of client configuration.
+///
+/// There are no mutable functions in the client API, so you can safely share it amongst threads,
+/// runtimes/tasks, etc...
+///
+/// Submitted operations are placed in a queue where they remain until they reach the head.  At
+/// that point, the operation's packet is assigned a packet id (if appropriate) and encoded and
+/// written to the socket.
+///
+/// Direct client construction is messy due to the different possibilities for TLS, async runtime,
+/// etc...  We encourage you to use the various client builders in this crate, or in other crates,
+/// to simplify this process.
+pub trait SyncMqttClient {
+
+    /// Signals the client that it should attempt to recurrently maintain a connection to
+    /// the broker endpoint it has been configured with.
+    fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> MqttResult<()>;
+
+    /// Signals the client that it should close any current connection it has and enter the
+    /// Stopped state, where it does nothing.
+    fn stop(&self, options: Option<StopOptions>) -> MqttResult<()>;
+
+    /// Signals the client that it should clean up all internal resources (connection, channels,
+    /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.  Useful to ensure
+    /// a full resource wipe.  If just `stop()` is used then the client will continue to track
+    /// MQTT session state internally.
+    fn close(&self) -> MqttResult<()>;
+
+    /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
+    /// the broker when it reaches the head of the queue and the client is connected.
+    fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> SyncPublishResult;
+
+    /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
+    /// the broker when it reaches the head of the queue and the client is connected.
+    fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> SyncSubscribeResult;
+
+    /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
+    /// the broker when it reaches the head of the queue and the client is connected.
+    fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> SyncUnsubscribeResult;
+
+    /// Adds an additional listener to the events emitted by this client.  This is useful when
+    /// multiple higher-level constructs are sharing the same MQTT client.
+    fn add_event_listener(&self, listener: ClientEventListener) -> MqttResult<ListenerHandle>;
+
+    /// Removes a listener from this client's set of event listeners.
+    fn remove_event_listener(&self, listener: ListenerHandle) -> MqttResult<()>;
+}
+
+/// A non-async network client that functions as a thin wrapper over the MQTT5 protocol.
+///
+/// A client is always in one of two states:
+/// * Stopped - the client is not connected and will perform no work
+/// * Not Stopped - the client will continually attempt to maintain a connection to the configured broker.
+///
+/// The start() and stop() APIs toggle between these two states.
+///
+/// The client will use configurable exponential backoff with jitter when re-establishing connections.
+///
+/// Regardless of the client's state, you may always safely invoke MQTT operations on it, but
+/// whether or not they are rejected (due to no connection) is a function of client configuration.
+///
+/// There are no mutable functions in the client API, so you can safely share it amongst threads,
+/// runtimes/tasks, etc...
+///
+/// Submitted operations are placed in a queue where they remain until they reach the head.  At
+/// that point, the operation's packet is assigned a packet id (if appropriate) and encoded and
+/// written to the socket.
+///
+/// Direct client construction is messy due to the different possibilities for TLS, async runtime,
+/// etc...  We encourage you to use the various client builders in this crate, or in other crates,
+/// to simplify this process.
+pub type SyncGneissClient = Arc<dyn SyncMqttClient + Send + Sync>;
