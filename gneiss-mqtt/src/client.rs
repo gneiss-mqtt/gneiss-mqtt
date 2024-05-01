@@ -20,7 +20,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
 use std::mem;
 use std::pin::Pin;
-use std::sync::{Arc};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 /// Additional client options applicable to an MQTT Publish operation
@@ -173,7 +173,7 @@ pub type SubscribeResult = MqttResult<SubackPacket>;
 /// to await to get the final result of performing it).
 pub type SubscribeResultFuture = dyn Future<Output = SubscribeResult> + Send;
 
-pub type AsyncSubscribeResult = Pin<Box<SubscribeResultFuture>;
+pub type AsyncSubscribeResult = Pin<Box<SubscribeResultFuture>>;
 
 /// Additional client options applicable to an MQTT Unsubscribe operation
 #[derive(Debug, Default)]
@@ -1189,21 +1189,84 @@ pub trait AsyncMqttClient {
 pub type AsyncGneissClient = Arc<dyn AsyncMqttClient + Send + Sync>;
 
 
-struct SyncResult<T> {
-    result: Mutex<Option<T>>,
+pub struct SyncResultReceiver<T> {
+    result_lock: Arc<Mutex<Option<T>>>,
+    result_signal: Arc<Condvar>
 }
 
-impl<T> SyncResult<T> {
-    pub fn recv() -> MqttResult<T> {
+pub(crate) struct SyncResultSender<T> {
+    result_lock: Arc<Mutex<Option<T>>>,
+    result_signal: Arc<Condvar>
+}
 
+impl<T> SyncResultSender<T> {
+
+    pub(crate) fn new(result_lock: Arc<Mutex<Option<T>>>, result_signal: Arc<Condvar>) -> SyncResultSender<T> {
+        SyncResultSender {
+            result_lock,
+            result_signal
+        }
     }
 
-    pub fn try_recv() -> Option<MqttResult<T>> {
+    pub(crate) fn apply(&self, value: T) -> () {
+        let mut current_value = self.result_lock.lock().unwrap();
 
+        if current_value.is_some() {
+            panic!("Cannot set operation result twice!");
+        }
+
+        *current_value = Some(value);
+
+        self.result_signal.notify_all();
     }
 }
 
-type SyncPublishResult = Arc<SyncResult<PublishResult>>;
+impl<T> SyncResultReceiver<T> {
+
+    pub(crate) fn new(result_lock: Arc<Mutex<Option<T>>>, result_signal: Arc<Condvar>) -> SyncResultReceiver<T> {
+        SyncResultReceiver {
+            result_lock,
+            result_signal
+        }
+    }
+
+    pub fn recv(&self) -> T {
+        let mut current_value = self.result_lock.lock().unwrap();
+        while current_value.is_none() {
+            current_value = self.result_signal.wait(current_value).unwrap();
+        }
+
+        current_value.take().unwrap()
+    }
+
+    pub fn try_recv(&self) -> Option<T> {
+        let mut current_value = self.result_lock.lock().unwrap();
+        if current_value.is_none() {
+            return None
+        } else {
+            return current_value.take()
+        }
+    }
+}
+
+pub(crate) fn new_sync_result_pair<T>() -> (SyncResultReceiver<T>, SyncResultSender<T>) {
+    let lock = Arc::new(Mutex::new(None));
+    let signal = Arc::new(Condvar::new());
+
+    return (SyncResultReceiver::new(lock.clone(), signal.clone()), SyncResultSender::new(lock.clone(), signal.clone()));
+}
+
+pub type SyncPublishResult = SyncResultReceiver<PublishResult>;
+
+pub type SyncSubscribeResult = SyncResultReceiver<SubscribeResult>;
+
+pub type SyncUnsubscribeResult = SyncResultReceiver<UnsubscribeResult>;
+
+pub type SyncPublishResultCallback = Box<dyn Fn(PublishResult) -> ()>;
+
+pub type SyncSubscribeResultCallback = Box<dyn Fn(SubscribeResult) -> ()>;
+
+pub type SyncUnsubscribeResultCallback = Box<dyn Fn(UnsubscribeResult) -> ()>;
 
 /// An async network client that functions as a thin wrapper over the MQTT5 protocol.
 ///
@@ -1248,13 +1311,19 @@ pub trait SyncMqttClient {
     /// the broker when it reaches the head of the queue and the client is connected.
     fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> SyncPublishResult;
 
+    fn publish_with_callback(&self, packet: PublishPacket, options: Option<PublishOptions>, completion_callback: SyncPublishResultCallback) -> MqttResult<()>;
+
     /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
     fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> SyncSubscribeResult;
 
+    fn subscribe_with_callback(&self, packet: SubscribePacket, options: Option<SubscribeOptions>, completion_callback: SyncSubscribeResultCallback) -> MqttResult<()>;
+
     /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
     fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> SyncUnsubscribeResult;
+
+    fn unsubscribe_with_callback(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>, completion_callback: SyncUnsubscribeResultCallback) -> MqttResult<()>;
 
     /// Adds an additional listener to the events emitted by this client.  This is useful when
     /// multiple higher-level constructs are sharing the same MQTT client.
