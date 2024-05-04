@@ -20,25 +20,25 @@ testing = [] # enables environmentally-controlled integration tests and long-run
 tokio-rustls = ["tokio", "dep:rustls", "dep:rustls-native-certs", "dep:rustls-pemfile", "dep:rustls-pki-types", "dep:tokio-rustls"]
 tokio-native-tls = ["tokio", "dep:native-tls", "dep:tokio-native-tls"]
 tokio-websockets = ["tokio", "dep:http", "dep:tungstenite", "dep:tokio-tungstenite", "dep:stream-ws"]
-tokio = ["dep:tokio"]
+tokio = ["dep:tokio"] # enables the tokio-based async client
+threaded = [] # enables the thread-based sync client; does not add any dependencies
 
 [dev-dependencies]
 assert_matches = "1.5.0"
 uuid = { version = "1", features = [ "v4", "fast-rng" ] }
 
 [dependencies]
-futures = {  version = "0.3.30", optional = true }
 http = { version = "0.2", optional = true }
-httparse = { version = "1" }
-lru = { version = "0.12" }
-log = { version = "0.4" }
+httparse = { version = "1" } # proxy support
+lru = { version = "0.12" } # lru topic aliasing cache
+log = { version = "0.4" } # logging interface
 native-tls = { version = "0.2.11", optional = true, features = ["alpn"] }
-rand = { version = "0.8" }
+rand = { version = "0.8" } # reconnect with randomized exponential backoff
 rustls = { version = "0.23", default-features = false, optional = true }
 rustls-native-certs = { version = "0.7", optional = true }
 rustls-pemfile = { version = "2", optional = true }
 rustls-pki-types = { version = "1", optional = true }
-stream-ws = { version = "0.1.1", features = ["tungstenite", "tokio"], optional = true }
+stream-ws = { version = "0.1.1", features = ["tungstenite", "tokio"], optional = true } # this dependency is an albatross
 tokio = { version = "1", features = ["full"], optional = true }
 tokio-native-tls = { version = "0.3.1", optional = true}
 tokio-rustls = { version = "0.26", optional = true }

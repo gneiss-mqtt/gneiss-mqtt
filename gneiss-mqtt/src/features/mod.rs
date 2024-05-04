@@ -15,3 +15,6 @@ pub mod tokio;
 
 #[cfg(feature = "tokio-native-tls")]
 pub mod native_tls;
+
+#[cfg(feature = "threaded")]
+pub mod threaded;

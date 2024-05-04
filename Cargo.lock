@@ -856,7 +856,6 @@ name = "gneiss-mqtt"
 version = "0.3.0"
 dependencies = [
  "assert_matches",
- "futures",
  "http",
  "httparse",
  "log",
