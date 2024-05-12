@@ -1099,11 +1099,6 @@ pub mod waiter {
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////
-// WIP
-//////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 /// An async network client that functions as a thin wrapper over the MQTT5 protocol.
 ///
 /// A client is always in one of two states:
@@ -1188,6 +1183,10 @@ pub trait AsyncMqttClient {
 /// to simplify this process.
 pub type AsyncGneissClient = Arc<dyn AsyncMqttClient + Send + Sync>;
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+// WIP
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 pub struct SyncResultReceiver<T> {
     result_lock: Arc<Mutex<Option<T>>>,
@@ -1197,6 +1196,15 @@ pub struct SyncResultReceiver<T> {
 pub(crate) struct SyncResultSender<T> {
     result_lock: Arc<Mutex<Option<T>>>,
     result_signal: Arc<Condvar>
+}
+
+impl<T> Clone for SyncResultSender<T> {
+    fn clone(&self) -> Self {
+        SyncResultSender {
+            result_lock: self.result_lock.clone(),
+            result_signal: self.result_signal.clone()
+        }
+    }
 }
 
 impl<T> SyncResultSender<T> {
@@ -1262,11 +1270,11 @@ pub type SyncSubscribeResult = SyncResultReceiver<SubscribeResult>;
 
 pub type SyncUnsubscribeResult = SyncResultReceiver<UnsubscribeResult>;
 
-pub type SyncPublishResultCallback = Box<dyn Fn(PublishResult) -> ()>;
+pub type SyncPublishResultCallback = Box<dyn Fn(PublishResult) -> () + Send + Sync>;
 
-pub type SyncSubscribeResultCallback = Box<dyn Fn(SubscribeResult) -> ()>;
+pub type SyncSubscribeResultCallback = Box<dyn Fn(SubscribeResult) -> () + Send + Sync>;
 
-pub type SyncUnsubscribeResultCallback = Box<dyn Fn(UnsubscribeResult) -> ()>;
+pub type SyncUnsubscribeResultCallback = Box<dyn Fn(UnsubscribeResult) -> () + Send + Sync>;
 
 /// An async network client that functions as a thin wrapper over the MQTT5 protocol.
 ///

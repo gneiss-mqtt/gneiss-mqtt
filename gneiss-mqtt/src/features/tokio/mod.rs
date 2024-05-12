@@ -312,7 +312,7 @@ async fn client_event_loop<T>(client_impl: &mut MqttClientImpl, async_state: &mu
         }
     }
 
-    info!("Async client loop exiting");
+    info!("Tokio client loop exiting");
 }
 
 pub(crate) fn spawn_client_impl<T>(
@@ -383,7 +383,7 @@ impl AsyncMqttClient for TokioClient {
     /// Signals the client that it should attempt to recurrently maintain a connection to
     /// the broker endpoint it has been configured with.
     fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> MqttResult<()> {
-        info!("client start invoked");
+        info!("tokio client start invoked");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Start(default_listener)) {
             return Err(MqttError::new_operation_channel_failure(send_error));
         }
@@ -394,7 +394,7 @@ impl AsyncMqttClient for TokioClient {
     /// Signals the client that it should close any current connection it has and enter the
     /// Stopped state, where it does nothing.
     fn stop(&self, options: Option<StopOptions>) -> MqttResult<()> {
-        info!("client stop invoked {} a disconnect packet", if options.as_ref().is_some_and(|opts| { opts.disconnect.is_some()}) { "with" } else { "without" });
+        info!("tokio client stop invoked {} a disconnect packet", if options.as_ref().is_some_and(|opts| { opts.disconnect.is_some()}) { "with" } else { "without" });
         let options = options.unwrap_or_default();
 
         if let Some(disconnect) = &options.disconnect {
@@ -421,7 +421,7 @@ impl AsyncMqttClient for TokioClient {
     /// a full resource wipe.  If just `stop()` is used then the client will continue to track
     /// MQTT session state internally.
     fn close(&self) -> MqttResult<()> {
-        info!("client close invoked; no further operations allowed");
+        info!("tokio client close invoked; no further operations allowed");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Shutdown()) {
             return Err(MqttError::new_operation_channel_failure(send_error));
         }
@@ -432,7 +432,7 @@ impl AsyncMqttClient for TokioClient {
     /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
     fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> AsyncPublishResult {
-        debug!("Publish operation submitted");
+        debug!("tokio client - publish operation submitted");
         let boxed_packet = Box::new(MqttPacket::Publish(packet));
         if let Err(error) = validate_packet_outbound(&boxed_packet) {
             return Box::pin(async move { Err(error) });
@@ -444,7 +444,7 @@ impl AsyncMqttClient for TokioClient {
     /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
     fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> AsyncSubscribeResult {
-        debug!("Subscribe operation submitted");
+        debug!("tokio client - subscribe operation submitted");
         let boxed_packet = Box::new(MqttPacket::Subscribe(packet));
         if let Err(error) = validate_packet_outbound(&boxed_packet) {
             return Box::pin(async move { Err(error) });
@@ -456,7 +456,7 @@ impl AsyncMqttClient for TokioClient {
     /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
     fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> AsyncUnsubscribeResult {
-        debug!("Unsubscribe operation submitted");
+        debug!("tokio client - unsubscribe operation submitted");
         let boxed_packet = Box::new(MqttPacket::Unsubscribe(packet));
         if let Err(error) = validate_packet_outbound(&boxed_packet) {
             return Box::pin(async move { Err(error) });
@@ -468,7 +468,7 @@ impl AsyncMqttClient for TokioClient {
     /// Adds an additional listener to the events emitted by this client.  This is useful when
     /// multiple higher-level constructs are sharing the same MQTT client.
     fn add_event_listener(&self, listener: ClientEventListener) -> MqttResult<ListenerHandle> {
-        debug!("AddListener operation submitted");
+        debug!("tokio client - add listener operation submitted");
         let mut current_id = self.listener_id_allocator.lock().unwrap();
         let listener_id = *current_id;
         *current_id += 1;
@@ -484,7 +484,7 @@ impl AsyncMqttClient for TokioClient {
 
     /// Removes a listener from this client's set of event listeners.
     fn remove_event_listener(&self, listener: ListenerHandle) -> MqttResult<()> {
-        debug!("RemoveListener operation submitted");
+        debug!("tokio client - remove listener operation submitted");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::RemoveListener(listener.id)) {
             return Err(MqttError::new_operation_channel_failure(send_error));
         }
