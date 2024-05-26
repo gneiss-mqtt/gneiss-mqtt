@@ -1097,6 +1097,12 @@ pub mod waiter {
         /// Waits for and returns an event sequence that matches the configuration the waiter was created with
         fn wait(self) -> Pin<Box<ClientEventWaitFuture>>;
     }
+
+    pub trait SyncClientEventWaiter {
+
+        /// Waits for and returns an event sequence that matches the configuration the waiter was created with
+        fn wait(self) -> MqttResult<Vec<ClientEventRecord>>;
+    }
 }
 
 /// An async network client that functions as a thin wrapper over the MQTT5 protocol.

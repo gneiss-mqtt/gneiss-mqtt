@@ -526,13 +526,13 @@ pub fn new_with_tokio<T>(client_config: MqttClientOptions, connect_config: Conne
 
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn make_direct_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
+pub(crate) fn make_direct_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
     match tls_impl {
         TlsConfiguration::None => { make_direct_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, runtime) }
         #[cfg(feature = "tokio-rustls")]
-        TlsConfiguration::Rustls => { make_direct_client_rustls(endpoint, port, _tls_options, client_options, connect_options, http_proxy_options, runtime) }
+        TlsConfiguration::Rustls => { make_direct_client_rustls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, runtime) }
         #[cfg(feature = "tokio-native-tls")]
-        TlsConfiguration::Nativetls => { make_direct_client_native_tls(endpoint, port, _tls_options, client_options, connect_options, http_proxy_options, runtime) }
+        TlsConfiguration::Nativetls => { make_direct_client_native_tls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, runtime) }
         _ => { panic!("Illegal state"); }
     }
 }
@@ -951,12 +951,6 @@ async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=Mqtt
     Ok(byte_stream)
 }
 
-fn build_connect_request(http_connect_endpoint: &Endpoint) -> Vec<u8> {
-    let request_as_string = format!("CONNECT {}:{} HTTP/1.1\r\nHost: {}:{}\r\nConnection: keep-alive\r\n\r\n", http_connect_endpoint.endpoint, http_connect_endpoint.port, http_connect_endpoint.endpoint, http_connect_endpoint.port);
-
-    return request_as_string.as_bytes().to_vec();
-}
-
 async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, http_connect_endpoint: Endpoint) -> MqttResult<S> where S : AsyncRead + AsyncWrite + Unpin {
     let mut inner_stream = stream.await?;
 
@@ -1219,7 +1213,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(all(feature = "tokio-rustls", feature="websosckets"))]
+    #[cfg(all(feature = "tokio-rustls", feature="tokio-websockets"))]
     fn client_connect_disconnect_websocket_rustls_with_proxy() {
         do_good_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder|{
             Box::pin(tokio_connect_disconnect_test(builder))

@@ -7,35 +7,37 @@
 Implementation of an MQTT client that uses one or more background threads for processing.
  */
 
-
 use std::cmp::min;
 use std::io::{Read, Write};
-use std::sync::{Arc, Mutex};
-use std::thread::sleep;
+use std::net::TcpStream;
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
-use log::{debug, info, trace};
+use log::{debug, error, info, trace};
 use crate::client::*;
+use crate::client::waiter::{client_event_matches, ClientEventRecord, ClientEventType, ClientEventWaiterOptions, ClientEventWaitType, SyncClientEventWaiter};
+use crate::config::*;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::{MqttPacket, PublishPacket, SubscribePacket, UnsubscribePacket};
 use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
 use crate::protocol::is_connection_established;
 use crate::validate::validate_packet_outbound;
 
+/// Factory function for creating the final connection object based on all the various
+/// configuration options and features.  It might be a TcpStream, it might be a TlsStream,
+/// it might be a WebsocketStream, it might be some nested combination.
+///
+/// Ultimately, the type must implement Read and Write.
+pub type ConnectionFactory<T> = Arc<dyn Fn() -> MqttResult<T> + Send + Sync>;
+
 /// Thread-specific client configuration
-pub struct ThreadedClientOptions<T> where T : Read + Write + Send + Sync + 'static {
-
+#[derive(Copy, Clone)]
+pub struct ThreadedClientOptions {
     pub idle_service_sleep: Duration,
-
-    /// Factory function for creating the final connection object based on all the various
-    /// configuration options and features.  It might be a TcpStream, it might be a TlsStream,
-    /// it might be a WebsocketStream, it might be some nested combination.
-    ///
-    /// Ultimately, the type must implement Read and Write.
-    pub connection_factory: Arc<dyn Fn() -> MqttResult<T> + Send + Sync>,
 }
 
 pub(crate) struct ClientRuntimeState<T> where T : Read + Write + Send + Sync + 'static {
-    threaded_config: ThreadedClientOptions<T>,
+    connection_factory: ConnectionFactory<T>,
+    threaded_config: ThreadedClientOptions,
     operation_receiver: std::sync::mpsc::Receiver<OperationOptions>,
     stream: Option<T>
 }
@@ -58,7 +60,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
                 return Ok(transition_state);
             } else if let Some(sleep_duration) = sleep_duration {
                 debug!("threaded - process_stopped - sleeping for {:?}", sleep_duration);
-                sleep(sleep_duration);
+                std::thread::sleep(sleep_duration);
             } else {
                 debug!("threaded - process_stopped - skipping sleep");
             }
@@ -69,7 +71,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
         // let mut connect = (self.threaded_config.connection_factory)();
         let timeout_timepoint = Instant::now() + *client.connect_timeout();
 
-        let connection_factory = self.threaded_config.connection_factory.clone();
+        let connection_factory = self.connection_factory.clone();
         let (connection_recv, connection_send) = new_sync_result_pair::<MqttResult<T>>();
         std::thread::spawn(move || {
             connection_send.apply(connection_factory());
@@ -122,7 +124,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
                 return Ok(transition_state);
             } else if let Some(sleep_duration) = sleep_duration {
                 debug!("threaded - process_connecting - sleeping for {:?}", sleep_duration);
-                sleep(sleep_duration);
+                std::thread::sleep(sleep_duration);
             } else {
                 debug!("threaded - process_connecting - skipping sleep");
             }
@@ -174,16 +176,21 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
                     sleep_duration = None;
                 }
                 Err(error) => {
-                    // TODO: handle would block/again cases as non-error
-
-                    info!("threaded - process_connected - connection stream read failed: {:?}", error);
-                    if is_connection_established(client.get_protocol_state()) {
-                        client.apply_error(MqttError::new_connection_closed(error));
-                    } else {
-                        client.apply_error(MqttError::new_connection_establishment_failure(error));
+                    match error.kind() {
+                        std::io::ErrorKind::WouldBlock => {
+                            trace!("threaded - process_connected - no data available to read");
+                        }
+                        _ => {
+                            info!("threaded - process_connected - connection stream read failed: {:?}", error);
+                            if is_connection_established(client.get_protocol_state()) {
+                                client.apply_error(MqttError::new_connection_closed(error));
+                            } else {
+                                client.apply_error(MqttError::new_connection_establishment_failure(error));
+                            }
+                            next_state = Some(ClientImplState::PendingReconnect);
+                            continue;
+                        }
                     }
-                    next_state = Some(ClientImplState::PendingReconnect);
-                    continue;
                 }
             }
 
@@ -214,33 +221,45 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
                 write_directive = None;
             }
 
+            let mut connection_fatal_write_error = None;
             if let Some(write_bytes) = write_directive {
                 let mut should_flush : bool = false;
                 let bytes_written_result = stream.write(write_bytes);
                 match bytes_written_result {
                     Ok(bytes_written) => {
-                        // TODO: handle 0-length writes?
-
-                        debug!("threaded - process_connected - wrote {} bytes to connection stream", bytes_written);
-                        cumulative_bytes_written += bytes_written;
-                        if cumulative_bytes_written == outbound_data.len() {
-                            outbound_data.clear();
-                            cumulative_bytes_written = 0;
-                            should_flush = true;
+                        if bytes_written > 0 {
+                            debug!("threaded - process_connected - wrote {} bytes to connection stream", bytes_written);
+                            cumulative_bytes_written += bytes_written;
+                            if cumulative_bytes_written == outbound_data.len() {
+                                outbound_data.clear();
+                                cumulative_bytes_written = 0;
+                                should_flush = true;
+                            }
+                        } else {
+                            connection_fatal_write_error = Some(std::io::Error::from(std::io::ErrorKind::WriteZero));
                         }
                     }
                     Err(error) => {
-                        // TODO: handle blocking errors?
-
-                        info!("threaded - process_connected - connection stream write failed: {:?}", error);
-                        if is_connection_established(client.get_protocol_state()) {
-                            client.apply_error(MqttError::new_connection_closed(error));
-                        } else {
-                            client.apply_error(MqttError::new_connection_establishment_failure(error));
+                        match error.kind() {
+                            std::io::ErrorKind::WouldBlock | std::io::ErrorKind::Interrupted => {
+                                trace!("threaded - process_connected - no progress made writing data to socket");
+                            }
+                            _ => {
+                                connection_fatal_write_error = Some(error);
+                            }
                         }
-                        next_state = Some(ClientImplState::PendingReconnect);
-                        continue;
                     }
+                }
+
+                if let Some(write_error) = connection_fatal_write_error {
+                    info!("threaded - process_connected - connection stream write failed: {:?}", write_error);
+                    if is_connection_established(client.get_protocol_state()) {
+                        client.apply_error(MqttError::new_connection_closed(write_error));
+                    } else {
+                        client.apply_error(MqttError::new_connection_establishment_failure(write_error));
+                    }
+                    next_state = Some(ClientImplState::PendingReconnect);
+                    continue;
                 }
 
                 if should_flush {
@@ -279,7 +298,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
                 next_state = client.compute_optional_state_transition();
             } else if let Some(sleep_duration) = sleep_duration {
                 debug!("threaded - process_connected - sleeping for {:?}", sleep_duration);
-                sleep(sleep_duration);
+                std::thread::sleep(sleep_duration);
             } else {
                 debug!("threaded - process_connected - skipping sleep");
             }
@@ -318,7 +337,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
                 return Ok(transition_state);
             } else if let Some(sleep_duration) = sleep_duration {
                 debug!("threaded - process_pending_reconnect - sleeping for {:?}", sleep_duration);
-                sleep(sleep_duration);
+                std::thread::sleep(sleep_duration);
             } else {
                 debug!("threaded - process_pending_reconnect - skipping sleep");
             }
@@ -542,5 +561,237 @@ impl SyncMqttClient for ThreadedClient {
         }
 
         Ok(())
+    }
+}
+
+pub(crate) fn create_runtime_states<T>(threaded_config: ThreadedClientOptions, connection_factory: ConnectionFactory<T>) -> (std::sync::mpsc::Sender<OperationOptions>, ClientRuntimeState<T>) where T : Read + Write + Send + Sync + 'static {
+    let (sender, receiver) = std::sync::mpsc::channel();
+
+    let impl_state = ClientRuntimeState {
+        connection_factory,
+        threaded_config,
+        operation_receiver: receiver,
+        stream: None
+    };
+
+    (sender, impl_state)
+}
+
+/// Creates a new sync MQTT5 client that will use background threads for the client and connection attempts
+pub fn new_threaded<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, threaded_config: ThreadedClientOptions, connection_factory: ConnectionFactory<T>) -> SyncGneissClient where T: Read + Write + Send + Sync + 'static {
+    let (operation_sender, internal_state) = create_runtime_states(threaded_config, connection_factory);
+
+    let callback_spawner : CallbackSpawnerFunction = Box::new(|event, callback| {
+        (callback)(event)
+    });
+
+    let client_impl = MqttClientImpl::new(client_config, connect_config, callback_spawner);
+
+    spawn_client_impl(client_impl, internal_state);
+
+    Arc::new(ThreadedClient{
+        operation_sender,
+        listener_id_allocator: Mutex::new(1),
+    })
+}
+
+
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn make_direct_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+    match tls_impl {
+        TlsConfiguration::None => { make_direct_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, threaded_config) }
+        //#[cfg(feature = "threaded-rustls")]
+        //TlsConfiguration::Rustls => { make_direct_client_rustls(endpoint, port, _tls_options, client_options, connect_options, http_proxy_options) }
+        //#[cfg(feature = "threaded-native-tls")]
+        //TlsConfiguration::Nativetls => { make_direct_client_native_tls(endpoint, port, _tls_options, client_options, connect_options, http_proxy_options) }
+        _ => { panic!("Illegal state"); }
+    }
+}
+
+fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+    info!("threaded make_direct_client_no_tls - creating connection establishment closure");
+    let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
+
+    if http_connect_endpoint.is_some() {
+        let connection_factory = Arc::new(move || {
+            let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+            let tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
+            apply_proxy_connect_to_stream(tcp_stream, http_connect_endpoint.clone())
+        });
+
+        info!("threaded make_direct_client_no_tls - plaintext-to-proxy -> plaintext-to-broker");
+        Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+    } else {
+        let connection_factory = Arc::new(move || {
+            make_leaf_stream(stream_endpoint.clone())
+        });
+
+        info!("threaded make_direct_client_no_tls - plaintext-to-broker");
+        Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+    }
+}
+
+fn make_leaf_stream(endpoint: Endpoint) -> MqttResult<TcpStream> {
+    let addr = make_addr(endpoint.endpoint.as_str(), endpoint.port)?;
+    debug!("make_leaf_stream - opening TCP stream");
+    let stream = TcpStream::connect(&addr)?;
+    debug!("make_leaf_stream - TCP stream successfully established");
+
+    stream.set_nonblocking(true)?;
+
+    Ok(stream)
+}
+
+fn apply_proxy_connect_to_stream<T>(mut stream : T, http_connect_endpoint: Endpoint) -> MqttResult<T> where T : Read + Write {
+
+    debug!("apply_proxy_connect_to_stream - writing CONNECT request to connection stream");
+    let request_bytes = build_connect_request(&http_connect_endpoint);
+    stream.write_all(request_bytes.as_slice())?;
+    debug!("apply_proxy_connect_to_stream - successfully wrote CONNECT request to stream");
+
+    let mut inbound_data: [u8; 4096] = [0; 4096];
+    let mut response_bytes = Vec::new();
+
+    loop {
+        let bytes_read = stream.read(&mut inbound_data)?;
+        if bytes_read == 0 {
+            info!("apply_proxy_connect_to_stream - proxy connect stream closed with zero byte read");
+            return Err(MqttError::new_connection_establishment_failure("proxy connect stream closed"));
+        }
+
+        response_bytes.extend_from_slice(&inbound_data[..bytes_read]);
+
+        let mut headers = [httparse::EMPTY_HEADER; 32];
+        let mut response = httparse::Response::new(&mut headers);
+
+        let parse_result = response.parse(response_bytes.as_slice());
+        match parse_result {
+            Err(e) => {
+                error!("apply_proxy_connect_to_stream - failed to parse proxy response to CONNECT request: {:?}", e);
+                return Err(MqttError::new_connection_establishment_failure(e));
+            }
+            Ok(httparse::Status::Complete(bytes_parsed)) => {
+                if bytes_parsed < response_bytes.len() {
+                    error!("apply_proxy_connect_to_stream - stream incoming data contains more data than the CONNECT response");
+                    return Err(MqttError::new_connection_establishment_failure("proxy connect response too long"));
+                }
+
+                if let Some(response_code) = response.code {
+                    if (200..300).contains(&response_code) {
+                        return Ok(stream);
+                    }
+                }
+
+                error!("apply_proxy_connect_to_stream - CONNECT request was failed, with http code: {:?}", response.code);
+                return Err(MqttError::new_connection_establishment_failure("proxy connect request unsuccessful"));
+            }
+            Ok(httparse::Status::Partial) => {}
+        }
+    }
+}
+
+
+/// Simple debug type that uses the client listener framework to allow tests to asynchronously wait for
+/// configurable client event sequences.  May be useful outside of tests.  May need polish.  Currently public
+/// because we use it across crates.  May eventually go internal.
+///
+/// Requires the client to be Arc-wrapped.
+pub struct ThreadedClientEventWaiter {
+    event_count: usize,
+
+    client: SyncGneissClient,
+
+    listener: Option<ListenerHandle>,
+
+    events: Arc<Mutex<Option<Vec<ClientEventRecord>>>>,
+
+    signal: Arc<Condvar>,
+}
+
+impl ThreadedClientEventWaiter {
+
+    /// Creates a new ClientEventWaiter instance from full configuration
+    pub fn new(client: SyncGneissClient, config: ClientEventWaiterOptions, event_count: usize) -> Self {
+        let lock = Arc::new(Mutex::new(Some(Vec::new())));
+        let signal = Arc::new(Condvar::new());
+
+        let mut waiter = ThreadedClientEventWaiter {
+            event_count,
+            client: client.clone(),
+            listener: None,
+            events: lock.clone(),
+            signal: signal.clone(),
+        };
+
+        let listener_fn = move |event: Arc<ClientEvent>| {
+            match &config.wait_type {
+                ClientEventWaitType::Type(event_type) => {
+                    if !client_event_matches(&event, *event_type) {
+                        return;
+                    }
+                }
+                ClientEventWaitType::Predicate(event_predicate) => {
+                    if !(*event_predicate)(&event) {
+                        return;
+                    }
+                }
+            }
+
+            let event_record = ClientEventRecord {
+                event: event.clone(),
+                timestamp: Instant::now(),
+            };
+
+            let mut events_guard = lock.lock().unwrap();
+            let events_option = events_guard.as_mut();
+            if let Some(events) = events_option {
+                events.push(event_record);
+
+                if events.len() >= event_count {
+                    signal.notify_all();
+                }
+            }
+        };
+
+        waiter.listener = Some(client.add_event_listener(Arc::new(listener_fn)).unwrap());
+        waiter
+    }
+
+    /// Creates a new ClientEventWaiter instance that will wait for a single occurrence of a single event type
+    pub fn new_single(client: SyncGneissClient, event_type: ClientEventType) -> Self {
+        let config = ClientEventWaiterOptions {
+            wait_type: ClientEventWaitType::Type(event_type),
+        };
+
+        Self::new(client, config, 1)
+    }
+}
+
+impl SyncClientEventWaiter for ThreadedClientEventWaiter {
+    fn wait(self) -> MqttResult<Vec<ClientEventRecord>> {
+        let mut current_events_option = self.events.lock().unwrap();
+        loop {
+            match &*current_events_option {
+                Some(current_events) => {
+                    if current_events.len() >= self.event_count {
+                        return Ok(current_events_option.take().unwrap());
+                    }
+                }
+                None => {
+                    return Err(MqttError::new_other_error("Client event waiter result already taken"));
+                }
+            }
+
+            current_events_option = self.signal.wait(current_events_option).unwrap();
+        }
+    }
+}
+
+impl Drop for ThreadedClientEventWaiter {
+    fn drop(&mut self) {
+        let listener_handler = self.listener.take().unwrap();
+
+        let _ = self.client.remove_event_listener(listener_handler);
     }
 }

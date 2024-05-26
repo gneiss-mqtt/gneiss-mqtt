@@ -31,6 +31,9 @@ use crate::features::tokio::*;
 #[cfg(feature="tokio")]
 use tokio::runtime::Handle;
 
+#[cfg(feature="threaded")]
+use crate::features::threaded::{ThreadedClientOptions, make_direct_client_threaded};
+
 /// Configuration options related to establishing connections through HTTP proxies
 #[derive(Default, Clone)]
 pub struct HttpProxyOptions {
@@ -878,6 +881,45 @@ impl GenericClientBuilder {
 
         make_direct_client_tokio(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, runtime)
     }
+
+    /// Builds a new MQTT client according to all the configuration options given to the builder.
+    /// Does not consume self; can be called multiple times
+    #[cfg(feature="threaded")]
+    pub fn build_threaded(&self, threaded_config: &ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+        let tls_impl = self.get_tls_impl();
+        if tls_impl == TlsConfiguration::Mixed {
+            return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));
+        }
+
+        let connect_options =
+            if let Some(options) = &self.connect_options {
+                options.clone()
+            } else {
+                ConnectOptionsBuilder::new().build()
+            };
+
+        let client_options =
+            if let Some(options) = &self.client_options {
+                options.clone()
+            } else {
+                MqttClientOptionsBuilder::new().build()
+            };
+
+        let http_proxy_options = self.http_proxy_options.clone();
+        let tls_options = self.tls_options.clone();
+        let endpoint = self.endpoint.clone();
+
+        /*
+        #[cfg(feature="threaded-websockets")]
+        {
+            let websocket_options = self.websocket_options.clone();
+            if let Some(websocket_options) = websocket_options {
+                return make_websocket_client_tokio(tls_impl, endpoint, self.port, websocket_options, tls_options, client_options, connect_options, http_proxy_options, runtime);
+            }
+        }*/
+
+        make_direct_client_threaded(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, *threaded_config)
+    }
 }
 
 #[derive(Clone)]
@@ -914,6 +956,12 @@ pub(crate) fn compute_endpoints(endpoint: String, port: u16, http_proxy_options:
     } else {
         (broker_endpoint, None)
     }
+}
+
+pub(crate) fn build_connect_request(http_connect_endpoint: &Endpoint) -> Vec<u8> {
+    let request_as_string = format!("CONNECT {}:{} HTTP/1.1\r\nHost: {}:{}\r\nConnection: keep-alive\r\n\r\n", http_connect_endpoint.endpoint, http_connect_endpoint.port, http_connect_endpoint.endpoint, http_connect_endpoint.port);
+
+    return request_as_string.as_bytes().to_vec();
 }
 
 #[cfg(feature="tokio-websockets")]
