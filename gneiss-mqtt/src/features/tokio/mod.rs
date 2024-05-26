@@ -1128,8 +1128,8 @@ pub(crate) mod testing {
     async fn tokio_connect_disconnect_test(builder: GenericClientBuilder) -> MqttResult<()> {
         let client = builder.build_tokio(&tokio::runtime::Handle::current()).unwrap();
 
-        start_client(&client, TokioClientEventWaiter::new_single).await?;
-        stop_client(&client, TokioClientEventWaiter::new_single).await?;
+        start_async_client(&client, TokioClientEventWaiter::new_single).await?;
+        stop_async_client(&client, TokioClientEventWaiter::new_single).await?;
 
         Ok(())
     }

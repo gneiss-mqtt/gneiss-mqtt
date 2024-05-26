@@ -32,12 +32,48 @@ pub type ConnectionFactory<T> = Arc<dyn Fn() -> MqttResult<T> + Send + Sync>;
 /// Thread-specific client configuration
 #[derive(Copy, Clone)]
 pub struct ThreadedClientOptions {
-    pub idle_service_sleep: Duration,
+    pub(crate) idle_service_sleep: Option<Duration>,
+}
+
+pub struct ThreadedClientOptionsBuilder {
+    config: ThreadedClientOptions
+}
+
+impl ThreadedClientOptionsBuilder {
+    pub fn new() -> Self {
+        return ThreadedClientOptionsBuilder {
+            config: ThreadedClientOptions {
+                idle_service_sleep: None,
+            }
+        }
+    }
+
+    pub fn with_idle_service_sleep(&mut self, duration: Duration) {
+        self.config.idle_service_sleep = Some(duration);
+    }
+    pub fn build(&self) -> ThreadedClientOptions {
+        return self.config.clone();
+    }
+}
+
+#[derive(Copy, Clone)]
+struct ThreadedClientOptionsInternal {
+    idle_service_sleep: Duration
+}
+
+const DEFAULT_IDLE_SLEEP_MILLIS : u64 = 20;
+
+fn create_internal_options(options: &ThreadedClientOptions) -> ThreadedClientOptionsInternal {
+    let idle_service_sleep = options.idle_service_sleep;
+
+    return ThreadedClientOptionsInternal {
+        idle_service_sleep: idle_service_sleep.unwrap_or(Duration::from_millis(DEFAULT_IDLE_SLEEP_MILLIS))
+    }
 }
 
 pub(crate) struct ClientRuntimeState<T> where T : Read + Write + Send + Sync + 'static {
     connection_factory: ConnectionFactory<T>,
-    threaded_config: ThreadedClientOptions,
+    threaded_config: ThreadedClientOptionsInternal,
     operation_receiver: std::sync::mpsc::Receiver<OperationOptions>,
     stream: Option<T>
 }
@@ -569,7 +605,7 @@ pub(crate) fn create_runtime_states<T>(threaded_config: ThreadedClientOptions, c
 
     let impl_state = ClientRuntimeState {
         connection_factory,
-        threaded_config,
+        threaded_config: create_internal_options(&threaded_config),
         operation_receiver: receiver,
         stream: None
     };
@@ -793,5 +829,34 @@ impl Drop for ThreadedClientEventWaiter {
         let listener_handler = self.listener.take().unwrap();
 
         let _ = self.client.remove_event_listener(listener_handler);
+    }
+}
+
+#[cfg(all(test, feature = "testing"))]
+pub(crate) mod testing {
+    use crate::config::GenericClientBuilder;
+    use crate::error::MqttResult;
+    use crate::features::threaded::*;
+    use crate::testing::integration::{create_good_client_builder, ProxyUsage, start_sync_client, stop_sync_client, SyncTestFactory, TlsUsage, WebsocketUsage};
+
+    fn threaded_connect_disconnect_test(builder: GenericClientBuilder) -> MqttResult<()> {
+        let threaded_options = ThreadedClientOptionsBuilder::new().build();
+        let client = builder.build_threaded(&threaded_options).unwrap();
+
+        start_sync_client(&client, ThreadedClientEventWaiter::new_single)?;
+        stop_sync_client(&client, ThreadedClientEventWaiter::new_single)?;
+
+        Ok(())
+    }
+
+    fn do_good_client_test(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: SyncTestFactory) {
+        assert!((*test_factory)(create_good_client_builder(tls, ws, proxy)).is_ok());
+    }
+
+    #[test]
+    fn client_connect_disconnect_direct_plaintext_no_proxy() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+            threaded_connect_disconnect_test(builder)
+        }));
     }
 }
