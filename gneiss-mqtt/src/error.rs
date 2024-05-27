@@ -474,24 +474,33 @@ impl From<core::str::Utf8Error> for MqttError {
     }
 }
 
-#[cfg(feature = "tokio-rustls")]
+#[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
 impl From<rustls_pki_types::InvalidDnsNameError> for MqttError {
     fn from(err: rustls_pki_types::InvalidDnsNameError) -> Self {
         MqttError::new_connection_establishment_failure(err)
     }
 }
 
-#[cfg(feature = "tokio-rustls")]
+#[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
 impl From<rustls::Error> for MqttError {
     fn from(err: rustls::Error) -> Self {
         MqttError::new_tls_error(err)
     }
 }
 
-#[cfg(feature = "tokio-native-tls")]
+#[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
 impl From<native_tls::Error> for MqttError {
     fn from(err: native_tls::Error) -> Self {
         MqttError::new_tls_error(err)
+    }
+}
+
+#[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
+impl<S> From<native_tls::HandshakeError<S>> for MqttError  {
+    fn from(_err: native_tls::HandshakeError<S>) -> Self {
+        // TODO: is there a better way of handling this?  S is the transport stream which
+        // isn't copy/clone so it doesn't seem like we can wrap it
+        MqttError::new_tls_error("native-tls handshake error")
     }
 }
 
@@ -508,7 +517,6 @@ impl From<tokio::sync::oneshot::error::RecvError> for MqttError {
         MqttError::new_operation_channel_failure(err)
     }
 }
-
 
 impl <T> From<std::sync::mpsc::SendError<T>> for MqttError where T : Send + Sync + 'static {
     fn from(err: std::sync::mpsc::SendError<T>) -> Self {

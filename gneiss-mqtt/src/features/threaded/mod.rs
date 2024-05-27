@@ -192,16 +192,14 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
             }
 
             // incoming data on the socket
+            let mut connection_fatal_read_error = None;
             let read_result = stream.read(inbound_data.as_mut_slice());
             match read_result {
                 Ok(bytes_read) => {
                     debug!("threaded - process_connected - read {} bytes from connection stream", bytes_read);
 
                     if bytes_read == 0 {
-                        info!("threaded - process_connected - connection closed for read (0 bytes)");
-                        client.apply_error(MqttError::new_connection_closed("network stream closed"));
-                        next_state = Some(ClientImplState::PendingReconnect);
-                        continue;
+                        connection_fatal_read_error = Some(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
                     } else if let Err(error) = client.handle_incoming_bytes(&inbound_data[..bytes_read]) {
                         info!("threaded - process_connected - error handling incoming bytes: {:?}", error);
                         client.apply_error(error);
@@ -217,17 +215,21 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
                             trace!("threaded - process_connected - no data available to read");
                         }
                         _ => {
-                            info!("threaded - process_connected - connection stream read failed: {:?}", error);
-                            if is_connection_established(client.get_protocol_state()) {
-                                client.apply_error(MqttError::new_connection_closed(error));
-                            } else {
-                                client.apply_error(MqttError::new_connection_establishment_failure(error));
-                            }
-                            next_state = Some(ClientImplState::PendingReconnect);
-                            continue;
+                            connection_fatal_read_error = Some(error);
                         }
                     }
                 }
+            }
+
+            if let Some(read_error) = connection_fatal_read_error {
+                info!("threaded - process_connected - connection stream read failed: {:?}", read_error);
+                if is_connection_established(client.get_protocol_state()) {
+                    client.apply_error(MqttError::new_connection_closed(read_error));
+                } else {
+                    client.apply_error(MqttError::new_connection_establishment_failure(read_error));
+                }
+                next_state = Some(ClientImplState::PendingReconnect);
+                continue;
             }
 
             // client service (if relevant)
@@ -634,13 +636,13 @@ pub fn new_threaded<T>(client_config: MqttClientOptions, connect_config: Connect
 
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn make_direct_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+pub(crate) fn make_direct_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     match tls_impl {
         TlsConfiguration::None => { make_direct_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, threaded_config) }
-        //#[cfg(feature = "threaded-rustls")]
-        //TlsConfiguration::Rustls => { make_direct_client_rustls(endpoint, port, _tls_options, client_options, connect_options, http_proxy_options) }
-        //#[cfg(feature = "threaded-native-tls")]
-        //TlsConfiguration::Nativetls => { make_direct_client_native_tls(endpoint, port, _tls_options, client_options, connect_options, http_proxy_options) }
+        #[cfg(feature = "threaded-rustls")]
+        TlsConfiguration::Rustls => { make_direct_client_rustls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config) }
+        #[cfg(feature = "threaded-native-tls")]
+        TlsConfiguration::Nativetls => { make_direct_client_native_tls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config) }
         _ => { panic!("Illegal state"); }
     }
 }
@@ -653,18 +655,154 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttCl
         let connection_factory = Arc::new(move || {
             let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
             let tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
-            apply_proxy_connect_to_stream(tcp_stream, http_connect_endpoint.clone())
+            let proxy_stream = apply_proxy_connect_to_stream(tcp_stream, http_connect_endpoint.clone())?;
+            proxy_stream.set_nonblocking(true)?;
+            Ok(proxy_stream)
         });
 
         info!("threaded make_direct_client_no_tls - plaintext-to-proxy -> plaintext-to-broker");
         Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
     } else {
         let connection_factory = Arc::new(move || {
-            make_leaf_stream(stream_endpoint.clone())
+            let tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
+            tcp_stream.set_nonblocking(true)?;
+            Ok(tcp_stream)
         });
 
         info!("threaded make_direct_client_no_tls - plaintext-to-broker");
         Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+    }
+}
+
+#[cfg(feature = "threaded-rustls")]
+fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+    info!("threaded make_direct_client_rustls - creating connection establishment closure");
+
+    let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
+
+    if let Some(tls_options) = tls_options {
+        if let Some(http_proxy_options) = http_proxy_options {
+            if let Some(proxy_tls_options) = http_proxy_options.tls_options {
+                let connection_factory = Arc::new(move || {
+                    let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                    let proxy_tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
+                    let proxy_tls_stream = wrap_stream_with_tls_rustls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone())?;
+                    let connect_stream = apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone())?;
+                    let tls_connect_stream = wrap_stream_with_tls_rustls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone())?;
+                    tls_connect_stream.sock.sock.set_nonblocking(true)?;
+                    Ok(tls_connect_stream)
+                });
+
+                info!("threaded make_direct_client_rustls - tls-to-proxy -> tls-to-broker");
+                Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+            } else {
+                let connection_factory = Arc::new(move || {
+                    let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                    let proxy_tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
+                    let connect_stream = apply_proxy_connect_to_stream(proxy_tcp_stream, http_connect_endpoint.clone())?;
+                    let tls_connect_stream = wrap_stream_with_tls_rustls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone())?;
+                    tls_connect_stream.sock.set_nonblocking(true)?;
+                    Ok(tls_connect_stream)
+                });
+
+                info!("threaded make_direct_client_rustls - plaintext-to-proxy -> tls-to-broker");
+                Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+            }
+        } else {
+            let connection_factory = Arc::new(move || {
+                let tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
+                let tls_stream = wrap_stream_with_tls_rustls(tcp_stream, endpoint.clone(), tls_options.clone())?;
+                tls_stream.sock.set_nonblocking(true)?;
+                Ok(tls_stream)
+            });
+
+            info!("threaded make_direct_client_rustls - tls-to-broker");
+            Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+        }
+    } else if let Some(http_proxy_options) = http_proxy_options {
+        if let Some(proxy_tls_options) = http_proxy_options.tls_options {
+            let connection_factory = Arc::new(move || {
+                let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                let proxy_tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
+                let proxy_tls_stream = wrap_stream_with_tls_rustls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone())?;
+                let connect_stream = apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone())?;
+                connect_stream.sock.set_nonblocking(true)?;
+                Ok(connect_stream)
+            });
+
+            info!("threaded make_direct_client_rustls - tls-to-proxy -> plaintext-to-broker");
+            Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+        } else {
+            panic!("threaded make_direct_client_rustls - invoked without tls configuration")
+        }
+    } else {
+        panic!("threaded make_direct_client_rustls - invoked without tls configuration")
+    }
+}
+
+#[cfg(feature = "threaded-native-tls")]
+fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>,  threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+    info!("threaded make_direct_client_native_tls - creating async connection establishment closure");
+
+    let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
+
+    if let Some(tls_options) = tls_options {
+        if let Some(http_proxy_options) = http_proxy_options {
+            if let Some(proxy_tls_options) = http_proxy_options.tls_options {
+                let connection_factory = Arc::new(move || {
+                    let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                    let proxy_tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
+                    let proxy_tls_stream = wrap_stream_with_tls_native_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone())?;
+                    let connect_stream = apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone())?;
+                    let tls_connect_stream = wrap_stream_with_tls_native_tls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone())?;
+                    tls_connect_stream.get_ref().get_ref().set_nonblocking(true)?;
+                    Ok(tls_connect_stream)
+                });
+
+                info!("threaded make_direct_client_native_tls - tls-to-proxy -> tls-to-broker");
+                Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+            } else {
+                let connection_factory = Arc::new(move || {
+                    let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                    let proxy_tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
+                    let connect_stream = apply_proxy_connect_to_stream(proxy_tcp_stream, http_connect_endpoint.clone())?;
+                    let tls_connect_stream = wrap_stream_with_tls_native_tls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone())?;
+                    tls_connect_stream.get_ref().set_nonblocking(true)?;
+                    Ok(tls_connect_stream)
+                });
+
+                info!("threaded make_direct_client_native_tls - plaintext-to-proxy -> tls-to-broker");
+                Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+            }
+        } else {
+            let connection_factory = Arc::new(move || {
+                let tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
+                let tls_stream = wrap_stream_with_tls_native_tls(tcp_stream, endpoint.clone(), tls_options.clone())?;
+                tls_stream.get_ref().set_nonblocking(true)?;
+                Ok(tls_stream)
+            });
+
+            info!("threaded make_direct_client_native_tls - tls-to-broker");
+            Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+        }
+    } else if let Some(http_proxy_options) = http_proxy_options {
+        if let Some(proxy_tls_options) = http_proxy_options.tls_options {
+            let connection_factory = Arc::new(move || {
+                let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
+                let proxy_tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
+                let proxy_tls_stream = wrap_stream_with_tls_native_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone())?;
+                let connect_stream = apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone())?;
+                connect_stream.get_ref().set_nonblocking(true)?;
+                Ok(connect_stream)
+            });
+
+            info!("threaded make_direct_client_native_tls - tls-to-proxy -> plaintext-to-broker");
+            Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+        } else {
+            panic!("threaded make_direct_client_native_tls - invoked without tls configuration")
+        }
+    } else {
+        panic!("threaded make_direct_client_native_tls - invoked without tls configuration")
     }
 }
 
@@ -674,9 +812,45 @@ fn make_leaf_stream(endpoint: Endpoint) -> MqttResult<TcpStream> {
     let stream = TcpStream::connect(&addr)?;
     debug!("make_leaf_stream - TCP stream successfully established");
 
-    stream.set_nonblocking(true)?;
+    // we don't set non-blocking here.  The tls and websocket wrapper layers often need the
+    // socket to be blocking to work correctly.  We set the socket non-blocking once the
+    // transport has been fully established and we're ready to speak MQTT.
+    stream.set_nodelay(true)?;
 
     Ok(stream)
+}
+
+#[cfg(feature = "threaded-rustls")]
+fn wrap_stream_with_tls_rustls<S>(stream : S, endpoint: String, tls_options: TlsOptions) -> MqttResult<rustls::StreamOwned<rustls::client::ClientConnection, S>> where S : Read + Write {
+    let domain = rustls_pki_types::ServerName::try_from(endpoint)?
+        .to_owned();
+
+    if let TlsData::Rustls(config) = tls_options.options {
+        let client_connection = rustls::client::ClientConnection::new(config, domain)?;
+        let mut tls_stream = rustls::StreamOwned::new(client_connection, stream);
+        debug!("wrap_stream_with_tls_rustls - performing tls handshake");
+        let result = tls_stream.flush();
+        if result.is_err() {
+            return Err(MqttError::new_connection_establishment_failure(result.err().unwrap()));
+        }
+        debug!("wrap_stream_with_tls_rustls - tls handshake successfully completed");
+        Ok(tls_stream)
+    } else {
+        panic!("Rustls stream wrapper invoked without Rustls configuration");
+    }
+}
+
+#[cfg(feature = "threaded-native-tls")]
+fn wrap_stream_with_tls_native_tls<S>(stream : S, endpoint: String, tls_options: TlsOptions) -> MqttResult<native_tls::TlsStream<S>> where S : Read + Write {
+    if let TlsData::NativeTls(ntls_builder) = tls_options.options {
+        let connector = ntls_builder.build()?;
+        debug!("threaded wrap_stream_with_tls_native_tls - performing tls handshake");
+        let tls_stream = connector.connect(endpoint.as_str(), stream)?;
+        debug!("threaded wrap_stream_with_tls_native_tls - tls handshake successfully completed");
+        Ok(tls_stream)
+    } else {
+        panic!("Native-tls stream wrapper invoked without native-tls configuration");
+    }
 }
 
 fn apply_proxy_connect_to_stream<T>(mut stream : T, http_connect_endpoint: Endpoint) -> MqttResult<T> where T : Read + Write {
@@ -856,6 +1030,22 @@ pub(crate) mod testing {
     #[test]
     fn client_connect_disconnect_direct_plaintext_no_proxy() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+            threaded_connect_disconnect_test(builder)
+        }));
+    }
+
+    #[test]
+    #[cfg(feature = "threaded-rustls")]
+    fn client_connect_disconnect_direct_rustls_no_proxy() {
+        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+            threaded_connect_disconnect_test(builder)
+        }));
+    }
+
+    #[test]
+    #[cfg(feature = "threaded-native-tls")]
+    fn client_connect_disconnect_direct_native_tls_no_proxy() {
+        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
             threaded_connect_disconnect_test(builder)
         }));
     }

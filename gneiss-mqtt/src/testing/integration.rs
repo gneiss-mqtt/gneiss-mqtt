@@ -18,10 +18,10 @@ use crate::mqtt::{ConnectReasonCode, PubackReasonCode, PubcompReasonCode, Publis
 pub(crate) enum TlsUsage {
     None,
 
-    #[cfg(feature = "tokio-rustls")]
+    #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
     Rustls,
 
-    #[cfg(feature = "tokio-native-tls")]
+    #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
     Nativetls
 }
 
@@ -39,7 +39,7 @@ pub(crate) enum ProxyUsage {
     Plaintext
 }
 
-#[cfg(feature = "tokio-rustls")]
+#[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
 pub(crate) fn get_ca_path() -> String {
     env::var("GNEISS_MQTT_TEST_BROKER_CA_PATH").unwrap()
 }
@@ -102,7 +102,7 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
     builder.with_connect_options(connect_options);
     builder.with_client_options(client_config);
 
-    #[cfg(feature = "tokio-rustls")]
+    #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
     if _tls_usage == TlsUsage::Rustls {
         let mut tls_options_builder = TlsOptionsBuilder::new();
         tls_options_builder.with_verify_peer(false);
@@ -111,7 +111,7 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
         builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
     }
 
-    #[cfg(feature = "tokio-native-tls")]
+    #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
     if _tls_usage == TlsUsage::Nativetls {
         let mut tls_options_builder = TlsOptionsBuilder::new();
         tls_options_builder.with_verify_peer(false);
