@@ -698,7 +698,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
 
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature="tokio-websockets")]
-pub(crate) fn make_websocket_client_tokio(tls_impl: crate::config::TlsConfiguration, endpoint: String, port: u16, websocket_options: WebsocketOptions, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
+pub(crate) fn make_websocket_client_tokio(tls_impl: crate::config::TlsConfiguration, endpoint: String, port: u16, websocket_options: AsyncWebsocketOptions, _tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
     match tls_impl {
         crate::config::TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, websocket_options, client_options, connect_options, http_proxy_options, runtime) }
         #[cfg(feature = "tokio-rustls")]
@@ -710,7 +710,7 @@ pub(crate) fn make_websocket_client_tokio(tls_impl: crate::config::TlsConfigurat
 }
 
 #[cfg(feature="tokio-websockets")]
-fn make_websocket_client_no_tls(endpoint: String, port: u16, websocket_options: WebsocketOptions, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
+fn make_websocket_client_no_tls(endpoint: String, port: u16, websocket_options: AsyncWebsocketOptions, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
     info!("make_websocket_client_no_tls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
 
@@ -741,7 +741,7 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, websocket_options: 
 
 #[allow(clippy::too_many_arguments)]
 #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
-fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
+fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: AsyncWebsocketOptions, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
     info!("make_websocket_client_rustls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
 
@@ -811,7 +811,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, websocket_options: 
 
 #[allow(clippy::too_many_arguments)]
 #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
-fn make_websocket_client_native_tls(endpoint: String, port: u16, websocket_options: WebsocketOptions, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
+fn make_websocket_client_native_tls(endpoint: String, port: u16, websocket_options: AsyncWebsocketOptions, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
     info!("make_websocket_client_native_tls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
 
@@ -928,7 +928,7 @@ async fn wrap_stream_with_tls_native_tls<S>(stream : Pin<Box<impl Future<Output=
 }
 
 #[cfg(feature="tokio-websockets")]
-async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, scheme: &str, websocket_options: WebsocketOptions) -> MqttResult<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
+async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, scheme: &str, websocket_options: AsyncWebsocketOptions) -> MqttResult<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
 
     let uri = format!("{}://{}/mqtt", scheme, endpoint); // scheme needs to be present but value irrelevant
     let handshake_builder = crate::config::create_default_websocket_handshake_request(uri)?;

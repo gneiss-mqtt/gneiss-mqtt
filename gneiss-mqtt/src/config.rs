@@ -73,35 +73,35 @@ impl HttpProxyOptionsBuilder {
     }
 }
 
-/// Return type for a websocket handshake transformation function
-#[cfg(feature="tokio-websockets")]
-pub type WebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = MqttResult<http::request::Builder>> + Send >>;
+/// Return type for a synchronous websocket handshake transformation function
+#[cfg(feature="threaded-websockets")]
+pub type SyncWebsocketHandshakeTransformReturnType = MqttResult<http::request::Builder>;
 
-/// Async websocket handshake transformation function type
-#[cfg(feature="tokio-websockets")]
-pub type WebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -> WebsocketHandshakeTransformReturnType + Send + Sync>;
+/// Synchronous websocket handshake transformation function type
+#[cfg(feature="threaded-websockets")]
+pub type SyncWebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -> SyncWebsocketHandshakeTransformReturnType>;
 
-/// Configuration options related to establishing an MQTT over websockets
+/// Configuration options related to establishing a synchronous MQTT connection over websockets
 #[derive(Default, Clone)]
-#[cfg(feature="tokio-websockets")]
-pub struct WebsocketOptions {
-    pub(crate) handshake_transform: std::sync::Arc<Option<WebsocketHandshakeTransform>>
+#[cfg(feature="threaded-websockets")]
+pub struct SyncWebsocketOptions {
+    pub(crate) handshake_transform: std::sync::Arc<Option<SyncWebsocketHandshakeTransform>>
 }
 
-/// Builder type for constructing Websockets-related configuration.
+/// Builder type for constructing async Websockets-related configuration.
 #[derive(Default)]
-#[cfg(feature="tokio-websockets")]
-pub struct WebsocketOptionsBuilder {
-    options : WebsocketOptions
+#[cfg(feature="threaded-websockets")]
+pub struct SyncWebsocketOptionsBuilder {
+    options : SyncWebsocketOptions
 }
 
-#[cfg(feature="tokio-websockets")]
-impl WebsocketOptionsBuilder {
+#[cfg(feature="threaded-websockets")]
+impl SyncWebsocketOptionsBuilder {
 
     /// Creates a new builder object with default options.
     pub fn new() -> Self {
-        WebsocketOptionsBuilder {
-            options: WebsocketOptions {
+        SyncWebsocketOptionsBuilder {
+            options: SyncWebsocketOptions {
                 ..Default::default()
             }
         }
@@ -109,13 +109,60 @@ impl WebsocketOptionsBuilder {
 
     /// Configure an async transformation function that operates on the websocket handshake.  Useful
     /// for brokers that require some kind of signing algorithm to accept the upgrade request.
-    pub fn with_handshake_transform(&mut self, transform: WebsocketHandshakeTransform) -> &mut Self {
+    pub fn with_handshake_transform(&mut self, transform: SyncWebsocketHandshakeTransform) -> &mut Self {
         self.options.handshake_transform = std::sync::Arc::new(Some(transform));
         self
     }
 
     /// Creates a new set of Websocket options
-    pub fn build(&self) -> WebsocketOptions {
+    pub fn build(&self) -> crate::config::SyncWebsocketOptions {
+        self.options.clone()
+    }
+}
+
+/// Return type for an async websocket handshake transformation function
+#[cfg(feature="tokio-websockets")]
+pub type AsyncWebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = MqttResult<http::request::Builder>> + Send >>;
+
+/// Async websocket handshake transformation function type
+#[cfg(feature="tokio-websockets")]
+pub type AsyncWebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -> AsyncWebsocketHandshakeTransformReturnType + Send + Sync>;
+
+/// Configuration options related to establishing an async MQTT connection over websockets
+#[derive(Default, Clone)]
+#[cfg(feature="tokio-websockets")]
+pub struct AsyncWebsocketOptions {
+    pub(crate) handshake_transform: std::sync::Arc<Option<AsyncWebsocketHandshakeTransform>>
+}
+
+/// Builder type for constructing async Websockets-related configuration.
+#[derive(Default)]
+#[cfg(feature="tokio-websockets")]
+pub struct AsyncWebsocketOptionsBuilder {
+    options : AsyncWebsocketOptions
+}
+
+#[cfg(feature="tokio-websockets")]
+impl AsyncWebsocketOptionsBuilder {
+
+    /// Creates a new builder object with default options.
+    pub fn new() -> Self {
+        AsyncWebsocketOptionsBuilder {
+            options: AsyncWebsocketOptions {
+                ..Default::default()
+            }
+        }
+    }
+
+    /// Configure an async transformation function that operates on the websocket handshake.  Useful
+    /// for brokers that require some kind of signing algorithm to accept the upgrade request.
+    pub fn with_handshake_transform(&mut self, transform: AsyncWebsocketHandshakeTransform) -> &mut Self {
+        self.options.handshake_transform = std::sync::Arc::new(Some(transform));
+        self
+    }
+
+    /// Creates a new set of Websocket options
+    pub fn build(&self) -> AsyncWebsocketOptions {
         self.options.clone()
     }
 }
@@ -744,7 +791,7 @@ pub struct GenericClientBuilder {
     connect_options: Option<ConnectOptions>,
     client_options: Option<MqttClientOptions>,
     #[cfg(feature="tokio-websockets")]
-    websocket_options: Option<WebsocketOptions>,
+    websocket_options: Option<AsyncWebsocketOptions>,
     http_proxy_options: Option<HttpProxyOptions>
 }
 
@@ -811,7 +858,7 @@ impl GenericClientBuilder {
 
     /// Configures the client to connect over websockets
     #[cfg(feature="tokio-websockets")]
-    pub fn with_websocket_options(&mut self, websocket_options: WebsocketOptions) -> &mut Self {
+    pub fn with_websocket_options(&mut self, websocket_options: AsyncWebsocketOptions) -> &mut Self {
         self.websocket_options = Some(websocket_options);
         self
     }

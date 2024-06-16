@@ -7,6 +7,9 @@
 Implementation of an MQTT client that uses one or more background threads for processing.
  */
 
+#[cfg(feature="threaded-websockets")]
+mod ws_stream;
+
 use std::cmp::min;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -853,6 +856,31 @@ fn wrap_stream_with_tls_native_tls<S>(stream : S, endpoint: String, tls_options:
     }
 }
 
+/*
+#[cfg(feature="threaded-websockets")]
+fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, scheme: &str, websocket_options: WebsocketOptions) -> MqttResult<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
+
+    let uri = format!("{}://{}/mqtt", scheme, endpoint); // scheme needs to be present but value irrelevant
+    let handshake_builder = crate::config::create_default_websocket_handshake_request(uri)?;
+
+    debug!("wrap_stream_with_websockets - performing websocket upgrade request transform");
+    let transformed_handshake_builder =
+        if let Some(transform) = &*websocket_options.handshake_transform {
+            transform(handshake_builder).await?
+        } else {
+            handshake_builder
+        };
+    debug!("wrap_stream_with_websockets - successfully transformed websocket upgrade request");
+
+    debug!("wrap_stream_with_websockets - upgrading stream to websockets");
+    let inner_stream= stream.await?;
+    let (message_stream, _) = client_async(crate::config::HandshakeRequest { handshake_builder: transformed_handshake_builder }, inner_stream).await?;
+    let byte_stream = WsMessageHandler::wrap_stream(message_stream);
+    debug!("wrap_stream_with_websockets - successfully upgraded stream to websockets");
+
+    Ok(byte_stream)
+}
+ */
 fn apply_proxy_connect_to_stream<T>(mut stream : T, http_connect_endpoint: Endpoint) -> MqttResult<T> where T : Read + Write {
 
     debug!("apply_proxy_connect_to_stream - writing CONNECT request to connection stream");

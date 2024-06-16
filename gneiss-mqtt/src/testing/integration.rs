@@ -10,7 +10,7 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use crate::client::{AsyncGneissClient, ClientEvent, PublishReceivedEvent, PublishResponse, Qos2Response, SyncGneissClient};
 use crate::client::waiter::{AsyncClientEventWaiter, ClientEventType, ClientEventWaiterOptions, ClientEventWaitType, SyncClientEventWaiter};
-use crate::config::{ConnectOptions, ConnectOptionsBuilder, GenericClientBuilder, HttpProxyOptionsBuilder, MqttClientOptionsBuilder, OfflineQueuePolicy, RejoinSessionPolicy, TlsOptionsBuilder, WebsocketOptionsBuilder};
+use crate::config::{ConnectOptions, ConnectOptionsBuilder, GenericClientBuilder, HttpProxyOptionsBuilder, MqttClientOptionsBuilder, OfflineQueuePolicy, RejoinSessionPolicy, TlsOptionsBuilder, AsyncWebsocketOptionsBuilder};
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::{ConnectReasonCode, PubackReasonCode, PubcompReasonCode, PublishPacket, QualityOfService, SubackReasonCode, SubscribePacket, UnsubackReasonCode, UnsubscribePacket};
 
@@ -122,7 +122,7 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
 
     #[cfg(feature="tokio-websockets")]
     if ws_config != WebsocketUsage::None {
-        let websocket_options = WebsocketOptionsBuilder::new().build();
+        let websocket_options = AsyncWebsocketOptionsBuilder::new().build();
         builder.with_websocket_options(websocket_options);
     }
 

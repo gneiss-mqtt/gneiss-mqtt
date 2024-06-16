@@ -24,6 +24,7 @@ tokio = ["dep:tokio"] # enables the tokio-based async client
 threaded = [] # enables the thread-based sync client; does not add any dependencies
 threaded-rustls = [ "dep:rustls", "dep:rustls-native-certs", "dep:rustls-pemfile", "dep:rustls-pki-types" ]
 threaded-native-tls = [ "dep:native-tls" ]
+threaded-websockets = [ "dep:tungstenite" ]
 
 [dev-dependencies]
 assert_matches = "1.5.0"

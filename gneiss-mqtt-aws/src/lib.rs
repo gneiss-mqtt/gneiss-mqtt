@@ -704,7 +704,7 @@ impl AwsClientBuilder {
             let signing_region = sigv4_options.signing_region.clone();
             let credentials_provider = sigv4_options.credentials_provider.clone();
 
-            let mut websocket_options_builder = WebsocketOptionsBuilder::new();
+            let mut websocket_options_builder = AsyncWebsocketOptionsBuilder::new();
             websocket_options_builder.with_handshake_transform(Box::new(move |request_builder| {
                 Box::pin(sign_websocket_upgrade_sigv4(request_builder, signing_region.clone(), credentials_provider.clone()))
             }));

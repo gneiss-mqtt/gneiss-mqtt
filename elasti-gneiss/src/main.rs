@@ -113,7 +113,7 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
             builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
         }
         "ws" => {
-            let websocket_options = WebsocketOptionsBuilder::new().build();
+            let websocket_options = AsyncWebsocketOptionsBuilder::new().build();
             builder.with_websocket_options(websocket_options);
         }
         "wss" => {
@@ -126,7 +126,7 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
             let tls_options = tls_options_builder.build_rustls().unwrap();
             builder.with_tls_options(tls_options);
 
-            let websocket_options = WebsocketOptionsBuilder::new().build();
+            let websocket_options = AsyncWebsocketOptionsBuilder::new().build();
             builder.with_websocket_options(websocket_options);
         }
         _ => {}
