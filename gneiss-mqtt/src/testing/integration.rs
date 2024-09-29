@@ -10,7 +10,7 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use crate::client::{AsyncGneissClient, ClientEvent, PublishReceivedEvent, PublishResponse, Qos2Response, SyncGneissClient};
 use crate::client::waiter::{AsyncClientEventWaiter, ClientEventType, ClientEventWaiterOptions, ClientEventWaitType, SyncClientEventWaiter};
-use crate::config::{ConnectOptions, ConnectOptionsBuilder, GenericClientBuilder, HttpProxyOptionsBuilder, MqttClientOptionsBuilder, OfflineQueuePolicy, RejoinSessionPolicy, TlsOptionsBuilder, AsyncWebsocketOptionsBuilder};
+use crate::config::*;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::{ConnectReasonCode, PubackReasonCode, PubcompReasonCode, PublishPacket, QualityOfService, SubackReasonCode, SubscribePacket, UnsubackReasonCode, UnsubscribePacket};
 
@@ -89,7 +89,7 @@ pub(crate) fn get_broker_port(tls: TlsUsage, ws: WebsocketUsage) -> u16 {
     port_string.parse().unwrap()
 }
 
-pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _tls_usage: TlsUsage, ws_config: WebsocketUsage, proxy_config: ProxyUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
+pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _tls_usage: TlsUsage, proxy_config: ProxyUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
     let client_config = MqttClientOptionsBuilder::new()
         .with_connect_timeout(Duration::from_secs(5))
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
@@ -120,12 +120,6 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
         builder.with_tls_options(tls_options_builder.build_native_tls().unwrap());
     }
 
-    #[cfg(feature="tokio-websockets")]
-    if ws_config != WebsocketUsage::None {
-        let websocket_options = AsyncWebsocketOptionsBuilder::new().build();
-        builder.with_websocket_options(websocket_options);
-    }
-
     if proxy_config != ProxyUsage::None {
         let proxy_endpoint = get_proxy_endpoint();
         let proxy_port = get_proxy_port();
@@ -142,7 +136,21 @@ pub(crate) fn create_good_client_builder(tls: TlsUsage, ws: WebsocketUsage, prox
         .with_session_expiry_interval_seconds(3600)
         .build();
 
-    create_client_builder_internal(connect_options, tls, ws, proxy, tls, ws)
+    create_client_builder_internal(connect_options, tls, proxy, tls, ws)
+}
+
+pub(crate) fn create_websocket_options_async(ws: WebsocketUsage) -> Option<AsyncWebsocketOptions> {
+    match ws {
+        WebsocketUsage::None => { None }
+        WebsocketUsage::Tungstenite => { Some(AsyncWebsocketOptionsBuilder::new().build()) }
+    }
+}
+
+pub(crate) fn create_websocket_options_sync(ws: WebsocketUsage) -> Option<SyncWebsocketOptions> {
+    match ws {
+        WebsocketUsage::None => { None }
+        WebsocketUsage::Tungstenite => { Some(SyncWebsocketOptionsBuilder::new().build()) }
+    }
 }
 
 pub(crate) type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output=MqttResult<()>> + Send>>;
@@ -330,8 +338,9 @@ pub(crate) async fn async_subscribe_publish_test<T : AsyncClientEventWaiter>(cli
     Ok(())
 }
 
-pub(crate) async fn async_will_test<T : AsyncClientEventWaiter>(base_client_options: GenericClientBuilder, client_factory: fn(GenericClientBuilder) -> AsyncGneissClient, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
-    let client = client_factory(base_client_options);
+pub(crate) async fn async_will_test<T : AsyncClientEventWaiter>(base_client_options: GenericClientBuilder, client_factory: fn(GenericClientBuilder, TokioClientOptions) -> AsyncGneissClient, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
+    let tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+    let client = client_factory(base_client_options, tokio_options);
 
     let payload = "Onsecondthought".as_bytes().to_vec();
 
@@ -348,8 +357,9 @@ pub(crate) async fn async_will_test<T : AsyncClientEventWaiter>(base_client_opti
         .with_will(will)
         .build();
 
-    let will_builder = create_client_builder_internal(connect_options, TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, TlsUsage::None, WebsocketUsage::None);
-    let will_client = client_factory(will_builder);
+    let will_builder = create_client_builder_internal(connect_options, TlsUsage::None, ProxyUsage::None, TlsUsage::None, WebsocketUsage::None);
+    let will_tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+    let will_client = client_factory(will_builder, will_tokio_options);
 
     start_async_client(&client, waiter_factory).await?;
     start_async_client(&will_client, waiter_factory).await?;

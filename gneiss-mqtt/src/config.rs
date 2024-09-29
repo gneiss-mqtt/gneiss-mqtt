@@ -32,7 +32,7 @@ use crate::features::tokio::*;
 use tokio::runtime::Handle;
 
 #[cfg(feature="threaded")]
-use crate::features::threaded::{ThreadedClientOptions, make_direct_client_threaded};
+use crate::features::threaded::*;
 
 /// Configuration options related to establishing connections through HTTP proxies
 #[derive(Default, Clone)]
@@ -781,6 +781,77 @@ impl MqttClientOptionsBuilder {
     }
 }
 
+pub struct TokioClientOptions<'a> {
+    pub(crate) runtime: &'a Handle,
+
+    #[cfg(feature="tokio-websockets")]
+    pub(crate) websocket_options: Option<AsyncWebsocketOptions>
+}
+
+pub struct TokioClientOptionsBuilder<'a> {
+    options: TokioClientOptions<'a>
+}
+
+impl <'a> TokioClientOptionsBuilder<'a> {
+    pub fn new(runtime: &'a Handle) -> Self {
+        TokioClientOptionsBuilder {
+            options: TokioClientOptions {
+                runtime,
+                #[cfg(feature="tokio-websockets")]
+                websocket_options: None
+            }
+        }
+    }
+
+    #[cfg(feature="tokio-websockets")]
+    pub fn with_websocket_options(&mut self, websocket_options: AsyncWebsocketOptions) -> &mut Self {
+        self.options.websocket_options = Some(websocket_options);
+        self
+    }
+
+    pub fn build(self) -> TokioClientOptions<'a> {
+        self.options
+    }
+}
+
+/// Thread-specific client configuration
+pub struct ThreadedClientOptions {
+    pub(crate) idle_service_sleep: Option<Duration>,
+
+    #[cfg(feature="threaded-websockets")]
+    pub(crate) websocket_options: Option<SyncWebsocketOptions>
+}
+
+pub struct ThreadedClientOptionsBuilder {
+    config: ThreadedClientOptions
+}
+
+impl ThreadedClientOptionsBuilder {
+    pub fn new() -> Self {
+        ThreadedClientOptionsBuilder {
+            config: ThreadedClientOptions {
+                idle_service_sleep: None,
+                #[cfg(feature="threaded-websockets")]
+                websocket_options: None
+            }
+        }
+    }
+
+    pub fn with_idle_service_sleep(&mut self, duration: Duration) {
+        self.config.idle_service_sleep = Some(duration);
+    }
+
+    #[cfg(feature="threaded-websockets")]
+    pub fn with_websocket_options(&mut self, websocket_options: SyncWebsocketOptions) -> &mut Self {
+        self.config.websocket_options = Some(websocket_options);
+        self
+    }
+
+    pub fn build(self) -> ThreadedClientOptions {
+        self.config
+    }
+}
+
 /// A basic builder for creating MQTT clients.  Specialized builders for particular brokers may
 /// exist in other crates.
 pub struct GenericClientBuilder {
@@ -790,8 +861,6 @@ pub struct GenericClientBuilder {
     tls_options: Option<TlsOptions>,
     connect_options: Option<ConnectOptions>,
     client_options: Option<MqttClientOptions>,
-    #[cfg(feature="tokio-websockets")]
-    websocket_options: Option<AsyncWebsocketOptions>,
     http_proxy_options: Option<HttpProxyOptions>
 }
 
@@ -830,8 +899,6 @@ impl GenericClientBuilder {
             tls_options: None,
             connect_options: None,
             client_options: None,
-            #[cfg(feature="tokio-websockets")]
-            websocket_options: None,
             http_proxy_options: None
         }
     }
@@ -853,13 +920,6 @@ impl GenericClientBuilder {
     /// Configures the client behavioral options.  If not specified, default values will be used.
     pub fn with_client_options(&mut self, client_options: MqttClientOptions) -> &mut Self {
         self.client_options = Some(client_options);
-        self
-    }
-
-    /// Configures the client to connect over websockets
-    #[cfg(feature="tokio-websockets")]
-    pub fn with_websocket_options(&mut self, websocket_options: AsyncWebsocketOptions) -> &mut Self {
-        self.websocket_options = Some(websocket_options);
         self
     }
 
@@ -891,10 +951,12 @@ impl GenericClientBuilder {
         }
     }
 
+
+
     /// Builds a new MQTT client according to all the configuration options given to the builder.
     /// Does not consume self; can be called multiple times
     #[cfg(feature="tokio")]
-    pub fn build_tokio(&self, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
+    pub fn build_tokio(&self, tokio_options: TokioClientOptions) -> MqttResult<AsyncGneissClient> {
         let tls_impl = self.get_tls_impl();
         if tls_impl == TlsConfiguration::Mixed {
             return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));
@@ -918,21 +980,13 @@ impl GenericClientBuilder {
         let tls_options = self.tls_options.clone();
         let endpoint = self.endpoint.clone();
 
-        #[cfg(feature="tokio-websockets")]
-        {
-            let websocket_options = self.websocket_options.clone();
-            if let Some(websocket_options) = websocket_options {
-                return make_websocket_client_tokio(tls_impl, endpoint, self.port, websocket_options, tls_options, client_options, connect_options, http_proxy_options, runtime);
-            }
-        }
-
-        make_direct_client_tokio(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, runtime)
+        make_client_tokio(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, tokio_options)
     }
 
     /// Builds a new MQTT client according to all the configuration options given to the builder.
     /// Does not consume self; can be called multiple times
     #[cfg(feature="threaded")]
-    pub fn build_threaded(&self, threaded_config: &ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+    pub fn build_threaded(&self, threaded_options: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
         let tls_impl = self.get_tls_impl();
         if tls_impl == TlsConfiguration::Mixed {
             return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));
@@ -956,16 +1010,7 @@ impl GenericClientBuilder {
         let tls_options = self.tls_options.clone();
         let endpoint = self.endpoint.clone();
 
-        /*
-        #[cfg(feature="threaded-websockets")]
-        {
-            let websocket_options = self.websocket_options.clone();
-            if let Some(websocket_options) = websocket_options {
-                return make_websocket_client_tokio(tls_impl, endpoint, self.port, websocket_options, tls_options, client_options, connect_options, http_proxy_options, runtime);
-            }
-        }*/
-
-        make_direct_client_threaded(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, *threaded_config)
+        make_client_threaded(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, threaded_options)
     }
 }
 
