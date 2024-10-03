@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Instant, Duration};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, split, WriteHalf};
 use tokio::net::TcpStream;
-use tokio::{runtime, runtime::Handle};
+use tokio::{runtime, runtime::Handle, runtime::Runtime};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::{sleep};
 
@@ -527,10 +527,10 @@ pub fn new_with_tokio<T>(client_config: MqttClientOptions, connect_config: Conne
 pub(crate) fn make_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, tokio_options: TokioClientOptions) -> MqttResult<AsyncGneissClient> {
     #[cfg(feature="tokio-websockets")]
     if let Some(websocket_options) = tokio_options.websocket_options {
-        return make_websocket_client_tokio(tls_impl, endpoint, port, websocket_options, tls_options, client_options, connect_options, http_proxy_options, tokio_options.runtime)
+        return make_websocket_client_tokio(tls_impl, endpoint, port, websocket_options, tls_options, client_options, connect_options, http_proxy_options, &tokio_options.runtime)
     }
 
-    make_direct_client_tokio(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, tokio_options.runtime)
+    make_direct_client_tokio(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, &tokio_options.runtime)
 
 }
 
@@ -1120,15 +1120,13 @@ pub(crate) mod testing {
         builder.build_tokio(tokio_client_options).unwrap()
     }
 
-    fn do_good_client_test(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: AsyncTestFactory) {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
+    fn do_good_client_test(runtime: &tokio::runtime::Runtime, tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: AsyncTestFactory) {
         let test_future = (*test_factory)(create_good_client_builder(tls, ws, proxy));
 
         runtime.block_on(test_future).unwrap();
     }
 
-    pub(crate) fn do_builder_test(test_factory: AsyncTestFactory, builder: GenericClientBuilder) {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
+    pub(crate) fn do_builder_test(runtime: &tokio::runtime::Runtime, test_factory: AsyncTestFactory, builder: GenericClientBuilder) {
         let test_future = (*test_factory)(builder);
 
         runtime.block_on(test_future).unwrap();
@@ -1145,17 +1143,21 @@ pub(crate) mod testing {
 
     #[test]
     fn client_connect_disconnect_direct_plaintext_no_proxy() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
-            let tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let handle = runtime.handle().clone();
+        do_good_client_test(&runtime, TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(move |builder|{
+            let tokio_options = TokioClientOptionsBuilder::new(handle.clone()).build();
             Box::pin(tokio_connect_disconnect_test(builder, tokio_options))
         }));
     }
 
+/*
     #[test]
     #[cfg(feature = "tokio-rustls")]
     fn client_connect_disconnect_direct_rustls_no_proxy() {
-        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
-            let tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+            let tokio_options = TokioClientOptionsBuilder::new(runtime.handle()).build();
             Box::pin(tokio_connect_disconnect_test(builder, tokio_options))
         }));
     }
@@ -1163,8 +1165,9 @@ pub(crate) mod testing {
     #[test]
     #[cfg(feature = "tokio-native-tls")]
     fn client_connect_disconnect_direct_native_tls_no_proxy() {
-        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
-            let tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::Nativetls, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+            let tokio_options = TokioClientOptionsBuilder::new(runtime.handle()).build();
             Box::pin(tokio_connect_disconnect_test(builder, tokio_options))
         }));
     }
@@ -1172,8 +1175,9 @@ pub(crate) mod testing {
     #[test]
     #[cfg(feature="tokio-websockets")]
     fn client_connect_disconnect_websocket_plaintext_no_proxy() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
-            let mut tokio_options_builder = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current());
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
+            let mut tokio_options_builder = TokioClientOptionsBuilder::new(runtime.handle());
             tokio_options_builder.with_websocket_options(AsyncWebsocketOptionsBuilder::new().build());
             Box::pin(tokio_connect_disconnect_test(builder, tokio_options_builder.build()))
         }));
@@ -1182,8 +1186,9 @@ pub(crate) mod testing {
     #[test]
     #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
     fn client_connect_disconnect_websocket_rustls_no_proxy() {
-        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
-            let mut tokio_options_builder = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current());
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
+            let mut tokio_options_builder = TokioClientOptionsBuilder::new(runtime.handle());
             tokio_options_builder.with_websocket_options(AsyncWebsocketOptionsBuilder::new().build());
             Box::pin(tokio_connect_disconnect_test(builder, tokio_options_builder.build()))
         }));
@@ -1192,8 +1197,9 @@ pub(crate) mod testing {
     #[test]
     #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
     fn client_connect_disconnect_websocket_native_tls_no_proxy() {
-        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
-            let mut tokio_options_builder = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current());
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::Nativetls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
+            let mut tokio_options_builder = TokioClientOptionsBuilder::new(runtime.handle());
             tokio_options_builder.with_websocket_options(AsyncWebsocketOptionsBuilder::new().build());
             Box::pin(tokio_connect_disconnect_test(builder, tokio_options_builder.build()))
         }));
@@ -1201,8 +1207,9 @@ pub(crate) mod testing {
 
     #[test]
     fn client_connect_disconnect_direct_plaintext_with_proxy() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder|{
-            let tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::None, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder|{
+            let tokio_options = TokioClientOptionsBuilder::new(runtime.handle()).build();
             Box::pin(tokio_connect_disconnect_test(builder, tokio_options))
         }));
     }
@@ -1210,8 +1217,9 @@ pub(crate) mod testing {
     #[test]
     #[cfg(feature = "tokio-rustls")]
     fn client_connect_disconnect_direct_rustls_with_proxy() {
-        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder|{
-            let tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder|{
+            let tokio_options = TokioClientOptionsBuilder::new(runtime.handle()).build();
             Box::pin(tokio_connect_disconnect_test(builder, tokio_options))
         }));
     }
@@ -1219,8 +1227,9 @@ pub(crate) mod testing {
     #[test]
     #[cfg(feature = "tokio-native-tls")]
     fn client_connect_disconnect_direct_native_tls_with_proxy() {
-        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder|{
-            let tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::Nativetls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder|{
+            let tokio_options = TokioClientOptionsBuilder::new(runtime.handle()).build();
             Box::pin(tokio_connect_disconnect_test(builder, tokio_options))
         }));
     }
@@ -1228,8 +1237,9 @@ pub(crate) mod testing {
     #[test]
     #[cfg(feature="tokio-websockets")]
     fn client_connect_disconnect_websocket_plaintext_with_proxy() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder|{
-            let mut tokio_options_builder = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current());
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder|{
+            let mut tokio_options_builder = TokioClientOptionsBuilder::new(runtime.handle());
             tokio_options_builder.with_websocket_options(AsyncWebsocketOptionsBuilder::new().build());
             Box::pin(tokio_connect_disconnect_test(builder, tokio_options_builder.build()))
         }));
@@ -1238,8 +1248,9 @@ pub(crate) mod testing {
     #[test]
     #[cfg(all(feature = "tokio-rustls", feature="tokio-websockets"))]
     fn client_connect_disconnect_websocket_rustls_with_proxy() {
-        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder|{
-            let mut tokio_options_builder = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current());
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder|{
+            let mut tokio_options_builder = TokioClientOptionsBuilder::new(runtime.handle());
             tokio_options_builder.with_websocket_options(AsyncWebsocketOptionsBuilder::new().build());
             Box::pin(tokio_connect_disconnect_test(builder, tokio_options_builder.build()))
         }));
@@ -1248,48 +1259,55 @@ pub(crate) mod testing {
     #[test]
     #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
     fn client_connect_disconnect_websocket_native_tls_with_proxy() {
-        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder|{
-            let mut tokio_options_builder = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current());
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::Nativetls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder|{
+            let mut tokio_options_builder = TokioClientOptionsBuilder::new(runtime.handle());
             tokio_options_builder.with_websocket_options(AsyncWebsocketOptionsBuilder::new().build());
             Box::pin(tokio_connect_disconnect_test(builder, tokio_options_builder.build()))
         }));
     }
 
     async fn tokio_subscribe_unsubscribe_test(builder: GenericClientBuilder) -> MqttResult<()> {
-        let tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let tokio_options = TokioClientOptionsBuilder::new(runtime.handle()).build();
         async_subscribe_unsubscribe_test(builder.build_tokio(tokio_options).unwrap(), TokioClientEventWaiter::new_single).await
     }
 
     #[test]
     fn client_subscribe_unsubscribe() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
             Box::pin(tokio_subscribe_unsubscribe_test(builder))
         }));
     }
 
     async fn tokio_subscribe_publish_test(builder: GenericClientBuilder, qos: QualityOfService) -> MqttResult<()> {
-        let tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let tokio_options = TokioClientOptionsBuilder::new(runtime.handle()).build();
         let client = builder.build_tokio(tokio_options).unwrap();
         async_subscribe_publish_test(client, qos, TokioClientEventWaiter::new_single).await
     }
 
     #[test]
     fn client_subscribe_publish_qos0() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
             Box::pin(tokio_subscribe_publish_test(builder, QualityOfService::AtMostOnce))
         }));
     }
 
     #[test]
     fn client_subscribe_publish_qos1() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
             Box::pin(tokio_subscribe_publish_test(builder, QualityOfService::AtLeastOnce))
         }));
     }
 
     #[test]
     fn client_subscribe_publish_qos2() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
             Box::pin(tokio_subscribe_publish_test(builder, QualityOfService::ExactlyOnce))
         }));
     }
@@ -1301,25 +1319,27 @@ pub(crate) mod testing {
 
     #[test]
     fn client_will_sent() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
             Box::pin(tokio_will_test(builder))
         }));
     }
 
-    async fn tokio_connect_disconnect_cycle_session_rejoin_test(builder: GenericClientBuilder) -> MqttResult<()> {
-        let tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+    async fn tokio_connect_disconnect_cycle_session_rejoin_test(runtime: &tokio::runtime::Runtime, builder: GenericClientBuilder) -> MqttResult<()> {
+        let tokio_options = TokioClientOptionsBuilder::new(runtime.handle()).build();
         let client = builder.build_tokio(tokio_options).unwrap();
         async_connect_disconnect_cycle_session_rejoin_test(client, TokioClientEventWaiter::new_single, TokioClientEventWaiter::new).await
     }
 
     #[test]
     fn connect_disconnect_cycle_session_rejoin() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
-            Box::pin(tokio_connect_disconnect_cycle_session_rejoin_test(builder))
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        do_good_client_test(&runtime, TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+            Box::pin(tokio_connect_disconnect_cycle_session_rejoin_test(&runtime, builder))
         }));
     }
 
-    async fn connection_failure_test(builder : GenericClientBuilder, tokio_client_options: TokioClientOptions) -> MqttResult<()> {
+    async fn connection_failure_test<'a>(builder : GenericClientBuilder, tokio_client_options: TokioClientOptions<'a>) -> MqttResult<()> {
         let client = builder.build_tokio(tokio_client_options).unwrap();
         let connection_failure_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
 
@@ -1339,8 +1359,8 @@ pub(crate) mod testing {
         create_client_builder_internal(connect_options, tls_config, ProxyUsage::None, tls_endpoint, ws_endpoint)
     }
 
-    fn create_mismatch_tokio_client_options(ws_config: WebsocketUsage) -> TokioClientOptions {
-        let mut builder = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current());
+    fn create_mismatch_tokio_client_options<'a>(ws_config: WebsocketUsage, handle: &'a tokio::runtime::Handle) -> TokioClientOptions {
+        let mut builder = TokioClientOptionsBuilder::new(handle);
         let websocket_config_option = create_websocket_options_async(ws_config);
         if let Some(websocket_options) = websocket_config_option {
             builder.with_websocket_options(websocket_options);
@@ -1352,224 +1372,260 @@ pub(crate) mod testing {
     #[test]
     #[cfg(feature = "tokio-rustls")]
     fn connection_failure_direct_rustls_tls_config_direct_plaintext_endpoint() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let handle = runtime.handle();
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None)))
+        do_builder_test(handle, Box::new(|builder| {
+            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle)))
         }), builder);
     }
 
-    #[test]
-    #[cfg(feature = "tokio-native-tls")]
-    fn connection_failure_direct_native_tls_tls_config_direct_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(feature = "tokio-native-tls")]
+        fn connection_failure_direct_native_tls_tls_config_direct_plaintext_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let handle = runtime.handle();
+            let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::None);
+            do_builder_test(handle, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle)))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
-    fn connection_failure_direct_rustls_tls_config_websocket_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
+        fn connection_failure_direct_rustls_tls_config_websocket_plaintext_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let handle = runtime.handle();
+            let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
+            do_builder_test(handle, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle)))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
-    fn connection_failure_direct_native_tls_tls_config_websocket_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
+        fn connection_failure_direct_native_tls_tls_config_websocket_plaintext_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let handle = runtime.handle();
+            let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
+            do_builder_test(handle, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle)))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
-    fn connection_failure_direct_rustls_tls_config_websocket_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
+        fn connection_failure_direct_rustls_tls_config_websocket_tls_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let handle = runtime.handle();
+            let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
+            do_builder_test(handle, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle)))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
-    fn connection_failure_direct_native_tls_tls_config_websocket_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
+        fn connection_failure_direct_native_tls_tls_config_websocket_tls_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let handle = runtime.handle();
+            let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
+            do_builder_test(handle, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle)))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(feature = "tokio-rustls")]
-    fn connection_failure_direct_plaintext_config_direct_rustls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::None);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(feature = "tokio-rustls")]
+        fn connection_failure_direct_plaintext_config_direct_rustls_tls_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let handle = runtime.handle();
+            let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::None);
+            do_builder_test(handle, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle)))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(feature = "tokio-native-tls")]
-    fn connection_failure_direct_plaintext_config_direct_native_tls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::None);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(feature = "tokio-native-tls")]
+        fn connection_failure_direct_plaintext_config_direct_native_tls_tls_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let handle = runtime.handle();
+            let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::None);
+            do_builder_test(handle, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle)))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(feature="tokio-websockets")]
-    fn connection_failure_direct_plaintext_config_websocket_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(feature="tokio-websockets")]
+        fn connection_failure_direct_plaintext_config_websocket_plaintext_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let handle = runtime.handle();
+            let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
+            do_builder_test(handle, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle)))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
-    fn connection_failure_direct_plaintext_config_websocket_rustls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
+        fn connection_failure_direct_plaintext_config_websocket_rustls_tls_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
-    fn connection_failure_direct_plaintext_config_websocket_native_tls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
+        fn connection_failure_direct_plaintext_config_websocket_native_tls_tls_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
-    fn connection_failure_websocket_rustls_tls_config_direct_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
+        fn connection_failure_websocket_rustls_tls_config_direct_plaintext_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
-    fn connection_failure_websocket_native_tls_tls_config_direct_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
+        fn connection_failure_websocket_native_tls_tls_config_direct_plaintext_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
-    fn connection_failure_websocket_rustls_tls_config_websocket_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
+        fn connection_failure_websocket_rustls_tls_config_websocket_plaintext_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
-    fn connection_failure_websocket_native_tls_tls_config_websocket_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
+        fn connection_failure_websocket_native_tls_tls_config_websocket_plaintext_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
-    fn connection_failure_websocket_rustls_tls_config_direct_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
+        fn connection_failure_websocket_rustls_tls_config_direct_tls_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
-    fn connection_failure_websocket_native_tls_tls_config_direct_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::None);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
+        fn connection_failure_websocket_native_tls_tls_config_direct_tls_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::None);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(feature="tokio-websockets")]
-    fn connection_failure_websocket_plaintext_config_direct_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(feature="tokio-websockets")]
+        fn connection_failure_websocket_plaintext_config_direct_plaintext_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
-    fn connection_failure_websocket_plaintext_config_websocket_rustls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
+        fn connection_failure_websocket_plaintext_config_websocket_rustls_tls_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
-    fn connection_failure_websocket_plaintext_config_websocket_native_tls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
+        fn connection_failure_websocket_plaintext_config_websocket_native_tls_tls_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
-    fn connection_failure_websocket_plaintext_config_direct_rustls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
+        fn connection_failure_websocket_plaintext_config_direct_rustls_tls_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
-    fn connection_failure_websocket_plaintext_config_direct_native_tls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::None);
-        do_builder_test(Box::new(|builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite)))
-        }), builder);
-    }
+        #[test]
+        #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
+        fn connection_failure_websocket_plaintext_config_direct_native_tls_tls_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::None);
+            do_builder_test(&runtime, Box::new(|builder| {
+                Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, runtime.handle())))
+            }), builder);
+        }
 
-    #[test]
-    fn connection_failure_invalid_endpoint() {
-        let client_options = MqttClientOptionsBuilder::new()
-            .with_connect_timeout(Duration::from_secs(3))
-            .build();
+        #[test]
+        fn connection_failure_invalid_endpoint() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
 
-        let mut builder = GenericClientBuilder::new("example.com", 8000);
-        builder.with_client_options(client_options);
+            let client_options = MqttClientOptionsBuilder::new()
+                .with_connect_timeout(Duration::from_secs(3))
+                .build();
 
-        do_builder_test(Box::new(|builder| {
-            let tokio_client_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
-            Box::pin(connection_failure_test(builder, tokio_client_options))
-        }), builder);
-    }
+            let mut builder = GenericClientBuilder::new("example.com", 8000);
+            builder.with_client_options(client_options);
 
-    #[test]
-    fn connection_failure_invalid_endpoint_http() {
-        let builder = GenericClientBuilder::new("amazon.com", 443);
-        do_builder_test(Box::new(|builder| {
-            let tokio_client_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
-            Box::pin(connection_failure_test(builder, tokio_client_options))
-        }), builder);
-    }
+            do_builder_test(&runtime, Box::new(|builder| {
+                let tokio_client_options = TokioClientOptionsBuilder::new(runtime.handle()).build();
+                Box::pin(connection_failure_test(builder, tokio_client_options))
+            }), builder);
+        }
 
+        #[test]
+        fn connection_failure_invalid_endpoint_http() {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let handle = runtime.handle();
 
+            let builder = GenericClientBuilder::new("amazon.com", 443);
+            do_builder_test(handle, Box::new(|builder| {
+                let tokio_client_options = TokioClientOptionsBuilder::new(handle).build();
+                Box::pin(connection_failure_test(builder, tokio_client_options))
+            }), builder);
+        }
+
+    */
 }

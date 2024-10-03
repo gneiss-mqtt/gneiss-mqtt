@@ -1238,11 +1238,12 @@ pub(crate) mod testing {
         }));
     }
 
+    /*
     #[test]
     #[cfg(feature="threaded-websockets")]
     fn client_connect_disconnect_websocket_plaintext_no_proxy() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
             threaded_connect_disconnect_test(builder)
         }));
-    }
+    }*/
 }

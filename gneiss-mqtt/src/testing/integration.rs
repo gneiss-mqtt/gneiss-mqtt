@@ -339,7 +339,7 @@ pub(crate) async fn async_subscribe_publish_test<T : AsyncClientEventWaiter>(cli
 }
 
 pub(crate) async fn async_will_test<T : AsyncClientEventWaiter>(base_client_options: GenericClientBuilder, client_factory: fn(GenericClientBuilder, TokioClientOptions) -> AsyncGneissClient, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
-    let tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+    let tokio_options = TokioClientOptionsBuilder::new(tokio::runtime::Handle::current().clone()).build();
     let client = client_factory(base_client_options, tokio_options);
 
     let payload = "Onsecondthought".as_bytes().to_vec();
@@ -358,7 +358,7 @@ pub(crate) async fn async_will_test<T : AsyncClientEventWaiter>(base_client_opti
         .build();
 
     let will_builder = create_client_builder_internal(connect_options, TlsUsage::None, ProxyUsage::None, TlsUsage::None, WebsocketUsage::None);
-    let will_tokio_options = TokioClientOptionsBuilder::new(&tokio::runtime::Handle::current()).build();
+    let will_tokio_options = TokioClientOptionsBuilder::new(tokio::runtime::Handle::current().clone()).build();
     let will_client = client_factory(will_builder, will_tokio_options);
 
     start_async_client(&client, waiter_factory).await?;

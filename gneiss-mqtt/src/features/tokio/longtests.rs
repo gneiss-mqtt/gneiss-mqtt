@@ -9,9 +9,10 @@ use std::time::{Duration, Instant};
 use assert_matches::assert_matches;
 use crate::client::ClientEvent;
 use crate::client::waiter::{ClientEventType, ClientEventWaiterOptions, ClientEventWaitType, AsyncClientEventWaiter};
-use crate::config::{ExponentialBackoffJitterType, GenericClientBuilder};
+use crate::config::{ExponentialBackoffJitterType, GenericClientBuilder, TokioClientOptions, TokioClientOptionsBuilder};
 use crate::error::MqttResult;
 use crate::features::tokio::{ClientEventRecord, TokioClientEventWaiter};
+use crate::features::tokio::testing::*;
 use crate::mqtt::{ConnackPacket, ConnectReasonCode, DisconnectPacket, DisconnectReasonCode, MqttPacket, PacketType, PublishPacket, QualityOfService};
 use crate::testing::mock_server::{build_mock_client_server, ClientTestOptions};
 use crate::testing::protocol::{BrokerTestContext, create_default_packet_handlers};
@@ -31,7 +32,9 @@ fn is_reconnect_related_event(event: &Arc<ClientEvent>) -> bool {
 type ReconnectEventTestValidatorFn = Box<dyn Fn(&Vec<ClientEventRecord>) -> MqttResult<()> + Send + Sync>;
 
 async fn simple_reconnect_test(builder : GenericClientBuilder, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> MqttResult<()> {
-    let client = builder.build_tokio(&tokio::runtime::Handle::current()).unwrap();
+    let handle = tokio::runtime::Handle::current().clone();
+    let tokio_options = TokioClientOptionsBuilder::new(handle).build();
+    let client = builder.build_tokio(tokio_options).unwrap();
 
     let wait_options = ClientEventWaiterOptions {
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
@@ -108,9 +111,10 @@ fn validate_reconnect_failure_sequence(events: &Vec<ClientEventRecord>) -> MqttR
 
 #[test]
 fn client_reconnect_with_backoff() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
     let (builder, server) = build_mock_client_server(build_reconnect_test_options());
 
-    crate::features::tokio::testing::do_builder_test(Box::new(|builder| {
+    do_builder_test(&runtime, Box::new(|builder| {
         Box::pin(simple_reconnect_test(builder, 14, Box::new(|events|{validate_reconnect_failure_sequence(events)})))
     }), builder);
 
@@ -178,8 +182,9 @@ fn build_reconnect_reset_test_options() -> ClientTestOptions {
     test_options
 }
 
-async fn reconnect_backoff_reset_test(builder : GenericClientBuilder, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> MqttResult<()> {
-    let client = builder.build_tokio(&tokio::runtime::Handle::current()).unwrap();
+async fn reconnect_backoff_reset_test(handle: tokio::runtime::Handle, builder : GenericClientBuilder, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> MqttResult<()> {
+    let tokio_client_options = TokioClientOptionsBuilder::new(handle).build();
+    let client = builder.build_tokio(tokio_client_options).unwrap();
 
     let first_wait_options = ClientEventWaiterOptions {
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
@@ -250,10 +255,13 @@ fn validate_reconnect_backoff_reset_sequence(events: &Vec<ClientEventRecord>, ex
 
 #[test]
 fn client_reconnect_with_backoff_and_backoff_reset() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let handle = runtime.handle().clone();
     let (builder, server) = build_mock_client_server(build_reconnect_reset_test_options());
 
-    crate::features::tokio::testing::do_builder_test(Box::new(|builder| {
-        Box::pin(reconnect_backoff_reset_test(builder,
+    crate::features::tokio::testing::do_builder_test(&runtime, Box::new(move |builder| {
+        Box::pin(reconnect_backoff_reset_test(handle.clone(),
+                                              builder,
                                               Box::new(|events|{validate_reconnect_backoff_failure_sequence(events)}),
                                               Box::new(|events|{validate_reconnect_backoff_reset_sequence(events, Duration::from_millis(500))}),
                                               4000))
@@ -264,10 +272,13 @@ fn client_reconnect_with_backoff_and_backoff_reset() {
 
 #[test]
 fn client_reconnect_with_backoff_and_no_backoff_reset() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let handle = runtime.handle().clone();
     let (builder, server) = build_mock_client_server(build_reconnect_reset_test_options());
 
-    crate::features::tokio::testing::do_builder_test(Box::new(|builder| {
-        Box::pin(reconnect_backoff_reset_test(builder,
+    crate::features::tokio::testing::do_builder_test(&runtime, Box::new(move |builder| {
+        Box::pin(reconnect_backoff_reset_test(handle.clone(),
+                                              builder,
                                               Box::new(|events|{validate_reconnect_backoff_failure_sequence(events)}),
                                               Box::new(|events|{validate_reconnect_backoff_reset_sequence(events, Duration::from_millis(6000))}),
                                               500))

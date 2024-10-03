@@ -781,19 +781,19 @@ impl MqttClientOptionsBuilder {
     }
 }
 
-pub struct TokioClientOptions<'a> {
-    pub(crate) runtime: &'a Handle,
+pub struct TokioClientOptions {
+    pub(crate) runtime: Handle,
 
     #[cfg(feature="tokio-websockets")]
     pub(crate) websocket_options: Option<AsyncWebsocketOptions>
 }
 
-pub struct TokioClientOptionsBuilder<'a> {
-    options: TokioClientOptions<'a>
+pub struct TokioClientOptionsBuilder {
+    options: TokioClientOptions
 }
 
-impl <'a> TokioClientOptionsBuilder<'a> {
-    pub fn new(runtime: &'a Handle) -> Self {
+impl TokioClientOptionsBuilder {
+    pub fn new(runtime: Handle) -> Self {
         TokioClientOptionsBuilder {
             options: TokioClientOptions {
                 runtime,
@@ -809,7 +809,7 @@ impl <'a> TokioClientOptionsBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> TokioClientOptions<'a> {
+    pub fn build(self) -> TokioClientOptions {
         self.options
     }
 }
