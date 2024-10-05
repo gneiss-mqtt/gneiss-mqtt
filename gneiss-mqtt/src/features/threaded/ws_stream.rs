@@ -53,13 +53,13 @@ impl MessageCursor {
     }
 }
 
-pub(crate) struct WebsocketStreamWrapper<T> where T : Read + Write + Send + Sync + 'static {
+pub(crate) struct WebsocketStreamWrapper<T> where T : Read + Write {
     stream: WebSocket<T>,
     current_read_message: Option<MessageCursor>,
     final_error: Option<tungstenite::error::Error>
 }
 
-impl<T> WebsocketStreamWrapper<T> where T : Read + Write + Send + Sync + 'static {
+impl<T> WebsocketStreamWrapper<T> where T : Read + Write {
     pub(crate) fn new(stream : WebSocket<T>) -> WebsocketStreamWrapper<T> {
         WebsocketStreamWrapper {
             stream,
@@ -69,7 +69,7 @@ impl<T> WebsocketStreamWrapper<T> where T : Read + Write + Send + Sync + 'static
     }
 }
 
-impl<T> Read for WebsocketStreamWrapper<T> where T : Read + Write + Send + Sync + 'static {
+impl<T> Read for WebsocketStreamWrapper<T> where T : Read + Write {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let mut bytes_read = 0;
 
@@ -109,7 +109,7 @@ impl<T> Read for WebsocketStreamWrapper<T> where T : Read + Write + Send + Sync 
     }
 }
 
-impl<T> Write for WebsocketStreamWrapper<T> where T : Read + Write + Send + Sync + 'static {
+impl<T> Write for WebsocketStreamWrapper<T> where T : Read + Write {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let message = Message::Binary(buf.to_vec());
         let write_result = self.stream.send(message);
@@ -126,6 +126,12 @@ impl<T> Write for WebsocketStreamWrapper<T> where T : Read + Write + Send + Sync
 
     fn flush(&mut self) -> std::io::Result<()> {
         self.stream.flush().map_err(|err| { map_tungstenite_error_to_io_error(err) })
+    }
+}
+
+impl<T> WebsocketStreamWrapper<T> where T : Read + Write {
+    pub fn get_mut(&mut self) -> &T {
+        self.stream.get_mut()
     }
 }
 

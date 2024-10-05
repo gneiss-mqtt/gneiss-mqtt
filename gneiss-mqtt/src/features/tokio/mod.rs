@@ -1476,7 +1476,7 @@ pub(crate) mod testing {
             Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle.clone())))
         }), builder);
     }
-    
+
     #[test]
     #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
     fn connection_failure_direct_plaintext_config_websocket_rustls_tls_endpoint() {

@@ -79,7 +79,7 @@ pub type SyncWebsocketHandshakeTransformReturnType = MqttResult<http::request::B
 
 /// Synchronous websocket handshake transformation function type
 #[cfg(feature="threaded-websockets")]
-pub type SyncWebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -> SyncWebsocketHandshakeTransformReturnType>;
+pub type SyncWebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -> SyncWebsocketHandshakeTransformReturnType + Send + Sync>;
 
 /// Configuration options related to establishing a synchronous MQTT connection over websockets
 #[derive(Default, Clone)]
@@ -1056,12 +1056,12 @@ pub(crate) fn build_connect_request(http_connect_endpoint: &Endpoint) -> Vec<u8>
     return request_as_string.as_bytes().to_vec();
 }
 
-#[cfg(feature="tokio-websockets")]
+#[cfg(any(feature="tokio-websockets", feature="threaded-websockets"))]
 pub(crate) struct HandshakeRequest {
     pub(crate) handshake_builder: http::request::Builder,
 }
 
-#[cfg(feature="tokio-websockets")]
+#[cfg(any(feature="tokio-websockets", feature="threaded-websockets"))]
 impl IntoClientRequest for HandshakeRequest {
     fn into_client_request(self) -> tungstenite::Result<tungstenite::handshake::client::Request> {
         let final_request = self.handshake_builder.body(()).unwrap();
@@ -1069,7 +1069,7 @@ impl IntoClientRequest for HandshakeRequest {
     }
 }
 
-#[cfg(feature="tokio-websockets")]
+#[cfg(any(feature="tokio-websockets", feature="threaded-websockets"))]
 pub(crate) fn create_default_websocket_handshake_request(uri: String) -> MqttResult<http::request::Builder> {
     let uri = Uri::from_str(uri.as_str()).unwrap();
 

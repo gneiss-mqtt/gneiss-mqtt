@@ -511,6 +511,16 @@ impl From<tungstenite::error::Error> for MqttError {
     }
 }
 
+use std::io::{Read, Write};
+
+#[cfg(feature="threaded-websockets")]
+impl <S> From<tungstenite::HandshakeError<tungstenite::ClientHandshake<S>>>  for MqttError where S : Read + Write {
+    fn from(err: tungstenite::HandshakeError<tungstenite::ClientHandshake<S>>) -> Self {
+        let message = format!("websocket handshake error: {}", err);
+        MqttError::new_transport_error(message)
+    }
+}
+
 #[cfg(feature="tokio")]
 impl From<tokio::sync::oneshot::error::RecvError> for MqttError {
     fn from(err: tokio::sync::oneshot::error::RecvError) -> Self {

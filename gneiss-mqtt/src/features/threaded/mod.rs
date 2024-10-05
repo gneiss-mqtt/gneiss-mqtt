@@ -19,6 +19,7 @@ use log::{debug, error, info, trace};
 use crate::client::*;
 use crate::client::waiter::{client_event_matches, ClientEventRecord, ClientEventType, ClientEventWaiterOptions, ClientEventWaitType, SyncClientEventWaiter};
 use crate::config::*;
+use crate::features::threaded::ws_stream::WebsocketStreamWrapper;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::{MqttPacket, PublishPacket, SubscribePacket, UnsubscribePacket};
 use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
@@ -792,52 +793,55 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature="threaded-websockets")]
 pub(crate) fn make_websocket_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     match tls_impl {
+        TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, threaded_config) }
         /*
-            TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, threaded_config) }
-           #[cfg(feature = "threaded-rustls")]
-            TlsConfiguration::Rustls => { make_websocket_client_rustls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config) }
-            #[cfg(feature = "threaded-native-tls")]
-            TlsConfiguration::Nativetls => { make_websocket_client_native_tls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config) }
+        #[cfg(feature = "threaded-rustls")]
+        TlsConfiguration::Rustls => { make_websocket_client_rustls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config) }
+        #[cfg(feature = "threaded-native-tls")]
+        TlsConfiguration::Nativetls => { make_websocket_client_native_tls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config) }
 
-     */
+         */
         _ => { panic!("Illegal state"); }
     }
 }
 
-/*
-
-fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
-    info!("threaded make_direct_client_no_tls - creating connection establishment closure");
+#[cfg(feature="threaded-websockets")]
+fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, mut threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+    info!("threaded make_websocket_client_no_tls - creating connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
+    let ws_options = threaded_config.websocket_options.clone().unwrap();
 
     if http_connect_endpoint.is_some() {
         let connection_factory = Arc::new(move || {
             let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
             let tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
             let proxy_stream = apply_proxy_connect_to_stream(tcp_stream, http_connect_endpoint.clone())?;
-            proxy_stream.set_nonblocking(true)?;
-            Ok(proxy_stream)
+            let mut ws_stream = wrap_stream_with_websockets(proxy_stream, http_connect_endpoint.endpoint.clone(), "ws", ws_options.clone())?;
+            ws_stream.get_mut().set_nonblocking(true)?;
+            Ok(ws_stream)
         });
 
-        info!("threaded make_direct_client_no_tls - plaintext-to-proxy -> plaintext-to-broker");
+        info!("threaded make_websocket_client_no_tls - plaintext-to-proxy -> plaintext-to-broker");
         Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
     } else {
         let connection_factory = Arc::new(move || {
             let tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
-            tcp_stream.set_nonblocking(true)?;
-            Ok(tcp_stream)
+            let mut ws_stream = wrap_stream_with_websockets(tcp_stream, stream_endpoint.endpoint.clone(), "ws", ws_options.clone())?;
+            ws_stream.get_mut().set_nonblocking(true)?;
+            Ok(ws_stream)
         });
 
-        info!("threaded make_direct_client_no_tls - plaintext-to-broker");
+        info!("threaded make_websocket_client_no_tls - plaintext-to-broker");
         Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
     }
 }
-
-#[cfg(feature = "threaded-rustls")]
-fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
-    info!("threaded make_direct_client_rustls - creating connection establishment closure");
+/*
+#[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
+fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, mut threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+    info!("threaded make_websocket_client_rustls - creating connection establishment closure");
 
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
 
@@ -850,11 +854,14 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
                     let proxy_tls_stream = wrap_stream_with_tls_rustls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone())?;
                     let connect_stream = apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone())?;
                     let tls_connect_stream = wrap_stream_with_tls_rustls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone())?;
-                    tls_connect_stream.sock.sock.set_nonblocking(true)?;
-                    Ok(tls_connect_stream)
+                    let ws_options = threaded_config.websocket_options.take();
+                    let mut ws_stream = wrap_stream_with_websockets(tls_connect_stream, http_connect_endpoint.endpoint.clone(), "ws", ws_options.unwrap())?;
+                    ws_stream.get_mut().sock.sock.set_nonblocking(true)?;
+
+                    Ok(ws_stream)
                 });
 
-                info!("threaded make_direct_client_rustls - tls-to-proxy -> tls-to-broker");
+                info!("threaded make_websocket_client_rustls - tls-to-proxy -> tls-to-broker");
                 Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
             } else {
                 let connection_factory = Arc::new(move || {
@@ -862,22 +869,28 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
                     let proxy_tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
                     let connect_stream = apply_proxy_connect_to_stream(proxy_tcp_stream, http_connect_endpoint.clone())?;
                     let tls_connect_stream = wrap_stream_with_tls_rustls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone())?;
-                    tls_connect_stream.sock.set_nonblocking(true)?;
-                    Ok(tls_connect_stream)
+                    let ws_options = threaded_config.websocket_options.take();
+                    let mut ws_stream = wrap_stream_with_websockets(tls_connect_stream, http_connect_endpoint.endpoint.clone(), "ws", ws_options.unwrap())?;
+                    ws_stream.get_mut().sock.set_nonblocking(true)?;
+
+                    Ok(ws_stream)
                 });
 
-                info!("threaded make_direct_client_rustls - plaintext-to-proxy -> tls-to-broker");
+                info!("threaded make_websocket_client_rustls - plaintext-to-proxy -> tls-to-broker");
                 Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
             }
         } else {
             let connection_factory = Arc::new(move || {
                 let tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
                 let tls_stream = wrap_stream_with_tls_rustls(tcp_stream, endpoint.clone(), tls_options.clone())?;
-                tls_stream.sock.set_nonblocking(true)?;
-                Ok(tls_stream)
+                let ws_options = threaded_config.websocket_options.take();
+                let mut ws_stream = wrap_stream_with_websockets(tls_stream, endpoint.clone(), "ws", ws_options.unwrap())?;
+                ws_stream.get_mut().sock.set_nonblocking(true)?;
+
+                Ok(ws_stream)
             });
 
-            info!("threaded make_direct_client_rustls - tls-to-broker");
+            info!("threaded make_websocket_client_rustls - tls-to-broker");
             Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
@@ -887,23 +900,26 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
                 let proxy_tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
                 let proxy_tls_stream = wrap_stream_with_tls_rustls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone())?;
                 let connect_stream = apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone())?;
-                connect_stream.sock.set_nonblocking(true)?;
-                Ok(connect_stream)
+                let ws_options = threaded_config.websocket_options.take();
+                let mut ws_stream = wrap_stream_with_websockets(connect_stream, http_connect_endpoint.endpoint.clone(), "ws", ws_options.unwrap())?;
+                ws_stream.get_mut().sock.set_nonblocking(true)?;
+
+                Ok(ws_stream)
             });
 
-            info!("threaded make_direct_client_rustls - tls-to-proxy -> plaintext-to-broker");
+            info!("threaded make_websocket_client_rustls - tls-to-proxy -> plaintext-to-broker");
             Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
         } else {
-            panic!("threaded make_direct_client_rustls - invoked without tls configuration")
+            panic!("threaded make_websocket_client_rustls - invoked without tls configuration")
         }
     } else {
-        panic!("threaded make_direct_client_rustls - invoked without tls configuration")
+        panic!("threaded make_websocket_client_rustls - invoked without tls configuration")
     }
 }
 
-#[cfg(feature = "threaded-native-tls")]
-fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>,  threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
-    info!("threaded make_direct_client_native_tls - creating async connection establishment closure");
+#[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
+fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>,  mut threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+    info!("threaded make_websocket_client_native_tls - creating async connection establishment closure");
 
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
 
@@ -916,11 +932,14 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
                     let proxy_tls_stream = wrap_stream_with_tls_native_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone())?;
                     let connect_stream = apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone())?;
                     let tls_connect_stream = wrap_stream_with_tls_native_tls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone())?;
-                    tls_connect_stream.get_ref().get_ref().set_nonblocking(true)?;
-                    Ok(tls_connect_stream)
+                    let ws_options = threaded_config.websocket_options.take();
+                    let mut ws_stream = wrap_stream_with_websockets(tls_connect_stream, http_connect_endpoint.endpoint.clone(), "ws", ws_options.unwrap())?;
+                    ws_stream.get_mut().get_ref().get_ref().set_nonblocking(true)?;
+
+                    Ok(ws_stream)
                 });
 
-                info!("threaded make_direct_client_native_tls - tls-to-proxy -> tls-to-broker");
+                info!("threaded make_websocket_client_native_tls - tls-to-proxy -> tls-to-broker");
                 Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
             } else {
                 let connection_factory = Arc::new(move || {
@@ -928,22 +947,28 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
                     let proxy_tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
                     let connect_stream = apply_proxy_connect_to_stream(proxy_tcp_stream, http_connect_endpoint.clone())?;
                     let tls_connect_stream = wrap_stream_with_tls_native_tls(connect_stream, http_connect_endpoint.endpoint.clone(), tls_options.clone())?;
-                    tls_connect_stream.get_ref().set_nonblocking(true)?;
-                    Ok(tls_connect_stream)
+                    let ws_options = threaded_config.websocket_options.take();
+                    let mut ws_stream = wrap_stream_with_websockets(tls_connect_stream, http_connect_endpoint.endpoint.clone(), "ws", ws_options.unwrap())?;
+                    ws_stream.get_mut().get_ref().set_nonblocking(true)?;
+
+                    Ok(ws_stream)
                 });
 
-                info!("threaded make_direct_client_native_tls - plaintext-to-proxy -> tls-to-broker");
+                info!("threaded make_websocket_client_native_tls - plaintext-to-proxy -> tls-to-broker");
                 Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
             }
         } else {
             let connection_factory = Arc::new(move || {
                 let tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
                 let tls_stream = wrap_stream_with_tls_native_tls(tcp_stream, endpoint.clone(), tls_options.clone())?;
-                tls_stream.get_ref().set_nonblocking(true)?;
-                Ok(tls_stream)
+                let ws_options = threaded_config.websocket_options.take();
+                let mut ws_stream = wrap_stream_with_websockets(tls_stream, endpoint.clone(), "ws", ws_options.unwrap())?;
+                ws_stream.get_mut().get_ref().set_nonblocking(true)?;
+
+                Ok(ws_stream)
             });
 
-            info!("threaded make_direct_client_native_tls - tls-to-broker");
+            info!("threaded make_websocket_client_native_tls - tls-to-broker");
             Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
@@ -953,21 +978,24 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
                 let proxy_tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
                 let proxy_tls_stream = wrap_stream_with_tls_native_tls(proxy_tcp_stream, stream_endpoint.endpoint.clone(), proxy_tls_options.clone())?;
                 let connect_stream = apply_proxy_connect_to_stream(proxy_tls_stream, http_connect_endpoint.clone())?;
-                connect_stream.get_ref().set_nonblocking(true)?;
-                Ok(connect_stream)
+                let ws_options = threaded_config.websocket_options.take();
+                let mut ws_stream = wrap_stream_with_websockets(connect_stream, http_connect_endpoint.endpoint.clone(), "ws", ws_options.unwrap())?;
+                ws_stream.get_mut().get_ref().set_nonblocking(true)?;
+
+                Ok(ws_stream)
             });
 
-            info!("threaded make_direct_client_native_tls - tls-to-proxy -> plaintext-to-broker");
+            info!("threaded make_websocket_client_native_tls - tls-to-proxy -> plaintext-to-broker");
             Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
         } else {
-            panic!("threaded make_direct_client_native_tls - invoked without tls configuration")
+            panic!("threaded make_websocket_client_native_tls - invoked without tls configuration")
         }
     } else {
-        panic!("threaded make_direct_client_native_tls - invoked without tls configuration")
+        panic!("threaded make_websocket_client_native_tls - invoked without tls configuration")
     }
 }
+*/
 
- */
 fn make_leaf_stream(endpoint: Endpoint) -> MqttResult<TcpStream> {
     let addr = make_addr(endpoint.endpoint.as_str(), endpoint.port)?;
     debug!("make_leaf_stream - opening TCP stream");
@@ -1015,31 +1043,31 @@ fn wrap_stream_with_tls_native_tls<S>(stream : S, endpoint: String, tls_options:
     }
 }
 
-/*
+
 #[cfg(feature="threaded-websockets")]
-fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, scheme: &str, websocket_options: WebsocketOptions) -> MqttResult<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
+fn wrap_stream_with_websockets<S>(stream : S, endpoint: String, scheme: &str, websocket_options: SyncWebsocketOptions) -> MqttResult<WebsocketStreamWrapper<S>> where S : Read + Write {
 
     let uri = format!("{}://{}/mqtt", scheme, endpoint); // scheme needs to be present but value irrelevant
     let handshake_builder = crate::config::create_default_websocket_handshake_request(uri)?;
 
-    debug!("wrap_stream_with_websockets - performing websocket upgrade request transform");
+    debug!("threaded wrap_stream_with_websockets - performing websocket upgrade request transform");
     let transformed_handshake_builder =
         if let Some(transform) = &*websocket_options.handshake_transform {
-            transform(handshake_builder).await?
+            transform(handshake_builder)?
         } else {
             handshake_builder
         };
-    debug!("wrap_stream_with_websockets - successfully transformed websocket upgrade request");
+    debug!("threaded wrap_stream_with_websockets - successfully transformed websocket upgrade request");
 
-    debug!("wrap_stream_with_websockets - upgrading stream to websockets");
-    let inner_stream= stream.await?;
-    let (message_stream, _) = client_async(crate::config::HandshakeRequest { handshake_builder: transformed_handshake_builder }, inner_stream).await?;
-    let byte_stream = WsMessageHandler::wrap_stream(message_stream);
-    debug!("wrap_stream_with_websockets - successfully upgraded stream to websockets");
+    debug!("threaded wrap_stream_with_websockets - upgrading stream to websockets");
 
-    Ok(byte_stream)
+    let websocket_result = tungstenite::client::client(HandshakeRequest { handshake_builder: transformed_handshake_builder }, stream)?;
+    let ws_stream = WebsocketStreamWrapper::new(websocket_result.0);
+    debug!("threaded wrap_stream_with_websockets - successfully upgraded stream to websockets");
+
+    Ok(ws_stream)
 }
- */
+
 fn apply_proxy_connect_to_stream<T>(mut stream : T, http_connect_endpoint: Endpoint) -> MqttResult<T> where T : Read + Write {
 
     debug!("apply_proxy_connect_to_stream - writing CONNECT request to connection stream");
@@ -1238,12 +1266,11 @@ pub(crate) mod testing {
         }));
     }
 
-    /*
     #[test]
     #[cfg(feature="threaded-websockets")]
     fn client_connect_disconnect_websocket_plaintext_no_proxy() {
         do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder|{
             threaded_connect_disconnect_test(builder)
         }));
-    }*/
+    }
 }
