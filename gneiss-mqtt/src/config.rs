@@ -781,22 +781,20 @@ impl MqttClientOptionsBuilder {
     }
 }
 
-pub struct TokioClientOptions {
-    pub(crate) runtime: Handle,
+pub struct AsyncClientOptions {
 
     #[cfg(feature="tokio-websockets")]
     pub(crate) websocket_options: Option<AsyncWebsocketOptions>
 }
 
-pub struct TokioClientOptionsBuilder {
-    options: TokioClientOptions
+pub struct AsyncClientOptionsBuilder {
+    options: AsyncClientOptions
 }
 
-impl TokioClientOptionsBuilder {
-    pub fn new(runtime: Handle) -> Self {
-        TokioClientOptionsBuilder {
-            options: TokioClientOptions {
-                runtime,
+impl AsyncClientOptionsBuilder {
+    pub fn new() -> Self {
+        AsyncClientOptionsBuilder {
+            options: AsyncClientOptions {
                 #[cfg(feature="tokio-websockets")]
                 websocket_options: None
             }
@@ -809,17 +807,65 @@ impl TokioClientOptionsBuilder {
         self
     }
 
+    pub fn build(self) -> AsyncClientOptions {
+        self.options
+    }
+}
+
+pub struct TokioClientOptions {
+    pub(crate) runtime: Handle,
+}
+
+pub struct TokioClientOptionsBuilder {
+    options: TokioClientOptions
+}
+
+impl TokioClientOptionsBuilder {
+    pub fn new(runtime: Handle) -> Self {
+        TokioClientOptionsBuilder {
+            options: TokioClientOptions {
+                runtime
+            }
+        }
+    }
+
     pub fn build(self) -> TokioClientOptions {
         self.options
+    }
+}
+
+pub struct SyncClientOptions {
+    #[cfg(feature="threaded-websockets")]
+    pub(crate) websocket_options: Option<SyncWebsocketOptions>
+}
+
+pub struct SyncClientOptionsBuilder {
+    config: SyncClientOptions
+}
+
+impl SyncClientOptionsBuilder {
+    pub fn new() -> Self {
+        SyncClientOptionsBuilder {
+            config: SyncClientOptions {
+                websocket_options: None,
+            }
+        }
+    }
+
+    #[cfg(feature="threaded-websockets")]
+    pub fn with_websocket_options(&mut self, websocket_options: SyncWebsocketOptions) -> &mut Self {
+        self.config.websocket_options = Some(websocket_options);
+        self
+    }
+
+    pub fn build(self) -> SyncClientOptions {
+        self.config
     }
 }
 
 /// Thread-specific client configuration
 pub struct ThreadedClientOptions {
     pub(crate) idle_service_sleep: Option<Duration>,
-
-    #[cfg(feature="threaded-websockets")]
-    pub(crate) websocket_options: Option<SyncWebsocketOptions>
 }
 
 pub struct ThreadedClientOptionsBuilder {
@@ -831,20 +877,12 @@ impl ThreadedClientOptionsBuilder {
         ThreadedClientOptionsBuilder {
             config: ThreadedClientOptions {
                 idle_service_sleep: None,
-                #[cfg(feature="threaded-websockets")]
-                websocket_options: None
             }
         }
     }
 
     pub fn with_idle_service_sleep(&mut self, duration: Duration) {
         self.config.idle_service_sleep = Some(duration);
-    }
-
-    #[cfg(feature="threaded-websockets")]
-    pub fn with_websocket_options(&mut self, websocket_options: SyncWebsocketOptions) -> &mut Self {
-        self.config.websocket_options = Some(websocket_options);
-        self
     }
 
     pub fn build(self) -> ThreadedClientOptions {
