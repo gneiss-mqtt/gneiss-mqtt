@@ -1283,4 +1283,52 @@ pub(crate) mod testing {
             threaded_connect_disconnect_test(builder, client_options)
         }));
     }
+
+    #[test]
+    #[cfg(feature = "threaded")]
+    fn client_connect_disconnect_direct_plaintext_with_proxy() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, client_options|{
+            threaded_connect_disconnect_test(builder, client_options)
+        }));
+    }
+
+    #[test]
+    #[cfg(feature = "threaded-rustls")]
+    fn client_connect_disconnect_direct_rustls_with_proxy() {
+        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder, client_options|{
+            threaded_connect_disconnect_test(builder, client_options)
+        }));
+    }
+
+    #[test]
+    #[cfg(feature = "threaded-native-tls")]
+    fn client_connect_disconnect_direct_native_tls_with_proxy() {
+        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder, client_options|{
+            threaded_connect_disconnect_test(builder, client_options)
+        }));
+    }
+
+    #[test]
+    #[cfg(feature="threaded-websockets")]
+    fn client_connect_disconnect_websocket_plaintext_with_proxy() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, client_options|{
+            threaded_connect_disconnect_test(builder, client_options)
+        }));
+    }
+
+    #[test]
+    #[cfg(all(feature="threaded-websockets", feature="threaded-rustls"))]
+    fn client_connect_disconnect_websocket_rustls_with_proxy() {
+        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, client_options|{
+            threaded_connect_disconnect_test(builder, client_options)
+        }));
+    }
+
+    #[test]
+    #[cfg(all(feature="threaded-websockets", feature="threaded-native-tls"))]
+    fn client_connect_disconnect_websocket_native_tls_with_proxy() {
+        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, client_options|{
+            threaded_connect_disconnect_test(builder, client_options)
+        }));
+    }
 }

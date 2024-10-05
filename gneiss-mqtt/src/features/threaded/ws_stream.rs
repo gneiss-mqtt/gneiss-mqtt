@@ -91,10 +91,11 @@ impl<T> Read for WebsocketStreamWrapper<T> where T : Read + Write {
                     }
                     Err(err) => {
                         if is_tungstenite_error_would_block(&err) {
+                            // We never want to return Ok(0) which indicates EOF on byte streams
                             if bytes_read > 0 {
                                 return Ok(bytes_read);
                             } else {
-                                return Err(std::io::Error::new(ErrorKind::WouldBlock, "No data presently"))
+                                return Err(std::io::Error::new(ErrorKind::WouldBlock, "No data"))
                             }
                         }
 
