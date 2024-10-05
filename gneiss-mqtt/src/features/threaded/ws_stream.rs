@@ -91,7 +91,11 @@ impl<T> Read for WebsocketStreamWrapper<T> where T : Read + Write {
                     }
                     Err(err) => {
                         if is_tungstenite_error_would_block(&err) {
-                            return Ok(bytes_read);
+                            if bytes_read > 0 {
+                                return Ok(bytes_read);
+                            } else {
+                                return Err(std::io::Error::new(ErrorKind::WouldBlock, "No data presently"))
+                            }
                         }
 
                         self.final_error = Some(err);
@@ -101,6 +105,10 @@ impl<T> Read for WebsocketStreamWrapper<T> where T : Read + Write {
 
             if let Some(current_message) = &mut self.current_read_message {
                 bytes_read += current_message.read(buf);
+            }
+
+            if bytes_read < buf.len() {
+                self.current_read_message = None;
             }
         }
 
@@ -157,7 +165,7 @@ fn is_tungstenite_error_would_block(error: &tungstenite::error::Error) -> bool {
     match error {
         Error::Io(io_error) => {
             let error_kind = io_error.kind();
-            error_kind != ErrorKind::WouldBlock
+            error_kind == ErrorKind::WouldBlock
         }
         _ => {
             false

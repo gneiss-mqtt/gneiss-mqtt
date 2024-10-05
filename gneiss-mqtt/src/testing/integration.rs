@@ -155,7 +155,7 @@ pub(crate) fn create_websocket_options_sync(ws: WebsocketUsage) -> Option<SyncWe
 
 pub(crate) type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output=MqttResult<()>> + Send>>;
 pub(crate) type AsyncTestFactory = Box<dyn Fn(GenericClientBuilder) -> AsyncTestFactoryReturnType + Send + Sync>;
-pub(crate) type SyncTestFactory = Box<dyn Fn(GenericClientBuilder) -> MqttResult<()>>;
+pub(crate) type SyncTestFactory = Box<dyn Fn(GenericClientBuilder, ThreadedClientOptions) -> MqttResult<()>>;
 
 pub(crate) async fn start_async_client<T : AsyncClientEventWaiter>(client: &AsyncGneissClient, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
     let connection_attempt_waiter = waiter_factory(client.clone(), ClientEventType::ConnectionAttempt);
