@@ -618,22 +618,22 @@ pub(crate) fn make_client_threaded(tls_impl: TlsConfiguration, endpoint: String,
         return make_websocket_client_threaded(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, sync_options, threaded_config);
     }
 
-    make_direct_client_threaded(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config)
+    make_direct_client_threaded(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, sync_options, threaded_config)
 }
 
 #[allow(clippy::too_many_arguments)]
-fn make_direct_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_direct_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     match tls_impl {
-        TlsConfiguration::None => { make_direct_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, threaded_config) }
+        TlsConfiguration::None => { make_direct_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, sync_options, threaded_config) }
         #[cfg(feature = "threaded-rustls")]
-        TlsConfiguration::Rustls => { make_direct_client_rustls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config) }
+        TlsConfiguration::Rustls => { make_direct_client_rustls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, sync_options, threaded_config) }
         #[cfg(feature = "threaded-native-tls")]
-        TlsConfiguration::Nativetls => { make_direct_client_native_tls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config) }
+        TlsConfiguration::Nativetls => { make_direct_client_native_tls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, sync_options, threaded_config) }
         _ => { panic!("Illegal state"); }
     }
 }
 
-fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_direct_client_no_tls - creating connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
 
@@ -661,7 +661,7 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttCl
 }
 
 #[cfg(feature = "threaded-rustls")]
-fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_direct_client_rustls - creating connection establishment closure");
 
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
@@ -727,7 +727,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
 }
 
 #[cfg(feature = "threaded-native-tls")]
-fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>,  threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_direct_client_native_tls - creating async connection establishment closure");
 
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
@@ -806,7 +806,7 @@ pub(crate) fn make_websocket_client_threaded(tls_impl: TlsConfiguration, endpoin
 }
 
 #[cfg(feature="threaded-websockets")]
-fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, mut sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_websocket_client_no_tls - creating connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
     let ws_options = sync_options.websocket_options.clone().unwrap();
@@ -837,10 +837,10 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: Mqt
 }
 
 #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
-fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, mut sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_websocket_client_rustls - creating connection establishment closure");
 
-    let ws_options = sync_options.websocket_options.take().unwrap();
+    let ws_options = sync_options.websocket_options.unwrap().clone();
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
 
     if let Some(tls_options) = tls_options {
@@ -912,10 +912,10 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
 }
 
 #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
-fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, mut sync_options : SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options : SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_websocket_client_native_tls - creating async connection establishment closure");
 
-    let ws_options = sync_options.websocket_options.take().unwrap();
+    let ws_options = sync_options.websocket_options.unwrap().clone();
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
 
     if let Some(tls_options) = tls_options {
@@ -1218,8 +1218,8 @@ pub(crate) mod testing {
     use crate::features::threaded::*;
     use crate::testing::integration::{create_good_client_builder, ProxyUsage, start_sync_client, stop_sync_client, SyncTestFactory, TlsUsage, WebsocketUsage};
 
-    fn threaded_connect_disconnect_test(builder: GenericClientBuilder, client_options: ThreadedClientOptions) -> MqttResult<()> {
-        let client = builder.build_threaded(client_options).unwrap();
+    fn threaded_connect_disconnect_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
+        let client = builder.build_threaded(sync_options, client_options).unwrap();
 
         start_sync_client(&client, ThreadedClientEventWaiter::new_single)?;
         stop_sync_client(&client, ThreadedClientEventWaiter::new_single)?;
@@ -1228,107 +1228,108 @@ pub(crate) mod testing {
     }
 
     fn do_good_client_test(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: SyncTestFactory) {
-        let mut client_options_builder = ThreadedClientOptionsBuilder::new();
+        let client_options = ThreadedClientOptionsBuilder::new().build();
+        let mut sync_options_builder = SyncClientOptionsBuilder::new();
         if ws == WebsocketUsage::Tungstenite {
-            client_options_builder.with_websocket_options(SyncWebsocketOptionsBuilder::new().build());
+            sync_options_builder.with_websocket_options(SyncWebsocketOptionsBuilder::new().build());
         }
 
-        assert!((*test_factory)(create_good_client_builder(tls, ws, proxy), client_options_builder.build()).is_ok());
+        assert!((*test_factory)(create_good_client_builder(tls, ws, proxy), sync_options_builder.build(), client_options).is_ok());
     }
 
     #[test]
     #[cfg(feature = "threaded")]
     fn client_connect_disconnect_direct_plaintext_no_proxy() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder, client_options|{
-            threaded_connect_disconnect_test(builder, client_options)
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
 
     #[test]
     #[cfg(feature = "threaded-rustls")]
     fn client_connect_disconnect_direct_rustls_no_proxy() {
-        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder, client_options|{
-            threaded_connect_disconnect_test(builder, client_options)
+        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
 
     #[test]
     #[cfg(feature = "threaded-native-tls")]
     fn client_connect_disconnect_direct_native_tls_no_proxy() {
-        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder, client_options|{
-            threaded_connect_disconnect_test(builder, client_options)
+        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
 
     #[test]
     #[cfg(feature="threaded-websockets")]
     fn client_connect_disconnect_websocket_plaintext_no_proxy() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder, client_options|{
-            threaded_connect_disconnect_test(builder, client_options)
+        do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
 
     #[test]
     #[cfg(all(feature="threaded-websockets", feature="threaded-rustls"))]
     fn client_connect_disconnect_websocket_rustls_no_proxy() {
-        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder, client_options|{
-            threaded_connect_disconnect_test(builder, client_options)
+        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
 
     #[test]
     #[cfg(all(feature="threaded-websockets", feature="threaded-native-tls"))]
     fn client_connect_disconnect_websocket_native_tls_no_proxy() {
-        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder, client_options|{
-            threaded_connect_disconnect_test(builder, client_options)
+        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, ProxyUsage::None, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
 
     #[test]
     #[cfg(feature = "threaded")]
     fn client_connect_disconnect_direct_plaintext_with_proxy() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, client_options|{
-            threaded_connect_disconnect_test(builder, client_options)
+        do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
 
     #[test]
     #[cfg(feature = "threaded-rustls")]
     fn client_connect_disconnect_direct_rustls_with_proxy() {
-        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder, client_options|{
-            threaded_connect_disconnect_test(builder, client_options)
+        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
 
     #[test]
     #[cfg(feature = "threaded-native-tls")]
     fn client_connect_disconnect_direct_native_tls_with_proxy() {
-        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder, client_options|{
-            threaded_connect_disconnect_test(builder, client_options)
+        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
 
     #[test]
     #[cfg(feature="threaded-websockets")]
     fn client_connect_disconnect_websocket_plaintext_with_proxy() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, client_options|{
-            threaded_connect_disconnect_test(builder, client_options)
+        do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
 
     #[test]
     #[cfg(all(feature="threaded-websockets", feature="threaded-rustls"))]
     fn client_connect_disconnect_websocket_rustls_with_proxy() {
-        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, client_options|{
-            threaded_connect_disconnect_test(builder, client_options)
+        do_good_client_test(TlsUsage::Rustls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
 
     #[test]
     #[cfg(all(feature="threaded-websockets", feature="threaded-native-tls"))]
     fn client_connect_disconnect_websocket_native_tls_with_proxy() {
-        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, client_options|{
-            threaded_connect_disconnect_test(builder, client_options)
+        do_good_client_test(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
 }

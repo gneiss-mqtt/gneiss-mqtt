@@ -8,12 +8,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use assert_matches::assert_matches;
 use crate::client::ClientEvent;
-use crate::client::waiter::{ClientEventType, ClientEventWaiterOptions, ClientEventWaitType, AsyncClientEventWaiter};
-use crate::config::{ExponentialBackoffJitterType, GenericClientBuilder, TokioClientOptions, TokioClientOptionsBuilder};
+use crate::client::waiter::*;
+use crate::config::*;
 use crate::error::MqttResult;
 use crate::features::tokio::{ClientEventRecord, TokioClientEventWaiter};
 use crate::features::tokio::testing::*;
-use crate::mqtt::{ConnackPacket, ConnectReasonCode, DisconnectPacket, DisconnectReasonCode, MqttPacket, PacketType, PublishPacket, QualityOfService};
+use crate::mqtt::*;
 use crate::testing::mock_server::{build_mock_client_server, ClientTestOptions};
 use crate::testing::protocol::{BrokerTestContext, create_default_packet_handlers};
 
@@ -31,10 +31,8 @@ fn is_reconnect_related_event(event: &Arc<ClientEvent>) -> bool {
 
 type ReconnectEventTestValidatorFn = Box<dyn Fn(&Vec<ClientEventRecord>) -> MqttResult<()> + Send + Sync>;
 
-async fn simple_reconnect_test(builder : GenericClientBuilder, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> MqttResult<()> {
-    let handle = tokio::runtime::Handle::current().clone();
-    let tokio_options = TokioClientOptionsBuilder::new(handle).build();
-    let client = builder.build_tokio(tokio_options).unwrap();
+async fn simple_reconnect_test(builder : GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> MqttResult<()> {
+    let client = builder.build_tokio(async_options, tokio_options).unwrap();
 
     let wait_options = ClientEventWaiterOptions {
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
@@ -113,10 +111,11 @@ fn validate_reconnect_failure_sequence(events: &Vec<ClientEventRecord>) -> MqttR
 fn client_reconnect_with_backoff() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let (builder, server) = build_mock_client_server(build_reconnect_test_options());
+    let async_options = AsyncClientOptionsBuilder::new().build();
 
-    do_builder_test(&runtime, Box::new(|builder| {
-        Box::pin(simple_reconnect_test(builder, 14, Box::new(|events|{validate_reconnect_failure_sequence(events)})))
-    }), builder);
+    do_builder_test(runtime.handle().clone(), Box::new(|builder, async_options, tokio_options| {
+        Box::pin(simple_reconnect_test(builder, async_options, tokio_options, 14, Box::new(|events|{validate_reconnect_failure_sequence(events)})))
+    }), builder, async_options);
 
     server.close();
 }
@@ -182,9 +181,8 @@ fn build_reconnect_reset_test_options() -> ClientTestOptions {
     test_options
 }
 
-async fn reconnect_backoff_reset_test(handle: tokio::runtime::Handle, builder : GenericClientBuilder, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> MqttResult<()> {
-    let tokio_client_options = TokioClientOptionsBuilder::new(handle).build();
-    let client = builder.build_tokio(tokio_client_options).unwrap();
+async fn reconnect_backoff_reset_test(handle: tokio::runtime::Handle, builder : GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> MqttResult<()> {
+    let client = builder.build_tokio(async_options, tokio_options).unwrap();
 
     let first_wait_options = ClientEventWaiterOptions {
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
@@ -258,14 +256,17 @@ fn client_reconnect_with_backoff_and_backoff_reset() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let handle = runtime.handle().clone();
     let (builder, server) = build_mock_client_server(build_reconnect_reset_test_options());
+    let async_options = AsyncClientOptionsBuilder::new().build();
 
-    crate::features::tokio::testing::do_builder_test(&runtime, Box::new(move |builder| {
+    do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
         Box::pin(reconnect_backoff_reset_test(handle.clone(),
                                               builder,
+                                              async_options,
+                                              tokio_options,
                                               Box::new(|events|{validate_reconnect_backoff_failure_sequence(events)}),
                                               Box::new(|events|{validate_reconnect_backoff_reset_sequence(events, Duration::from_millis(500))}),
                                               4000))
-    }), builder);
+    }), builder, async_options);
 
     server.close();
 }
@@ -275,14 +276,17 @@ fn client_reconnect_with_backoff_and_no_backoff_reset() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let handle = runtime.handle().clone();
     let (builder, server) = build_mock_client_server(build_reconnect_reset_test_options());
+    let async_options = AsyncClientOptionsBuilder::new().build();
 
-    crate::features::tokio::testing::do_builder_test(&runtime, Box::new(move |builder| {
+    do_builder_test(runtime.handle().clone(), Box::new(move |builder, async_options, tokio_options| {
         Box::pin(reconnect_backoff_reset_test(handle.clone(),
                                               builder,
+                                              async_options,
+                                              tokio_options,
                                               Box::new(|events|{validate_reconnect_backoff_failure_sequence(events)}),
                                               Box::new(|events|{validate_reconnect_backoff_reset_sequence(events, Duration::from_millis(6000))}),
                                               500))
-    }), builder);
+    }), builder, async_options);
 
     server.close();
 }

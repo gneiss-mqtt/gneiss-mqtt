@@ -154,8 +154,8 @@ pub(crate) fn create_websocket_options_sync(ws: WebsocketUsage) -> Option<SyncWe
 }
 
 pub(crate) type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output=MqttResult<()>> + Send>>;
-pub(crate) type AsyncTestFactory = Box<dyn Fn(GenericClientBuilder) -> AsyncTestFactoryReturnType + Send + Sync>;
-pub(crate) type SyncTestFactory = Box<dyn Fn(GenericClientBuilder, ThreadedClientOptions) -> MqttResult<()>>;
+pub(crate) type AsyncTestFactory = Box<dyn Fn(GenericClientBuilder, AsyncClientOptions, TokioClientOptions) -> AsyncTestFactoryReturnType + Send + Sync>;
+pub(crate) type SyncTestFactory = Box<dyn Fn(GenericClientBuilder, SyncClientOptions, ThreadedClientOptions) -> MqttResult<()>>;
 
 pub(crate) async fn start_async_client<T : AsyncClientEventWaiter>(client: &AsyncGneissClient, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
     let connection_attempt_waiter = waiter_factory(client.clone(), ClientEventType::ConnectionAttempt);
@@ -338,9 +338,8 @@ pub(crate) async fn async_subscribe_publish_test<T : AsyncClientEventWaiter>(cli
     Ok(())
 }
 
-pub(crate) async fn async_will_test<T : AsyncClientEventWaiter>(base_client_options: GenericClientBuilder, client_factory: fn(GenericClientBuilder, TokioClientOptions) -> AsyncGneissClient, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
-    let tokio_options = TokioClientOptionsBuilder::new(tokio::runtime::Handle::current().clone()).build();
-    let client = client_factory(base_client_options, tokio_options);
+pub(crate) async fn async_will_test<T : AsyncClientEventWaiter>(base_client_options: GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, client_factory: fn(GenericClientBuilder, AsyncClientOptions, TokioClientOptions) -> AsyncGneissClient, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
+    let client = client_factory(base_client_options, async_options, tokio_options);
 
     let payload = "Onsecondthought".as_bytes().to_vec();
 
@@ -358,8 +357,9 @@ pub(crate) async fn async_will_test<T : AsyncClientEventWaiter>(base_client_opti
         .build();
 
     let will_builder = create_client_builder_internal(connect_options, TlsUsage::None, ProxyUsage::None, TlsUsage::None, WebsocketUsage::None);
+    let will_async_options = AsyncClientOptionsBuilder::new().build();
     let will_tokio_options = TokioClientOptionsBuilder::new(tokio::runtime::Handle::current().clone()).build();
-    let will_client = client_factory(will_builder, will_tokio_options);
+    let will_client = client_factory(will_builder, will_async_options, will_tokio_options);
 
     start_async_client(&client, waiter_factory).await?;
     start_async_client(&will_client, waiter_factory).await?;

@@ -49,18 +49,19 @@ supports all connection methods allowed by the AWS MQTT broker implementation,
 Assuming a default Mosquitto installation, you can connect locally by plaintext on port 1883:
 
 ```no_run
-use gneiss_mqtt::config::{GenericClientBuilder, TokioClientOptionsBuilder};
+use gneiss_mqtt::config::{AsyncClientOptionsBuilder, GenericClientBuilder, TokioClientOptionsBuilder};
 use tokio::runtime::Handle;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
+    let async_options = AsyncClientOptionsBuilder::new().build();
     let tokio_options = TokioClientOptionsBuilder::new(Handle::current().clone()).build();
 
     // In the common case, you will not need a root CA certificate
     let client =
         GenericClientBuilder::new("127.0.0.1", 1883)
-            .build_tokio(tokio_options)?;
+            .build_tokio(async_options, tokio_options)?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -131,7 +132,7 @@ every time we receive a "Ping" publish:
 
 ```no_run
 use gneiss_mqtt::client::{ClientEvent, AsyncGneissClient};
-use gneiss_mqtt::config::TokioClientOptionsBuilder;
+use gneiss_mqtt::config::{AsyncClientOptionsBuilder, TokioClientOptionsBuilder};
 use gneiss_mqtt::mqtt::{PublishPacket, QualityOfService};
 use std::sync::Arc;
 
@@ -166,12 +167,13 @@ use tokio::runtime::Handle;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
+    let async_options = AsyncClientOptionsBuilder::new().build();
     let tokio_client_options = TokioClientOptionsBuilder::new(Handle::current().clone()).build();
 
     // put the client in an Arc so we can capture an Arc clone in the event handler closure
     let client : AsyncGneissClient =
         GenericClientBuilder::new("127.0.0.1", 1883)
-            .build_tokio(tokio_client_options)?;
+            .build_tokio(async_options, tokio_client_options)?;
 
     // make a client event handler closure
     let closure_client = client.clone();
