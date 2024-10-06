@@ -994,7 +994,7 @@ impl GenericClientBuilder {
     /// Builds a new MQTT client according to all the configuration options given to the builder.
     /// Does not consume self; can be called multiple times
     #[cfg(feature="tokio")]
-    pub fn build_tokio(&self, tokio_options: TokioClientOptions) -> MqttResult<AsyncGneissClient> {
+    pub fn build_tokio(&self, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncGneissClient> {
         let tls_impl = self.get_tls_impl();
         if tls_impl == TlsConfiguration::Mixed {
             return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));
@@ -1018,13 +1018,13 @@ impl GenericClientBuilder {
         let tls_options = self.tls_options.clone();
         let endpoint = self.endpoint.clone();
 
-        make_client_tokio(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, tokio_options)
+        make_client_tokio(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, async_options, tokio_options)
     }
 
     /// Builds a new MQTT client according to all the configuration options given to the builder.
     /// Does not consume self; can be called multiple times
     #[cfg(feature="threaded")]
-    pub fn build_threaded(&self, threaded_options: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+    pub fn build_threaded(&self, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
         let tls_impl = self.get_tls_impl();
         if tls_impl == TlsConfiguration::Mixed {
             return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));
@@ -1048,7 +1048,7 @@ impl GenericClientBuilder {
         let tls_options = self.tls_options.clone();
         let endpoint = self.endpoint.clone();
 
-        make_client_threaded(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, threaded_options)
+        make_client_threaded(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, sync_options, threaded_options)
     }
 }
 

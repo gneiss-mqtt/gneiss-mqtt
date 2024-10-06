@@ -612,10 +612,10 @@ pub fn new_threaded<T>(client_config: MqttClientOptions, connect_config: Connect
     })
 }
 
-pub(crate) fn make_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+pub(crate) fn make_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     #[cfg(feature="threaded-websockets")]
-    if threaded_config.websocket_options.is_some() {
-        return make_websocket_client_threaded(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config);
+    if sync_options.websocket_options.is_some() {
+        return make_websocket_client_threaded(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, sync_options, threaded_config);
     }
 
     make_direct_client_threaded(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config)
@@ -794,22 +794,22 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
 
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature="threaded-websockets")]
-pub(crate) fn make_websocket_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+pub(crate) fn make_websocket_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     match tls_impl {
-        TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, threaded_config) }
+        TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, sync_options, threaded_config) }
         #[cfg(feature = "threaded-rustls")]
-        TlsConfiguration::Rustls => { make_websocket_client_rustls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config) }
+        TlsConfiguration::Rustls => { make_websocket_client_rustls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, sync_options, threaded_config) }
         #[cfg(feature = "threaded-native-tls")]
-        TlsConfiguration::Nativetls => { make_websocket_client_native_tls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config) }
+        TlsConfiguration::Nativetls => { make_websocket_client_native_tls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, sync_options, threaded_config) }
         _ => { panic!("Illegal state"); }
     }
 }
 
 #[cfg(feature="threaded-websockets")]
-fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, mut threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, mut sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_websocket_client_no_tls - creating connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
-    let ws_options = threaded_config.websocket_options.clone().unwrap();
+    let ws_options = sync_options.websocket_options.clone().unwrap();
 
     if http_connect_endpoint.is_some() {
         let connection_factory = Arc::new(move || {
@@ -837,10 +837,10 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: Mqt
 }
 
 #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
-fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, mut threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, mut sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_websocket_client_rustls - creating connection establishment closure");
 
-    let ws_options = threaded_config.websocket_options.take().unwrap();
+    let ws_options = sync_options.websocket_options.take().unwrap();
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
 
     if let Some(tls_options) = tls_options {
@@ -912,10 +912,10 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
 }
 
 #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
-fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>,  mut threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, mut sync_options : SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_websocket_client_native_tls - creating async connection establishment closure");
 
-    let ws_options = threaded_config.websocket_options.take().unwrap();
+    let ws_options = sync_options.websocket_options.take().unwrap();
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
 
     if let Some(tls_options) = tls_options {
