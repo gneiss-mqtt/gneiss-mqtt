@@ -45,7 +45,7 @@ const DEFAULT_IDLE_SLEEP_MILLIS : u64 = 20;
 fn create_internal_options(options: &ThreadedClientOptions) -> ThreadedClientOptionsInternal {
     let idle_service_sleep = options.idle_service_sleep;
 
-    return ThreadedClientOptionsInternal {
+    ThreadedClientOptionsInternal {
         idle_service_sleep: idle_service_sleep.unwrap_or(Duration::from_millis(DEFAULT_IDLE_SLEEP_MILLIS))
     }
 }
@@ -612,6 +612,7 @@ pub fn new_threaded<T>(client_config: MqttClientOptions, connect_config: Connect
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn make_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     #[cfg(feature="threaded-websockets")]
     if sync_options.websocket_options.is_some() {
@@ -661,6 +662,7 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttCl
 }
 
 #[cfg(feature = "threaded-rustls")]
+#[allow(clippy::too_many_arguments)]
 fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_direct_client_rustls - creating connection establishment closure");
 
@@ -727,6 +729,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
 }
 
 #[cfg(feature = "threaded-native-tls")]
+#[allow(clippy::too_many_arguments)]
 fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_direct_client_native_tls - creating async connection establishment closure");
 
@@ -837,6 +840,7 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: Mqt
 }
 
 #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
+#[allow(clippy::too_many_arguments)]
 fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_websocket_client_rustls - creating connection establishment closure");
 
@@ -912,6 +916,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
 }
 
 #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
+#[allow(clippy::too_many_arguments)]
 fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options : SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     info!("threaded make_websocket_client_native_tls - creating async connection establishment closure");
 
@@ -989,7 +994,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Op
 fn make_leaf_stream(endpoint: Endpoint) -> MqttResult<TcpStream> {
     let addr = make_addr(endpoint.endpoint.as_str(), endpoint.port)?;
     debug!("make_leaf_stream - opening TCP stream");
-    let stream = TcpStream::connect(&addr)?;
+    let stream = TcpStream::connect(addr)?;
     debug!("make_leaf_stream - TCP stream successfully established");
 
     // we don't set non-blocking here.  The tls and websocket wrapper layers often need the

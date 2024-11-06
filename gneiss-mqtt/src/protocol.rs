@@ -661,7 +661,7 @@ impl ProtocolState {
 
     fn partition_operation_queue_by_queue_policy(&self, queue: &VecDeque<u64>, policy: &OfflineQueuePolicy) -> (VecDeque<u64>, VecDeque<u64>) {
         partition_operations_by_queue_policy(queue.iter().filter(|id| {
-            self.operations.get(*id).is_some()
+            self.operations.contains_key(*id)
         }).map(|id| {
             (*id, &*self.operations.get(id).unwrap().packet)
         }), policy)

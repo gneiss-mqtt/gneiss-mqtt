@@ -277,7 +277,7 @@ fn client_reconnect_with_backoff_and_no_backoff_reset() {
     let (builder, server) = build_mock_client_server(build_reconnect_reset_test_options());
     let async_options = AsyncClientOptionsBuilder::new().build();
 
-    do_builder_test(runtime.handle().clone(), Box::new(move |builder, async_options, tokio_options| {
+    do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
         Box::pin(reconnect_backoff_reset_test(builder,
                                               async_options,
                                               tokio_options,

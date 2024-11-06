@@ -528,6 +528,7 @@ pub fn new_with_tokio<T>(client_config: MqttClientOptions, connect_config: Conne
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn make_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncGneissClient> {
     #[cfg(feature="tokio-websockets")]
     if async_options.websocket_options.is_some() {
@@ -580,6 +581,7 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttCl
 }
 
 #[cfg(feature = "tokio-rustls")]
+#[allow(clippy::too_many_arguments)]
 fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncGneissClient> {
     info!("make_direct_client_rustls - creating async connection establishment closure");
     let handle = tokio_options.runtime.clone();
@@ -650,6 +652,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
 }
 
 #[cfg(feature = "tokio-native-tls")]
+#[allow(clippy::too_many_arguments)]
 fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncGneissClient> {
     info!("make_direct_client_native_tls - creating async connection establishment closure");
 

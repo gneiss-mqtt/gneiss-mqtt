@@ -97,7 +97,6 @@ fn build_certs(certificate_bytes: &[u8]) -> Vec<rustls_pki_types::CertificateDer
     let mut reader = std::io::BufReader::new(certificate_bytes);
 
     rustls_pemfile::certs(&mut reader)
-        .filter(|cert| { cert.is_ok() })
-        .map(|cert| cert.unwrap())
+        .flatten()
         .collect()
 }

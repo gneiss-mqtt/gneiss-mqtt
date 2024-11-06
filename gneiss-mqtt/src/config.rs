@@ -819,6 +819,13 @@ impl AsyncClientOptionsBuilder {
     }
 }
 
+impl Default for AsyncClientOptionsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
 /// A structure that holds configuration related to how an asynchronous client should interact
 /// with the Tokio async runtime.
 pub struct TokioClientOptions {
@@ -883,6 +890,12 @@ impl SyncClientOptionsBuilder {
     }
 }
 
+impl Default for SyncClientOptionsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Threaded client specific configuration
 pub struct ThreadedClientOptions {
     pub(crate) idle_service_sleep: Option<Duration>,
@@ -908,6 +921,8 @@ impl ThreadedClientOptionsBuilder {
     /// processing events.  Only used if no events occurred on the previous iteration.  If the
     /// client is handling significant work, it will not sleep, but if there's nothing
     /// happening, it will.
+    ///
+    /// If not set, defaults to 20 milliseconds.
     pub fn with_idle_service_sleep(&mut self, duration: Duration) {
         self.config.idle_service_sleep = Some(duration);
     }
@@ -915,6 +930,12 @@ impl ThreadedClientOptionsBuilder {
     /// Builds a new set of threaded client configuration options
     pub fn build(self) -> ThreadedClientOptions {
         self.config
+    }
+}
+
+impl Default for ThreadedClientOptionsBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

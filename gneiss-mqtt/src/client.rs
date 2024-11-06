@@ -1217,7 +1217,7 @@ impl<T> SyncResultSender<T> {
         }
     }
 
-    pub(crate) fn apply(&self, value: T) -> () {
+    pub(crate) fn apply(&self, value: T) {
         let mut current_value = self.result_lock.lock().unwrap();
 
         if current_value.is_some() {
@@ -1254,9 +1254,9 @@ impl<T> SyncResultReceiver<T> {
     pub fn try_recv(&self) -> Option<T> {
         let mut current_value = self.result_lock.lock().unwrap();
         if current_value.is_none() {
-            return None
+            None
         } else {
-            return current_value.take()
+            current_value.take()
         }
     }
 }
@@ -1265,7 +1265,7 @@ pub(crate) fn new_sync_result_pair<T>() -> (SyncResultReceiver<T>, SyncResultSen
     let lock = Arc::new(Mutex::new(None));
     let signal = Arc::new(Condvar::new());
 
-    return (SyncResultReceiver::new(lock.clone(), signal.clone()), SyncResultSender::new(lock.clone(), signal.clone()));
+    (SyncResultReceiver::new(lock.clone(), signal.clone()), SyncResultSender::new(lock.clone(), signal.clone()))
 }
 
 /// Return type of a Publish operation for a synchronous client.  Invoke recv() on this value to
@@ -1281,13 +1281,13 @@ pub type SyncSubscribeResult = SyncResultReceiver<SubscribeResult>;
 pub type SyncUnsubscribeResult = SyncResultReceiver<UnsubscribeResult>;
 
 /// Result callback for a Publish operation on a synchronous client.
-pub type SyncPublishResultCallback = Box<dyn Fn(PublishResult) -> () + Send + Sync>;
+pub type SyncPublishResultCallback = Box<dyn Fn(PublishResult) + Send + Sync>;
 
 /// Result callback for a Subscribe operation on a synchronous client.
-pub type SyncSubscribeResultCallback = Box<dyn Fn(SubscribeResult) -> () + Send + Sync>;
+pub type SyncSubscribeResultCallback = Box<dyn Fn(SubscribeResult) + Send + Sync>;
 
 /// Result callback for an Unsubscribe operation on a synchronous client.
-pub type SyncUnsubscribeResultCallback = Box<dyn Fn(UnsubscribeResult) -> () + Send + Sync>;
+pub type SyncUnsubscribeResultCallback = Box<dyn Fn(UnsubscribeResult) + Send + Sync>;
 
 /// An async network client that functions as a thin wrapper over the MQTT5 protocol.
 ///
