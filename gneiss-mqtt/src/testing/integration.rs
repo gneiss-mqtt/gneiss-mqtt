@@ -243,6 +243,36 @@ pub(crate) fn stop_sync_client<T : SyncClientEventWaiter>(client: &SyncGneissCli
     Ok(())
 }
 
+pub(crate) fn sync_subscribe_unsubscribe_test<T : SyncClientEventWaiter>(client: SyncGneissClient, waiter_factory: fn(SyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
+    start_sync_client(&client, waiter_factory)?;
+
+    let subscribe = SubscribePacket::builder()
+        .with_subscription_simple("hello/world".to_string(), QualityOfService::AtLeastOnce)
+        .build();
+
+    let subscribe_result = client.subscribe(subscribe, None).recv();
+    assert!(subscribe_result.is_ok());
+    let suback = subscribe_result.unwrap();
+    assert_eq!(1, suback.reason_codes.len());
+    assert_eq!(SubackReasonCode::GrantedQos1, suback.reason_codes[0]);
+
+    let unsubscribe = UnsubscribePacket::builder()
+        .with_topic_filter("hello/world".to_string())
+        .with_topic_filter("not/subscribed".to_string())
+        .build();
+
+    let unsubscribe_result = client.unsubscribe(unsubscribe, None).recv();
+    assert!(unsubscribe_result.is_ok());
+    let unsuback = unsubscribe_result.unwrap();
+    assert_eq!(2, unsuback.reason_codes.len());
+    assert_eq!(UnsubackReasonCode::Success, unsuback.reason_codes[0]);
+    // broker may or may not give us a not subscribed reason code, so don't verify
+
+    stop_sync_client(&client, waiter_factory)?;
+
+    Ok(())
+}
+
 pub(crate) async fn async_subscribe_unsubscribe_test<T : AsyncClientEventWaiter>(client: AsyncGneissClient, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
     start_async_client(&client, waiter_factory).await?;
 
@@ -300,6 +330,44 @@ pub(crate) fn verify_publish_received(event: &PublishReceivedEvent, expected_top
     assert_eq!(expected_payload, publish.payload.as_ref().unwrap().as_slice());
 }
 
+pub(crate) fn sync_subscribe_publish_test<T : SyncClientEventWaiter>(client: SyncGneissClient, qos: QualityOfService, waiter_factory: fn(SyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
+    start_sync_client(&client, waiter_factory)?;
+
+    let payload = "derp".as_bytes().to_vec();
+
+    // tests are running in parallel, need a unique topic
+    let uuid = uuid::Uuid::new_v4();
+    let topic = format!("hello/world/{}", uuid.to_string());
+    let subscribe = SubscribePacket::builder()
+        .with_subscription_simple(topic.clone(), QualityOfService::ExactlyOnce)
+        .build();
+
+    let _ = client.subscribe(subscribe, None).recv();
+
+    let publish_received_waiter = waiter_factory(client.clone(), ClientEventType::PublishReceived);
+
+    let publish = PublishPacket::builder(topic.clone(), qos)
+        .with_payload(payload.clone())
+        .build();
+
+    let publish_result = client.publish(publish, None).recv()?;
+    verify_successful_publish_result(&publish_result, qos);
+
+    let publish_received_events = publish_received_waiter.wait()?;
+    assert_eq!(1, publish_received_events.len());
+    let publish_received_event = &publish_received_events[0].event;
+    assert_matches!(**publish_received_event, ClientEvent::PublishReceived(_));
+    if let ClientEvent::PublishReceived(event) = &**publish_received_event {
+        verify_publish_received(event, &topic, qos, payload.as_slice());
+    } else {
+        panic!("impossible");
+    }
+
+    stop_sync_client(&client, waiter_factory)?;
+
+    Ok(())
+}
+
 pub(crate) async fn async_subscribe_publish_test<T : AsyncClientEventWaiter>(client: AsyncGneissClient, qos: QualityOfService, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
     start_async_client(&client, waiter_factory).await?;
 
@@ -334,6 +402,57 @@ pub(crate) async fn async_subscribe_publish_test<T : AsyncClientEventWaiter>(cli
     }
 
     stop_async_client(&client, waiter_factory).await?;
+
+    Ok(())
+}
+
+pub(crate) fn sync_will_test<T : SyncClientEventWaiter>(base_client_options: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions, client_factory: fn(GenericClientBuilder, SyncClientOptions, ThreadedClientOptions) -> SyncGneissClient, waiter_factory: fn(SyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
+    let client = client_factory(base_client_options, sync_options, client_options);
+
+    let payload = "Onsecondthought".as_bytes().to_vec();
+
+    // tests are running in parallel, need a unique topic
+    let uuid = uuid::Uuid::new_v4();
+    let will_topic = format!("goodbye/cruel/world/{}", uuid.to_string());
+
+    let will = PublishPacket::builder(will_topic.clone(), QualityOfService::AtLeastOnce)
+        .with_payload(payload.clone())
+        .build();
+
+    let connect_options = ConnectOptionsBuilder::new()
+        .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
+        .with_will(will)
+        .build();
+
+    let will_builder = create_client_builder_internal(connect_options, TlsUsage::None, ProxyUsage::None, TlsUsage::None, WebsocketUsage::None);
+    let will_sync_options = SyncClientOptionsBuilder::new().build();
+    let will_threaded_options = ThreadedClientOptionsBuilder::new().build();
+    let will_client = client_factory(will_builder, will_sync_options, will_threaded_options);
+
+    start_sync_client(&client, waiter_factory)?;
+    start_sync_client(&will_client, waiter_factory)?;
+
+    let subscribe = SubscribePacket::builder()
+        .with_subscription_simple(will_topic.clone(), QualityOfService::ExactlyOnce)
+        .build();
+    let _ = client.subscribe(subscribe, None).recv()?;
+
+    let publish_received_waiter = waiter_factory(client.clone(), ClientEventType::PublishReceived);
+
+    // no stop options, so we just close the socket locally; the broker should send the will
+    stop_sync_client(&will_client, waiter_factory)?;
+
+    let publish_received_events = publish_received_waiter.wait()?;
+    assert_eq!(1, publish_received_events.len());
+    let publish_received_event = &publish_received_events[0].event;
+    assert_matches!(**publish_received_event, ClientEvent::PublishReceived(_));
+    if let ClientEvent::PublishReceived(event) = &**publish_received_event {
+        verify_publish_received(event, &will_topic, QualityOfService::AtLeastOnce, payload.as_slice());
+    } else {
+        panic!("impossible");
+    }
+
+    stop_sync_client(&client, waiter_factory)?;
 
     Ok(())
 }
@@ -385,6 +504,35 @@ pub(crate) async fn async_will_test<T : AsyncClientEventWaiter>(base_client_opti
     }
 
     stop_async_client(&client, waiter_factory).await?;
+
+    Ok(())
+}
+
+pub(crate) fn sync_connect_disconnect_cycle_session_rejoin_test<T : SyncClientEventWaiter>(client: SyncGneissClient,
+                                                                                                   single_waiter_factory: fn(SyncGneissClient, ClientEventType) -> T,
+                                                                                                   waiter_factory: fn(SyncGneissClient, ClientEventWaiterOptions, usize) -> T) -> MqttResult<()> {
+    start_sync_client(&client, single_waiter_factory)?;
+    stop_sync_client(&client, single_waiter_factory)?;
+
+    for _ in 0..5 {
+        let waiter_config = ClientEventWaiterOptions {
+            wait_type: ClientEventWaitType::Predicate(Box::new(|ev| {
+                if let ClientEvent::ConnectionSuccess(success_event) = &**ev {
+                    return success_event.connack.session_present && success_event.settings.rejoined_session;
+                }
+
+                false
+            })),
+        };
+        let connection_success_waiter = waiter_factory(client.clone(), waiter_config, 1);
+
+        client.start(None)?;
+
+        let connection_success_events = connection_success_waiter.wait()?;
+        assert_eq!(1, connection_success_events.len());
+
+        stop_sync_client(&client, single_waiter_factory)?;
+    }
 
     Ok(())
 }

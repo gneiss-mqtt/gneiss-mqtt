@@ -21,7 +21,7 @@ use crate::client::waiter::{client_event_matches, ClientEventRecord, ClientEvent
 use crate::config::*;
 use crate::features::threaded::ws_stream::WebsocketStreamWrapper;
 use crate::error::{MqttError, MqttResult};
-use crate::mqtt::{MqttPacket, PublishPacket, SubscribePacket, UnsubscribePacket};
+use crate::mqtt::*;
 use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
 use crate::protocol::is_connection_established;
 use crate::validate::validate_packet_outbound;
@@ -1216,7 +1216,7 @@ pub(crate) mod testing {
     use crate::config::GenericClientBuilder;
     use crate::error::MqttResult;
     use crate::features::threaded::*;
-    use crate::testing::integration::{create_good_client_builder, ProxyUsage, start_sync_client, stop_sync_client, SyncTestFactory, TlsUsage, WebsocketUsage};
+    use crate::testing::integration::*;
 
     fn threaded_connect_disconnect_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
         let client = builder.build_threaded(sync_options, client_options).unwrap();
@@ -1332,4 +1332,188 @@ pub(crate) mod testing {
             threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
+
+    fn threaded_subscribe_unsubscribe_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
+        sync_subscribe_unsubscribe_test(builder.build_threaded(sync_options, client_options).unwrap(), ThreadedClientEventWaiter::new_single)
+    }
+
+    #[test]
+    fn client_subscribe_unsubscribe() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder, sync_options, client_options|{
+            threaded_subscribe_unsubscribe_test(builder, sync_options, client_options)
+        }));
+    }
+
+    fn threaded_subscribe_publish_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions, qos: QualityOfService) -> MqttResult<()> {
+        let client = builder.build_threaded(sync_options, client_options).unwrap();
+        sync_subscribe_publish_test(client, qos, ThreadedClientEventWaiter::new_single)
+    }
+
+    #[test]
+    fn client_subscribe_publish_qos0() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder, sync_options, client_options|{
+            threaded_subscribe_publish_test(builder, sync_options, client_options, QualityOfService::AtMostOnce)
+        }));
+    }
+
+    #[test]
+    fn client_subscribe_publish_qos1() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder, sync_options, client_options|{
+            threaded_subscribe_publish_test(builder, sync_options, client_options, QualityOfService::AtLeastOnce)
+        }));
+    }
+
+    #[test]
+    fn client_subscribe_publish_qos2() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder, sync_options, client_options|{
+            threaded_subscribe_publish_test(builder, sync_options, client_options, QualityOfService::ExactlyOnce)
+        }));
+    }
+
+    fn build_threaded_client(builder: GenericClientBuilder, sync_client_options: SyncClientOptions, threaded_client_options: ThreadedClientOptions) -> SyncGneissClient {
+        builder.build_threaded(sync_client_options, threaded_client_options).unwrap()
+    }
+
+    // This primarily tests that the will configuration works.  Will functionality is mostly broker-side.
+    fn threaded_will_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
+        sync_will_test(builder, sync_options, client_options, build_threaded_client, ThreadedClientEventWaiter::new_single)
+    }
+
+    #[test]
+    fn client_will_sent() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder, sync_options, client_options|{
+            threaded_will_test(builder, sync_options, client_options)
+        }));
+    }
+
+    fn threaded_connect_disconnect_cycle_session_rejoin_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
+        let client = builder.build_threaded(sync_options, client_options).unwrap();
+        sync_connect_disconnect_cycle_session_rejoin_test(client, ThreadedClientEventWaiter::new_single, ThreadedClientEventWaiter::new)
+    }
+
+    #[test]
+    fn connect_disconnect_cycle_session_rejoin() {
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder, sync_options, client_options|{
+            threaded_connect_disconnect_cycle_session_rejoin_test(builder, sync_options, client_options)
+        }));
+    }
+
+    pub(crate) fn do_builder_test(test_factory: SyncTestFactory, builder: GenericClientBuilder, sync_options: SyncClientOptions) {
+        let threaded_options = ThreadedClientOptionsBuilder::new().build();
+        (*test_factory)(builder, sync_options, threaded_options).unwrap();
+    }
+
+    fn connection_failure_test(builder : GenericClientBuilder, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions) -> MqttResult<()> {
+        let client = builder.build_threaded(sync_options, threaded_options).unwrap();
+        let connection_failure_waiter = ThreadedClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
+
+        client.start(None)?;
+
+        let connection_failure_results = connection_failure_waiter.wait()?;
+        assert_eq!(1, connection_failure_results.len());
+
+        Ok(())
+    }
+
+    fn create_mismatch_builder(tls_config: TlsUsage, ws_config: WebsocketUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
+        assert!(tls_config != tls_endpoint || ws_config != ws_endpoint);
+
+        let connect_options = ConnectOptionsBuilder::new().build();
+
+        create_client_builder_internal(connect_options, tls_config, ProxyUsage::None, tls_endpoint, ws_endpoint)
+    }
+
+    fn create_mismatch_sync_client_options(ws_config: WebsocketUsage) -> SyncClientOptions {
+        let mut builder = SyncClientOptionsBuilder::new();
+        let websocket_config_option = create_websocket_options_sync(ws_config);
+        if let Some(websocket_options) = websocket_config_option {
+            builder.with_websocket_options(websocket_options);
+        }
+
+        builder.build()
+    }
+
+    #[test]
+    #[cfg(feature = "threaded-rustls")]
+    fn connection_failure_direct_rustls_tls_config_direct_plaintext_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::None);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::None);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(feature = "threaded-native-tls")]
+    fn connection_failure_direct_native_tls_tls_config_direct_plaintext_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::None);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::None);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
+    fn connection_failure_direct_rustls_tls_config_websocket_plaintext_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::None);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
+    fn connection_failure_direct_native_tls_tls_config_websocket_plaintext_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::None);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
+    fn connection_failure_direct_rustls_tls_config_websocket_tls_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::None);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
+    fn connection_failure_direct_native_tls_tls_config_websocket_tls_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::None);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(feature = "threaded-rustls")]
+    fn connection_failure_direct_plaintext_config_direct_rustls_tls_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::None);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::None);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(feature = "tokio-native-tls")]
+    fn connection_failure_direct_plaintext_config_direct_native_tls_tls_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::None);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::None);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    /*
+
+     */
 }
