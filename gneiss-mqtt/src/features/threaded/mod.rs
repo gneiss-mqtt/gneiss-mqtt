@@ -9,6 +9,8 @@ Implementation of an MQTT client that uses one or more background threads for pr
 
 #[cfg(feature="threaded-websockets")]
 mod ws_stream;
+#[cfg(all(feature = "testing", test))]
+mod longtests;
 
 use std::cmp::min;
 use std::io::{Read, Write};

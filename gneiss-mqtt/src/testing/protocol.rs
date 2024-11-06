@@ -5,18 +5,21 @@
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use crate::protocol::*;
 use assert_matches::assert_matches;
 use crate::alias::{OutboundAliasResolution, OutboundAliasResolverFactory};
 use crate::client::*;
-use crate::config::{ConnectOptionsBuilder, OfflineQueuePolicy, RejoinSessionPolicy};
+use crate::client::waiter::ClientEventRecord;
+use crate::config::{ConnectOptionsBuilder, ExponentialBackoffJitterType, OfflineQueuePolicy, RejoinSessionPolicy};
 use crate::decode::{Decoder, DecodingContext};
 use crate::encode::{Encoder, EncodeResult, EncodingContext};
 use crate::encode::MAXIMUM_VARIABLE_LENGTH_INTEGER;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
 use crate::mqtt::utils::mqtt_packet_to_packet_type;
+use crate::testing::mock_server::ClientTestOptions;
 use crate::validate::testing::verify_validation_failure;
 
 const CONNACK_TIMEOUT_MILLIS: u64 = 10000;
@@ -758,6 +761,172 @@ fn verify_protocol_state_empty(fixture: &ProtocolStateTestFixture) {
     assert_eq!(0, fixture.client_state.pending_publish_operations.len());
     assert_eq!(0, fixture.client_state.pending_non_publish_operations.len());
     assert_eq!(0, fixture.client_state.pending_write_completion_operations.len());
+}
+
+pub(crate) fn is_reconnect_related_event(event: &Arc<ClientEvent>) -> bool {
+    match **event {
+        ClientEvent::Stopped(_) | ClientEvent::PublishReceived(_) => {
+            false
+        }
+        _ => {
+            true
+        }
+    }
+}
+
+pub(crate) fn build_reconnect_test_options() -> ClientTestOptions {
+    let mut test_options = ClientTestOptions::default();
+
+    test_options.client_options_mutator_fn = Some(Box::new(|builder| {
+        builder.with_base_reconnect_period(Duration::from_millis(250));
+        builder.with_max_reconnect_period(Duration::from_millis(6000));
+        builder.with_reconnect_period_jitter(ExponentialBackoffJitterType::None);
+        builder.with_reconnect_stability_reset_period(Duration::from_millis(5000));
+    }));
+
+    test_options.packet_handler_set_factory_fn = Some(Box::new(|| {
+        let mut handlers = create_default_packet_handlers();
+
+        handlers.insert(PacketType::Connect, Box::new(crate::testing::protocol::handle_connect_with_failure_connack));
+
+        handlers
+    }));
+
+    test_options
+}
+
+pub(crate) fn validate_reconnect_failure_sequence(events: &Vec<ClientEventRecord>) -> MqttResult<()> {
+    let mut connection_failures: usize = 0;
+    let mut previous_failure_time : Option<Instant> = None;
+    let mut actual_delays : Vec<Duration> = Vec::new();
+
+    for (i, event_record) in events.iter().enumerate() {
+        if i % 2 == 0 {
+            assert_matches!(*event_record.event, ClientEvent::ConnectionAttempt(_));
+            if let Some(previous_timestamp) = &previous_failure_time {
+                assert!(*previous_timestamp < event_record.timestamp);
+                actual_delays.push(event_record.timestamp - *previous_timestamp);
+            }
+        } else {
+            assert_matches!(*event_record.event, ClientEvent::ConnectionFailure(_));
+            connection_failures += 1;
+            if let Some(old_failure_time) = previous_failure_time {
+                assert!(old_failure_time < event_record.timestamp);
+            }
+            previous_failure_time = Some(event_record.timestamp);
+        }
+    }
+
+    assert_eq!(7, connection_failures);
+
+    let expected_delays : Vec<Duration> = vec!(250, 500, 1000, 2000, 4000, 6000).into_iter().map(|val| {Duration::from_millis(val)}).collect();
+    assert_eq!(expected_delays.len(), actual_delays.len());
+
+    let zipped_iter = expected_delays.iter().zip(actual_delays.iter());
+
+    for (_, (expected_delay, actual_delay)) in zipped_iter.enumerate() {
+        assert!(*actual_delay >= *expected_delay);
+    }
+
+    Ok(())
+}
+
+pub(crate) type ReconnectEventTestValidatorFn = Box<dyn Fn(&Vec<ClientEventRecord>) -> MqttResult<()> + Send + Sync>;
+
+pub(crate) fn handle_connect_with_conditional_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, context: &mut BrokerTestContext) -> MqttResult<()> {
+    if let MqttPacket::Connect(_) = &**packet {
+        context.connect_count += 1;
+
+        if context.connect_count < 6 {
+            let response = Box::new(MqttPacket::Connack(ConnackPacket {
+                reason_code: ConnectReasonCode::Banned,
+                ..Default::default()
+            }));
+            response_packets.push_back(response);
+        } else {
+            let response = Box::new(MqttPacket::Connack(ConnackPacket {
+                reason_code: ConnectReasonCode::Success,
+                assigned_client_identifier: Some("client-id".to_string()),
+                ..Default::default()
+            }));
+            response_packets.push_back(response);
+        }
+
+        return Ok(());
+    }
+
+    panic!("Invalid packet handler state")
+}
+
+pub(crate) fn handle_publish_with_disconnect(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+    if let MqttPacket::Publish(_) = &**packet {
+        let response = Box::new(MqttPacket::Disconnect(DisconnectPacket {
+            reason_code: DisconnectReasonCode::NotAuthorized,
+            ..Default::default()
+        }));
+        response_packets.push_back(response);
+
+        return Ok(());
+    }
+
+    panic!("Invalid packet handler state")
+}
+
+pub(crate) fn build_reconnect_reset_test_options() -> ClientTestOptions {
+    let mut test_options = ClientTestOptions::default();
+
+    test_options.client_options_mutator_fn = Some(Box::new(|builder| {
+        builder.with_base_reconnect_period(Duration::from_millis(500));
+        builder.with_max_reconnect_period(Duration::from_millis(6000));
+        builder.with_reconnect_period_jitter(ExponentialBackoffJitterType::None);
+        builder.with_reconnect_stability_reset_period(Duration::from_millis(3000));
+    }));
+
+    test_options.packet_handler_set_factory_fn = Some(Box::new(|| {
+        let mut handlers = create_default_packet_handlers();
+
+        handlers.insert(PacketType::Connect, Box::new(handle_connect_with_conditional_connack));
+        handlers.insert(PacketType::Publish, Box::new(handle_publish_with_disconnect));
+
+        handlers
+    }));
+
+    test_options
+}
+
+pub(crate) fn validate_reconnect_backoff_failure_sequence(events: &Vec<ClientEventRecord>) -> MqttResult<()> {
+    let mut connection_failures: usize = 0;
+
+    for (i, event_record) in events.iter().enumerate() {
+        if i % 2 == 0 {
+            assert_matches!(*event_record.event, ClientEvent::ConnectionAttempt(_));
+        } else if i < 11 {
+            assert_matches!(*event_record.event, ClientEvent::ConnectionFailure(_));
+            connection_failures += 1;
+        } else {
+            assert_matches!(*event_record.event, ClientEvent::ConnectionSuccess(_));
+        }
+    }
+
+    assert_eq!(5, connection_failures);
+    Ok(())
+}
+
+pub(crate) fn validate_reconnect_backoff_reset_sequence(events: &Vec<ClientEventRecord>, expected_reconnect_delay: Duration) -> MqttResult<()> {
+
+    let record1 = &events[0];
+    let record2 = &events[1];
+    let record3 = &events[2];
+
+    assert_matches!(*record1.event, ClientEvent::Disconnection(_));
+    assert_matches!(*record2.event, ClientEvent::ConnectionAttempt(_));
+    assert_matches!(*record3.event, ClientEvent::ConnectionSuccess(_));
+
+    let reconnect_delay = record2.timestamp - record1.timestamp;
+
+    assert!(reconnect_delay >= expected_reconnect_delay && reconnect_delay < 2 * expected_reconnect_delay);
+
+    Ok(())
 }
 
 #[test]
