@@ -781,17 +781,22 @@ impl MqttClientOptionsBuilder {
     }
 }
 
+/// A structure that holds configuration related to a client's asynchronous properties and
+/// internal implementation.  Only relevant to asynchronous clients.
 pub struct AsyncClientOptions {
 
     #[cfg(feature="tokio-websockets")]
     pub(crate) websocket_options: Option<AsyncWebsocketOptions>
 }
 
+/// Builder type for asynchronous client behavior.
 pub struct AsyncClientOptionsBuilder {
     options: AsyncClientOptions
 }
 
 impl AsyncClientOptionsBuilder {
+
+    /// Creates a new builder object for AsyncClientOptions
     pub fn new() -> Self {
         AsyncClientOptionsBuilder {
             options: AsyncClientOptions {
@@ -802,25 +807,32 @@ impl AsyncClientOptionsBuilder {
     }
 
     #[cfg(feature="tokio-websockets")]
+    /// Configures an asynchronous client to use websockets for MQTT transport
     pub fn with_websocket_options(&mut self, websocket_options: AsyncWebsocketOptions) -> &mut Self {
         self.options.websocket_options = Some(websocket_options);
         self
     }
 
+    /// Builds a new set of asynchronous client options
     pub fn build(self) -> AsyncClientOptions {
         self.options
     }
 }
 
+/// A structure that holds configuration related to how an asynchronous client should interact
+/// with the Tokio async runtime.
 pub struct TokioClientOptions {
     pub(crate) runtime: Handle,
 }
 
+/// Builder type for tokio-based client configuration
 pub struct TokioClientOptionsBuilder {
     options: TokioClientOptions
 }
 
 impl TokioClientOptionsBuilder {
+
+    /// Creates a new builder object for TokioClientOptions
     pub fn new(runtime: Handle) -> Self {
         TokioClientOptionsBuilder {
             options: TokioClientOptions {
@@ -829,21 +841,27 @@ impl TokioClientOptionsBuilder {
         }
     }
 
+    /// Builds a new set of tokio client configuration options
     pub fn build(self) -> TokioClientOptions {
         self.options
     }
 }
 
+/// A structure that holds configuration related to a client's synchronous properties and
+/// internal implementation.  Only relevant to synchronous clients.
 pub struct SyncClientOptions {
     #[cfg(feature="threaded-websockets")]
     pub(crate) websocket_options: Option<SyncWebsocketOptions>
 }
 
+/// Builder type for synchronous client behavior.
 pub struct SyncClientOptionsBuilder {
     config: SyncClientOptions
 }
 
 impl SyncClientOptionsBuilder {
+
+    /// Creates a new builder object for SyncClientOptions
     pub fn new() -> Self {
         SyncClientOptionsBuilder {
             config: SyncClientOptions {
@@ -853,26 +871,31 @@ impl SyncClientOptionsBuilder {
     }
 
     #[cfg(feature="threaded-websockets")]
+    /// Configures a synchronous client to use websockets for MQTT transport
     pub fn with_websocket_options(&mut self, websocket_options: SyncWebsocketOptions) -> &mut Self {
         self.config.websocket_options = Some(websocket_options);
         self
     }
 
+    /// Builds a new set of synchronous client options
     pub fn build(self) -> SyncClientOptions {
         self.config
     }
 }
 
-/// Thread-specific client configuration
+/// Threaded client specific configuration
 pub struct ThreadedClientOptions {
     pub(crate) idle_service_sleep: Option<Duration>,
 }
 
+/// Builder type for threaded client configuration
 pub struct ThreadedClientOptionsBuilder {
     config: ThreadedClientOptions
 }
 
 impl ThreadedClientOptionsBuilder {
+
+    /// Creates a new builder object for ThreadedClientOptions
     pub fn new() -> Self {
         ThreadedClientOptionsBuilder {
             config: ThreadedClientOptions {
@@ -881,10 +904,15 @@ impl ThreadedClientOptionsBuilder {
         }
     }
 
+    /// Configures the time interval to sleep the thread the client runs on between io
+    /// processing events.  Only used if no events occurred on the previous iteration.  If the
+    /// client is handling significant work, it will not sleep, but if there's nothing
+    /// happening, it will.
     pub fn with_idle_service_sleep(&mut self, duration: Duration) {
         self.config.idle_service_sleep = Some(duration);
     }
 
+    /// Builds a new set of threaded client configuration options
     pub fn build(self) -> ThreadedClientOptions {
         self.config
     }

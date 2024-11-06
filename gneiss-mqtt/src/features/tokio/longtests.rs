@@ -181,7 +181,7 @@ fn build_reconnect_reset_test_options() -> ClientTestOptions {
     test_options
 }
 
-async fn reconnect_backoff_reset_test(handle: tokio::runtime::Handle, builder : GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> MqttResult<()> {
+async fn reconnect_backoff_reset_test(builder : GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> MqttResult<()> {
     let client = builder.build_tokio(async_options, tokio_options).unwrap();
 
     let first_wait_options = ClientEventWaiterOptions {
@@ -259,8 +259,7 @@ fn client_reconnect_with_backoff_and_backoff_reset() {
     let async_options = AsyncClientOptionsBuilder::new().build();
 
     do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
-        Box::pin(reconnect_backoff_reset_test(handle.clone(),
-                                              builder,
+        Box::pin(reconnect_backoff_reset_test(builder,
                                               async_options,
                                               tokio_options,
                                               Box::new(|events|{validate_reconnect_backoff_failure_sequence(events)}),
@@ -279,8 +278,7 @@ fn client_reconnect_with_backoff_and_no_backoff_reset() {
     let async_options = AsyncClientOptionsBuilder::new().build();
 
     do_builder_test(runtime.handle().clone(), Box::new(move |builder, async_options, tokio_options| {
-        Box::pin(reconnect_backoff_reset_test(handle.clone(),
-                                              builder,
+        Box::pin(reconnect_backoff_reset_test(builder,
                                               async_options,
                                               tokio_options,
                                               Box::new(|events|{validate_reconnect_backoff_failure_sequence(events)}),

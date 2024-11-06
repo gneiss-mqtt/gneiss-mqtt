@@ -1504,7 +1504,7 @@ pub(crate) mod testing {
     }
 
     #[test]
-    #[cfg(feature = "tokio-native-tls")]
+    #[cfg(feature = "threaded-native-tls")]
     fn connection_failure_direct_plaintext_config_direct_native_tls_tls_endpoint() {
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::None);
         let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::None);
@@ -1513,7 +1513,167 @@ pub(crate) mod testing {
         }), builder, sync_client_options);
     }
 
-    /*
+    #[test]
+    #[cfg(feature = "threaded-websockets")]
+    fn connection_failure_direct_plaintext_config_websocket_plaintext_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::None);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
 
-     */
+    #[test]
+    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
+    fn connection_failure_direct_plaintext_config_websocket_rustls_tls_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::None);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
+    fn connection_failure_direct_plaintext_config_websocket_native_tls_tls_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::None);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
+    fn connection_failure_websocket_rustls_tls_config_direct_plaintext_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
+    fn connection_failure_websocket_native_tls_tls_config_direct_plaintext_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
+    fn connection_failure_websocket_rustls_tls_config_websocket_plaintext_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
+    fn connection_failure_websocket_native_tls_tls_config_websocket_plaintext_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
+    fn connection_failure_websocket_rustls_tls_config_direct_tls_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
+    fn connection_failure_websocket_native_tls_tls_config_direct_tls_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::None);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(feature="threaded-websockets")]
+    fn connection_failure_websocket_plaintext_config_direct_plaintext_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
+    fn connection_failure_websocket_plaintext_config_websocket_rustls_tls_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
+    fn connection_failure_websocket_plaintext_config_websocket_native_tls_tls_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
+    fn connection_failure_websocket_plaintext_config_direct_rustls_tls_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
+    fn connection_failure_websocket_plaintext_config_direct_native_tls_tls_endpoint() {
+        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::None);
+        let sync_client_options = create_mismatch_sync_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    fn connection_failure_invalid_endpoint() {
+        let client_options = MqttClientOptionsBuilder::new()
+            .with_connect_timeout(Duration::from_secs(3))
+            .build();
+        let sync_client_options = SyncClientOptionsBuilder::new().build();
+
+        let mut builder = GenericClientBuilder::new("example.com", 8000);
+        builder.with_client_options(client_options);
+
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
+
+    #[test]
+    fn connection_failure_invalid_endpoint_http() {
+        let sync_client_options = SyncClientOptionsBuilder::new().build();
+        let builder = GenericClientBuilder::new("amazon.com", 443);
+        do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+            connection_failure_test(builder, sync_options, threaded_options)
+        }), builder, sync_client_options);
+    }
 }

@@ -124,9 +124,7 @@ pub type PublishResult = MqttResult<PublishResponse>;
 /// receive the operation's result, but note that the operation will complete independently of
 /// the use of `.await` (you don't need to await for the operation to be performed, you only need
 /// to await to get the final result of performing it).
-pub type PublishResultFuture = dyn Future<Output = PublishResult> + Send;
-
-pub type AsyncPublishResult = Pin<Box<PublishResultFuture>>;
+pub type AsyncPublishResult = Pin<Box<dyn Future<Output = PublishResult> + Send>>;
 
 /// Additional client options applicable to an MQTT Subscribe operation
 #[derive(Debug, Default)]
@@ -171,9 +169,7 @@ pub type SubscribeResult = MqttResult<SubackPacket>;
 /// receive the operation's result, but note that the operation will complete independently of
 /// the use of `.await` (you don't need to await for the operation to be performed, you only need
 /// to await to get the final result of performing it).
-pub type SubscribeResultFuture = dyn Future<Output = SubscribeResult> + Send;
-
-pub type AsyncSubscribeResult = Pin<Box<SubscribeResultFuture>>;
+pub type AsyncSubscribeResult = Pin<Box<dyn Future<Output = SubscribeResult> + Send>>;
 
 /// Additional client options applicable to an MQTT Unsubscribe operation
 #[derive(Debug, Default)]
@@ -218,9 +214,7 @@ pub type UnsubscribeResult = MqttResult<UnsubackPacket>;
 /// receive the operation's result, but note that the operation will complete independently of
 /// the use of `.await` (you don't need to await for the operation to be performed, you only need
 /// to await to get the final result of performing it).
-pub type UnsubscribeResultFuture = dyn Future<Output = UnsubscribeResult> + Send;
-
-pub type AsyncUnsubscribeResult = Pin<Box<UnsubscribeResultFuture>>;
+pub type AsyncUnsubscribeResult = Pin<Box<dyn Future<Output = UnsubscribeResult> + Send>>;
 
 /// Additional client options applicable to client Stop operation
 #[derive(Debug, Default)]
@@ -1098,6 +1092,7 @@ pub mod waiter {
         fn wait(self) -> Pin<Box<ClientEventWaitFuture>>;
     }
 
+    /// Trait API for waiting for a set of client events to be emitted by a synchronous client
     pub trait SyncClientEventWaiter {
 
         /// Waits for and returns an event sequence that matches the configuration the waiter was created with
@@ -1168,7 +1163,7 @@ pub trait AsyncMqttClient {
 ///
 /// A client is always in one of two states:
 /// * Stopped - the client is not connected and will perform no work
-/// * Not Stopped - the client will continually attempt to maintain a connection to the configured broker.
+/// * Running - the client will continually attempt to maintain a connection to the configured broker.
 ///
 /// The start() and stop() APIs toggle between these two states.
 ///
@@ -1193,7 +1188,7 @@ pub type AsyncGneissClient = Arc<dyn AsyncMqttClient + Send + Sync>;
 // WIP
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
+/// Helper type to wait on MQTT operation results when using a synchronous client
 pub struct SyncResultReceiver<T> {
     result_lock: Arc<Mutex<Option<T>>>,
     result_signal: Arc<Condvar>
@@ -1244,6 +1239,7 @@ impl<T> SyncResultReceiver<T> {
         }
     }
 
+    /// Blocking.  Waits for a result from a synchronous client MQTT operation.
     pub fn recv(&self) -> T {
         let mut current_value = self.result_lock.lock().unwrap();
         while current_value.is_none() {
@@ -1253,6 +1249,8 @@ impl<T> SyncResultReceiver<T> {
         current_value.take().unwrap()
     }
 
+    /// Non-blocking.  Checks if a synchronous client MQTT operation has produced a result yet.
+    /// Returns the result value if so.
     pub fn try_recv(&self) -> Option<T> {
         let mut current_value = self.result_lock.lock().unwrap();
         if current_value.is_none() {
@@ -1270,16 +1268,25 @@ pub(crate) fn new_sync_result_pair<T>() -> (SyncResultReceiver<T>, SyncResultSen
     return (SyncResultReceiver::new(lock.clone(), signal.clone()), SyncResultSender::new(lock.clone(), signal.clone()));
 }
 
+/// Return type of a Publish operation for a synchronous client.  Invoke recv() on this value to
+/// wait for the operation's result.
 pub type SyncPublishResult = SyncResultReceiver<PublishResult>;
 
+/// Return type of a Subscribe operation for a synchronous client.  Invoke recv() on this value to
+/// wait for the operation's result.
 pub type SyncSubscribeResult = SyncResultReceiver<SubscribeResult>;
 
+/// Return type of a Unsubscribe operation for a synchronous client.  Invoke recv() on this value to
+/// wait for the operation's result.
 pub type SyncUnsubscribeResult = SyncResultReceiver<UnsubscribeResult>;
 
+/// Result callback for a Publish operation on a synchronous client.
 pub type SyncPublishResultCallback = Box<dyn Fn(PublishResult) -> () + Send + Sync>;
 
+/// Result callback for a Subscribe operation on a synchronous client.
 pub type SyncSubscribeResultCallback = Box<dyn Fn(SubscribeResult) -> () + Send + Sync>;
 
+/// Result callback for an Unsubscribe operation on a synchronous client.
 pub type SyncUnsubscribeResultCallback = Box<dyn Fn(UnsubscribeResult) -> () + Send + Sync>;
 
 /// An async network client that functions as a thin wrapper over the MQTT5 protocol.
@@ -1322,21 +1329,33 @@ pub trait SyncMqttClient {
     fn close(&self) -> MqttResult<()>;
 
     /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
-    /// the broker when it reaches the head of the queue and the client is connected.
+    /// the broker when it reaches the head of the queue and the client is connected.  Returns
+    /// a receiver type that allows for polling or a blocking wait on the result.
     fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> SyncPublishResult;
 
+    /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
+    /// the broker when it reaches the head of the queue and the client is connected.  Invokes a
+    /// completion callback function when the result of the operation is determined.
     fn publish_with_callback(&self, packet: PublishPacket, options: Option<PublishOptions>, completion_callback: SyncPublishResultCallback) -> MqttResult<()>;
 
     /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
-    /// the broker when it reaches the head of the queue and the client is connected.
+    /// the broker when it reaches the head of the queue and the client is connected.  Returns
+    /// a receiver type that allows for polling or a blocking wait on the result.
     fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> SyncSubscribeResult;
 
+    /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
+    /// the broker when it reaches the head of the queue and the client is connected.  Invokes a
+    /// completion callback function when the result of the operation is determined.
     fn subscribe_with_callback(&self, packet: SubscribePacket, options: Option<SubscribeOptions>, completion_callback: SyncSubscribeResultCallback) -> MqttResult<()>;
 
     /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
-    /// the broker when it reaches the head of the queue and the client is connected.
+    /// the broker when it reaches the head of the queue and the client is connected.  Returns
+    /// a receiver type that allows for polling or a blocking wait on the result.
     fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> SyncUnsubscribeResult;
 
+    /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
+    /// the broker when it reaches the head of the queue and the client is connected.  Invokes a
+    /// completion callback function when the result of the operation is determined.
     fn unsubscribe_with_callback(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>, completion_callback: SyncUnsubscribeResultCallback) -> MqttResult<()>;
 
     /// Adds an additional listener to the events emitted by this client.  This is useful when
@@ -1351,7 +1370,7 @@ pub trait SyncMqttClient {
 ///
 /// A client is always in one of two states:
 /// * Stopped - the client is not connected and will perform no work
-/// * Not Stopped - the client will continually attempt to maintain a connection to the configured broker.
+/// * Running - the client will continually attempt to maintain a connection to the configured broker.
 ///
 /// The start() and stop() APIs toggle between these two states.
 ///

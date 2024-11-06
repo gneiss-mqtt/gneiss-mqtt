@@ -343,6 +343,7 @@ pub struct TokioClientOptionsInternal<T> where T : AsyncRead + AsyncWrite + Send
     /// Ultimately, the type must implement AsyncRead and AsyncWrite.
     pub connection_factory: Box<dyn Fn() -> TokioConnectionFactoryReturnType<T> + Send + Sync>,
 
+    /// Handle of the tokio runtime that the client will run all of its logic on.
     pub runtime_handle: Handle,
 }
 
@@ -1489,17 +1490,16 @@ pub(crate) mod testing {
         }), builder, async_client_options);
     }
 
-    /*
-
     #[test]
     #[cfg(feature="tokio-websockets")]
     fn connection_failure_direct_plaintext_config_websocket_plaintext_endpoint() {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::None);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1508,9 +1508,10 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::None);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1519,10 +1520,12 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::None, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::None);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
+
 
     #[test]
     #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
@@ -1530,9 +1533,10 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1541,9 +1545,10 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1552,9 +1557,10 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1563,9 +1569,10 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1574,9 +1581,10 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1585,9 +1593,10 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::None);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1596,9 +1605,10 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1607,9 +1617,10 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1618,9 +1629,10 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1629,9 +1641,10 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1640,9 +1653,10 @@ pub(crate) mod testing {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
         let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::None);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            Box::pin(connection_failure_test(builder, create_mismatch_tokio_client_options(WebsocketUsage::Tungstenite, handle.clone())))
-        }), builder);
+        let async_client_options = create_mismatch_async_client_options(WebsocketUsage::Tungstenite);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
@@ -1653,26 +1667,24 @@ pub(crate) mod testing {
         let client_options = MqttClientOptionsBuilder::new()
             .with_connect_timeout(Duration::from_secs(3))
             .build();
+        let async_client_options = AsyncClientOptionsBuilder::new().build();
 
         let mut builder = GenericClientBuilder::new("example.com", 8000);
         builder.with_client_options(client_options);
 
-        do_builder_test(&runtime, Box::new(move |builder| {
-            let tokio_client_options = TokioClientOptionsBuilder::new(handle.clone()).build();
-            Box::pin(connection_failure_test(builder, tokio_client_options))
-        }), builder);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
 
     #[test]
     fn connection_failure_invalid_endpoint_http() {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
-
+        let async_client_options = AsyncClientOptionsBuilder::new().build();
         let builder = GenericClientBuilder::new("amazon.com", 443);
-        do_builder_test(&runtime, Box::new(move |builder| {
-            let tokio_client_options = TokioClientOptionsBuilder::new(handle.clone()).build();
-            Box::pin(connection_failure_test(builder, tokio_client_options))
-        }), builder);
+        do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
+            Box::pin(connection_failure_test(builder, async_options, tokio_options))
+        }), builder, async_client_options);
     }
-*/
 }
