@@ -29,7 +29,7 @@ pub(crate) enum TlsUsage {
 pub(crate) enum WebsocketUsage {
     None,
 
-    #[cfg(feature="tokio-websockets")]
+    //#[cfg(feature="tokio-websockets")]
     Tungstenite
 }
 
@@ -139,6 +139,7 @@ pub(crate) fn create_good_client_builder(tls: TlsUsage, ws: WebsocketUsage, prox
     create_client_builder_internal(connect_options, tls, proxy, tls, ws)
 }
 
+#[cfg(feature="tokio-websockets")]
 pub(crate) fn create_websocket_options_async(ws: WebsocketUsage) -> Option<AsyncWebsocketOptions> {
     match ws {
         WebsocketUsage::None => { None }
@@ -146,6 +147,7 @@ pub(crate) fn create_websocket_options_async(ws: WebsocketUsage) -> Option<Async
     }
 }
 
+#[cfg(feature="threaded-websockets")]
 pub(crate) fn create_websocket_options_sync(ws: WebsocketUsage) -> Option<SyncWebsocketOptions> {
     match ws {
         WebsocketUsage::None => { None }
@@ -154,8 +156,10 @@ pub(crate) fn create_websocket_options_sync(ws: WebsocketUsage) -> Option<SyncWe
 }
 
 pub(crate) type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output=MqttResult<()>> + Send>>;
-pub(crate) type AsyncTestFactory = Box<dyn Fn(GenericClientBuilder, AsyncClientOptions, TokioClientOptions) -> AsyncTestFactoryReturnType + Send + Sync>;
-pub(crate) type SyncTestFactory = Box<dyn Fn(GenericClientBuilder, SyncClientOptions, ThreadedClientOptions) -> MqttResult<()>>;
+#[cfg(feature = "tokio")]
+pub(crate) type TokioTestFactory = Box<dyn Fn(GenericClientBuilder, AsyncClientOptions, TokioClientOptions) -> AsyncTestFactoryReturnType + Send + Sync>;
+#[cfg(feature = "threaded")]
+pub(crate) type ThreadedTestFactory = Box<dyn Fn(GenericClientBuilder, SyncClientOptions, ThreadedClientOptions) -> MqttResult<()>>;
 
 pub(crate) async fn start_async_client<T : AsyncClientEventWaiter>(client: &AsyncGneissClient, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
     let connection_attempt_waiter = waiter_factory(client.clone(), ClientEventType::ConnectionAttempt);
@@ -406,6 +410,7 @@ pub(crate) async fn async_subscribe_publish_test<T : AsyncClientEventWaiter>(cli
     Ok(())
 }
 
+#[cfg(feature = "threaded")]
 pub(crate) fn sync_will_test<T : SyncClientEventWaiter>(base_client_options: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions, client_factory: fn(GenericClientBuilder, SyncClientOptions, ThreadedClientOptions) -> SyncGneissClient, waiter_factory: fn(SyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
     let client = client_factory(base_client_options, sync_options, client_options);
 
@@ -457,6 +462,7 @@ pub(crate) fn sync_will_test<T : SyncClientEventWaiter>(base_client_options: Gen
     Ok(())
 }
 
+#[cfg(feature = "tokio")]
 pub(crate) async fn async_will_test<T : AsyncClientEventWaiter>(base_client_options: GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, client_factory: fn(GenericClientBuilder, AsyncClientOptions, TokioClientOptions) -> AsyncGneissClient, waiter_factory: fn(AsyncGneissClient, ClientEventType) -> T) -> MqttResult<()> {
     let client = client_factory(base_client_options, async_options, tokio_options);
 

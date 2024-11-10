@@ -19,11 +19,13 @@ use std::io::Read;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
-#[cfg(feature="tokio-websockets")]
+#[cfg(any(feature="tokio-websockets", feature="threaded-websockets"))]
 use http::{Uri, Version};
+#[cfg(any(feature="tokio-websockets", feature="threaded-websockets"))]
+use std::str::FromStr;
 #[cfg(feature="tokio-websockets")]
-use std::{future::Future, pin::Pin, str::FromStr};
-#[cfg(feature="tokio-websockets")]
+use std::{future::Future, pin::Pin,};
+#[cfg(any(feature="tokio-websockets", feature="threaded-websockets"))]
 use tungstenite::{client::*, handshake::client::generate_key};
 
 #[cfg(feature="tokio")]
@@ -178,10 +180,10 @@ pub(crate) enum TlsData {
     #[allow(dead_code)]
     Invalid,
 
-    #[cfg(feature = "tokio-rustls")]
+    #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
     Rustls(std::sync::Arc<rustls::ClientConfig>),
 
-    #[cfg(feature = "tokio-native-tls")]
+    #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
     NativeTls(std::sync::Arc<native_tls::TlsConnectorBuilder>)
 }
 
@@ -825,18 +827,20 @@ impl Default for AsyncClientOptionsBuilder {
     }
 }
 
-
+#[cfg(feature="tokio")]
 /// A structure that holds configuration related to how an asynchronous client should interact
 /// with the Tokio async runtime.
 pub struct TokioClientOptions {
     pub(crate) runtime: Handle,
 }
 
+#[cfg(feature="tokio")]
 /// Builder type for tokio-based client configuration
 pub struct TokioClientOptionsBuilder {
     options: TokioClientOptions
 }
 
+#[cfg(feature="tokio")]
 impl TokioClientOptionsBuilder {
 
     /// Creates a new builder object for TokioClientOptions
@@ -872,6 +876,7 @@ impl SyncClientOptionsBuilder {
     pub fn new() -> Self {
         SyncClientOptionsBuilder {
             config: SyncClientOptions {
+                #[cfg(feature="threaded-websockets")]
                 websocket_options: None,
             }
         }
@@ -896,16 +901,19 @@ impl Default for SyncClientOptionsBuilder {
     }
 }
 
+#[cfg(feature="threaded")]
 /// Threaded client specific configuration
 pub struct ThreadedClientOptions {
     pub(crate) idle_service_sleep: Option<Duration>,
 }
 
+#[cfg(feature="threaded")]
 /// Builder type for threaded client configuration
 pub struct ThreadedClientOptionsBuilder {
     config: ThreadedClientOptions
 }
 
+#[cfg(feature="threaded")]
 impl ThreadedClientOptionsBuilder {
 
     /// Creates a new builder object for ThreadedClientOptions
@@ -933,6 +941,7 @@ impl ThreadedClientOptionsBuilder {
     }
 }
 
+#[cfg(feature="threaded")]
 impl Default for ThreadedClientOptionsBuilder {
     fn default() -> Self {
         Self::new()
@@ -954,9 +963,9 @@ pub struct GenericClientBuilder {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum TlsConfiguration {
     None,
-    #[cfg(feature = "tokio-rustls")]
+    #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
     Rustls,
-    #[cfg(feature = "tokio-native-tls")]
+    #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
     Nativetls,
     Mixed
 }
@@ -965,9 +974,9 @@ fn get_tls_impl_from_options(tls_options: Option<&TlsOptions>) -> TlsConfigurati
     if let Some(tls_opts) = tls_options {
         return
             match &tls_opts.options {
-                #[cfg(feature = "tokio-rustls")]
+                #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
                 TlsData::Rustls(_) => { TlsConfiguration::Rustls }
-                #[cfg(feature = "tokio-native-tls")]
+                #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
                 TlsData::NativeTls(_) => { TlsConfiguration::Nativetls }
                 _ => { TlsConfiguration::None }
             };

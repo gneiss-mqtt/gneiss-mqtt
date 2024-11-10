@@ -1194,11 +1194,13 @@ pub struct SyncResultReceiver<T> {
     result_signal: Arc<Condvar>
 }
 
+#[allow(dead_code)]
 pub(crate) struct SyncResultSender<T> {
     result_lock: Arc<Mutex<Option<T>>>,
     result_signal: Arc<Condvar>
 }
 
+#[allow(dead_code)]
 impl<T> Clone for SyncResultSender<T> {
     fn clone(&self) -> Self {
         SyncResultSender {
@@ -1208,6 +1210,7 @@ impl<T> Clone for SyncResultSender<T> {
     }
 }
 
+#[allow(dead_code)]
 impl<T> SyncResultSender<T> {
 
     pub(crate) fn new(result_lock: Arc<Mutex<Option<T>>>, result_signal: Arc<Condvar>) -> SyncResultSender<T> {
@@ -1232,6 +1235,7 @@ impl<T> SyncResultSender<T> {
 
 impl<T> SyncResultReceiver<T> {
 
+    #[allow(dead_code)]
     pub(crate) fn new(result_lock: Arc<Mutex<Option<T>>>, result_signal: Arc<Condvar>) -> SyncResultReceiver<T> {
         SyncResultReceiver {
             result_lock,
@@ -1261,6 +1265,7 @@ impl<T> SyncResultReceiver<T> {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn new_sync_result_pair<T>() -> (SyncResultReceiver<T>, SyncResultSender<T>) {
     let lock = Arc::new(Mutex::new(None));
     let signal = Arc::new(Condvar::new());

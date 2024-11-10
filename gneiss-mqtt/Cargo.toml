@@ -10,34 +10,34 @@ homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 documentation = "https://docs.rs/gneiss-mqtt"
 repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 readme = "README.md"
+resolver = "2"
 
 [package.metadata.docs.rs]
-features = []
-all-features = true
+features = ["tokio", "tokio-rustls", "tokio-native-tls", "tokio-websockets", "threaded", "threaded-rustls", "threaded-native-tls", "threaded-websockets"]
 
 [features]
-testing = [] # enables environmentally-controlled integration tests and long-running tests (30+ seconds) that check reconnect, backoff, etc...
+testing = [ "dep:assert_matches", "dep:uuid" ] # enables environmentally-controlled integration tests and long-running tests (30+ seconds) that check reconnect, backoff, etc...
+tokio = ["dep:tokio"] # enables the tokio-based async client
 tokio-rustls = ["tokio", "dep:rustls", "dep:rustls-native-certs", "dep:rustls-pemfile", "dep:rustls-pki-types", "dep:tokio-rustls"]
 tokio-native-tls = ["tokio", "dep:native-tls", "dep:tokio-native-tls"]
 tokio-websockets = ["tokio", "dep:http", "dep:tungstenite", "dep:tokio-tungstenite", "dep:stream-ws"]
-tokio = ["dep:tokio"] # enables the tokio-based async client
 threaded = [] # enables the thread-based sync client; does not add any dependencies
-threaded-rustls = [ "dep:rustls", "dep:rustls-native-certs", "dep:rustls-pemfile", "dep:rustls-pki-types" ]
-threaded-native-tls = [ "dep:native-tls" ]
-threaded-websockets = [ "dep:tungstenite" ]
+threaded-rustls = [ "threaded", "dep:rustls", "dep:rustls-native-certs", "dep:rustls-pemfile", "dep:rustls-pki-types" ]
+threaded-native-tls = [ "threaded", "dep:native-tls" ]
+threaded-websockets = [ "threaded", "dep:tungstenite", "dep:http" ]
 
 [dev-dependencies]
-assert_matches = "1.5.0"
-uuid = { version = "1", features = [ "v4", "fast-rng" ] }
+gneiss-mqtt = { path = ".", features = [ "testing" ]}
 
 [dependencies]
+assert_matches = { version = "1.5.0", optional = true } # only included in test builds
 http = { version = "0.2", optional = true }
 httparse = { version = "1" } # proxy support
 lru = { version = "0.12" } # lru topic aliasing cache
 log = { version = "0.4" } # logging interface
 native-tls = { version = "0.2.11", optional = true, features = ["alpn"] }
 rand = { version = "0.8" } # reconnect with randomized exponential backoff
-rustls = { version = "0.23", default-features = false, optional = true }
+rustls = { version = "0.23", features = ["std"], optional = true }
 rustls-native-certs = { version = "0.7", optional = true }
 rustls-pemfile = { version = "2", optional = true }
 rustls-pki-types = { version = "1", optional = true }
@@ -47,6 +47,7 @@ tokio-native-tls = { version = "0.3.1", optional = true}
 tokio-rustls = { version = "0.26", optional = true }
 tokio-tungstenite = { version = "0.20" , optional = true }
 tungstenite = { version = "0.20", optional = true }
+uuid = { version = "1", features = [ "v4", "fast-rng" ], optional = true } # only included in test builds
 
 
 

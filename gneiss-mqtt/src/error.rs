@@ -511,6 +511,7 @@ impl From<tungstenite::error::Error> for MqttError {
     }
 }
 
+#[cfg(feature="threaded-websockets")]
 use std::io::{Read, Write};
 
 #[cfg(feature="threaded-websockets")]

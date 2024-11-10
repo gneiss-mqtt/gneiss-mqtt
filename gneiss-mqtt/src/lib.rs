@@ -217,7 +217,7 @@ pub mod features;
 mod logging;
 pub mod mqtt;
 mod protocol;
-#[cfg(test)]
+#[cfg(feature = "testing")]
 pub(crate) mod testing;
 mod validate;
 

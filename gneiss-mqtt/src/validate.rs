@@ -321,7 +321,7 @@ pub(crate) fn is_valid_topic_filter_internal(filter: &str, context: &OutboundVal
     true
 }
 
-#[cfg(test)]
+#[cfg(feature = "testing")]
 pub(crate) mod testing {
     use super::*;
     use crate::encode::MAXIMUM_VARIABLE_LENGTH_INTEGER;

@@ -539,6 +539,7 @@ pub(crate) fn make_client_tokio(tls_impl: TlsConfiguration, endpoint: String, po
 
 }
 
+#[allow(unused_variables)]
 #[allow(clippy::too_many_arguments)]
 fn make_direct_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncGneissClient> {
     match tls_impl {
@@ -723,6 +724,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
     }
 }
 
+#[allow(unused_variables)]
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature="tokio-websockets")]
 fn make_websocket_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncGneissClient> {
@@ -1154,7 +1156,7 @@ pub(crate) mod testing {
         builder.build_tokio(async_client_options, tokio_client_options).unwrap()
     }
 
-    fn do_good_client_test(handle: Handle, tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: AsyncTestFactory) {
+    fn do_good_client_test(handle: Handle, tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: TokioTestFactory) {
         let tokio_options = TokioClientOptionsBuilder::new(handle.clone()).build();
         let mut async_options_builder = AsyncClientOptionsBuilder::new();
         if ws == WebsocketUsage::Tungstenite {
@@ -1360,7 +1362,7 @@ pub(crate) mod testing {
         }));
     }
 
-    pub(crate) fn do_builder_test(handle: Handle, test_factory: AsyncTestFactory, builder: GenericClientBuilder, async_options: AsyncClientOptions) {
+    pub(crate) fn do_builder_test(handle: Handle, test_factory: TokioTestFactory, builder: GenericClientBuilder, async_options: AsyncClientOptions) {
         let tokio_options = TokioClientOptionsBuilder::new(handle.clone()).build();
         let test_future = (*test_factory)(builder, async_options, tokio_options);
 

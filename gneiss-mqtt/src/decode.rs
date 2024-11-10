@@ -581,7 +581,7 @@ pub(crate) fn decode_optional_u32<'a>(bytes: &'a[u8], value: &mut Option<u32>) -
 }
 
 
-#[cfg(test)]
+#[cfg(feature = "testing")]
 pub(crate) mod testing {
     use super::*;
     use crate::alias::*;

@@ -9,7 +9,7 @@ Implementation of an MQTT client that uses one or more background threads for pr
 
 #[cfg(feature="threaded-websockets")]
 mod ws_stream;
-#[cfg(all(feature = "testing", test))]
+#[cfg(feature = "testing")]
 mod longtests;
 
 use std::cmp::min;
@@ -19,8 +19,9 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use log::{debug, error, info, trace};
 use crate::client::*;
-use crate::client::waiter::{client_event_matches, ClientEventRecord, ClientEventType, ClientEventWaiterOptions, ClientEventWaitType, SyncClientEventWaiter};
+use crate::client::waiter::*;
 use crate::config::*;
+#[cfg(feature="threaded-websockets")]
 use crate::features::threaded::ws_stream::WebsocketStreamWrapper;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
@@ -625,6 +626,7 @@ pub(crate) fn make_client_threaded(tls_impl: TlsConfiguration, endpoint: String,
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(unused_variables)]
 fn make_direct_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     match tls_impl {
         TlsConfiguration::None => { make_direct_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, sync_options, threaded_config) }
@@ -798,6 +800,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(unused_variables)]
 #[cfg(feature="threaded-websockets")]
 pub(crate) fn make_websocket_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
     match tls_impl {
@@ -1218,7 +1221,7 @@ impl Drop for ThreadedClientEventWaiter {
     }
 }
 
-#[cfg(all(test, feature = "testing"))]
+#[cfg(feature = "testing")]
 pub(crate) mod testing {
     use crate::config::GenericClientBuilder;
     use crate::error::MqttResult;
@@ -1234,9 +1237,11 @@ pub(crate) mod testing {
         Ok(())
     }
 
-    fn do_good_client_test(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: SyncTestFactory) {
+    fn do_good_client_test(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: ThreadedTestFactory) {
         let client_options = ThreadedClientOptionsBuilder::new().build();
         let mut sync_options_builder = SyncClientOptionsBuilder::new();
+
+        #[cfg(feature = "threaded-websockets")]
         if ws == WebsocketUsage::Tungstenite {
             sync_options_builder.with_websocket_options(SyncWebsocketOptionsBuilder::new().build());
         }
@@ -1295,7 +1300,7 @@ pub(crate) mod testing {
     #[test]
     #[cfg(feature = "threaded")]
     fn client_connect_disconnect_direct_plaintext_with_proxy() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::Tungstenite, ProxyUsage::Plaintext, Box::new(|builder, sync_options, client_options|{
+        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::Plaintext, Box::new(|builder, sync_options, client_options|{
             threaded_connect_disconnect_test(builder, sync_options, client_options)
         }));
     }
@@ -1405,7 +1410,7 @@ pub(crate) mod testing {
         }));
     }
 
-    pub(crate) fn do_builder_test(test_factory: SyncTestFactory, builder: GenericClientBuilder, sync_options: SyncClientOptions) {
+    pub(crate) fn do_builder_test(test_factory: ThreadedTestFactory, builder: GenericClientBuilder, sync_options: SyncClientOptions) {
         let threaded_options = ThreadedClientOptionsBuilder::new().build();
         (*test_factory)(builder, sync_options, threaded_options).unwrap();
     }
@@ -1432,9 +1437,13 @@ pub(crate) mod testing {
 
     fn create_mismatch_sync_client_options(ws_config: WebsocketUsage) -> SyncClientOptions {
         let mut builder = SyncClientOptionsBuilder::new();
-        let websocket_config_option = create_websocket_options_sync(ws_config);
-        if let Some(websocket_options) = websocket_config_option {
-            builder.with_websocket_options(websocket_options);
+
+        #[cfg(feature = "threaded-websockets")]
+        {
+            let websocket_config_option = create_websocket_options_sync(ws_config);
+            if let Some(websocket_options) = websocket_config_option {
+                builder.with_websocket_options(websocket_options);
+            }
         }
 
         builder.build()

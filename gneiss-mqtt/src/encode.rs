@@ -606,8 +606,8 @@ pub(crate) fn process_encoding_step(
 }
 
 
-#[cfg(test)]
-mod tests {
+#[cfg(feature = "testing")]
+mod testing {
     use super::*;
     use crate::decode::*;
 

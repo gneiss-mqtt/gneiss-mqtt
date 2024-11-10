@@ -1691,7 +1691,7 @@ impl UnsubscribePacketBuilder {
 
 /// Algebraic union of all MQTT5 packet types.
 #[derive(Clone, Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(feature = "testing", derive(PartialEq, Eq))]
 pub(crate) enum MqttPacket {
     Connect(ConnectPacket),
     Connack(ConnackPacket),
