@@ -39,7 +39,7 @@ pub(crate) enum ProxyUsage {
     Plaintext
 }
 
-#[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
+#[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls", feature="tokio-native-tls", feature="threaded-native-tls"))]
 pub(crate) fn get_ca_path() -> String {
     env::var("GNEISS_MQTT_TEST_BROKER_CA_PATH").unwrap()
 }

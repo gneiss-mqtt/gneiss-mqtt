@@ -1159,6 +1159,8 @@ pub(crate) mod testing {
     fn do_good_client_test(handle: Handle, tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: TokioTestFactory) {
         let tokio_options = TokioClientOptionsBuilder::new(handle.clone()).build();
         let mut async_options_builder = AsyncClientOptionsBuilder::new();
+
+        #[cfg(feature = "tokio-websockets")]
         if ws == WebsocketUsage::Tungstenite {
             async_options_builder.with_websocket_options(AsyncWebsocketOptionsBuilder::new().build());
         }
@@ -1391,9 +1393,13 @@ pub(crate) mod testing {
 
     fn create_mismatch_async_client_options(ws_config: WebsocketUsage) -> AsyncClientOptions {
         let mut builder = AsyncClientOptionsBuilder::new();
-        let websocket_config_option = create_websocket_options_async(ws_config);
-        if let Some(websocket_options) = websocket_config_option {
-            builder.with_websocket_options(websocket_options);
+
+        #[cfg(feature = "tokio-websockets")]
+        {
+            let websocket_config_option = create_websocket_options_async(ws_config);
+            if let Some(websocket_options) = websocket_config_option {
+                builder.with_websocket_options(websocket_options);
+            }
         }
 
         builder.build()
