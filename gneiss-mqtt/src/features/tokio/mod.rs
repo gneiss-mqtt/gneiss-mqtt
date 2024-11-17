@@ -12,7 +12,7 @@ runtime implementation.
 mod longtests;
 
 use crate::client::*;
-use crate::config::*;
+use crate::client::config::*;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::{disconnect::validate_disconnect_packet_outbound, MqttPacket, PublishPacket, SubscribePacket, UnsubscribePacket};
 use crate::protocol::is_connection_established;
@@ -728,11 +728,11 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
 #[cfg(feature="tokio-websockets")]
 fn make_websocket_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncGneissClient> {
     match tls_impl {
-        crate::config::TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, async_options, tokio_options) }
+        TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, async_options, tokio_options) }
         #[cfg(feature = "tokio-rustls")]
-        crate::config::TlsConfiguration::Rustls => { make_websocket_client_rustls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, async_options, tokio_options) }
+        TlsConfiguration::Rustls => { make_websocket_client_rustls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, async_options, tokio_options) }
         #[cfg(feature = "tokio-native-tls")]
-        crate::config::TlsConfiguration::Nativetls => { make_websocket_client_native_tls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, async_options, tokio_options) }
+        TlsConfiguration::Nativetls => { make_websocket_client_native_tls(endpoint, port, tls_options, client_options, connect_options, http_proxy_options, async_options, tokio_options) }
         _ => { panic!("Illegal state"); }
     }
 }
@@ -975,7 +975,7 @@ async fn wrap_stream_with_tls_native_tls<S>(stream : Pin<Box<impl Future<Output=
 async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, scheme: &str, websocket_options: AsyncWebsocketOptions) -> MqttResult<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
 
     let uri = format!("{}://{}/mqtt", scheme, endpoint); // scheme needs to be present but value irrelevant
-    let handshake_builder = crate::config::create_default_websocket_handshake_request(uri)?;
+    let handshake_builder = create_default_websocket_handshake_request(uri)?;
 
     debug!("wrap_stream_with_websockets - performing websocket upgrade request transform");
     let transformed_handshake_builder =
@@ -988,7 +988,7 @@ async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=Mqtt
 
     debug!("wrap_stream_with_websockets - upgrading stream to websockets");
     let inner_stream= stream.await?;
-    let (message_stream, _) = client_async(crate::config::HandshakeRequest { handshake_builder: transformed_handshake_builder }, inner_stream).await?;
+    let (message_stream, _) = client_async(HandshakeRequest { handshake_builder: transformed_handshake_builder }, inner_stream).await?;
     let byte_stream = WsMessageHandler::wrap_stream(message_stream);
     debug!("wrap_stream_with_websockets - successfully upgraded stream to websockets");
 
@@ -1047,13 +1047,12 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Mq
 #[cfg(all(test, feature = "testing"))]
 pub(crate) mod testing {
     use std::time::Duration;
-    use crate::config::*;
     use crate::error::*;
     use crate::mqtt::*;
-    use super::*;
     use crate::testing::integration::*;
     use crate::testing::waiter::*;
     use crate::testing::waiter::asynchronous::*;
+    use super::*;
 
     fn build_tokio_client(builder: GenericClientBuilder, async_client_options: AsyncClientOptions, tokio_client_options: TokioClientOptions) -> AsyncGneissClient {
         builder.build_tokio(async_client_options, tokio_client_options).unwrap()

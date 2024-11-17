@@ -118,7 +118,7 @@ impl SyncWebsocketOptionsBuilder {
     }
 
     /// Creates a new set of Websocket options
-    pub fn build(&self) -> crate::config::SyncWebsocketOptions {
+    pub fn build(&self) -> SyncWebsocketOptions {
         self.options.clone()
     }
 }

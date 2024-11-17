@@ -7,7 +7,7 @@
 
 use crate::alias::*;
 use crate::client::*;
-use crate::config::*;
+use crate::client::config::*;
 use crate::decode::*;
 use crate::encode::*;
 use crate::error::{fold_mqtt_result, MqttError, MqttResult};

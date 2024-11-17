@@ -15,7 +15,7 @@ use crate::client::*;
 use crate::client::AsyncGneissClient;
 #[cfg(feature="threaded")]
 use crate::client::SyncGneissClient;
-use crate::config::*;
+use crate::client::config::*;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
 

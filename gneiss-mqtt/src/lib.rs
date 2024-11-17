@@ -49,7 +49,7 @@ supports all connection methods allowed by the AWS MQTT broker implementation,
 Assuming a default Mosquitto installation, you can connect locally by plaintext on port 1883:
 
 ```no_run
-use gneiss_mqtt::config::{AsyncClientOptionsBuilder, GenericClientBuilder, TokioClientOptionsBuilder};
+use gneiss_mqtt::client::config::{AsyncClientOptionsBuilder, GenericClientBuilder, TokioClientOptionsBuilder};
 use tokio::runtime::Handle;
 
 #[tokio::main]
@@ -132,7 +132,7 @@ every time we receive a "Ping" publish:
 
 ```no_run
 use gneiss_mqtt::client::{ClientEvent, AsyncGneissClient};
-use gneiss_mqtt::config::{AsyncClientOptionsBuilder, TokioClientOptionsBuilder};
+use gneiss_mqtt::client::config::{AsyncClientOptionsBuilder, TokioClientOptionsBuilder};
 use gneiss_mqtt::mqtt::{PublishPacket, QualityOfService};
 use std::sync::Arc;
 
@@ -161,7 +161,7 @@ pub fn client_event_callback(client: AsyncGneissClient, event: Arc<ClientEvent>)
     }
 }
 
-use gneiss_mqtt::config::GenericClientBuilder;
+use gneiss_mqtt::client::config::GenericClientBuilder;
 use tokio::runtime::Handle;
 
 #[tokio::main]
@@ -212,7 +212,6 @@ in the README for more details.
 
 pub mod alias;
 pub mod client;
-pub mod config;
 mod decode;
 mod encode;
 pub mod error;

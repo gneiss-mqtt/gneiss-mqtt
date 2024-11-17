@@ -7,7 +7,9 @@
 Module containing the public MQTT client and associated types necessary to invoke operations on it.
  */
 
-use crate::config::*;
+pub mod config;
+
+use crate::client::config::*;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
 use crate::mqtt::utils::*;

@@ -12,7 +12,7 @@ use assert_matches::assert_matches;
 use crate::alias::{OutboundAliasResolution, OutboundAliasResolverFactory};
 use crate::client::*;
 use crate::testing::waiter::ClientEventRecord;
-use crate::config::{ConnectOptionsBuilder, ExponentialBackoffJitterType, OfflineQueuePolicy, RejoinSessionPolicy};
+use crate::client::config::*;
 use crate::decode::{Decoder, DecodingContext};
 use crate::encode::{Encoder, EncodeResult, EncodingContext};
 use crate::encode::MAXIMUM_VARIABLE_LENGTH_INTEGER;

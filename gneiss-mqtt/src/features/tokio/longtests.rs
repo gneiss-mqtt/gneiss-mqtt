@@ -4,7 +4,7 @@
  */
 
 use std::time::{Duration};
-use crate::config::*;
+use crate::client::config::*;
 use crate::error::MqttResult;
 use crate::features::tokio::testing::*;
 use crate::mqtt::*;

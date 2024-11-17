@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::config::*;
+use crate::client::config::*;
 use crate::error::MqttResult;
 use crate::features::threaded::*;
 use crate::features::threaded::testing::*;

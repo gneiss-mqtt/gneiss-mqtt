@@ -14,7 +14,7 @@ use std::io::ErrorKind::{TimedOut, WouldBlock, Interrupted};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::time::Duration;
 use crate::alias::OutboundAliasResolution;
-use crate::config::{ConnectOptionsBuilder, GenericClientBuilder, MqttClientOptionsBuilder};
+use crate::client::config::*;
 use crate::mqtt::utils::mqtt_packet_to_packet_type;
 use crate::testing::protocol::*;
 use std::sync::{Arc, Mutex};

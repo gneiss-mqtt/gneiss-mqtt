@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use log::{debug, error, info, trace};
 use crate::client::*;
-use crate::config::*;
+use crate::client::config::*;
 #[cfg(feature="threaded-websockets")]
 use crate::features::threaded::ws_stream::WebsocketStreamWrapper;
 use crate::error::{MqttError, MqttResult};
@@ -1051,7 +1051,7 @@ fn wrap_stream_with_tls_native_tls<S>(stream : S, endpoint: String, tls_options:
 fn wrap_stream_with_websockets<S>(stream : S, endpoint: String, scheme: &str, websocket_options: SyncWebsocketOptions) -> MqttResult<WebsocketStreamWrapper<S>> where S : Read + Write {
 
     let uri = format!("{}://{}/mqtt", scheme, endpoint); // scheme needs to be present but value irrelevant
-    let handshake_builder = crate::config::create_default_websocket_handshake_request(uri)?;
+    let handshake_builder = create_default_websocket_handshake_request(uri)?;
 
     debug!("threaded wrap_stream_with_websockets - performing websocket upgrade request transform");
     let transformed_handshake_builder =
@@ -1124,8 +1124,6 @@ fn apply_proxy_connect_to_stream<T>(mut stream : T, http_connect_endpoint: Endpo
 
 #[cfg(feature = "testing")]
 pub(crate) mod testing {
-    use crate::config::GenericClientBuilder;
-    use crate::error::MqttResult;
     use crate::features::threaded::*;
     use crate::testing::integration::*;
 

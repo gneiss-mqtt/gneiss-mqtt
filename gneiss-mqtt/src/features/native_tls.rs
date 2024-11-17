@@ -9,7 +9,7 @@ implementation.
  */
 
 use std::sync::Arc;
-use crate::config::{TlsData, TlsMode, TlsOptions, TlsOptionsBuilder};
+use crate::client::config::*;
 use crate::error::MqttError;
 
 impl TlsOptionsBuilder {
