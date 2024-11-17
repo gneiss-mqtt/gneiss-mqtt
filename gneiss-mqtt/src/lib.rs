@@ -220,7 +220,6 @@ pub mod client;
 mod decode;
 mod encode;
 pub mod error;
-pub mod features;
 mod logging;
 pub mod mqtt;
 mod protocol;
