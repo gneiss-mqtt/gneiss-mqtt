@@ -9,6 +9,7 @@ Module containing types for configuring an MQTT client.
 
 use crate::alias::{OutboundAliasResolverFactoryFn};
 use crate::error::*;
+#[cfg(any(feature="tokio", feature="threaded"))]
 use crate::client::*;
 use crate::mqtt::*;
 

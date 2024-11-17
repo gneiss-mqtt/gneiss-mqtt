@@ -116,7 +116,7 @@ impl MqttOperation {
 
 // Most received packets stay internal or are routed to an operation's result channel.  But
 // Connack, Publish, and Disconnect are all surfaced to the user through the client.
-#[cfg_attr(test, derive(Eq, PartialEq, Debug))]
+#[cfg_attr(feature = "testing", derive(Eq, PartialEq, Debug))]
 pub(crate) enum PacketEvent {
     Connack(ConnackPacket),
     Publish(PublishPacket),

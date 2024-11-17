@@ -12,7 +12,6 @@ runtime implementation.
 mod longtests;
 
 use crate::client::*;
-use crate::client::waiter::*;
 use crate::config::*;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::{disconnect::validate_disconnect_packet_outbound, MqttPacket, PublishPacket, SubscribePacket, UnsubscribePacket};
@@ -1045,112 +1044,16 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Mq
     }
 }
 
-
-/// Simple debug type that uses the client listener framework to allow tests to asynchronously wait for
-/// configurable client event sequences.  May be useful outside of tests.  May need polish.  Currently public
-/// because we use it across crates.  May eventually go internal.
-///
-/// Requires the client to be Arc-wrapped.
-pub struct TokioClientEventWaiter {
-    event_count: usize,
-
-    client: AsyncGneissClient,
-
-    listener: Option<ListenerHandle>,
-
-    event_receiver: tokio::sync::mpsc::UnboundedReceiver<ClientEventRecord>,
-
-    events: Vec<ClientEventRecord>,
-}
-
-impl TokioClientEventWaiter {
-
-    /// Creates a new ClientEventWaiter instance from full configuration
-    pub fn new(client: AsyncGneissClient, config: ClientEventWaiterOptions, event_count: usize) -> Self {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-
-        let mut waiter = TokioClientEventWaiter {
-            event_count,
-            client: client.clone(),
-            listener: None,
-            event_receiver: rx,
-            events: Vec::new(),
-        };
-
-        let listener_fn = move |event: Arc<ClientEvent>| {
-            match &config.wait_type {
-                ClientEventWaitType::Type(event_type) => {
-                    if !client_event_matches(&event, *event_type) {
-                        return;
-                    }
-                }
-                ClientEventWaitType::Predicate(event_predicate) => {
-                    if !(*event_predicate)(&event) {
-                        return;
-                    }
-                }
-            }
-
-            let event_record = ClientEventRecord {
-                event: event.clone(),
-                timestamp: Instant::now(),
-            };
-
-            let _ = tx.send(event_record);
-        };
-
-        waiter.listener = Some(client.add_event_listener(Arc::new(listener_fn)).unwrap());
-        waiter
-    }
-
-    /// Creates a new ClientEventWaiter instance that will wait for a single occurrence of a single event type
-    pub fn new_single(client: AsyncGneissClient, event_type: ClientEventType) -> Self {
-        let config = ClientEventWaiterOptions {
-            wait_type: ClientEventWaitType::Type(event_type),
-        };
-
-        Self::new(client, config, 1)
-    }
-}
-
-impl AsyncClientEventWaiter for TokioClientEventWaiter {
-
-    /// Waits for and returns an event sequence that matches the original configuration
-    fn wait(mut self) -> Pin<Box<ClientEventWaitFuture>> {
-        Box::pin(async move {
-            while self.events.len() < self.event_count {
-                match self.event_receiver.recv().await {
-                    None => {
-                        return Err(MqttError::new_other_error("Channel closed"));
-                    }
-                    Some(event) => {
-                        self.events.push(event);
-                    }
-                }
-            }
-
-            Ok(self.events.clone())
-        })
-    }
-}
-
-impl Drop for TokioClientEventWaiter {
-    fn drop(&mut self) {
-        let listener_handler = self.listener.take().unwrap();
-
-        let _ = self.client.remove_event_listener(listener_handler);
-    }
-}
-
 #[cfg(all(test, feature = "testing"))]
 pub(crate) mod testing {
     use std::time::Duration;
-    use crate::client::waiter::*;
     use crate::config::*;
     use crate::error::*;
     use crate::mqtt::*;
     use super::*;
     use crate::testing::integration::*;
+    use crate::testing::waiter::*;
+    use crate::testing::waiter::asynchronous::*;
 
     fn build_tokio_client(builder: GenericClientBuilder, async_client_options: AsyncClientOptions, tokio_client_options: TokioClientOptions) -> AsyncGneissClient {
         builder.build_tokio(async_client_options, tokio_client_options).unwrap()
@@ -1158,6 +1061,8 @@ pub(crate) mod testing {
 
     fn do_good_client_test(handle: Handle, tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: TokioTestFactory) {
         let tokio_options = TokioClientOptionsBuilder::new(handle.clone()).build();
+
+        #[cfg_attr(not(feature = "tokio-websockets"), allow(unused_mut))]
         let mut async_options_builder = AsyncClientOptionsBuilder::new();
 
         #[cfg(feature = "tokio-websockets")]
@@ -1173,8 +1078,8 @@ pub(crate) mod testing {
     async fn tokio_connect_disconnect_test(builder: GenericClientBuilder, async_options: AsyncClientOptions, tokio_client_options: TokioClientOptions) -> MqttResult<()> {
         let client = builder.build_tokio(async_options, tokio_client_options).unwrap();
 
-        start_async_client(&client, TokioClientEventWaiter::new_single).await?;
-        stop_async_client(&client, TokioClientEventWaiter::new_single).await?;
+        start_async_client(&client).await?;
+        stop_async_client(&client).await?;
 
         Ok(())
     }
@@ -1298,7 +1203,7 @@ pub(crate) mod testing {
     }
 
     async fn tokio_subscribe_unsubscribe_test(builder: GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<()> {
-        async_subscribe_unsubscribe_test(builder.build_tokio(async_options, tokio_options).unwrap(), TokioClientEventWaiter::new_single).await
+        async_subscribe_unsubscribe_test(builder.build_tokio(async_options, tokio_options).unwrap()).await
     }
 
     #[test]
@@ -1311,7 +1216,7 @@ pub(crate) mod testing {
 
     async fn tokio_subscribe_publish_test(builder: GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, qos: QualityOfService) -> MqttResult<()> {
         let client = builder.build_tokio(async_options, tokio_options).unwrap();
-        async_subscribe_publish_test(client, qos, TokioClientEventWaiter::new_single).await
+        async_subscribe_publish_test(client, qos).await
     }
 
     #[test]
@@ -1340,7 +1245,7 @@ pub(crate) mod testing {
 
     // This primarily tests that the will configuration works.  Will functionality is mostly broker-side.
     async fn tokio_will_test(builder: GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<()> {
-        async_will_test(builder, async_options, tokio_options, build_tokio_client, TokioClientEventWaiter::new_single).await
+        async_will_test(builder, async_options, tokio_options, build_tokio_client).await
     }
 
     #[test]
@@ -1353,7 +1258,7 @@ pub(crate) mod testing {
 
     async fn tokio_connect_disconnect_cycle_session_rejoin_test(builder: GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<()> {
         let client = builder.build_tokio(async_options, tokio_options).unwrap();
-        async_connect_disconnect_cycle_session_rejoin_test(client, TokioClientEventWaiter::new_single, TokioClientEventWaiter::new).await
+        async_connect_disconnect_cycle_session_rejoin_test(client).await
     }
 
     #[test]
@@ -1373,7 +1278,7 @@ pub(crate) mod testing {
 
     async fn connection_failure_test(builder : GenericClientBuilder, async_options: AsyncClientOptions, tokio_client_options: TokioClientOptions) -> MqttResult<()> {
         let client = builder.build_tokio(async_options, tokio_client_options).unwrap();
-        let connection_failure_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
+        let connection_failure_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
 
         client.start(None)?;
 
@@ -1383,6 +1288,7 @@ pub(crate) mod testing {
         Ok(())
     }
 
+    #[cfg(any(feature = "tokio-rustls", feature = "tokio-native-tls", feature = "tokio-websockets"))]
     fn create_mismatch_builder(tls_config: TlsUsage, ws_config: WebsocketUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
         assert!(tls_config != tls_endpoint || ws_config != ws_endpoint);
 
@@ -1391,12 +1297,14 @@ pub(crate) mod testing {
         create_client_builder_internal(connect_options, tls_config, ProxyUsage::None, tls_endpoint, ws_endpoint)
     }
 
-    fn create_mismatch_async_client_options(ws_config: WebsocketUsage) -> AsyncClientOptions {
+    #[cfg(any(feature = "tokio-rustls", feature = "tokio-native-tls", feature = "tokio-websockets"))]
+    fn create_mismatch_async_client_options(_ws_config: WebsocketUsage) -> AsyncClientOptions {
+        #[cfg_attr(not(feature = "tokio-websockets"), allow(unused_mut))]
         let mut builder = AsyncClientOptionsBuilder::new();
 
         #[cfg(feature = "tokio-websockets")]
         {
-            let websocket_config_option = create_websocket_options_async(ws_config);
+            let websocket_config_option = create_websocket_options_async(_ws_config);
             if let Some(websocket_options) = websocket_config_option {
                 builder.with_websocket_options(websocket_options);
             }

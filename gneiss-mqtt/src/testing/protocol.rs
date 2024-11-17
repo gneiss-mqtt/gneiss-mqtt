@@ -11,7 +11,7 @@ use crate::protocol::*;
 use assert_matches::assert_matches;
 use crate::alias::{OutboundAliasResolution, OutboundAliasResolverFactory};
 use crate::client::*;
-use crate::client::waiter::ClientEventRecord;
+use crate::testing::waiter::ClientEventRecord;
 use crate::config::{ConnectOptionsBuilder, ExponentialBackoffJitterType, OfflineQueuePolicy, RejoinSessionPolicy};
 use crate::decode::{Decoder, DecodingContext};
 use crate::encode::{Encoder, EncodeResult, EncodingContext};

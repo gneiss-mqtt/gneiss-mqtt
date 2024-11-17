@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::client::waiter::*;
 use crate::config::*;
 use crate::error::MqttResult;
 use crate::features::threaded::*;
 use crate::features::threaded::testing::*;
 use crate::testing::mock_server::build_mock_client_server;
 use crate::testing::protocol::*;
+use crate::testing::waiter::*;
+use crate::testing::waiter::synchronous::*;
 
 fn simple_reconnect_test(builder : GenericClientBuilder, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> MqttResult<()> {
     let client = builder.build_threaded(sync_options, threaded_options).unwrap();
@@ -18,7 +19,7 @@ fn simple_reconnect_test(builder : GenericClientBuilder, sync_options: SyncClien
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
     };
 
-    let reconnect_waiter = ThreadedClientEventWaiter::new(client.clone(), wait_options, event_count);
+    let reconnect_waiter = SyncClientEventWaiter::new(client.clone(), wait_options, event_count);
 
     client.start(None)?;
 
@@ -49,8 +50,8 @@ fn reconnect_backoff_reset_test(builder : GenericClientBuilder, sync_options: Sy
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
     };
 
-    let first_reconnect_waiter = ThreadedClientEventWaiter::new(client.clone(), first_wait_options, 12);
-    let success_waiter = ThreadedClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
+    let first_reconnect_waiter = SyncClientEventWaiter::new(client.clone(), first_wait_options, 12);
+    let success_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
 
     client.start(None)?;
 
@@ -61,7 +62,7 @@ fn reconnect_backoff_reset_test(builder : GenericClientBuilder, sync_options: Sy
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
     };
 
-    let final_reconnect_waiter = ThreadedClientEventWaiter::new(client.clone(), final_wait_options, 3);
+    let final_reconnect_waiter = SyncClientEventWaiter::new(client.clone(), final_wait_options, 3);
 
     std::thread::sleep(Duration::from_millis(connection_success_wait_millis));
 

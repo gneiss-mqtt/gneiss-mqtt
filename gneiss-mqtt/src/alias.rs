@@ -24,7 +24,7 @@ use std::sync::Arc;
 /// resolution is performed as the client encodes a Publish packet before writing it to the
 /// socket.
 #[derive(Default, Copy, Clone)]
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+#[cfg_attr(feature = "testing", derive(Debug, Eq, PartialEq))]
 pub struct OutboundAliasResolution {
     /// Should the client use an empty topic during packet encoding?
     pub skip_topic : bool,

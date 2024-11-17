@@ -15,11 +15,10 @@ mod longtests;
 use std::cmp::min;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use log::{debug, error, info, trace};
 use crate::client::*;
-use crate::client::waiter::*;
 use crate::config::*;
 #[cfg(feature="threaded-websockets")]
 use crate::features::threaded::ws_stream::WebsocketStreamWrapper;
@@ -27,6 +26,10 @@ use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
 use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
 use crate::protocol::is_connection_established;
+#[cfg(feature = "testing")]
+use crate::testing::waiter::*;
+#[cfg(feature = "testing")]
+use crate::testing::waiter::synchronous::*;
 use crate::validate::validate_packet_outbound;
 
 /// Factory function for creating the final connection object based on all the various
@@ -1117,109 +1120,7 @@ fn apply_proxy_connect_to_stream<T>(mut stream : T, http_connect_endpoint: Endpo
 }
 
 
-/// Simple debug type that uses the client listener framework to allow tests to asynchronously wait for
-/// configurable client event sequences.  May be useful outside of tests.  May need polish.  Currently public
-/// because we use it across crates.  May eventually go internal.
-///
-/// Requires the client to be Arc-wrapped.
-pub struct ThreadedClientEventWaiter {
-    event_count: usize,
 
-    client: SyncGneissClient,
-
-    listener: Option<ListenerHandle>,
-
-    events: Arc<Mutex<Option<Vec<ClientEventRecord>>>>,
-
-    signal: Arc<Condvar>,
-}
-
-impl ThreadedClientEventWaiter {
-
-    /// Creates a new ClientEventWaiter instance from full configuration
-    pub fn new(client: SyncGneissClient, config: ClientEventWaiterOptions, event_count: usize) -> Self {
-        let lock = Arc::new(Mutex::new(Some(Vec::new())));
-        let signal = Arc::new(Condvar::new());
-
-        let mut waiter = ThreadedClientEventWaiter {
-            event_count,
-            client: client.clone(),
-            listener: None,
-            events: lock.clone(),
-            signal: signal.clone(),
-        };
-
-        let listener_fn = move |event: Arc<ClientEvent>| {
-            match &config.wait_type {
-                ClientEventWaitType::Type(event_type) => {
-                    if !client_event_matches(&event, *event_type) {
-                        return;
-                    }
-                }
-                ClientEventWaitType::Predicate(event_predicate) => {
-                    if !(*event_predicate)(&event) {
-                        return;
-                    }
-                }
-            }
-
-            let event_record = ClientEventRecord {
-                event: event.clone(),
-                timestamp: Instant::now(),
-            };
-
-            let mut events_guard = lock.lock().unwrap();
-            let events_option = events_guard.as_mut();
-            if let Some(events) = events_option {
-                events.push(event_record);
-
-                if events.len() >= event_count {
-                    signal.notify_all();
-                }
-            }
-        };
-
-        waiter.listener = Some(client.add_event_listener(Arc::new(listener_fn)).unwrap());
-        waiter
-    }
-
-    /// Creates a new ClientEventWaiter instance that will wait for a single occurrence of a single event type
-    pub fn new_single(client: SyncGneissClient, event_type: ClientEventType) -> Self {
-        let config = ClientEventWaiterOptions {
-            wait_type: ClientEventWaitType::Type(event_type),
-        };
-
-        Self::new(client, config, 1)
-    }
-}
-
-impl SyncClientEventWaiter for ThreadedClientEventWaiter {
-    fn wait(self) -> MqttResult<Vec<ClientEventRecord>> {
-        let mut current_events_option = self.events.lock().unwrap();
-        loop {
-            match &*current_events_option {
-                Some(current_events) => {
-                    if current_events.len() >= self.event_count {
-                        return Ok(current_events_option.take().unwrap());
-                    }
-                }
-                None => {
-                    return Err(MqttError::new_other_error("Client event waiter result already taken"));
-                }
-            }
-
-            current_events_option = self.signal.wait(current_events_option).unwrap();
-        }
-    }
-}
-
-impl Drop for ThreadedClientEventWaiter {
-    fn drop(&mut self) {
-        let listener_handler = self.listener.take().unwrap();
-
-        let _ = self.client.remove_event_listener(listener_handler);
-    }
-}
 
 #[cfg(feature = "testing")]
 pub(crate) mod testing {
@@ -1231,14 +1132,16 @@ pub(crate) mod testing {
     fn threaded_connect_disconnect_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
         let client = builder.build_threaded(sync_options, client_options).unwrap();
 
-        start_sync_client(&client, ThreadedClientEventWaiter::new_single)?;
-        stop_sync_client(&client, ThreadedClientEventWaiter::new_single)?;
+        start_sync_client(&client)?;
+        stop_sync_client(&client)?;
 
         Ok(())
     }
 
     fn do_good_client_test(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: ThreadedTestFactory) {
         let client_options = ThreadedClientOptionsBuilder::new().build();
+
+        #[cfg_attr(not(feature = "threaded-websockets"), allow(unused_mut))]
         let mut sync_options_builder = SyncClientOptionsBuilder::new();
 
         #[cfg(feature = "threaded-websockets")]
@@ -1346,7 +1249,7 @@ pub(crate) mod testing {
     }
 
     fn threaded_subscribe_unsubscribe_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
-        sync_subscribe_unsubscribe_test(builder.build_threaded(sync_options, client_options).unwrap(), ThreadedClientEventWaiter::new_single)
+        sync_subscribe_unsubscribe_test(builder.build_threaded(sync_options, client_options).unwrap())
     }
 
     #[test]
@@ -1358,7 +1261,7 @@ pub(crate) mod testing {
 
     fn threaded_subscribe_publish_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions, qos: QualityOfService) -> MqttResult<()> {
         let client = builder.build_threaded(sync_options, client_options).unwrap();
-        sync_subscribe_publish_test(client, qos, ThreadedClientEventWaiter::new_single)
+        sync_subscribe_publish_test(client, qos)
     }
 
     #[test]
@@ -1388,7 +1291,7 @@ pub(crate) mod testing {
 
     // This primarily tests that the will configuration works.  Will functionality is mostly broker-side.
     fn threaded_will_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
-        sync_will_test(builder, sync_options, client_options, build_threaded_client, ThreadedClientEventWaiter::new_single)
+        sync_will_test(builder, sync_options, client_options, build_threaded_client)
     }
 
     #[test]
@@ -1400,7 +1303,7 @@ pub(crate) mod testing {
 
     fn threaded_connect_disconnect_cycle_session_rejoin_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
         let client = builder.build_threaded(sync_options, client_options).unwrap();
-        sync_connect_disconnect_cycle_session_rejoin_test(client, ThreadedClientEventWaiter::new_single, ThreadedClientEventWaiter::new)
+        sync_connect_disconnect_cycle_session_rejoin_test(client)
     }
 
     #[test]
@@ -1417,7 +1320,7 @@ pub(crate) mod testing {
 
     fn connection_failure_test(builder : GenericClientBuilder, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions) -> MqttResult<()> {
         let client = builder.build_threaded(sync_options, threaded_options).unwrap();
-        let connection_failure_waiter = ThreadedClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
+        let connection_failure_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
 
         client.start(None)?;
 
@@ -1427,6 +1330,7 @@ pub(crate) mod testing {
         Ok(())
     }
 
+    #[cfg(any(feature = "threaded-websockets", feature="threaded-rustls", feature="threaded-native-tls"))]
     fn create_mismatch_builder(tls_config: TlsUsage, ws_config: WebsocketUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
         assert!(tls_config != tls_endpoint || ws_config != ws_endpoint);
 
@@ -1435,12 +1339,14 @@ pub(crate) mod testing {
         create_client_builder_internal(connect_options, tls_config, ProxyUsage::None, tls_endpoint, ws_endpoint)
     }
 
-    fn create_mismatch_sync_client_options(ws_config: WebsocketUsage) -> SyncClientOptions {
+    #[cfg(any(feature = "threaded-websockets", feature="threaded-rustls", feature="threaded-native-tls"))]
+    fn create_mismatch_sync_client_options(_ws_config: WebsocketUsage) -> SyncClientOptions {
+        #[cfg_attr(not(feature = "threaded-websockets"), allow(unused_mut))]
         let mut builder = SyncClientOptionsBuilder::new();
 
         #[cfg(feature = "threaded-websockets")]
         {
-            let websocket_config_option = create_websocket_options_sync(ws_config);
+            let websocket_config_option = create_websocket_options_sync(_ws_config);
             if let Some(websocket_options) = websocket_config_option {
                 builder.with_websocket_options(websocket_options);
             }
