@@ -6,7 +6,7 @@
 
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Instant;
-use crate::client::*;
+use crate::client::synchronous::*;
 use crate::error::{MqttError, MqttResult};
 use super::*;
 

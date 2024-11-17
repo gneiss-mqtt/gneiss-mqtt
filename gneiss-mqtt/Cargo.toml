@@ -16,6 +16,7 @@ resolver = "2"
 features = ["tokio", "tokio-rustls", "tokio-native-tls", "tokio-websockets", "threaded", "threaded-rustls", "threaded-native-tls", "threaded-websockets"]
 
 [features]
+strict = [] # treats warnings as errors, only intended for internal checks
 testing = [ "dep:assert_matches", "dep:uuid" ] # enables environmentally-controlled integration tests and long-running tests (30+ seconds) that check reconnect, backoff, etc...
 tokio = ["dep:tokio"] # enables the tokio-based async client
 tokio-rustls = ["tokio", "dep:rustls", "dep:rustls-native-certs", "dep:rustls-pemfile", "dep:rustls-pki-types", "dep:tokio-rustls"]

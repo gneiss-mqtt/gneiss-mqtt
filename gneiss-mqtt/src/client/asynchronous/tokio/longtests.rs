@@ -6,7 +6,9 @@
 use std::time::{Duration};
 use crate::client::config::*;
 use crate::error::MqttResult;
-use crate::features::tokio::testing::*;
+use crate::client::asynchronous::*;
+use crate::client::asynchronous::tokio::{TokioClientOptions};
+use crate::client::asynchronous::tokio::testing::*;
 use crate::mqtt::*;
 use crate::testing::mock_server::build_mock_client_server;
 use crate::testing::protocol::*;
@@ -66,7 +68,7 @@ async fn reconnect_backoff_reset_test(builder : GenericClientBuilder, async_opti
 
     let final_reconnect_waiter = AsyncClientEventWaiter::new(client.clone(), final_wait_options, 3);
 
-    tokio::time::sleep(Duration::from_millis(connection_success_wait_millis)).await;
+    ::tokio::time::sleep(Duration::from_millis(connection_success_wait_millis)).await;
 
     let publish = PublishPacket::builder("hello/world".to_string(), QualityOfService::AtLeastOnce).build();
     let _ = client.publish(publish, None);

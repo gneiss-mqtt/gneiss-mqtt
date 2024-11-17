@@ -7,7 +7,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
-use crate::client::*;
+use crate::client::asynchronous::AsyncGneissClient;
 use crate::error::{MqttError, MqttResult};
 use super::*;
 

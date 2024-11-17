@@ -5,8 +5,8 @@
 
 use crate::client::config::*;
 use crate::error::MqttResult;
-use crate::features::threaded::*;
-use crate::features::threaded::testing::*;
+use crate::client::synchronous::threaded::*;
+use crate::client::synchronous::threaded::testing::*;
 use crate::testing::mock_server::build_mock_client_server;
 use crate::testing::protocol::*;
 use crate::testing::waiter::*;

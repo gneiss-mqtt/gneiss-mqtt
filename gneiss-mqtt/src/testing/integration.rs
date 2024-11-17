@@ -12,9 +12,13 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use crate::client::*;
 #[cfg(feature="tokio")]
-use crate::client::AsyncGneissClient;
+use crate::client::asynchronous::{AsyncClientOptions, AsyncClientOptionsBuilder, AsyncGneissClient};
+#[cfg(feature="tokio")]
+use crate::client::asynchronous::tokio::{TokioClientOptions, TokioClientOptionsBuilder};
 #[cfg(feature="threaded")]
-use crate::client::SyncGneissClient;
+use crate::client::synchronous::{SyncClientOptions, SyncClientOptionsBuilder, SyncGneissClient};
+#[cfg(feature="threaded")]
+use crate::client::synchronous::threaded::{ThreadedClientOptions, ThreadedClientOptionsBuilder};
 use crate::client::config::*;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;

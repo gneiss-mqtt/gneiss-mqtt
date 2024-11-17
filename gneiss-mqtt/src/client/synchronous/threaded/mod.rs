@@ -21,16 +21,13 @@ use log::{debug, error, info, trace};
 use crate::client::*;
 use crate::client::config::*;
 #[cfg(feature="threaded-websockets")]
-use crate::features::threaded::ws_stream::WebsocketStreamWrapper;
+use ws_stream::WebsocketStreamWrapper;
 use crate::error::{MqttError, MqttResult};
 use crate::mqtt::*;
 use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
 use crate::protocol::is_connection_established;
-#[cfg(feature = "testing")]
-use crate::testing::waiter::*;
-#[cfg(feature = "testing")]
-use crate::testing::waiter::synchronous::*;
 use crate::validate::validate_packet_outbound;
+use super::*;
 
 /// Factory function for creating the final connection object based on all the various
 /// configuration options and features.  It might be a TcpStream, it might be a TlsStream,
@@ -39,7 +36,48 @@ use crate::validate::validate_packet_outbound;
 /// Ultimately, the type must implement Read and Write.
 pub type ConnectionFactory<T> = Arc<dyn Fn() -> MqttResult<T> + Send + Sync>;
 
+/// Threaded client specific configuration
+pub struct ThreadedClientOptions {
+    pub(crate) idle_service_sleep: Option<Duration>,
+}
 
+/// Builder type for threaded client configuration
+pub struct ThreadedClientOptionsBuilder {
+    config: ThreadedClientOptions
+}
+
+impl ThreadedClientOptionsBuilder {
+
+    /// Creates a new builder object for ThreadedClientOptions
+    pub fn new() -> Self {
+        ThreadedClientOptionsBuilder {
+            config: ThreadedClientOptions {
+                idle_service_sleep: None,
+            }
+        }
+    }
+
+    /// Configures the time interval to sleep the thread the client runs on between io
+    /// processing events.  Only used if no events occurred on the previous iteration.  If the
+    /// client is handling significant work, it will not sleep, but if there's nothing
+    /// happening, it will.
+    ///
+    /// If not set, defaults to 20 milliseconds.
+    pub fn with_idle_service_sleep(&mut self, duration: Duration) {
+        self.config.idle_service_sleep = Some(duration);
+    }
+
+    /// Builds a new set of threaded client configuration options
+    pub fn build(self) -> ThreadedClientOptions {
+        self.config
+    }
+}
+
+impl Default for ThreadedClientOptionsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[derive(Copy, Clone)]
 struct ThreadedClientOptionsInternal {
@@ -1124,8 +1162,11 @@ fn apply_proxy_connect_to_stream<T>(mut stream : T, http_connect_endpoint: Endpo
 
 #[cfg(feature = "testing")]
 pub(crate) mod testing {
-    use crate::features::threaded::*;
+    use crate::client::synchronous::*;
     use crate::testing::integration::*;
+    use crate::testing::waiter::*;
+    use crate::testing::waiter::synchronous::*;
+    use super::*;
 
     fn threaded_connect_disconnect_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
         let client = builder.build_threaded(sync_options, client_options).unwrap();

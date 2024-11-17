@@ -10,11 +10,6 @@ Module that encompasses feature-specific logic (primarily TLS and Async runtime)
 #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
 pub mod rustls;
 
-#[cfg(feature = "tokio")]
-pub mod tokio;
-
 #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
 pub mod native_tls;
 
-#[cfg(feature = "threaded")]
-pub mod threaded;

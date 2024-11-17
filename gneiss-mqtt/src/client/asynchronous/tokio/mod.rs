@@ -14,9 +14,12 @@ mod longtests;
 use crate::client::*;
 use crate::client::config::*;
 use crate::error::{MqttError, MqttResult};
-use crate::mqtt::{disconnect::validate_disconnect_packet_outbound, MqttPacket, PublishPacket, SubscribePacket, UnsubscribePacket};
+use crate::mqtt::*;
+use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
 use crate::protocol::is_connection_established;
 use crate::validate::validate_packet_outbound;
+use super::{AsyncClientOptions, AsyncGneissClient, AsyncMqttClient, AsyncPublishResult, AsyncSubscribeResult, AsyncUnsubscribeResult};
+
 use log::*;
 use std::future::Future;
 use std::pin::Pin;
@@ -34,6 +37,34 @@ use stream_ws::{tungstenite::WsMessageHandler, WsMessageHandle, WsByteStream};
 use tokio_tungstenite::{client_async, WebSocketStream};
 #[cfg(feature="tokio-websockets")]
 use tungstenite::Message;
+
+/// A structure that holds configuration related to how an asynchronous client should interact
+/// with the Tokio async runtime.
+pub struct TokioClientOptions {
+    pub(crate) runtime: Handle,
+}
+
+/// Builder type for tokio-based client configuration
+pub struct TokioClientOptionsBuilder {
+    options: TokioClientOptions
+}
+
+impl TokioClientOptionsBuilder {
+
+    /// Creates a new builder object for TokioClientOptions
+    pub fn new(runtime: Handle) -> Self {
+        TokioClientOptionsBuilder {
+            options: TokioClientOptions {
+                runtime
+            }
+        }
+    }
+
+    /// Builds a new set of tokio client configuration options
+    pub fn build(self) -> TokioClientOptions {
+        self.options
+    }
+}
 
 pub(crate) struct ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
     tokio_config: TokioClientOptionsInternal<T>,
@@ -1047,8 +1078,8 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Mq
 #[cfg(all(test, feature = "testing"))]
 pub(crate) mod testing {
     use std::time::Duration;
+    use crate::client::asynchronous::AsyncClientOptionsBuilder;
     use crate::error::*;
-    use crate::mqtt::*;
     use crate::testing::integration::*;
     use crate::testing::waiter::*;
     use crate::testing::waiter::asynchronous::*;
