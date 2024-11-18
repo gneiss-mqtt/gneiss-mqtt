@@ -118,10 +118,19 @@ pub type AsyncGneissClient = Arc<dyn AsyncMqttClient + Send + Sync>;
 
 /// A structure that holds configuration related to a client's asynchronous properties and
 /// internal implementation.  Only relevant to asynchronous clients.
+#[derive(Clone)]
 pub struct AsyncClientOptions {
 
     #[cfg(feature="tokio-websockets")]
     pub(crate) websocket_options: Option<AsyncWebsocketOptions>
+}
+
+impl AsyncClientOptions {
+
+    /// Creates a new builder for AsyncClientOptions instances
+    pub fn builder() -> AsyncClientOptionsBuilder {
+        AsyncClientOptionsBuilder::new()
+    }
 }
 
 /// Builder type for asynchronous client behavior.
@@ -132,7 +141,7 @@ pub struct AsyncClientOptionsBuilder {
 impl AsyncClientOptionsBuilder {
 
     /// Creates a new builder object for AsyncClientOptions
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         AsyncClientOptionsBuilder {
             options: AsyncClientOptions {
                 #[cfg(feature="tokio-websockets")]
@@ -149,13 +158,7 @@ impl AsyncClientOptionsBuilder {
     }
 
     /// Builds a new set of asynchronous client options
-    pub fn build(self) -> AsyncClientOptions {
-        self.options
-    }
-}
-
-impl Default for AsyncClientOptionsBuilder {
-    fn default() -> Self {
-        Self::new()
+    pub fn build(&self) -> AsyncClientOptions {
+        self.options.clone()
     }
 }

@@ -12,9 +12,9 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use crate::client::*;
 #[cfg(feature="tokio")]
-use crate::client::asynchronous::{AsyncClientOptions, AsyncClientOptionsBuilder, AsyncGneissClient};
+use crate::client::asynchronous::{AsyncClientOptions, AsyncGneissClient};
 #[cfg(feature="tokio")]
-use crate::client::asynchronous::tokio::{TokioClientOptions, TokioClientOptionsBuilder};
+use crate::client::asynchronous::tokio::{TokioClientOptions};
 #[cfg(feature="threaded")]
 use crate::client::synchronous::{SyncClientOptions, SyncClientOptionsBuilder, SyncGneissClient};
 #[cfg(feature="threaded")]
@@ -119,7 +119,7 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
 
     #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
     if _tls_usage == TlsUsage::Rustls {
-        let mut tls_options_builder = TlsOptionsBuilder::new();
+        let mut tls_options_builder = TlsOptions::builder();
         tls_options_builder.with_verify_peer(false);
         tls_options_builder.with_root_ca_from_path(&get_ca_path()).unwrap();
 
@@ -128,7 +128,7 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
 
     #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
     if _tls_usage == TlsUsage::Nativetls {
-        let mut tls_options_builder = TlsOptionsBuilder::new();
+        let mut tls_options_builder = TlsOptions::builder();
         tls_options_builder.with_verify_peer(false);
         tls_options_builder.with_root_ca_from_path(&get_ca_path()).unwrap();
 
@@ -138,7 +138,7 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
     if proxy_config != ProxyUsage::None {
         let proxy_endpoint = get_proxy_endpoint();
         let proxy_port = get_proxy_port();
-        let proxy_options = HttpProxyOptionsBuilder::new(&proxy_endpoint, proxy_port).build();
+        let proxy_options = HttpProxyOptions::builder(&proxy_endpoint, proxy_port).build();
         builder.with_http_proxy_options(proxy_options);
     }
 
@@ -146,7 +146,7 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
 }
 
 pub(crate) fn create_good_client_builder(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage) -> GenericClientBuilder {
-    let connect_options = ConnectOptionsBuilder::new()
+    let connect_options = ConnectOptions::builder()
         .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
         .with_session_expiry_interval_seconds(3600)
         .build();
@@ -158,7 +158,7 @@ pub(crate) fn create_good_client_builder(tls: TlsUsage, ws: WebsocketUsage, prox
 pub(crate) fn create_websocket_options_async(ws: WebsocketUsage) -> Option<AsyncWebsocketOptions> {
     match ws {
         WebsocketUsage::None => { None }
-        WebsocketUsage::Tungstenite => { Some(AsyncWebsocketOptionsBuilder::new().build()) }
+        WebsocketUsage::Tungstenite => { Some(AsyncWebsocketOptions::builder().build()) }
     }
 }
 
@@ -166,7 +166,7 @@ pub(crate) fn create_websocket_options_async(ws: WebsocketUsage) -> Option<Async
 pub(crate) fn create_websocket_options_sync(ws: WebsocketUsage) -> Option<SyncWebsocketOptions> {
     match ws {
         WebsocketUsage::None => { None }
-        WebsocketUsage::Tungstenite => { Some(SyncWebsocketOptionsBuilder::new().build()) }
+        WebsocketUsage::Tungstenite => { Some(SyncWebsocketOptions::builder().build()) }
     }
 }
 #[cfg(feature = "tokio")]
@@ -447,7 +447,7 @@ pub(crate) fn sync_will_test(base_client_options: GenericClientBuilder, sync_opt
         .with_payload(payload.clone())
         .build();
 
-    let connect_options = ConnectOptionsBuilder::new()
+    let connect_options = ConnectOptions::builder()
         .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
         .with_will(will)
         .build();
@@ -499,14 +499,14 @@ pub(crate) async fn async_will_test(base_client_options: GenericClientBuilder, a
         .with_payload(payload.clone())
         .build();
 
-    let connect_options = ConnectOptionsBuilder::new()
+    let connect_options = ConnectOptions::builder()
         .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
         .with_will(will)
         .build();
 
     let will_builder = create_client_builder_internal(connect_options, TlsUsage::None, ProxyUsage::None, TlsUsage::None, WebsocketUsage::None);
-    let will_async_options = AsyncClientOptionsBuilder::new().build();
-    let will_tokio_options = TokioClientOptionsBuilder::new(tokio::runtime::Handle::current().clone()).build();
+    let will_async_options = AsyncClientOptions::builder().build();
+    let will_tokio_options = TokioClientOptions::builder(tokio::runtime::Handle::current().clone()).build();
     let will_client = client_factory(will_builder, will_async_options, will_tokio_options);
 
     start_async_client(&client).await?;

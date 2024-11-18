@@ -222,9 +222,18 @@ pub type SyncGneissClient = Arc<dyn SyncMqttClient + Send + Sync>;
 
 /// A structure that holds configuration related to a client's synchronous properties and
 /// internal implementation.  Only relevant to synchronous clients.
+#[derive(Clone)]
 pub struct SyncClientOptions {
     #[cfg(feature="threaded-websockets")]
     pub(crate) websocket_options: Option<SyncWebsocketOptions>
+}
+
+impl SyncClientOptions {
+
+    /// Creates a new builder for SyncClientOptions instances.
+    pub fn builder() -> SyncClientOptionsBuilder {
+        SyncClientOptionsBuilder::new()
+    }
 }
 
 /// Builder type for synchronous client behavior.
@@ -235,7 +244,7 @@ pub struct SyncClientOptionsBuilder {
 impl SyncClientOptionsBuilder {
 
     /// Creates a new builder object for SyncClientOptions
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         SyncClientOptionsBuilder {
             config: SyncClientOptions {
                 #[cfg(feature="threaded-websockets")]
@@ -252,14 +261,7 @@ impl SyncClientOptionsBuilder {
     }
 
     /// Builds a new set of synchronous client options
-    pub fn build(self) -> SyncClientOptions {
-        self.config
+    pub fn build(&self) -> SyncClientOptions {
+        self.config.clone()
     }
 }
-
-impl Default for SyncClientOptionsBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-

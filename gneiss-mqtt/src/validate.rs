@@ -334,7 +334,7 @@ pub(crate) mod testing {
     pub(crate) fn create_pinned_validation_context() -> PinnedValidationContext {
         let mut pinned_context = PinnedValidationContext {
             settings : NegotiatedSettings {..Default::default() },
-            connect_options : ConnectOptionsBuilder::new().build(),
+            connect_options : ConnectOptions::builder().build(),
         };
 
         pinned_context.settings.maximum_packet_size_to_server = MAXIMUM_VARIABLE_LENGTH_INTEGER as u32;

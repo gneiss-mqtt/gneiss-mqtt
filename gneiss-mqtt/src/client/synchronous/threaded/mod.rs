@@ -37,8 +37,17 @@ use super::*;
 pub type ConnectionFactory<T> = Arc<dyn Fn() -> MqttResult<T> + Send + Sync>;
 
 /// Threaded client specific configuration
+#[derive(Default, Clone)]
 pub struct ThreadedClientOptions {
     pub(crate) idle_service_sleep: Option<Duration>,
+}
+
+impl ThreadedClientOptions {
+
+    /// Creates a new builder for ThreadedClientOptions instances
+    pub fn builder() -> ThreadedClientOptionsBuilder {
+        ThreadedClientOptionsBuilder::new()
+    }
 }
 
 /// Builder type for threaded client configuration
@@ -49,7 +58,7 @@ pub struct ThreadedClientOptionsBuilder {
 impl ThreadedClientOptionsBuilder {
 
     /// Creates a new builder object for ThreadedClientOptions
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         ThreadedClientOptionsBuilder {
             config: ThreadedClientOptions {
                 idle_service_sleep: None,
@@ -70,12 +79,6 @@ impl ThreadedClientOptionsBuilder {
     /// Builds a new set of threaded client configuration options
     pub fn build(self) -> ThreadedClientOptions {
         self.config
-    }
-}
-
-impl Default for ThreadedClientOptionsBuilder {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -1185,7 +1188,7 @@ pub(crate) mod testing {
 
         #[cfg(feature = "threaded-websockets")]
         if ws == WebsocketUsage::Tungstenite {
-            sync_options_builder.with_websocket_options(SyncWebsocketOptionsBuilder::new().build());
+            sync_options_builder.with_websocket_options(SyncWebsocketOptions::builder().build());
         }
 
         assert!((*test_factory)(create_good_client_builder(tls, ws, proxy), sync_options_builder.build(), client_options).is_ok());
@@ -1373,7 +1376,7 @@ pub(crate) mod testing {
     fn create_mismatch_builder(tls_config: TlsUsage, ws_config: WebsocketUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
         assert!(tls_config != tls_endpoint || ws_config != ws_endpoint);
 
-        let connect_options = ConnectOptionsBuilder::new().build();
+        let connect_options = ConnectOptions::builder().build();
 
         create_client_builder_internal(connect_options, tls_config, ProxyUsage::None, tls_endpoint, ws_endpoint)
     }

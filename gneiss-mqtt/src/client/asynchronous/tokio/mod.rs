@@ -44,6 +44,14 @@ pub struct TokioClientOptions {
     pub(crate) runtime: Handle,
 }
 
+impl TokioClientOptions {
+
+    /// Creates a new builder for TokioClientOptions instances.
+    pub fn builder(runtime: Handle) -> TokioClientOptionsBuilder {
+        TokioClientOptionsBuilder::new(runtime)
+    }
+}
+
 /// Builder type for tokio-based client configuration
 pub struct TokioClientOptionsBuilder {
     options: TokioClientOptions
@@ -52,7 +60,7 @@ pub struct TokioClientOptionsBuilder {
 impl TokioClientOptionsBuilder {
 
     /// Creates a new builder object for TokioClientOptions
-    pub fn new(runtime: Handle) -> Self {
+    pub(crate) fn new(runtime: Handle) -> Self {
         TokioClientOptionsBuilder {
             options: TokioClientOptions {
                 runtime
@@ -1078,7 +1086,6 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Mq
 #[cfg(all(test, feature = "testing"))]
 pub(crate) mod testing {
     use std::time::Duration;
-    use crate::client::asynchronous::AsyncClientOptionsBuilder;
     use crate::error::*;
     use crate::testing::integration::*;
     use crate::testing::waiter::*;
@@ -1090,14 +1097,14 @@ pub(crate) mod testing {
     }
 
     fn do_good_client_test(handle: Handle, tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: TokioTestFactory) {
-        let tokio_options = TokioClientOptionsBuilder::new(handle.clone()).build();
+        let tokio_options = TokioClientOptions::builder(handle.clone()).build();
 
         #[cfg_attr(not(feature = "tokio-websockets"), allow(unused_mut))]
-        let mut async_options_builder = AsyncClientOptionsBuilder::new();
+        let mut async_options_builder = AsyncClientOptions::builder();
 
         #[cfg(feature = "tokio-websockets")]
         if ws == WebsocketUsage::Tungstenite {
-            async_options_builder.with_websocket_options(AsyncWebsocketOptionsBuilder::new().build());
+            async_options_builder.with_websocket_options(AsyncWebsocketOptions::builder().build());
         }
 
         let test_future = (*test_factory)(create_good_client_builder(tls, ws, proxy), async_options_builder.build(), tokio_options);
@@ -1300,7 +1307,7 @@ pub(crate) mod testing {
     }
 
     pub(crate) fn do_builder_test(handle: Handle, test_factory: TokioTestFactory, builder: GenericClientBuilder, async_options: AsyncClientOptions) {
-        let tokio_options = TokioClientOptionsBuilder::new(handle.clone()).build();
+        let tokio_options = TokioClientOptions::builder(handle.clone()).build();
         let test_future = (*test_factory)(builder, async_options, tokio_options);
 
         handle.block_on(test_future).unwrap();
@@ -1322,7 +1329,7 @@ pub(crate) mod testing {
     fn create_mismatch_builder(tls_config: TlsUsage, ws_config: WebsocketUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
         assert!(tls_config != tls_endpoint || ws_config != ws_endpoint);
 
-        let connect_options = ConnectOptionsBuilder::new().build();
+        let connect_options = ConnectOptions::builder().build();
 
         create_client_builder_internal(connect_options, tls_config, ProxyUsage::None, tls_endpoint, ws_endpoint)
     }
@@ -1330,7 +1337,7 @@ pub(crate) mod testing {
     #[cfg(any(feature = "tokio-rustls", feature = "tokio-native-tls", feature = "tokio-websockets"))]
     fn create_mismatch_async_client_options(_ws_config: WebsocketUsage) -> AsyncClientOptions {
         #[cfg_attr(not(feature = "tokio-websockets"), allow(unused_mut))]
-        let mut builder = AsyncClientOptionsBuilder::new();
+        let mut builder = AsyncClientOptions::builder();
 
         #[cfg(feature = "tokio-websockets")]
         {
@@ -1616,7 +1623,7 @@ pub(crate) mod testing {
         let client_options = MqttClientOptionsBuilder::new()
             .with_connect_timeout(Duration::from_secs(3))
             .build();
-        let async_client_options = AsyncClientOptionsBuilder::new().build();
+        let async_client_options = AsyncClientOptions::builder().build();
 
         let mut builder = GenericClientBuilder::new("example.com", 8000);
         builder.with_client_options(client_options);
@@ -1630,7 +1637,7 @@ pub(crate) mod testing {
     fn connection_failure_invalid_endpoint_http() {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let handle = runtime.handle().clone();
-        let async_client_options = AsyncClientOptionsBuilder::new().build();
+        let async_client_options = AsyncClientOptions::builder().build();
         let builder = GenericClientBuilder::new("amazon.com", 443);
         do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
             Box::pin(connection_failure_test(builder, async_options, tokio_options))

@@ -229,7 +229,7 @@ pub(crate) fn build_mock_client_server(mut config: ClientTestOptions) -> (Generi
         (*client_options_mutator)(&mut client_options_builder);
     }
 
-    let mut connect_options_builder = ConnectOptionsBuilder::new();
+    let mut connect_options_builder = ConnectOptions::builder();
     if let Some(connect_options_mutator) = config.connect_options_mutator_fn {
         (*connect_options_mutator)(&mut connect_options_builder);
     }

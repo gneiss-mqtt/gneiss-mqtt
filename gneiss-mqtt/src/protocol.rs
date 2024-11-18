@@ -2132,7 +2132,7 @@ mod tests {
 
     #[test]
     fn build_negotiated_settings_min_connect_min_connack() {
-        let config = build_protocol_state_config_for_settings_test(ConnectOptionsBuilder::new().build());
+        let config = build_protocol_state_config_for_settings_test(ConnectOptions::builder().build());
 
         let connack = ConnackPacket {
             assigned_client_identifier: Some("client".to_string()),
@@ -2161,7 +2161,7 @@ mod tests {
     #[test]
     fn build_negotiated_settings_max_connect_min_connack() {
         let config = build_protocol_state_config_for_settings_test(
-            ConnectOptionsBuilder::new()
+            ConnectOptions::builder()
                 .with_keep_alive_interval_seconds(None)
                 .with_rejoin_session_policy(RejoinSessionPolicy::Always)
                 .with_client_id("connect_client_id")
@@ -2196,7 +2196,7 @@ mod tests {
 
     #[test]
     fn build_negotiated_settings_min_connect_max_connack() {
-        let config = build_protocol_state_config_for_settings_test(ConnectOptionsBuilder::new().build());
+        let config = build_protocol_state_config_for_settings_test(ConnectOptions::builder().build());
 
         let connack = ConnackPacket {
             session_present: true,
@@ -2236,7 +2236,7 @@ mod tests {
     #[test]
     fn build_negotiated_settings_max_connect_max_connack() {
         let config = build_protocol_state_config_for_settings_test(
-            ConnectOptionsBuilder::new()
+            ConnectOptions::builder()
                 .with_rejoin_session_policy(RejoinSessionPolicy::Never)
                 .with_client_id("connect_client_id")
                 .with_session_expiry_interval_seconds(3600)
@@ -2282,7 +2282,7 @@ mod tests {
 
     #[test]
     fn build_negotiated_settings_existing_client_id() {
-        let config = build_protocol_state_config_for_settings_test(ConnectOptionsBuilder::new().build());
+        let config = build_protocol_state_config_for_settings_test(ConnectOptions::builder().build());
 
         let connack = ConnackPacket {
             ..Default::default()
@@ -2392,7 +2392,7 @@ mod tests {
 
     fn build_protocol_state_for_acquire_packet_id_test() -> ProtocolState {
         let config = ProtocolStateConfig {
-            connect_options: ConnectOptionsBuilder::new().build(),
+            connect_options: ConnectOptions::builder().build(),
             base_timestamp: Instant::now(),
             offline_queue_policy: OfflineQueuePolicy::PreserveNothing,
             ping_timeout: Duration::from_millis(0),

@@ -38,7 +38,7 @@ async fn simple_reconnect_test(builder : GenericClientBuilder, async_options: As
 fn client_reconnect_with_backoff() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let (builder, server) = build_mock_client_server(build_reconnect_test_options());
-    let async_options = AsyncClientOptionsBuilder::new().build();
+    let async_options = AsyncClientOptions::builder().build();
 
     do_builder_test(runtime.handle().clone(), Box::new(|builder, async_options, tokio_options| {
         Box::pin(simple_reconnect_test(builder, async_options, tokio_options, 14, Box::new(|events|{validate_reconnect_failure_sequence(events)})))
@@ -87,7 +87,7 @@ fn client_reconnect_with_backoff_and_backoff_reset() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let handle = runtime.handle().clone();
     let (builder, server) = build_mock_client_server(build_reconnect_reset_test_options());
-    let async_options = AsyncClientOptionsBuilder::new().build();
+    let async_options = AsyncClientOptions::builder().build();
 
     do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
         Box::pin(reconnect_backoff_reset_test(builder,
@@ -106,7 +106,7 @@ fn client_reconnect_with_backoff_and_no_backoff_reset() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let handle = runtime.handle().clone();
     let (builder, server) = build_mock_client_server(build_reconnect_reset_test_options());
-    let async_options = AsyncClientOptionsBuilder::new().build();
+    let async_options = AsyncClientOptions::builder().build();
 
     do_builder_test(handle.clone(), Box::new(move |builder, async_options, tokio_options| {
         Box::pin(reconnect_backoff_reset_test(builder,

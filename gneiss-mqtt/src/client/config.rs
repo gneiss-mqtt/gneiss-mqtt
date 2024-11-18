@@ -16,7 +16,7 @@ use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::io::Read;
 use std::net::{SocketAddr, ToSocketAddrs};
-#[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls", feature = "tokio-rustls", feature = "threaded-rustls"))]
+#[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls", feature = "tokio-rustls", feature = "threaded-rustls", feature = "tokio-websockets", feature = "threaded-websockets"))]
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -42,11 +42,18 @@ use crate::client::synchronous::*;
 use crate::client::synchronous::threaded::*;
 
 /// Configuration options related to establishing connections through HTTP proxies
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct HttpProxyOptions {
     pub(crate) endpoint: String,
     pub(crate) port: u16,
     pub(crate) tls_options: Option<TlsOptions>
+}
+
+impl HttpProxyOptions {
+    /// Creates a new builder for an HttpProxyOptions instance.
+    pub fn builder(endpoint: &str, port: u16) -> HttpProxyOptionsBuilder {
+        HttpProxyOptionsBuilder::new(endpoint, port)
+    }
 }
 
 /// Builder type for constructing HTTP-proxy-related configuration.
@@ -57,7 +64,7 @@ pub struct HttpProxyOptionsBuilder {
 impl HttpProxyOptionsBuilder {
 
     /// Creates a new builder object
-    pub fn new(endpoint: &str, port: u16) -> Self {
+    pub(crate) fn new(endpoint: &str, port: u16) -> Self {
         HttpProxyOptionsBuilder {
             options: HttpProxyOptions {
                 endpoint: endpoint.to_string(),
@@ -75,8 +82,8 @@ impl HttpProxyOptionsBuilder {
     }
 
     /// Creates a new set of HTTP proxy options
-    pub fn build(self) -> HttpProxyOptions {
-        self.options
+    pub fn build(&self) -> HttpProxyOptions {
+        self.options.clone()
     }
 }
 
@@ -92,11 +99,19 @@ pub type SyncWebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) ->
 #[derive(Default, Clone)]
 #[cfg(feature="threaded-websockets")]
 pub struct SyncWebsocketOptions {
-    pub(crate) handshake_transform: std::sync::Arc<Option<SyncWebsocketHandshakeTransform>>
+    pub(crate) handshake_transform: Arc<Option<SyncWebsocketHandshakeTransform>>
+}
+
+#[cfg(feature="threaded-websockets")]
+impl SyncWebsocketOptions {
+
+    /// Creates a new builder for SyncWebsocketOptions instances
+    pub fn builder() -> SyncWebsocketOptionsBuilder {
+        SyncWebsocketOptionsBuilder::new()
+    }
 }
 
 /// Builder type for constructing async Websockets-related configuration.
-#[derive(Default)]
 #[cfg(feature="threaded-websockets")]
 pub struct SyncWebsocketOptionsBuilder {
     options : SyncWebsocketOptions
@@ -106,7 +121,7 @@ pub struct SyncWebsocketOptionsBuilder {
 impl SyncWebsocketOptionsBuilder {
 
     /// Creates a new builder object with default options.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         SyncWebsocketOptionsBuilder {
             options: SyncWebsocketOptions {
                 ..Default::default()
@@ -136,14 +151,22 @@ pub type AsyncWebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output 
 pub type AsyncWebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -> AsyncWebsocketHandshakeTransformReturnType + Send + Sync>;
 
 /// Configuration options related to establishing an async MQTT connection over websockets
-#[derive(Default, Clone)]
+#[derive(Clone)]
 #[cfg(feature="tokio-websockets")]
 pub struct AsyncWebsocketOptions {
     pub(crate) handshake_transform: std::sync::Arc<Option<AsyncWebsocketHandshakeTransform>>
 }
 
+#[cfg(feature="tokio-websockets")]
+impl AsyncWebsocketOptions {
+
+    /// Creates a new builder for AsyncWebsocketOptions instances
+    pub fn builder() -> AsyncWebsocketOptionsBuilder {
+        AsyncWebsocketOptionsBuilder::new()
+    }
+}
+
 /// Builder type for constructing async Websockets-related configuration.
-#[derive(Default)]
 #[cfg(feature="tokio-websockets")]
 pub struct AsyncWebsocketOptionsBuilder {
     options : AsyncWebsocketOptions
@@ -153,10 +176,10 @@ pub struct AsyncWebsocketOptionsBuilder {
 impl AsyncWebsocketOptionsBuilder {
 
     /// Creates a new builder object with default options.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         AsyncWebsocketOptionsBuilder {
             options: AsyncWebsocketOptions {
-                ..Default::default()
+                handshake_transform: Arc::new(None)
             }
         }
     }
@@ -164,7 +187,7 @@ impl AsyncWebsocketOptionsBuilder {
     /// Configure an async transformation function that operates on the websocket handshake.  Useful
     /// for brokers that require some kind of signing algorithm to accept the upgrade request.
     pub fn with_handshake_transform(&mut self, transform: AsyncWebsocketHandshakeTransform) -> &mut Self {
-        self.options.handshake_transform = std::sync::Arc::new(Some(transform));
+        self.options.handshake_transform = Arc::new(Some(transform));
         self
     }
 
@@ -198,6 +221,46 @@ pub struct TlsOptions {
     pub(crate) options: TlsData
 }
 
+impl TlsOptions {
+
+    /// Creates a new builder object with default options.  Defaults may be TLS-feature specific.
+    /// Presently, this means standard TLS using 1.2 or higher and the system trust store.
+    pub fn builder() -> TlsOptionsBuilder {
+        TlsOptionsBuilder::new()
+    }
+
+    /// Creates a new builder object using mutual TLS and an X509 certificate and a
+    /// private key, by file path.
+    pub fn bulder_with_mtls_from_path(certificate_path: &str, private_key_path: &str) -> MqttResult<TlsOptionsBuilder> {
+        TlsOptionsBuilder::new_with_mtls_from_path(certificate_path, private_key_path)
+    }
+
+    /// Creates a new builder object using mutual TLS and an X509 certificate and a
+    /// private key from memory.
+    pub fn builder_with_mtls_from_memory(certificate_bytes: &[u8], private_key_bytes: &[u8]) -> TlsOptionsBuilder {
+        TlsOptionsBuilder::new_with_mtls_from_memory(certificate_bytes, private_key_bytes)
+    }
+
+    #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
+    /// Builds client TLS options directly from a Rustls ClientConfig instance
+    ///
+    /// This factory is useful when you need TLS properties that TlsOptionsBuilder does not support.
+    pub fn new_rustls_from_client_config(config: rustls::ClientConfig) -> TlsOptions {
+        TlsOptions {
+            options: TlsData::Rustls(Arc::new(config))
+        }
+    }
+
+    #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
+    /// Builds client TLS options directly from a native-tls TlsConnectorBuilder instance
+    ///
+    /// This factory is useful when you need TLS properties that TlsOptionsBuilder does not support.
+    pub fn new_native_tls_from_tls_connector_builder(builder: native_tls::TlsConnectorBuilder) -> TlsOptions {
+        TlsOptions {
+            options: TlsData::NativeTls(Arc::new(builder))
+        }
+    }
+}
 fn load_file(filename: &str) -> std::io::Result<Vec<u8>> {
     let mut bytes_vec = Vec::new();
     let mut bytes_file = File::open(filename)?;
@@ -207,7 +270,7 @@ fn load_file(filename: &str) -> std::io::Result<Vec<u8>> {
 
 
 /// Builder type for constructing TLS configuration.
-#[allow(dead_code)]
+#[cfg_attr(not(any(feature = "tokio-rustls", feature = "tokio-native-tls", feature = "threaded-rustls", feature = "threaded-native-tls")), allow(dead_code))]
 pub struct TlsOptionsBuilder {
     pub(crate) mode: TlsMode,
     pub(crate) root_ca_bytes: Option<Vec<u8>>,
@@ -219,15 +282,18 @@ pub struct TlsOptionsBuilder {
 
 impl TlsOptionsBuilder {
 
-    /// Creates a new builder object with default options.  Defaults may be TLS-feature specific.
-    /// Presently, this means standard TLS using 1.2 or higher and the system trust store.
-    pub fn new() -> Self {
-        TlsOptionsBuilder::default()
+    pub(crate) fn new() -> Self {
+        TlsOptionsBuilder {
+            mode: TlsMode::Standard,
+            root_ca_bytes: None,
+            certificate_bytes: None,
+            private_key_bytes: None,
+            verify_peer: true,
+            alpn: None
+        }
     }
 
-    /// Configures the builder to create a mutual TLS context using an X509 certificate and a
-    /// private key, by file path.
-    pub fn new_with_mtls_from_path(certificate_path: &str, private_key_path: &str) -> MqttResult<Self> {
+    pub(crate) fn new_with_mtls_from_path(certificate_path: &str, private_key_path: &str) -> MqttResult<Self> {
         let certificate_bytes = load_file(certificate_path)?;
         let private_key_bytes = load_file(private_key_path)?;
 
@@ -241,9 +307,7 @@ impl TlsOptionsBuilder {
         })
     }
 
-    /// Configures the builder to create a mutual TLS context using an X509 certificate and a
-    /// private key, from memory.
-    pub fn new_with_mtls_from_memory(certificate_bytes: &[u8], private_key_bytes: &[u8]) -> Self {
+    pub(crate) fn new_with_mtls_from_memory(certificate_bytes: &[u8], private_key_bytes: &[u8]) -> Self {
         TlsOptionsBuilder {
             mode: TlsMode::Mtls,
             root_ca_bytes: None,
@@ -314,20 +378,6 @@ impl TlsOptionsBuilder {
         })
     }
 
-    #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
-    /// Builds client TLS options directly from a native-tls TlsConnectorBuilder instance
-    ///
-    /// This factory is useful when you need TLS properties that TlsOptionsBuilder does not support.
-    pub fn build_native_tls_from_tls_connector_builder(builder: native_tls::TlsConnectorBuilder) -> TlsOptions {
-        TlsOptions {
-            options: TlsData::NativeTls(Arc::new(builder))
-        }
-    }
-}
-
-
-impl TlsOptionsBuilder {
-
     #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
     /// Builds client TLS options using the `rustls` crate
     pub fn build_rustls(&self) -> Result<TlsOptions, MqttError> {
@@ -359,16 +409,6 @@ impl TlsOptionsBuilder {
         Ok(TlsOptions {
             options: TlsData::Rustls(Arc::new(config))
         })
-    }
-
-    #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
-    /// Builds client TLS options directly from a Rustls ClientConfig instance
-    ///
-    /// This factory is useful when you need TLS properties that TlsOptionsBuilder does not support.
-    pub fn build_rustls_from_client_config(config: rustls::ClientConfig) -> TlsOptions {
-        TlsOptions {
-            options: TlsData::Rustls(Arc::new(config))
-        }
     }
 }
 
@@ -414,19 +454,6 @@ fn build_certs(certificate_bytes: &[u8]) -> Vec<rustls_pki_types::CertificateDer
     rustls_pemfile::certs(&mut reader)
         .flatten()
         .collect()
-}
-
-impl Default for TlsOptionsBuilder {
-    fn default() -> Self {
-        TlsOptionsBuilder {
-            mode: TlsMode::Standard,
-            root_ca_bytes: None,
-            certificate_bytes: None,
-            private_key_bytes: None,
-            verify_peer: true,
-            alpn: None
-        }
-    }
 }
 
 /// Controls how the client attempts to rejoin MQTT sessions.
@@ -489,6 +516,17 @@ pub struct ConnectOptions {
 
 impl ConnectOptions {
 
+    /// Creates a new builder for a ConnectOptions instances.
+    pub fn builder() -> ConnectOptionsBuilder {
+        ConnectOptionsBuilder::new()
+    }
+
+    /// Creates a new builder object for ConnectOptions using an existing ConnectOptions
+    /// value as a starting point.  Useful for internally tweaking user-supplied configuration.
+    pub fn builder_from_existing(connect_options: ConnectOptions) -> ConnectOptionsBuilder {
+        ConnectOptionsBuilder::new_from_existing(connect_options)
+    }
+
     // TODO: implement as From<ConnectOptions>
     pub(crate) fn to_connect_packet(&self, connected_previously: bool) -> ConnectPacket {
         let clean_start =
@@ -528,54 +566,39 @@ impl ConnectOptions {
     pub fn client_id(&self) -> &Option<String> { &self.client_id }
 }
 
-impl Default for ConnectOptions {
-
-    /// Creates a ConnectOptions object with default values.
-    ///
-    /// In particular, MQTT keep alive is set to a "reasonable" default value rather than
-    /// set to zero, which means don't use keep alive.  It is strongly recommended to never set
-    /// keep alive to zero.
-    fn default() -> Self {
-        ConnectOptions {
-            keep_alive_interval_seconds: Some(DEFAULT_KEEP_ALIVE_SECONDS),
-            rejoin_session_policy: RejoinSessionPolicy::PostSuccess,
-            client_id: None,
-            username: None,
-            password: None,
-            session_expiry_interval_seconds: None,
-            request_response_information: None,
-            request_problem_information: None,
-            receive_maximum: None,
-            topic_alias_maximum: None,
-            maximum_packet_size_bytes: None,
-            will_delay_interval_seconds: None,
-            will: None,
-            user_properties: None,
-        }
-    }
-}
-
 /// A builder for connection-related options on the client.
 ///
 /// These options will determine packet field values for the CONNECT packet sent out
 /// by the client on each connection attempt.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ConnectOptionsBuilder {
     options: ConnectOptions
 }
 
 impl ConnectOptionsBuilder {
 
-    /// Creates a new builder object for ConnectOptions
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         ConnectOptionsBuilder {
-            ..Default::default()
+            options: ConnectOptions {
+                keep_alive_interval_seconds: Some(DEFAULT_KEEP_ALIVE_SECONDS),
+                rejoin_session_policy: RejoinSessionPolicy::PostSuccess,
+                client_id: None,
+                username: None,
+                password: None,
+                session_expiry_interval_seconds: None,
+                request_response_information: None,
+                request_problem_information: None,
+                receive_maximum: None,
+                topic_alias_maximum: None,
+                maximum_packet_size_bytes: None,
+                will_delay_interval_seconds: None,
+                will: None,
+                user_properties: None,
+            }
         }
     }
 
-    /// Creates a new builder object for ConnectOptions using existing an existing ConnectOptions
-    /// value as a starting point.  Useful for internally tweaking user-supplied configuration.
-    pub fn new_from_existing(options: ConnectOptions) -> Self {
+    pub(crate) fn new_from_existing(options: ConnectOptions) -> Self {
         ConnectOptionsBuilder {
             options
         }
@@ -810,6 +833,14 @@ pub struct MqttClientOptions {
     pub(crate) reconnect_options: ReconnectOptions,
 }
 
+impl MqttClientOptions {
+
+    /// Creates a new builder for MqttClientOptions instances.
+    pub fn builder() -> MqttClientOptionsBuilder {
+        MqttClientOptionsBuilder::new()
+    }
+}
+
 impl Debug for MqttClientOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "MqttClientOptions {{ ")?;
@@ -827,31 +858,22 @@ impl Debug for MqttClientOptions {
     }
 }
 
-impl Default for MqttClientOptions {
-    fn default() -> Self {
-        MqttClientOptions {
-            offline_queue_policy: OfflineQueuePolicy::PreserveAcknowledged,
-            connect_timeout: Duration::from_secs(30),
-            ping_timeout: Duration::from_secs(10),
-            outbound_alias_resolver_factory: None,
-            reconnect_options: ReconnectOptions::default(),
-        }
-    }
-}
-
 /// A builder for client-level behavior configuration options
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MqttClientOptionsBuilder {
     options: MqttClientOptions
 }
 
 impl MqttClientOptionsBuilder {
 
-    /// Creates a new builder object for MqttClientOptions
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         MqttClientOptionsBuilder {
             options: MqttClientOptions {
-                ..Default::default()
+                offline_queue_policy: OfflineQueuePolicy::PreserveAcknowledged,
+                connect_timeout: Duration::from_secs(30),
+                ping_timeout: Duration::from_secs(10),
+                outbound_alias_resolver_factory: None,
+                reconnect_options: ReconnectOptions::default(),
             }
         }
     }
@@ -1034,7 +1056,7 @@ impl GenericClientBuilder {
             if let Some(options) = &self.connect_options {
                 options.clone()
             } else {
-                ConnectOptionsBuilder::new().build()
+                ConnectOptions::builder().build()
             };
 
         let client_options =
@@ -1064,7 +1086,7 @@ impl GenericClientBuilder {
             if let Some(options) = &self.connect_options {
                 options.clone()
             } else {
-                ConnectOptionsBuilder::new().build()
+                ConnectOptions::builder().build()
             };
 
         let client_options =

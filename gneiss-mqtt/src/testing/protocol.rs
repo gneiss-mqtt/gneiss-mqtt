@@ -26,7 +26,7 @@ const CONNACK_TIMEOUT_MILLIS: u64 = 10000;
 
 fn build_standard_test_config() -> ProtocolStateConfig {
     ProtocolStateConfig {
-        connect_options : ConnectOptionsBuilder::new().with_client_id("DefaultTesting").with_keep_alive_interval_seconds(None).build(),
+        connect_options : ConnectOptions::builder().with_client_id("DefaultTesting").with_keep_alive_interval_seconds(None).build(),
         base_timestamp: Instant::now(),
         offline_queue_policy: OfflineQueuePolicy::PreserveAll,
         ping_timeout: Duration::from_millis(30000),
@@ -961,7 +961,7 @@ fn verify_service_does_nothing(fixture : &mut ProtocolStateTestFixture) {
                                                qos: QualityOfService::AtLeastOnce,
                                                ..Default::default()
                                            },
-                                           PublishOptionsBuilder::new().build());
+                                           PublishOptions::builder().build());
     assert!(publish_receiver.is_ok());
     assert!(fixture.client_state.operations.len() > 0);
     assert!(fixture.client_state.user_operation_queue.len() > 0);
@@ -2552,7 +2552,7 @@ fn connected_state_qos2_publish_failure_pubrel_timeout() {
 
     let packet = build_qos2_publish_success_packet();
 
-    let operation_result_receiver = fixture.publish(0, packet, PublishOptionsBuilder::new().with_timeout(Duration::from_secs(30)).build()).unwrap();
+    let operation_result_receiver = fixture.publish(0, packet, PublishOptions::builder().with_timeout(Duration::from_secs(30)).build()).unwrap();
     assert!(fixture.service_round_trip(0, 0, 4096).is_ok());
     assert!(fixture.service_round_trip(10, 10, 4096).is_ok());
 
@@ -3559,7 +3559,7 @@ fn connected_state_maximum_inflight_publish_limit_respected() {
 #[test]
 fn connected_state_ack_order() {
     let mut config = build_standard_test_config();
-    config.connect_options = ConnectOptionsBuilder::new().with_topic_alias_maximum(2).build();
+    config.connect_options = ConnectOptions::builder().with_topic_alias_maximum(2).build();
 
     let mut fixture = ProtocolStateTestFixture::new(config);
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());

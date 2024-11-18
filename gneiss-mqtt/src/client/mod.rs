@@ -26,23 +26,31 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Additional client options applicable to an MQTT Publish operation
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct PublishOptions {
     pub(crate) timeout: Option<Duration>,
 }
 
+impl PublishOptions {
+
+    /// Creates a new builder for PublishOptions instances using default values.
+    pub fn builder() -> PublishOptionsBuilder {
+        PublishOptionsBuilder::new()
+    }
+}
+
 /// Builder type for the set of additional client options applicable to an MQTT Publish operation
-#[derive(Default)]
 pub struct PublishOptionsBuilder {
     options: PublishOptions
 }
 
 impl PublishOptionsBuilder {
 
-    /// Creates a new PublishOptionsBuilder with default values
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         PublishOptionsBuilder {
-            ..Default::default()
+            options: PublishOptions {
+                timeout : None,
+            }
         }
     }
 
@@ -55,8 +63,8 @@ impl PublishOptionsBuilder {
     }
 
     /// Creates a new PublishOptions object from what was configured on the builder.
-    pub fn build(self) -> PublishOptions {
-        self.options
+    pub fn build(&self) -> PublishOptions {
+        self.options.clone()
     }
 }
 
@@ -123,23 +131,31 @@ impl Display for PublishResponse {
 pub type PublishResult = MqttResult<PublishResponse>;
 
 /// Additional client options applicable to an MQTT Subscribe operation
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SubscribeOptions {
     pub(crate) timeout: Option<Duration>,
 }
 
+impl SubscribeOptions {
+
+    /// Creates a new builder for SubscribeOptions instances using default values.
+    pub fn builder() -> SubscribeOptionsBuilder {
+        SubscribeOptionsBuilder::new()
+    }
+}
+
 /// Builder type for the set of additional client options applicable to an MQTT Subscribe operation
-#[derive(Default)]
 pub struct SubscribeOptionsBuilder {
     options: SubscribeOptions
 }
 
 impl SubscribeOptionsBuilder {
 
-    /// Creates a new SubscribeOptionsBuilder with default values
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         SubscribeOptionsBuilder {
-            ..Default::default()
+            options: SubscribeOptions {
+                timeout: None
+            }
         }
     }
 
@@ -152,8 +168,8 @@ impl SubscribeOptionsBuilder {
     }
 
     /// Creates a new SubscribeOptions object from what was configured on the builder.
-    pub fn build(self) -> SubscribeOptions {
-        self.options
+    pub fn build(&self) -> SubscribeOptions {
+        self.options.clone()
     }
 }
 
@@ -162,23 +178,31 @@ impl SubscribeOptionsBuilder {
 pub type SubscribeResult = MqttResult<SubackPacket>;
 
 /// Additional client options applicable to an MQTT Unsubscribe operation
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct UnsubscribeOptions {
     pub(crate) timeout: Option<Duration>,
 }
 
+impl UnsubscribeOptions {
+
+    /// Creates a new builder for UnsubscribeOptions instances using default values
+    pub fn builder() -> UnsubscribeOptionsBuilder {
+        UnsubscribeOptionsBuilder::new()
+    }
+}
+
 /// Builder type for the set of additional client options applicable to an MQTT Unsubscribe operation
-#[derive(Default)]
 pub struct UnsubscribeOptionsBuilder {
     options: UnsubscribeOptions
 }
 
 impl UnsubscribeOptionsBuilder {
 
-    /// Creates a new UnsubscribeOptionsBuilder with default values
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         UnsubscribeOptionsBuilder {
-            ..Default::default()
+            options: UnsubscribeOptions {
+                timeout: None
+            }
         }
     }
 
@@ -191,8 +215,8 @@ impl UnsubscribeOptionsBuilder {
     }
 
     /// Creates a new UnsubscribeOptions object from what was configured on the builder.
-    pub fn build(self) -> UnsubscribeOptions {
-        self.options
+    pub fn build(&self) -> UnsubscribeOptions {
+        self.options.clone()
     }
 }
 
@@ -201,7 +225,7 @@ impl UnsubscribeOptionsBuilder {
 pub type UnsubscribeResult = MqttResult<UnsubackPacket>;
 
 /// Additional client options applicable to client Stop operation
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct StopOptions {
 
     /// MQTT Disconnect packet the client should send before closing the connection and entering
@@ -209,18 +233,26 @@ pub struct StopOptions {
     pub(crate) disconnect: Option<DisconnectPacket>,
 }
 
+impl StopOptions {
+
+    /// Creates a new builder for StopOptions instances using default values.
+    pub fn builder() -> StopOptionsBuilder {
+        StopOptionsBuilder::new()
+    }
+}
+
 /// Builder type for the set of additional client options applicable to a client Stop invocation
-#[derive(Default)]
 pub struct StopOptionsBuilder {
     options: StopOptions
 }
 
 impl StopOptionsBuilder {
 
-    /// Creates a new StopOptionsBuilder with default values
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         StopOptionsBuilder {
-            ..Default::default()
+            options: StopOptions {
+                disconnect: None
+            }
         }
     }
 
@@ -232,8 +264,8 @@ impl StopOptionsBuilder {
     }
 
     /// Creates a new StopOptions object from what was configured on the builder.
-    pub fn build(self) -> StopOptions {
-        self.options
+    pub fn build(&self) -> StopOptions {
+        self.options.clone()
     }
 }
 

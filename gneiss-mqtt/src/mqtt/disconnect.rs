@@ -430,7 +430,7 @@ mod tests {
         let packet = create_disconnect_packet_all_properties();
 
         let mut test_validation_context = create_pinned_validation_context();
-        test_validation_context.connect_options = ConnectOptionsBuilder::new().build();
+        test_validation_context.connect_options = ConnectOptions::builder().build();
 
         let validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
@@ -442,7 +442,7 @@ mod tests {
         let packet = create_disconnect_packet_all_properties();
 
         let mut test_validation_context = create_pinned_validation_context();
-        test_validation_context.connect_options = ConnectOptionsBuilder::new().with_session_expiry_interval_seconds(0).build();
+        test_validation_context.connect_options = ConnectOptions::builder().with_session_expiry_interval_seconds(0).build();
 
         let validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
