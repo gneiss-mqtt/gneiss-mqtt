@@ -6,7 +6,7 @@
 
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -94,7 +94,7 @@ fn decode_auth_properties(property_bytes: &[u8], packet : &mut AuthPacket) -> Gn
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
                 error!("AuthPacket Decode - Invalid property type ({})", property_key);
-                return Err(MqttError::new_decoding_failure("invalid property type for auth packet"));
+                return Err(GneissError::new_decoding_failure("invalid property type for auth packet"));
             }
         }
     }
@@ -105,7 +105,7 @@ fn decode_auth_properties(property_bytes: &[u8], packet : &mut AuthPacket) -> Gn
 pub(crate) fn decode_auth_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if first_byte != (PACKET_TYPE_AUTH << 4) {
         error!("AuthPacket Decode - invalid first byte");
-        return Err(MqttError::new_decoding_failure("invalid first byte for auth packet"));
+        return Err(GneissError::new_decoding_failure("invalid first byte for auth packet"));
     }
 
     let mut box_packet = Box::new(MqttPacket::Auth(AuthPacket { ..Default::default() }));
@@ -121,7 +121,7 @@ pub(crate) fn decode_auth_packet(first_byte: u8, packet_body: &[u8]) -> GneissRe
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length != mutable_body.len() {
             error!("AuthPacket Decode - property length does not match expected overall packet length");
-            return Err(MqttError::new_decoding_failure("property length mismatches overall packet length for auth packet"));
+            return Err(GneissError::new_decoding_failure("property length mismatches overall packet length for auth packet"));
         }
 
         decode_auth_properties(mutable_body, packet)?;
@@ -138,7 +138,7 @@ pub(crate) fn validate_auth_packet_outbound(packet: &AuthPacket) -> GneissResult
         error!("AuthPacket Outbound Validation - authentication method must be set");
         // while optional from an encode/decode perspective, method is required from a protocol
         // perspective
-        return Err(MqttError::new_packet_validation(PacketType::Auth, "missing authentication_method field"));
+        return Err(GneissError::new_packet_validation(PacketType::Auth, "missing authentication_method field"));
     }
 
     validate_optional_string_length(&packet.authentication_method, PacketType::Auth, "Auth", "authentication_method")?;
@@ -155,7 +155,7 @@ pub(crate) fn validate_auth_packet_outbound_internal(packet: &AuthPacket, contex
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
         error!("AuthPacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(MqttError::new_packet_validation(PacketType::Auth, "packet length exceeds maximum allowed packet size"));
+        return Err(GneissError::new_packet_validation(PacketType::Auth, "packet length exceeds maximum allowed packet size"));
     }
 
     Ok(())
@@ -167,7 +167,7 @@ pub(crate) fn validate_auth_packet_inbound_internal(packet: &AuthPacket, _: &Inb
         // while optional from an encode/decode perspective, method is required from a protocol
         // perspective
         error!("AuthPacket Inbound Validation - authentication method must be set");
-        return Err(MqttError::new_packet_validation(PacketType::Auth, "missing authentication_method field"));
+        return Err(GneissError::new_packet_validation(PacketType::Auth, "missing authentication_method field"));
     }
 
     /* TODO: validation based on in-progress auth exchange */

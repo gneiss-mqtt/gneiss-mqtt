@@ -20,7 +20,7 @@ use crate::client::synchronous::{SyncClientOptions, SyncClientOptionsBuilder, Sy
 #[cfg(feature="threaded")]
 use crate::client::synchronous::threaded::{ThreadedClientOptions, ThreadedClientOptionsBuilder};
 use crate::client::config::*;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use crate::mqtt::*;
 
 use crate::testing::waiter::*;
@@ -209,7 +209,7 @@ pub(crate) async fn stop_async_client(client: &AsyncClientHandle) -> GneissResul
     let disconnect_event = &disconnect_events[0].event;
     assert_matches!(**disconnect_event, ClientEvent::Disconnection(_));
     if let ClientEvent::Disconnection(event) = &**disconnect_event {
-        assert_matches!(event.error, MqttError::UserInitiatedDisconnect(_));
+        assert_matches!(event.error, GneissError::UserInitiatedDisconnect(_));
     } else {
         panic!("impossible");
     }
@@ -256,7 +256,7 @@ pub(crate) fn stop_sync_client(client: &SyncClientHandle) -> GneissResult<()> {
     let disconnect_event = &disconnect_events[0].event;
     assert_matches!(**disconnect_event, ClientEvent::Disconnection(_));
     if let ClientEvent::Disconnection(event) = &**disconnect_event {
-        assert_matches!(event.error, MqttError::UserInitiatedDisconnect(_));
+        assert_matches!(event.error, GneissError::UserInitiatedDisconnect(_));
     } else {
         panic!("impossible");
     }

@@ -5,7 +5,7 @@
 
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -68,7 +68,7 @@ pub(crate) fn write_unsuback_encoding_steps(packet: &UnsubackPacket, _: &Encodin
 
 #[cfg(not(test))]
 pub(crate) fn write_unsuback_encoding_steps(_: &UnsubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    Err(MqttError::new_unimplemented("Test-only functionality"))
+    Err(GneissError::new_unimplemented("Test-only functionality"))
 }
 
 fn decode_unsuback_properties(property_bytes: &[u8], packet : &mut UnsubackPacket) -> GneissResult<()> {
@@ -83,7 +83,7 @@ fn decode_unsuback_properties(property_bytes: &[u8], packet : &mut UnsubackPacke
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
                 error!("UnsubackPacket Decode - Invalid property type ({})", property_key);
-                return Err(MqttError::new_decoding_failure("invalid property for unsuback packet"));
+                return Err(GneissError::new_decoding_failure("invalid property for unsuback packet"));
             }
         }
     }
@@ -95,7 +95,7 @@ pub(crate) fn decode_unsuback_packet(first_byte: u8, packet_body: &[u8]) -> Gnei
 
     if first_byte != UNSUBACK_FIRST_BYTE {
         error!("UnsubackPacket Decode - invalid first byte");
-        return Err(MqttError::new_decoding_failure("invalid first byte for unsuback packet"));
+        return Err(GneissError::new_decoding_failure("invalid first byte for unsuback packet"));
     }
 
     let mut box_packet = Box::new(MqttPacket::Unsuback(UnsubackPacket { ..Default::default() }));
@@ -108,7 +108,7 @@ pub(crate) fn decode_unsuback_packet(first_byte: u8, packet_body: &[u8]) -> Gnei
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
             error!("UnsubackPacket Decode - property length exceeds overall packet length");
-            return Err(MqttError::new_decoding_failure("property length exceeds overall packet length for unsuback packet"));
+            return Err(GneissError::new_decoding_failure("property length exceeds overall packet length for unsuback packet"));
         }
 
         let properties_bytes = &mutable_body[..properties_length];

@@ -13,7 +13,7 @@ mod longtests;
 
 use crate::client::*;
 use crate::client::config::*;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
 use crate::protocol::is_connection_established;
@@ -118,7 +118,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                 }
                 () = &mut timeout => {
                     info!("tokio - process_connecting - connection establishment timeout exceeded");
-                    client.apply_error(MqttError::new_connection_establishment_failure("connection establishment timeout reached"));
+                    client.apply_error(GneissError::new_connection_establishment_failure("connection establishment timeout reached"));
                     return Ok(ClientImplState::PendingReconnect);
                 }
                 connection_result = &mut connect => {
@@ -130,7 +130,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                         }
                         Err(error) => {
                             info!("tokio - process_connecting - transport connection establishment failed");
-                            client.apply_error(MqttError::new_connection_establishment_failure(error));
+                            client.apply_error(GneissError::new_connection_establishment_failure(error));
                             return Ok(ClientImplState::PendingReconnect);
                         }
                     }
@@ -194,7 +194,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
 
                             if bytes_read == 0 {
                                 info!("tokio - process_connected - connection closed for read (0 bytes)");
-                                client.apply_error(MqttError::new_connection_closed("network stream closed"));
+                                client.apply_error(GneissError::new_connection_closed("network stream closed"));
                                 next_state = Some(ClientImplState::PendingReconnect);
                             } else if let Err(error) = client.handle_incoming_bytes(&inbound_data[..bytes_read]) {
                                 info!("tokio - process_connected - error handling incoming bytes: {:?}", error);
@@ -205,9 +205,9 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                         Err(error) => {
                             info!("tokio - process_connected - connection stream read failed: {:?}", error);
                             if is_connection_established(client.get_protocol_state()) {
-                                client.apply_error(MqttError::new_connection_closed(error));
+                                client.apply_error(GneissError::new_connection_closed(error));
                             } else {
-                                client.apply_error(MqttError::new_connection_establishment_failure(error));
+                                client.apply_error(GneissError::new_connection_establishment_failure(error));
                             }
                             next_state = Some(ClientImplState::PendingReconnect);
                         }
@@ -236,9 +236,9 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                         Err(error) => {
                             info!("tokio - process_connected - connection stream write failed: {:?}", error);
                             if is_connection_established(client.get_protocol_state()) {
-                                client.apply_error(MqttError::new_connection_closed(error));
+                                client.apply_error(GneissError::new_connection_closed(error));
                             } else {
-                                client.apply_error(MqttError::new_connection_establishment_failure(error));
+                                client.apply_error(GneissError::new_connection_establishment_failure(error));
                             }
                             next_state = Some(ClientImplState::PendingReconnect);
                         }
@@ -259,9 +259,9 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
                     Err(error) => {
                         info!("tokio - process_connected - connection stream flush failed: {:?}", error);
                         if is_connection_established(client.get_protocol_state()) {
-                            client.apply_error(MqttError::new_connection_closed(error));
+                            client.apply_error(GneissError::new_connection_closed(error));
                         } else {
-                            client.apply_error(MqttError::new_connection_establishment_failure(error));
+                            client.apply_error(GneissError::new_connection_establishment_failure(error));
                         }
                         next_state = Some(ClientImplState::PendingReconnect);
                     }
@@ -397,7 +397,7 @@ macro_rules! submit_tokio_operation {
         let (response_sender, rx) = tokio::sync::oneshot::channel();
         let response_handler = Box::new(move |res| {
             if response_sender.send(res).is_err() {
-                return Err(MqttError::new_operation_channel_failure("Failed to send operation result on result channel"));
+                return Err(GneissError::new_operation_channel_failure("Failed to send operation result on result channel"));
             }
 
             Ok(())
@@ -410,7 +410,7 @@ macro_rules! submit_tokio_operation {
         Box::pin(async move {
             match send_result {
                 Err(error) => {
-                    Err(MqttError::new_operation_channel_failure(error))
+                    Err(GneissError::new_operation_channel_failure(error))
                 }
                 _ => {
                     rx.await?
@@ -426,7 +426,7 @@ impl AsyncClient for TokioClient {
     fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> GneissResult<()> {
         info!("tokio client start invoked");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Start(default_listener)) {
-            return Err(MqttError::new_operation_channel_failure(send_error));
+            return Err(GneissError::new_operation_channel_failure(send_error));
         }
 
         Ok(())
@@ -451,7 +451,7 @@ impl AsyncClient for TokioClient {
         }
 
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Stop(stop_options)) {
-            return Err(MqttError::new_operation_channel_failure(send_error));
+            return Err(GneissError::new_operation_channel_failure(send_error));
         }
 
         Ok(())
@@ -464,7 +464,7 @@ impl AsyncClient for TokioClient {
     fn close(&self) -> GneissResult<()> {
         info!("tokio client close invoked; no further operations allowed");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Shutdown()) {
-            return Err(MqttError::new_operation_channel_failure(send_error));
+            return Err(GneissError::new_operation_channel_failure(send_error));
         }
 
         Ok(())
@@ -515,7 +515,7 @@ impl AsyncClient for TokioClient {
         *current_id += 1;
 
         if let Err(send_error) = self.operation_sender.send(OperationOptions::AddListener(listener_id, listener)) {
-            return Err(MqttError::new_operation_channel_failure(send_error));
+            return Err(GneissError::new_operation_channel_failure(send_error));
         }
 
         Ok(ListenerHandle {
@@ -527,7 +527,7 @@ impl AsyncClient for TokioClient {
     fn remove_event_listener(&self, listener: ListenerHandle) -> GneissResult<()> {
         debug!("tokio client - remove listener operation submitted");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::RemoveListener(listener.id)) {
-            return Err(MqttError::new_operation_channel_failure(send_error));
+            return Err(GneissError::new_operation_channel_failure(send_error));
         }
 
         Ok(())
@@ -1050,7 +1050,7 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Gn
         let bytes_read = inner_stream.read(&mut inbound_data).await?;
         if bytes_read == 0 {
             info!("apply_proxy_connect_to_stream - proxy connect stream closed with zero byte read");
-            return Err(MqttError::new_connection_establishment_failure("proxy connect stream closed"));
+            return Err(GneissError::new_connection_establishment_failure("proxy connect stream closed"));
         }
 
         response_bytes.extend_from_slice(&inbound_data[..bytes_read]);
@@ -1062,12 +1062,12 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Gn
         match parse_result {
             Err(e) => {
                 error!("apply_proxy_connect_to_stream - failed to parse proxy response to CONNECT request: {:?}", e);
-                return Err(MqttError::new_connection_establishment_failure(e));
+                return Err(GneissError::new_connection_establishment_failure(e));
             }
             Ok(httparse::Status::Complete(bytes_parsed)) => {
                 if bytes_parsed < response_bytes.len() {
                     error!("apply_proxy_connect_to_stream - stream incoming data contains more data than the CONNECT response");
-                    return Err(MqttError::new_connection_establishment_failure("proxy connect response too long"));
+                    return Err(GneissError::new_connection_establishment_failure("proxy connect response too long"));
                 }
 
                 if let Some(response_code) = response.code {
@@ -1077,7 +1077,7 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Gn
                 }
 
                 error!("apply_proxy_connect_to_stream - CONNECT request was failed, with http code: {:?}", response.code);
-                return Err(MqttError::new_connection_establishment_failure("proxy connect request unsuccessful"));
+                return Err(GneissError::new_connection_establishment_failure("proxy connect request unsuccessful"));
             }
             Ok(httparse::Status::Partial) => {}
         }

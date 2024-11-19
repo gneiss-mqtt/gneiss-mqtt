@@ -5,7 +5,7 @@
 
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -68,7 +68,7 @@ pub(crate) fn write_suback_encoding_steps(packet: &SubackPacket, _: &EncodingCon
 
 #[cfg(not(test))]
 pub(crate) fn write_suback_encoding_steps(_: &SubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    Err(MqttError::new_unimplemented("Test-only functionality"))
+    Err(GneissError::new_unimplemented("Test-only functionality"))
 }
 
 fn decode_suback_properties(property_bytes: &[u8], packet : &mut SubackPacket) -> GneissResult<()> {
@@ -83,7 +83,7 @@ fn decode_suback_properties(property_bytes: &[u8], packet : &mut SubackPacket) -
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
                 error!("SubackPacket Decode - Invalid property type ({})", property_key);
-                return Err(MqttError::new_decoding_failure("invalid property type for suback packet"));
+                return Err(GneissError::new_decoding_failure("invalid property type for suback packet"));
             }
         }
     }
@@ -94,7 +94,7 @@ fn decode_suback_properties(property_bytes: &[u8], packet : &mut SubackPacket) -
 pub(crate) fn decode_suback_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if first_byte != SUBACK_FIRST_BYTE {
         error!("SubackPacket Decode - invalid first byte");
-        return Err(MqttError::new_decoding_failure("invalid first byte for suback packet"));
+        return Err(GneissError::new_decoding_failure("invalid first byte for suback packet"));
     }
 
     let mut box_packet = Box::new(MqttPacket::Suback(SubackPacket { ..Default::default() }));
@@ -107,7 +107,7 @@ pub(crate) fn decode_suback_packet(first_byte: u8, packet_body: &[u8]) -> Gneiss
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
             error!("SubackPacket Decode - property length exceeds overall packet length");
-            return Err(MqttError::new_decoding_failure("property length exceeds overall packet length for suback packet"));
+            return Err(GneissError::new_decoding_failure("property length exceeds overall packet length for suback packet"));
         }
 
         let properties_bytes = &mutable_body[..properties_length];

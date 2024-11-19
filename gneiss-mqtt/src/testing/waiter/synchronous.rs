@@ -7,7 +7,7 @@
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Instant;
 use crate::client::synchronous::*;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use super::*;
 
 /// Simple debug type that uses the client listener framework to allow tests to asynchronously wait for
@@ -95,7 +95,7 @@ impl SyncClientEventWaiter {
                     }
                 }
                 None => {
-                    return Err(MqttError::new_other_error("Client event waiter result already taken"));
+                    return Err(GneissError::new_other_error("Client event waiter result already taken"));
                 }
             }
 

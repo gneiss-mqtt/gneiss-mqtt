@@ -22,7 +22,7 @@ use crate::client::*;
 use crate::client::config::*;
 #[cfg(feature="threaded-websockets")]
 use ws_stream::WebsocketStreamWrapper;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
 use crate::protocol::is_connection_established;
@@ -163,7 +163,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
                         }
                         Err(error) => {
                             info!("threaded - process_connecting - transport connection establishment failed");
-                            client.apply_error(MqttError::new_connection_establishment_failure(error));
+                            client.apply_error(GneissError::new_connection_establishment_failure(error));
                             Ok(ClientImplState::PendingReconnect)
                         }
                     }
@@ -173,7 +173,7 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
             let now = Instant::now();
             if now >= timeout_timepoint {
                 info!("threaded - process_connecting - connection establishment timeout exceeded");
-                client.apply_error(MqttError::new_connection_establishment_failure("connection establishment timeout reached"));
+                client.apply_error(GneissError::new_connection_establishment_failure("connection establishment timeout reached"));
                 return Ok(ClientImplState::PendingReconnect);
             } else {
                 let until_timeout = timeout_timepoint - now;
@@ -250,9 +250,9 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
             if let Some(read_error) = connection_fatal_read_error {
                 info!("threaded - process_connected - connection stream read failed: {:?}", read_error);
                 if is_connection_established(client.get_protocol_state()) {
-                    client.apply_error(MqttError::new_connection_closed(read_error));
+                    client.apply_error(GneissError::new_connection_closed(read_error));
                 } else {
-                    client.apply_error(MqttError::new_connection_establishment_failure(read_error));
+                    client.apply_error(GneissError::new_connection_establishment_failure(read_error));
                 }
                 next_state = Some(ClientImplState::PendingReconnect);
                 continue;
@@ -318,9 +318,9 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
                 if let Some(write_error) = connection_fatal_write_error {
                     info!("threaded - process_connected - connection stream write failed: {:?}", write_error);
                     if is_connection_established(client.get_protocol_state()) {
-                        client.apply_error(MqttError::new_connection_closed(write_error));
+                        client.apply_error(GneissError::new_connection_closed(write_error));
                     } else {
-                        client.apply_error(MqttError::new_connection_establishment_failure(write_error));
+                        client.apply_error(GneissError::new_connection_establishment_failure(write_error));
                     }
                     next_state = Some(ClientImplState::PendingReconnect);
                     continue;
@@ -340,9 +340,9 @@ impl<T> ClientRuntimeState<T> where T : Read + Write + Send + Sync {
                         Err(error) => {
                             info!("threaded - process_connected - connection stream flush failed: {:?}", error);
                             if is_connection_established(client.get_protocol_state()) {
-                                client.apply_error(MqttError::new_connection_closed(error));
+                                client.apply_error(GneissError::new_connection_closed(error));
                             } else {
-                                client.apply_error(MqttError::new_connection_establishment_failure(error));
+                                client.apply_error(GneissError::new_connection_establishment_failure(error));
                             }
                             next_state = Some(ClientImplState::PendingReconnect);
                             continue;
@@ -470,7 +470,7 @@ macro_rules! submit_threaded_operation {
 
         let submit_result = $self.operation_sender.send(OperationOptions::$operation_type(boxed_packet, internal_options));
         if let Err(submit_error) = submit_result {
-            late_sender.apply(Err(MqttError::new_operation_channel_failure(submit_error)));
+            late_sender.apply(Err(GneissError::new_operation_channel_failure(submit_error)));
         }
 
         result_recv
@@ -494,7 +494,7 @@ macro_rules! submit_threaded_operation_with_callback {
 
         let submit_result = $self.operation_sender.send(OperationOptions::$operation_type(boxed_packet, internal_options));
         if let Err(submit_error) = submit_result {
-            return Err(MqttError::new_operation_channel_failure(submit_error));
+            return Err(GneissError::new_operation_channel_failure(submit_error));
         }
 
         Ok(())
@@ -514,7 +514,7 @@ impl SyncClient for ThreadedClient {
     fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> GneissResult<()> {
         info!("threaded client start invoked");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Start(default_listener)) {
-            return Err(MqttError::new_operation_channel_failure(send_error));
+            return Err(GneissError::new_operation_channel_failure(send_error));
         }
 
         Ok(())
@@ -539,7 +539,7 @@ impl SyncClient for ThreadedClient {
         }
 
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Stop(stop_options)) {
-            return Err(MqttError::new_operation_channel_failure(send_error));
+            return Err(GneissError::new_operation_channel_failure(send_error));
         }
 
         Ok(())
@@ -552,7 +552,7 @@ impl SyncClient for ThreadedClient {
     fn close(&self) -> GneissResult<()> {
         info!("threaded client close invoked; no further operations allowed");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Shutdown()) {
-            return Err(MqttError::new_operation_channel_failure(send_error));
+            return Err(GneissError::new_operation_channel_failure(send_error));
         }
 
         Ok(())
@@ -609,7 +609,7 @@ impl SyncClient for ThreadedClient {
         *current_id += 1;
 
         if let Err(send_error) = self.operation_sender.send(OperationOptions::AddListener(listener_id, listener)) {
-            return Err(MqttError::new_operation_channel_failure(send_error));
+            return Err(GneissError::new_operation_channel_failure(send_error));
         }
 
         Ok(ListenerHandle {
@@ -621,7 +621,7 @@ impl SyncClient for ThreadedClient {
     fn remove_event_listener(&self, listener: ListenerHandle) -> GneissResult<()> {
         debug!("threaded client - remove listener operation submitted");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::RemoveListener(listener.id)) {
-            return Err(MqttError::new_operation_channel_failure(send_error));
+            return Err(GneissError::new_operation_channel_failure(send_error));
         }
 
         Ok(())
@@ -1066,7 +1066,7 @@ fn wrap_stream_with_tls_rustls<S>(stream : S, endpoint: String, tls_options: Tls
         debug!("wrap_stream_with_tls_rustls - performing tls handshake");
         let result = tls_stream.flush();
         if result.is_err() {
-            return Err(MqttError::new_connection_establishment_failure(result.err().unwrap()));
+            return Err(GneissError::new_connection_establishment_failure(result.err().unwrap()));
         }
         debug!("wrap_stream_with_tls_rustls - tls handshake successfully completed");
         Ok(tls_stream)
@@ -1127,7 +1127,7 @@ fn apply_proxy_connect_to_stream<T>(mut stream : T, http_connect_endpoint: Endpo
         let bytes_read = stream.read(&mut inbound_data)?;
         if bytes_read == 0 {
             info!("apply_proxy_connect_to_stream - proxy connect stream closed with zero byte read");
-            return Err(MqttError::new_connection_establishment_failure("proxy connect stream closed"));
+            return Err(GneissError::new_connection_establishment_failure("proxy connect stream closed"));
         }
 
         response_bytes.extend_from_slice(&inbound_data[..bytes_read]);
@@ -1139,12 +1139,12 @@ fn apply_proxy_connect_to_stream<T>(mut stream : T, http_connect_endpoint: Endpo
         match parse_result {
             Err(e) => {
                 error!("apply_proxy_connect_to_stream - failed to parse proxy response to CONNECT request: {:?}", e);
-                return Err(MqttError::new_connection_establishment_failure(e));
+                return Err(GneissError::new_connection_establishment_failure(e));
             }
             Ok(httparse::Status::Complete(bytes_parsed)) => {
                 if bytes_parsed < response_bytes.len() {
                     error!("apply_proxy_connect_to_stream - stream incoming data contains more data than the CONNECT response");
-                    return Err(MqttError::new_connection_establishment_failure("proxy connect response too long"));
+                    return Err(GneissError::new_connection_establishment_failure("proxy connect response too long"));
                 }
 
                 if let Some(response_code) = response.code {
@@ -1154,7 +1154,7 @@ fn apply_proxy_connect_to_stream<T>(mut stream : T, http_connect_endpoint: Endpo
                 }
 
                 error!("apply_proxy_connect_to_stream - CONNECT request was failed, with http code: {:?}", response.code);
-                return Err(MqttError::new_connection_establishment_failure("proxy connect request unsuccessful"));
+                return Err(GneissError::new_connection_establishment_failure("proxy connect request unsuccessful"));
             }
             Ok(httparse::Status::Partial) => {}
         }

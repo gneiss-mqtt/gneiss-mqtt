@@ -6,7 +6,7 @@
 use crate::alias::*;
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -201,7 +201,7 @@ fn decode_publish_properties(property_bytes: &[u8], packet : &mut PublishPacket)
             PROPERTY_KEY_CONTENT_TYPE => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.content_type)?; }
             _ => {
                 error!("PublishPacket Decode - Invalid property type ({})", property_key);
-                return Err(MqttError::new_decoding_failure("invalid property type for publish packet"));
+                return Err(GneissError::new_decoding_failure("invalid property type for publish packet"));
             }
         }
     }
@@ -236,7 +236,7 @@ pub(crate) fn decode_publish_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
             error!("PublishPacket Decode - property length exceeds overall packet length");
-            return Err(MqttError::new_decoding_failure("property length exceeds overall packet length in publish packet"));
+            return Err(GneissError::new_decoding_failure("property length exceeds overall packet length in publish packet"));
         }
 
         let properties_bytes = &mutable_body[..properties_length];
@@ -258,37 +258,37 @@ pub(crate) fn validate_publish_packet_outbound(packet: &PublishPacket) -> Gneiss
 
     if packet.packet_id != 0 {
         error!("PublishPacket Outbound Validation - packet id may not be set");
-        return Err(MqttError::new_packet_validation(PacketType::Publish, "packet id is set"));
+        return Err(GneissError::new_packet_validation(PacketType::Publish, "packet id is set"));
     }
 
     if packet.duplicate {
         error!("PublishPacket Outbound Validation - duplicate flag is set");
-        return Err(MqttError::new_packet_validation(PacketType::Publish, "duplicate flag is set"));
+        return Err(GneissError::new_packet_validation(PacketType::Publish, "duplicate flag is set"));
     }
 
     validate_string_length(packet.topic.as_str(), PacketType::Publish, "Publish", "topic")?;
 
     if !is_valid_topic(&packet.topic) {
         error!("PublishPacket Outbound Validation - invalid topic");
-        return Err(MqttError::new_packet_validation(PacketType::Publish, "invalid topic"));
+        return Err(GneissError::new_packet_validation(PacketType::Publish, "invalid topic"));
     }
 
     if let Some(alias) = packet.topic_alias {
         if alias == 0 {
             error!("PublishPacket Outbound Validation - topic alias is zero");
-            return Err(MqttError::new_packet_validation(PacketType::Publish, "topic alias is zero"));
+            return Err(GneissError::new_packet_validation(PacketType::Publish, "topic alias is zero"));
         }
     }
 
     if packet.subscription_identifiers.is_some() {
         error!("PublishPacket Outbound Validation - subscription identifiers not allowed on client packets");
-        return Err(MqttError::new_packet_validation(PacketType::Publish, "subscription identifiers may not be set"));
+        return Err(GneissError::new_packet_validation(PacketType::Publish, "subscription identifiers may not be set"));
     }
 
     if let Some(response_topic) = &packet.response_topic {
         if !is_valid_topic(response_topic) {
             error!("PublishPacket Outbound Validation - invalid response topic");
-            return Err(MqttError::new_packet_validation(PacketType::Publish, "invalid response topic"));
+            return Err(GneissError::new_packet_validation(PacketType::Publish, "invalid response topic"));
         }
 
         validate_string_length(response_topic.as_str(), PacketType::Publish, "Publish", "response_topic")?;
@@ -307,31 +307,31 @@ pub(crate) fn validate_publish_packet_outbound_internal(packet: &PublishPacket, 
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
         error!("PublishPacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(MqttError::new_packet_validation(PacketType::Publish, "packet length exceeds maximum packet size allowed"));
+        return Err(GneissError::new_packet_validation(PacketType::Publish, "packet length exceeds maximum packet size allowed"));
     }
 
     if packet.packet_id == 0 && packet.qos != QualityOfService::AtMostOnce {
         error!("PublishPacket Outbound Validation - packet id must be non zero");
-        return Err(MqttError::new_packet_validation(PacketType::Publish, "packet id is zero"));
+        return Err(GneissError::new_packet_validation(PacketType::Publish, "packet id is zero"));
     }
 
     let settings = context.negotiated_settings.unwrap();
     if packet.retain && !settings.retain_available {
         error!("PublishPacket Outbound Validation - retained messages not allowed on this connection");
-        return Err(MqttError::new_packet_validation(PacketType::Publish, "session forbids retain"));
+        return Err(GneissError::new_packet_validation(PacketType::Publish, "session forbids retain"));
     }
 
     match settings.maximum_qos {
         QualityOfService::AtMostOnce => {
             if packet.qos != QualityOfService::AtMostOnce {
                 error!("PublishPacket Outbound Validation - quality of service exceeds established maximum");
-                return Err(MqttError::new_packet_validation(PacketType::Publish, "qos exceeds session maximum"));
+                return Err(GneissError::new_packet_validation(PacketType::Publish, "qos exceeds session maximum"));
             }
         }
         QualityOfService::AtLeastOnce => {
             if packet.qos == QualityOfService::ExactlyOnce {
                 error!("PublishPacket Outbound Validation - quality of service exceeds established maximum");
-                return Err(MqttError::new_packet_validation(PacketType::Publish, "qos exceeds session maximum"));
+                return Err(GneissError::new_packet_validation(PacketType::Publish, "qos exceeds session maximum"));
             }
         }
         _ => {}
@@ -345,12 +345,12 @@ pub(crate) fn validate_publish_packet_inbound_internal(packet: &PublishPacket, _
     /* alias resolution happens after decode and before validation, so by now we should have a real topic */
     if packet.topic.is_empty() {
         error!("PublishPacket Inbound Validation - topic could not be resolved");
-        return Err(MqttError::new_packet_validation(PacketType::Publish, "topic could not be resolved"));
+        return Err(GneissError::new_packet_validation(PacketType::Publish, "topic could not be resolved"));
     }
 
     if packet.packet_id == 0 && packet.qos != QualityOfService::AtMostOnce {
         error!("PublishPacket Inbound Validation - packet id must be non zero");
-        return Err(MqttError::new_packet_validation(PacketType::Publish, "packet id is zero"));
+        return Err(GneissError::new_packet_validation(PacketType::Publish, "packet id is zero"));
     }
 
     Ok(())

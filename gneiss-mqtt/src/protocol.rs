@@ -10,7 +10,7 @@ use crate::client::*;
 use crate::client::config::*;
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{fold_mqtt_result, MqttError, GneissResult};
+use crate::error::{fold_mqtt_result, GneissError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::connack::*;
 use crate::mqtt::utils::*;
@@ -460,7 +460,7 @@ impl ProtocolState {
                 ProtocolStateType::PendingConnack => { self.service_pending_connack(context) }
                 ProtocolStateType::Connected => { self.service_connected(context) }
                 ProtocolStateType::PendingDisconnect => { self.service_pending_disconnect(context) }
-                ProtocolStateType::Halted => { Err(MqttError::new_internal_state_error("protocol state previously halted")) }
+                ProtocolStateType::Halted => { Err(GneissError::new_internal_state_error("protocol state previously halted")) }
             };
 
         self.log_state();
@@ -501,7 +501,7 @@ impl ProtocolState {
         if let Some(check_operation) = self.operations.get(&op_id) {
             if !self.operation_packet_passes_offline_queue_policy(&check_operation.packet) {
                 debug!("[{} ms] handle_user_event - operation {} failed by offline queue policy", self.elapsed_time_ms, op_id);
-                let _ = self.complete_operation_as_failure(op_id, MqttError::new_offline_queue_policy_failed());
+                let _ = self.complete_operation_as_failure(op_id, GneissError::new_offline_queue_policy_failed());
                 return;
             }
         }
@@ -542,7 +542,7 @@ impl ProtocolState {
 
         let operations : Vec<u64> = self.operations.keys().copied().collect();
         for id in operations {
-            let _ = self.complete_operation_as_failure(id, MqttError::new_client_closed());
+            let _ = self.complete_operation_as_failure(id, GneissError::new_client_closed());
         }
 
         self.pending_write_completion = false;
@@ -698,7 +698,7 @@ impl ProtocolState {
                 self.state = ProtocolStateType::Halted;
             }
             info!("[{} ms] apply_disconnect_completion - user-requested disconnect operation {} completed", self.elapsed_time_ms, operation.id);
-            return Err(MqttError::new_user_initiated_disconnect());
+            return Err(GneissError::new_user_initiated_disconnect());
         }
 
         Ok(())
@@ -708,7 +708,7 @@ impl ProtocolState {
         let operation_option = self.operations.remove(&id);
         if operation_option.is_none() {
             error!("[{} ms] complete_operation_as_success - operation id {} does not exist", self.elapsed_time_ms, id);
-            return Err(MqttError::new_internal_state_error("cannot complete an operation that does not exist"));
+            return Err(GneissError::new_internal_state_error("cannot complete an operation that does not exist"));
         }
 
         let operation = operation_option.unwrap();
@@ -730,7 +730,7 @@ impl ProtocolState {
         complete_operation_with_result(&mut operation.options.unwrap(), completion_result)
     }
 
-    fn complete_operation_as_failure(&mut self, id : u64, error: MqttError) -> GneissResult<()> {
+    fn complete_operation_as_failure(&mut self, id : u64, error: GneissError) -> GneissResult<()> {
         let operation_option = self.operations.remove(&id);
         if operation_option.is_none() {
             // not fatal; the limits of the priority queue implementation used for timeouts
@@ -758,7 +758,7 @@ impl ProtocolState {
         complete_operation_with_error(&mut operation.options.unwrap(), error)
     }
 
-    fn complete_operation_sequence_as_failure<T>(&mut self, iterator: T, error_fn: fn() -> MqttError ) -> GneissResult<()> where T : Iterator<Item = u64> {
+    fn complete_operation_sequence_as_failure<T>(&mut self, iterator: T, error_fn: fn() -> GneissError) -> GneissResult<()> where T : Iterator<Item = u64> {
         #[allow(clippy::manual_try_fold)]
         iterator.fold(
             Ok(()),
@@ -782,7 +782,7 @@ impl ProtocolState {
         if self.state != ProtocolStateType::Disconnected {
             error!("[{} ms] handle_network_event_connection_opened - called in invalid state", self.elapsed_time_ms);
             self.change_state(ProtocolStateType::Halted);
-            return Err(MqttError::new_internal_state_error("connection opened in an invalid state"));
+            return Err(GneissError::new_internal_state_error("connection opened in an invalid state"));
         }
 
         if let NetworkEvent::ConnectionOpened(connection_opened_context) = &context.event {
@@ -817,7 +817,7 @@ impl ProtocolState {
                         if does_packet_pass_offline_queue_policy(&operation.packet, &self.config.offline_queue_policy) {
                             self.user_operation_queue.push_front(id);
                         } else {
-                            self.complete_operation_as_failure(id, MqttError::new_offline_queue_policy_failed())?;
+                            self.complete_operation_as_failure(id, GneissError::new_offline_queue_policy_failed())?;
                         }
                     }
                     MqttPacket::Publish(publish) => {
@@ -828,11 +828,11 @@ impl ProtocolState {
                         } else if does_packet_pass_offline_queue_policy(&operation.packet, &self.config.offline_queue_policy) {
                             self.user_operation_queue.push_front(id);
                         } else {
-                            self.complete_operation_as_failure(id, MqttError::new_offline_queue_policy_failed())?;
+                            self.complete_operation_as_failure(id, GneissError::new_offline_queue_policy_failed())?;
                         }
                     }
                     _ => {
-                        self.complete_operation_as_failure(id, MqttError::new_connection_closed("internal operation failed on connection close"))?;
+                        self.complete_operation_as_failure(id, GneissError::new_connection_closed("internal operation failed on connection close"))?;
                     }
                 }
             }
@@ -846,7 +846,7 @@ impl ProtocolState {
     fn handle_network_event_connection_closed(&mut self, _: &mut NetworkEventContext) -> GneissResult<()> {
         if self.state == ProtocolStateType::Disconnected {
             error!("[{} ms] handle_network_event_connection_closed - called in invalid state", self.elapsed_time_ms);
-            return Err(MqttError::new_internal_state_error("connection closed in an invalid state"));
+            return Err(GneissError::new_internal_state_error("connection closed in an invalid state"));
         }
 
         info!("[{} ms] handle_network_event_connection_closed", self.elapsed_time_ms);
@@ -939,14 +939,14 @@ impl ProtocolState {
     fn handle_network_event_write_completion(&mut self, _: &NetworkEventContext) -> GneissResult<()> {
         if self.state == ProtocolStateType::Halted || self.state == ProtocolStateType::Disconnected {
             error!("[{} ms] handle_network_event_write_completion - called in invalid state", self.elapsed_time_ms);
-            return Err(MqttError::new_internal_state_error("write completion in an invalid state"));
+            return Err(GneissError::new_internal_state_error("write completion in an invalid state"));
         }
 
         if !self.pending_write_completion {
             error!("[{} ms] handle_network_event_write_completion - called with no pending completion", self.elapsed_time_ms);
             self.change_state(ProtocolStateType::Halted);
 
-            return Err(MqttError::new_internal_state_error("write completion called with no pending completion"));
+            return Err(GneissError::new_internal_state_error("write completion called with no pending completion"));
         }
 
         debug!("[{} ms] handle_network_event - write completion", self.elapsed_time_ms);
@@ -980,13 +980,13 @@ impl ProtocolState {
     fn handle_network_event_incoming_data(&mut self, context: &mut NetworkEventContext, data: &[u8]) -> GneissResult<()> {
         if self.state == ProtocolStateType::Disconnected || self.state == ProtocolStateType::Halted {
             error!("[{} ms] handle_network_event_incoming_data - called in invalid state", self.elapsed_time_ms);
-            return Err(MqttError::new_internal_state_error("incoming network data while in an invalid state"));
+            return Err(GneissError::new_internal_state_error("incoming network data while in an invalid state"));
         }
 
         if self.state == ProtocolStateType::PendingConnack && self.is_connect_in_queue() {
             error!("[{} ms] handle_network_event_incoming_data - data received before CONNECT sent", self.elapsed_time_ms);
             self.change_state(ProtocolStateType::Halted);
-            return Err(MqttError::new_protocol_error("data received before CONNECT sent"));
+            return Err(GneissError::new_protocol_error("data received before CONNECT sent"));
         }
 
         debug!("[{} ms] handle_network_event_incoming_data received {} bytes", self.elapsed_time_ms, data.len());
@@ -1111,7 +1111,7 @@ impl ProtocolState {
 
         while let Some(id) = self.get_next_ack_timeout() {
             self.operation_ack_timeouts.pop();
-            result = fold_mqtt_result(result, self.complete_operation_as_failure(id, MqttError::new_ack_timeout()));
+            result = fold_mqtt_result(result, self.complete_operation_as_failure(id, GneissError::new_ack_timeout()));
         }
 
         result
@@ -1299,7 +1299,7 @@ impl ProtocolState {
 
         if context.current_time >= self.connack_timeout_timepoint.unwrap() {
             error!("[{} ms] service_pending_connack - connack timeout exceeded", self.elapsed_time_ms);
-            return Err(MqttError::new_connection_establishment_failure("connack response timeout reached"));
+            return Err(GneissError::new_connection_establishment_failure("connack response timeout reached"));
         }
 
         self.service_queue(context, ProtocolQueueServiceMode::HighPriorityOnly)?;
@@ -1311,7 +1311,7 @@ impl ProtocolState {
         if let Some(ping_timeout) = &self.ping_timeout_timepoint {
             if &context.current_time >= ping_timeout {
                 error!("[{} ms] service_keep_alive - keep alive timeout exceeded", self.elapsed_time_ms);
-                return Err(MqttError::new_connection_closed("keep alive timeout exceeded"));
+                return Err(GneissError::new_connection_closed("keep alive timeout exceeded"));
             }
         } else if let Some(next_ping) = &self.next_ping_timepoint {
             if &context.current_time >= next_ping {
@@ -1509,13 +1509,13 @@ impl ProtocolState {
 
             if self.state != ProtocolStateType::PendingConnack {
                 error!("[{} ms] handle_connack - invalid state to receive a connack", self.elapsed_time_ms);
-                return Err(MqttError::new_protocol_error("invalid state for connack receipt"));
+                return Err(GneissError::new_protocol_error("invalid state for connack receipt"));
             }
 
             if connack.reason_code != ConnectReasonCode::Success {
                 error!("[{} ms] handle_connack - connection rejected with reason code {}", self.elapsed_time_ms, connect_reason_code_to_str(connack.reason_code));
                 context.packet_events.push_back(PacketEvent::Connack(connack));
-                return Err(MqttError::new_connection_establishment_failure("broker rejected connection attempt with failing connack"));
+                return Err(GneissError::new_connection_establishment_failure("broker rejected connection attempt with failing connack"));
             }
 
             validate_connack_packet_inbound_internal(&connack)?;
@@ -1558,12 +1558,12 @@ impl ProtocolState {
                     Ok(())
                 } else {
                     error!("[{} ms] handle_pingresp - no matching PINGREQ", self.elapsed_time_ms);
-                    Err(MqttError::new_protocol_error("pingresp received without an outstanding pingreq"))
+                    Err(GneissError::new_protocol_error("pingresp received without an outstanding pingreq"))
                 }
             }
             _ => {
                 error!("[{} ms] handle_pingresp - invalid state to receive a PINGRESP", self.elapsed_time_ms);
-                Err(MqttError::new_protocol_error("invalid state to receive a pingresp"))
+                Err(GneissError::new_protocol_error("invalid state to receive a pingresp"))
             }
         }
     }
@@ -1573,7 +1573,7 @@ impl ProtocolState {
         match self.state {
             ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_suback - invalid state to receive a SUBACK", self.elapsed_time_ms);
-                return Err(MqttError::new_protocol_error("invalid state to receive a suback"));
+                return Err(GneissError::new_protocol_error("invalid state to receive a suback"));
             }
             _ => {}
         }
@@ -1586,7 +1586,7 @@ impl ProtocolState {
             }
 
             error!("[{} ms] handle_suback - no matching operation corresponding to SUBACK packet id {}", self.elapsed_time_ms, packet_id);
-            return Err(MqttError::new_protocol_error("no pending subscribe exists for incoming suback"));
+            return Err(GneissError::new_protocol_error("no pending subscribe exists for incoming suback"));
         }
 
         panic!("handle_suback - invalid input");
@@ -1597,7 +1597,7 @@ impl ProtocolState {
         match self.state {
             ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_unsuback - invalid state to receive an UNSUBACK", self.elapsed_time_ms);
-                return Err(MqttError::new_protocol_error("invalid state to receive an unsuback"));
+                return Err(GneissError::new_protocol_error("invalid state to receive an unsuback"));
             }
             _ => {}
         }
@@ -1610,7 +1610,7 @@ impl ProtocolState {
             }
 
             error!("[{} ms] handle_unsuback - no matching operation corresponding to UNSUBACK packet id {}", self.elapsed_time_ms, packet_id);
-            return Err(MqttError::new_protocol_error("no pending unsubscribe exists for incoming unsuback"));
+            return Err(GneissError::new_protocol_error("no pending unsubscribe exists for incoming unsuback"));
         }
 
         panic!("handle_unsuback - invalid input");
@@ -1621,7 +1621,7 @@ impl ProtocolState {
         match self.state {
             ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_puback - invalid state to receive a PUBACK", self.elapsed_time_ms);
-                return Err(MqttError::new_protocol_error("invalid state to receive a puback"));
+                return Err(GneissError::new_protocol_error("invalid state to receive a puback"));
             }
             _ => {}
         }
@@ -1634,7 +1634,7 @@ impl ProtocolState {
             }
 
             error!("[{} ms] handle_puback - no matching operation corresponding to PUBACK packet id {}", self.elapsed_time_ms, packet_id);
-            return Err(MqttError::new_protocol_error("no pending qos1 publish exists for incoming puback"));
+            return Err(GneissError::new_protocol_error("no pending qos1 publish exists for incoming puback"));
         }
 
         panic!("handle_puback - invalid input");
@@ -1645,7 +1645,7 @@ impl ProtocolState {
         match self.state {
             ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_pubrec - invalid state to receive a PUBREC", self.elapsed_time_ms);
-                return Err(MqttError::new_protocol_error("invalid state to receive a pubrec"));
+                return Err(GneissError::new_protocol_error("invalid state to receive a pubrec"));
             }
             _ => {}
         }
@@ -1672,7 +1672,7 @@ impl ProtocolState {
                         }
 
                         error!("[{} ms] handle_pubrec - operation {} corresponding to packet id {} is not a QoS 2 publish", self.elapsed_time_ms, operation_id, packet_id);
-                        return Err(MqttError::new_protocol_error("pubrec received for a pending operation that is not a qos2 publish"));
+                        return Err(GneissError::new_protocol_error("pubrec received for a pending operation that is not a qos2 publish"));
                     }
 
                     warn!("[{} ms] handle_pubrec - operation {} corresponding to packet id {} does not exist", self.elapsed_time_ms, operation_id, packet_id);
@@ -1681,7 +1681,7 @@ impl ProtocolState {
             }
 
             error!("[{} ms] handle_pubrec - no matching operation corresponding to PUBREC packet id {}", self.elapsed_time_ms, packet_id);
-            return Err(MqttError::new_protocol_error("no pending operation exists for incoming pubrec"));
+            return Err(GneissError::new_protocol_error("no pending operation exists for incoming pubrec"));
         }
 
         panic!("handle_pubrec - invalid input");
@@ -1692,7 +1692,7 @@ impl ProtocolState {
         match self.state {
             ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_pubrel - invalid state to receive a PUBREL", self.elapsed_time_ms);
-                return Err(MqttError::new_protocol_error("invalid state to receive a pubrel"));
+                return Err(GneissError::new_protocol_error("invalid state to receive a pubrel"));
             }
             _ => {}
         }
@@ -1719,7 +1719,7 @@ impl ProtocolState {
         match self.state {
             ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_pubcomp - invalid state to receive a PUBCOMP", self.elapsed_time_ms);
-                return Err(MqttError::new_protocol_error("invalid state to receive a pubcomp"));
+                return Err(GneissError::new_protocol_error("invalid state to receive a pubcomp"));
             }
             _ => {}
         }
@@ -1732,7 +1732,7 @@ impl ProtocolState {
             }
 
             error!("[{} ms] handle_pubcomp - no matching operation corresponding to PUBCOMP packet id {}", self.elapsed_time_ms, packet_id);
-            return Err(MqttError::new_protocol_error("no pending operation exists for incoming pubcomp"));
+            return Err(GneissError::new_protocol_error("no pending operation exists for incoming pubcomp"));
         }
 
         panic!("handle_pubcomp - invalid input");
@@ -1743,7 +1743,7 @@ impl ProtocolState {
         match self.state {
             ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 error!("[{} ms] handle_publish - invalid state to receive a PUBLISH", self.elapsed_time_ms);
-                return Err(MqttError::new_protocol_error("invalid state to receive a publish"));
+                return Err(GneissError::new_protocol_error("invalid state to receive a publish"));
             }
             _ => {}
         }
@@ -1799,7 +1799,7 @@ impl ProtocolState {
             ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 // per spec, the server must always send a CONNACK before a DISCONNECT is valid
                 error!("[{} ms] handle_disconnect - invalid state to receive a DISCONNECT", self.elapsed_time_ms);
-                return Err(MqttError::new_protocol_error("invalid state receive a disconnect"));
+                return Err(GneissError::new_protocol_error("invalid state receive a disconnect"));
             }
             _ => {}
         }
@@ -1807,7 +1807,7 @@ impl ProtocolState {
         if let MqttPacket::Disconnect(disconnect) = *packet {
             context.packet_events.push_back(PacketEvent::Disconnect(disconnect));
 
-            return Err(MqttError::new_connection_closed("server-side disconnect received"));
+            return Err(GneissError::new_connection_closed("server-side disconnect received"));
         }
 
         panic!("handle_disconnect - invalid input");
@@ -1815,7 +1815,7 @@ impl ProtocolState {
 
     fn handle_auth(&mut self, _: Box<MqttPacket>, _: &mut NetworkEventContext) -> GneissResult<()> {
         info!("[{} ms] handle_auth - processing AUTH packet", self.elapsed_time_ms);
-        Err(MqttError::new_unimplemented("auth exchanges are not implemented"))
+        Err(GneissError::new_unimplemented("auth exchanges are not implemented"))
     }
 
     fn handle_packet(&mut self, packet: Box<MqttPacket>, context: &mut NetworkEventContext) -> GneissResult<()> {
@@ -1833,7 +1833,7 @@ impl ProtocolState {
             MqttPacket::Auth(_) => { self.handle_auth(packet, context) }
             _ => {
                 error!("[{} ms] handle_packet - invalid packet type for client received", self.elapsed_time_ms);
-                Err(MqttError::new_protocol_error("invalid packet type received"))
+                Err(GneissError::new_protocol_error("invalid packet type received"))
             }
         }
     }
@@ -1917,7 +1917,7 @@ impl ProtocolState {
 
             if self.next_packet_id == start_id {
                 error!("[{} ms] acquire_packet_id_for_operation - operation {} could not find an unbound packet id", self.elapsed_time_ms, operation_id);
-                return Err(MqttError::new_internal_state_error("packet id space exhausted"));
+                return Err(GneissError::new_internal_state_error("packet id space exhausted"));
             }
 
             check_id = self.next_packet_id;
@@ -1956,12 +1956,12 @@ impl ProtocolState {
     }
 }
 
-fn generate_connection_closed_error() -> MqttError {
-    MqttError::new_connection_closed("internal operation failed due to connection close event")
+fn generate_connection_closed_error() -> GneissError {
+    GneissError::new_connection_closed("internal operation failed due to connection close event")
 }
 
-fn generate_offline_queue_policy_failed_error() -> MqttError {
-    MqttError::new_offline_queue_policy_failed()
+fn generate_offline_queue_policy_failed_error() -> GneissError {
+    GneissError::new_offline_queue_policy_failed()
 }
 
 fn build_negotiated_settings(config: &ProtocolStateConfig, packet: &ConnackPacket, existing_settings: &Option<NegotiatedSettings>) -> NegotiatedSettings {
@@ -2002,7 +2002,7 @@ fn complete_operation_with_result(operation_options: &mut MqttOperationOptions, 
                 if let Some(OperationResponse::Publish(publish_result)) = completion_result {
                     publish_response = publish_result;
                 } else {
-                    return Err(MqttError::new_internal_state_error("invalid publish result"));
+                    return Err(GneissError::new_internal_state_error("invalid publish result"));
                 }
             }
 
@@ -2029,10 +2029,10 @@ fn complete_operation_with_result(operation_options: &mut MqttOperationOptions, 
         }
     }
 
-    Err(MqttError::new_internal_state_error("operation result does not match operation type"))
+    Err(GneissError::new_internal_state_error("operation result does not match operation type"))
 }
 
-fn complete_operation_with_error(operation_options: &mut MqttOperationOptions, error: MqttError) -> GneissResult<()> {
+fn complete_operation_with_error(operation_options: &mut MqttOperationOptions, error: GneissError) -> GneissResult<()> {
     match operation_options {
         MqttOperationOptions::Publish(publish_options) => {
             let handler = publish_options.response_handler.take().unwrap();
@@ -2461,6 +2461,6 @@ mod tests {
             protocol_state.allocated_packet_ids.insert(i + 1, i as u64);
         }
 
-        assert_matches!(protocol_state.acquire_free_packet_id(1), Err(MqttError::InternalStateError(_)));
+        assert_matches!(protocol_state.acquire_free_packet_id(1), Err(GneissError::InternalStateError(_)));
     }
 }

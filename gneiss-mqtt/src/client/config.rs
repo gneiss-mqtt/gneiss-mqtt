@@ -351,7 +351,7 @@ impl TlsOptionsBuilder {
     ///
     /// If using MTLS, native-tls only supports pkcs8 format private keys.  If your private key is in a different
     /// format, you must first convert it to pkcs8 and instead use that.
-    pub fn build_native_tls(&self) -> Result<TlsOptions, MqttError> {
+    pub fn build_native_tls(&self) -> Result<TlsOptions, GneissError> {
         let mut builder = native_tls::TlsConnector::builder();
 
         if let Some(root_ca_bytes) = &self.root_ca_bytes {
@@ -380,7 +380,7 @@ impl TlsOptionsBuilder {
 
     #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
     /// Builds client TLS options using the `rustls` crate
-    pub fn build_rustls(&self) -> Result<TlsOptions, MqttError> {
+    pub fn build_rustls(&self) -> Result<TlsOptions, GneissError> {
         let root_cert_store = build_root_ca_store(self.root_ca_bytes.as_deref())?;
 
         let mut config =
@@ -1049,7 +1049,7 @@ impl ClientBuilder {
     pub fn build_tokio(&self, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<AsyncClientHandle> {
         let tls_impl = self.get_tls_impl();
         if tls_impl == TlsConfiguration::Mixed {
-            return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));
+            return Err(GneissError::new_tls_error("Cannot mix two different tls implementations in one client"));
         }
 
         let connect_options =
@@ -1079,7 +1079,7 @@ impl ClientBuilder {
     pub fn build_threaded(&self, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions) -> GneissResult<SyncClientHandle> {
         let tls_impl = self.get_tls_impl();
         if tls_impl == TlsConfiguration::Mixed {
-            return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));
+            return Err(GneissError::new_tls_error("Cannot mix two different tls implementations in one client"));
         }
 
         let connect_options =

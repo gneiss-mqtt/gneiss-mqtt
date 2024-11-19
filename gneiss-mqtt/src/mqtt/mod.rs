@@ -9,7 +9,7 @@ Module containing a set of structured data types that model the MQTT5 specificat
 
 use std::fmt;
 use log::error;
-use crate::error::{MqttError};
+use crate::error::{GneissError};
 
 pub(crate) mod auth;
 pub(crate) mod connack;
@@ -47,7 +47,7 @@ pub enum QualityOfService {
 }
 
 impl TryFrom<u8> for QualityOfService {
-    type Error = MqttError;
+    type Error = GneissError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         utils::convert_u8_to_quality_of_service(value)
@@ -526,7 +526,7 @@ impl DisconnectReasonCode {
 }
 
 impl TryFrom<u8> for DisconnectReasonCode {
-    type Error = MqttError;
+    type Error = GneissError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         utils::convert_u8_to_disconnect_reason_code(value)

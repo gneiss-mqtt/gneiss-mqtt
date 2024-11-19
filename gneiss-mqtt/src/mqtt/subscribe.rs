@@ -6,7 +6,7 @@
 #[cfg(test)]
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -99,7 +99,7 @@ fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePac
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
                 error!("SubscribePacket Decode - Invalid property type ({})", property_key);
-                return Err(MqttError::new_decoding_failure("invalid property type for subscribe packet"));
+                return Err(GneissError::new_decoding_failure("invalid property type for subscribe packet"));
             }
         }
     }
@@ -115,7 +115,7 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Gne
 
     if first_byte != SUBSCRIBE_FIRST_BYTE {
         error!("SubscribePacket Decode - invalid first byte");
-        return Err(MqttError::new_decoding_failure("invalid first byte for subscribe packet"));
+        return Err(GneissError::new_decoding_failure("invalid first byte for subscribe packet"));
     }
 
     let mut box_packet = Box::new(MqttPacket::Subscribe(SubscribePacket { ..Default::default() }));
@@ -127,7 +127,7 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Gne
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
             error!("SubscribePacket Decode - property length exceeds overall packet length");
-            return Err(MqttError::new_decoding_failure("property length exceeds overall packet length for subscribe packet"));
+            return Err(GneissError::new_decoding_failure("property length exceeds overall packet length for subscribe packet"));
         }
 
         let properties_bytes = &mutable_body[..properties_length];
@@ -146,7 +146,7 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Gne
             payload_bytes = decode_u8(payload_bytes, &mut subscription_options)?;
 
             if (subscription_options & SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK) != 0 {
-                return Err(MqttError::new_decoding_failure("invalid subscription reserved bit flags for subscribe packet"));
+                return Err(GneissError::new_decoding_failure("invalid subscription reserved bit flags for subscribe packet"));
             }
 
             subscription.qos = convert_u8_to_quality_of_service(subscription_options & 0x03)?;
@@ -172,19 +172,19 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Gne
 
 #[cfg(not(test))]
 pub(crate) fn decode_subscribe_packet(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
-    Err(MqttError::new_unimplemented("Test-only functionality"))
+    Err(GneissError::new_unimplemented("Test-only functionality"))
 }
 
 pub(crate) fn validate_subscribe_packet_outbound(packet: &SubscribePacket) -> GneissResult<()> {
 
     if packet.packet_id != 0 {
         error!("SubscribePacket Outbound Validation - packet id may not be set");
-        return Err(MqttError::new_packet_validation(PacketType::Subscribe, "packet id is non-zero"));
+        return Err(GneissError::new_packet_validation(PacketType::Subscribe, "packet id is non-zero"));
     }
 
     if packet.subscriptions.is_empty() {
         error!("SubscribePacket Outbound Validation - empty subscription set");
-        return Err(MqttError::new_packet_validation(PacketType::Subscribe, "empty subscription set"));
+        return Err(GneissError::new_packet_validation(PacketType::Subscribe, "empty subscription set"));
     }
 
     validate_user_properties(&packet.user_properties, PacketType::Subscribe, "Subscribe")?;
@@ -198,18 +198,18 @@ pub(crate) fn validate_subscribe_packet_outbound_internal(packet: &SubscribePack
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
         error!("SubscribePacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(MqttError::new_packet_validation(PacketType::Subscribe, "packet length exceeds maximum packet size allowed"));
+        return Err(GneissError::new_packet_validation(PacketType::Subscribe, "packet length exceeds maximum packet size allowed"));
     }
 
     if packet.packet_id == 0 {
         error!("SubscribePacket Outbound Validation - packet id is zero");
-        return Err(MqttError::new_packet_validation(PacketType::Subscribe, "packet id is zero"));
+        return Err(GneissError::new_packet_validation(PacketType::Subscribe, "packet id is zero"));
     }
 
     for subscription in &packet.subscriptions {
         if !is_valid_topic_filter_internal(&subscription.topic_filter, context, Some(subscription.no_local)) {
             error!("SubscribePacket Outbound Validation - invalid topic filter");
-            return Err(MqttError::new_packet_validation(PacketType::Subscribe, "invalid topic filter"));
+            return Err(GneissError::new_packet_validation(PacketType::Subscribe, "invalid topic filter"));
         }
     }
 

@@ -12,7 +12,7 @@ pub mod synchronous;
 pub mod asynchronous;
 
 use crate::client::config::*;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
 use crate::protocol::*;
@@ -366,7 +366,7 @@ impl Display for ConnectionSuccessEvent {
 pub struct ConnectionFailureEvent {
 
     /// Error describing why the connection attempt failed
-    pub error: MqttError,
+    pub error: GneissError,
 
     /// If the connection attempt was rejected by the broker with a Connack with
     /// failing reason code, that packet is found here.
@@ -389,7 +389,7 @@ impl Display for ConnectionFailureEvent {
 pub struct DisconnectionEvent {
 
     /// High-level reason for why the connection was shut down
-    pub error: MqttError,
+    pub error: GneissError,
 
     /// If the connection was shut down due to the receipt of a broker-sent Disconnect packet,
     /// then that packet is found here.
@@ -558,7 +558,7 @@ pub(crate) struct MqttClientImpl {
 
     last_connack: Option<ConnackPacket>,
     last_disconnect: Option<DisconnectPacket>,
-    last_error: Option<MqttError>,
+    last_error: Option<GneissError>,
 
     last_start_connect_time: Option<Instant>,
     successful_connect_time: Option<Instant>,
@@ -636,7 +636,7 @@ impl MqttClientImpl {
         }
     }
 
-    pub(crate) fn apply_error(&mut self, error: MqttError) {
+    pub(crate) fn apply_error(&mut self, error: GneissError) {
         debug!("Applying error to client: {}", error);
 
         if self.last_error.is_none() {
@@ -698,7 +698,7 @@ impl MqttClientImpl {
 
                 debug!("Updating desired state to Stopped");
                 self.desired_stop_options = Some(options);
-                self.apply_error(MqttError::new_user_initiated_disconnect());
+                self.apply_error(GneissError::new_user_initiated_disconnect());
                 self.desired_state = ClientImplState::Stopped;
             }
             OperationOptions::Shutdown() => {
@@ -882,7 +882,7 @@ impl MqttClientImpl {
 
     fn emit_connection_failure_event(&mut self) {
         let mut connection_failure_event = ConnectionFailureEvent {
-            error: self.last_error.take().unwrap_or(MqttError::new_connection_establishment_failure("unknown failure source")),
+            error: self.last_error.take().unwrap_or(GneissError::new_connection_establishment_failure("unknown failure source")),
             connack: None,
         };
 
@@ -895,7 +895,7 @@ impl MqttClientImpl {
 
     fn emit_disconnection_event(&mut self) {
         let mut disconnection_event = DisconnectionEvent {
-            error: self.last_error.take().unwrap_or(MqttError::new_connection_closed("disconnection with no source error")),
+            error: self.last_error.take().unwrap_or(GneissError::new_connection_closed("disconnection with no source error")),
             disconnect: None,
         };
 

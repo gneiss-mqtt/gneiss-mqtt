@@ -8,7 +8,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 use crate::client::asynchronous::AsyncClientHandle;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use super::*;
 
 /// Result type for calling wait() on an async client event waiter
@@ -86,7 +86,7 @@ impl AsyncClientEventWaiter {
             while self.events.len() < self.event_count {
                 match self.event_receiver.recv().await {
                     None => {
-                        return Err(MqttError::new_other_error("Channel closed"));
+                        return Err(GneissError::new_other_error("Channel closed"));
                     }
                     Some(event) => {
                         self.events.push(event);

@@ -4,7 +4,7 @@
  */
 
 use crate::alias::*;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::auth::*;
@@ -504,13 +504,13 @@ pub fn compute_variable_length_integer_encode_size(value: usize) -> GneissResult
     } else if value < 1usize << 28 {
         Ok(4)
     } else {
-        Err(MqttError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"))
+        Err(GneissError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"))
     }
 }
 
 fn encode_vli(value: u32, dest: &mut Vec<u8>) -> GneissResult<()> {
     if value > MAXIMUM_VARIABLE_LENGTH_INTEGER as u32 {
-        return Err(MqttError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
+        return Err(GneissError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
     }
 
     let mut done = false;

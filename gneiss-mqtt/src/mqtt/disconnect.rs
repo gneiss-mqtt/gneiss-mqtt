@@ -5,7 +5,7 @@
 
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, GneissResult};
+use crate::error::{GneissError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -97,7 +97,7 @@ fn decode_disconnect_properties(property_bytes: &[u8], packet : &mut DisconnectP
             PROPERTY_KEY_SERVER_REFERENCE => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.server_reference)?; }
             _ => {
                 error!("Packet Decode - Invalid DisconnectPacket property type ({})", property_key);
-                return Err(MqttError::new_decoding_failure("invalid property type for disconnect packet"));
+                return Err(GneissError::new_decoding_failure("invalid property type for disconnect packet"));
             }
         }
     }
@@ -108,7 +108,7 @@ fn decode_disconnect_properties(property_bytes: &[u8], packet : &mut DisconnectP
 pub(crate) fn decode_disconnect_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if first_byte != (PACKET_TYPE_DISCONNECT << 4) {
         error!("DisconnectPacket Decode - invalid first byte");
-        return Err(MqttError::new_decoding_failure("invalid first byte for disconnect packet"));
+        return Err(GneissError::new_decoding_failure("invalid first byte for disconnect packet"));
     }
 
     let mut box_packet = Box::new(MqttPacket::Disconnect(DisconnectPacket { ..Default::default() }));
@@ -128,7 +128,7 @@ pub(crate) fn decode_disconnect_packet(first_byte: u8, packet_body: &[u8]) -> Gn
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length != mutable_body.len() {
             error!("DisconnectPacket Decode - property length exceeds overall packet length");
-            return Err(MqttError::new_decoding_failure("mismatch between property length and overall packet length for disconnect packet"));
+            return Err(GneissError::new_decoding_failure("mismatch between property length and overall packet length for disconnect packet"));
         }
 
         decode_disconnect_properties(mutable_body, packet)?;
@@ -154,7 +154,7 @@ pub(crate) fn validate_disconnect_packet_outbound_internal(packet: &DisconnectPa
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
         error!("DisconnectPacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(MqttError::new_packet_validation(PacketType::Disconnect, "packet length exceeds maximum packet size"));
+        return Err(GneissError::new_packet_validation(PacketType::Disconnect, "packet length exceeds maximum packet size"));
     }
 
     /*
@@ -169,7 +169,7 @@ pub(crate) fn validate_disconnect_packet_outbound_internal(packet: &DisconnectPa
 
     if connect_session_expiry_interval == 0 && disconnect_session_expiry_interval > 0 {
         error!("DisconnectPacket Outbound Validation - session expiry interval cannot be non-zero when connect session expiry interval was zero");
-        return Err(MqttError::new_packet_validation(PacketType::Disconnect, "session_expiry_interval cannot be non-zero in this connext context"));
+        return Err(GneissError::new_packet_validation(PacketType::Disconnect, "session_expiry_interval cannot be non-zero in this connext context"));
     }
 
     Ok(())
@@ -180,7 +180,7 @@ pub(crate) fn validate_disconnect_packet_inbound_internal(packet: &DisconnectPac
     /* protocol error for the server to send us a session expiry interval property */
     if packet.session_expiry_interval_seconds.is_some() {
         error!("DisconnectPacket Inbound Validation - session expiry interval is non zero");
-        return Err(MqttError::new_packet_validation(PacketType::Disconnect, "session_expiry_interval is non zero"));
+        return Err(GneissError::new_packet_validation(PacketType::Disconnect, "session_expiry_interval is non zero"));
     }
 
     Ok(())
