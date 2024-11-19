@@ -6,7 +6,7 @@
 
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -17,7 +17,7 @@ use std::fmt;
 
 
 #[rustfmt::skip]
-fn compute_auth_packet_length_properties(packet: &AuthPacket) -> MqttResult<(u32, u32)> {
+fn compute_auth_packet_length_properties(packet: &AuthPacket) -> GneissResult<(u32, u32)> {
     let mut auth_property_section_length = compute_user_properties_length(&packet.user_properties);
 
     add_optional_string_property_length!(auth_property_section_length, packet.authentication_method);
@@ -58,7 +58,7 @@ fn get_auth_packet_user_property(packet: &MqttPacket, index: usize) -> &UserProp
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_auth_encoding_steps(packet: &AuthPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+pub(crate) fn write_auth_encoding_steps(packet: &AuthPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     let (total_remaining_length, auth_property_length) = compute_auth_packet_length_properties(packet)?;
 
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_AUTH << 4);
@@ -80,7 +80,7 @@ pub(crate) fn write_auth_encoding_steps(packet: &AuthPacket, _: &EncodingContext
 }
 
 
-fn decode_auth_properties(property_bytes: &[u8], packet : &mut AuthPacket) -> MqttResult<()> {
+fn decode_auth_properties(property_bytes: &[u8], packet : &mut AuthPacket) -> GneissResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
     while !mutable_property_bytes.is_empty() {
@@ -102,7 +102,7 @@ fn decode_auth_properties(property_bytes: &[u8], packet : &mut AuthPacket) -> Mq
     Ok(())
 }
 
-pub(crate) fn decode_auth_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
+pub(crate) fn decode_auth_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if first_byte != (PACKET_TYPE_AUTH << 4) {
         error!("AuthPacket Decode - invalid first byte");
         return Err(MqttError::new_decoding_failure("invalid first byte for auth packet"));
@@ -132,7 +132,7 @@ pub(crate) fn decode_auth_packet(first_byte: u8, packet_body: &[u8]) -> MqttResu
     panic!("AuthPacket Decode - Internal error");
 }
 
-pub(crate) fn validate_auth_packet_outbound(packet: &AuthPacket) -> MqttResult<()> {
+pub(crate) fn validate_auth_packet_outbound(packet: &AuthPacket) -> GneissResult<()> {
 
     if packet.authentication_method.is_none() {
         error!("AuthPacket Outbound Validation - authentication method must be set");
@@ -149,7 +149,7 @@ pub(crate) fn validate_auth_packet_outbound(packet: &AuthPacket) -> MqttResult<(
     Ok(())
 }
 
-pub(crate) fn validate_auth_packet_outbound_internal(packet: &AuthPacket, context: &OutboundValidationContext) -> MqttResult<()> {
+pub(crate) fn validate_auth_packet_outbound_internal(packet: &AuthPacket, context: &OutboundValidationContext) -> GneissResult<()> {
 
     let (total_remaining_length, _) = compute_auth_packet_length_properties(packet)?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
@@ -161,7 +161,7 @@ pub(crate) fn validate_auth_packet_outbound_internal(packet: &AuthPacket, contex
     Ok(())
 }
 
-pub(crate) fn validate_auth_packet_inbound_internal(packet: &AuthPacket, _: &InboundValidationContext) -> MqttResult<()> {
+pub(crate) fn validate_auth_packet_inbound_internal(packet: &AuthPacket, _: &InboundValidationContext) -> GneissResult<()> {
 
     if packet.authentication_method.is_none() {
         // while optional from an encode/decode perspective, method is required from a protocol

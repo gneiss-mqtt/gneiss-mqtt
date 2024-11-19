@@ -6,7 +6,7 @@
 #[cfg(test)]
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -146,7 +146,7 @@ fn compute_connect_flags(packet: &ConnectPacket) -> u8 {
 }
 
 #[rustfmt::skip]
-fn compute_connect_packet_length_properties(packet: &ConnectPacket) -> MqttResult<(u32, u32, u32)> {
+fn compute_connect_packet_length_properties(packet: &ConnectPacket) -> GneissResult<(u32, u32, u32)> {
     let mut connect_property_section_length = compute_user_properties_length(&packet.user_properties);
 
     add_optional_u32_property_length!(connect_property_section_length, packet.session_expiry_interval_seconds);
@@ -206,7 +206,7 @@ fn compute_connect_packet_length_properties(packet: &ConnectPacket) -> MqttResul
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_connect_encoding_steps(packet: &ConnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+pub(crate) fn write_connect_encoding_steps(packet: &ConnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     let (total_remaining_length, connect_property_length, will_property_length) = compute_connect_packet_length_properties(packet)?;
 
     encode_integral_expression!(steps, Uint8, 1u8 << 4);
@@ -254,7 +254,7 @@ pub(crate) fn write_connect_encoding_steps(packet: &ConnectPacket, _: &EncodingC
 }
 
 #[cfg(test)]
-fn decode_connect_properties(property_bytes: &[u8], packet : &mut ConnectPacket) -> MqttResult<()> {
+fn decode_connect_properties(property_bytes: &[u8], packet : &mut ConnectPacket) -> GneissResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
     while !mutable_property_bytes.is_empty() {
@@ -282,7 +282,7 @@ fn decode_connect_properties(property_bytes: &[u8], packet : &mut ConnectPacket)
 }
 
 #[cfg(test)]
-fn decode_will_properties(property_bytes: &[u8], will: &mut PublishPacket, connect : &mut ConnectPacket) -> MqttResult<()> {
+fn decode_will_properties(property_bytes: &[u8], will: &mut PublishPacket, connect : &mut ConnectPacket) -> GneissResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
     while !mutable_property_bytes.is_empty() {
@@ -311,7 +311,7 @@ fn decode_will_properties(property_bytes: &[u8], will: &mut PublishPacket, conne
 const CONNECT_HEADER_PROTOCOL_LENGTH : usize = 7;
 
 #[cfg(test)]
-pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
+pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if first_byte != (PACKET_TYPE_CONNECT << 4)  {
         error!("ConnectPacket Decode - invalid first byte");
         return Err(MqttError::new_decoding_failure("invalid first byte for connect packet"));
@@ -425,11 +425,11 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
 }
 
 #[cfg(not(test))]
-pub(crate) fn decode_connect_packet(_: u8, _: &[u8]) -> MqttResult<Box<MqttPacket>> {
+pub(crate) fn decode_connect_packet(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
     Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
-pub(crate) fn validate_connect_packet_outbound(packet: &ConnectPacket) -> MqttResult<()> {
+pub(crate) fn validate_connect_packet_outbound(packet: &ConnectPacket) -> GneissResult<()> {
 
     validate_optional_string_length(&packet.client_id, PacketType::Connect, "Connect", "client_id")?;
     validate_optional_integer_non_zero!(receive_maximum, packet.receive_maximum, PacketType::Connect, "Connect", "receive_maximum");

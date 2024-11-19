@@ -8,11 +8,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 use crate::client::asynchronous::AsyncClientHandle;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 use super::*;
 
 /// Result type for calling wait() on an async client event waiter
-pub type ClientEventWaitFuture = dyn Future<Output = MqttResult<Vec<ClientEventRecord>>> + Send;
+pub type ClientEventWaitFuture = dyn Future<Output = GneissResult<Vec<ClientEventRecord>>> + Send;
 
 /// Simple debug type that uses the client listener framework to allow tests to asynchronously wait for
 /// configurable client event sequences.  May be useful outside of tests.  May need polish.  Currently public

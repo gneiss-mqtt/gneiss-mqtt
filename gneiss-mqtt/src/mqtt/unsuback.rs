@@ -5,7 +5,7 @@
 
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -16,7 +16,7 @@ use std::fmt;
 
 #[rustfmt::skip]
 #[cfg(test)]
-fn compute_unsuback_packet_length_properties(packet: &UnsubackPacket) -> MqttResult<(u32, u32)> {
+fn compute_unsuback_packet_length_properties(packet: &UnsubackPacket) -> GneissResult<(u32, u32)> {
     let mut unsuback_property_section_length = compute_user_properties_length(&packet.user_properties);
     add_optional_string_property_length!(unsuback_property_section_length, packet.reason_string);
 
@@ -46,7 +46,7 @@ fn get_unsuback_packet_user_property(packet: &MqttPacket, index: usize) -> &User
 
 #[rustfmt::skip]
 #[cfg(test)]
-pub(crate) fn write_unsuback_encoding_steps(packet: &UnsubackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+pub(crate) fn write_unsuback_encoding_steps(packet: &UnsubackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     let (total_remaining_length, unsuback_property_length) = compute_unsuback_packet_length_properties(packet)?;
 
     encode_integral_expression!(steps, Uint8, UNSUBACK_FIRST_BYTE);
@@ -67,11 +67,11 @@ pub(crate) fn write_unsuback_encoding_steps(packet: &UnsubackPacket, _: &Encodin
 }
 
 #[cfg(not(test))]
-pub(crate) fn write_unsuback_encoding_steps(_: &UnsubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+pub(crate) fn write_unsuback_encoding_steps(_: &UnsubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
-fn decode_unsuback_properties(property_bytes: &[u8], packet : &mut UnsubackPacket) -> MqttResult<()> {
+fn decode_unsuback_properties(property_bytes: &[u8], packet : &mut UnsubackPacket) -> GneissResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
     while !mutable_property_bytes.is_empty() {
@@ -91,7 +91,7 @@ fn decode_unsuback_properties(property_bytes: &[u8], packet : &mut UnsubackPacke
     Ok(())
 }
 
-pub(crate) fn decode_unsuback_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
+pub(crate) fn decode_unsuback_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
 
     if first_byte != UNSUBACK_FIRST_BYTE {
         error!("UnsubackPacket Decode - invalid first byte");

@@ -111,7 +111,7 @@ impl MockBrokerConnection {
         }
     }
 
-    fn handle_packet(&mut self, packet: &Box<MqttPacket>, response_bytes: &mut Vec<u8>) -> MqttResult<()> {
+    fn handle_packet(&mut self, packet: &Box<MqttPacket>, response_bytes: &mut Vec<u8>) -> GneissResult<()> {
         let mut response_packets = VecDeque::new();
         let packet_type = mqtt_packet_to_packet_type(&*packet);
 

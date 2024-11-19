@@ -12,7 +12,7 @@ pub mod synchronous;
 pub mod asynchronous;
 
 use crate::client::config::*;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
 use crate::protocol::*;
@@ -128,7 +128,7 @@ impl Display for PublishResponse {
 }
 
 /// Result type for the final outcome of a Publish operation
-pub type PublishResult = MqttResult<PublishResponse>;
+pub type PublishResult = GneissResult<PublishResponse>;
 
 /// Additional client options applicable to an MQTT Subscribe operation
 #[derive(Debug, Default, Clone)]
@@ -175,7 +175,7 @@ impl SubscribeOptionsBuilder {
 
 /// Result type for the final outcome of a Subscribe operation.  Check the reason
 /// code vector on the Suback packet for individual success/failure indicators.
-pub type SubscribeResult = MqttResult<SubackPacket>;
+pub type SubscribeResult = GneissResult<SubackPacket>;
 
 /// Additional client options applicable to an MQTT Unsubscribe operation
 #[derive(Debug, Default, Clone)]
@@ -222,7 +222,7 @@ impl UnsubscribeOptionsBuilder {
 
 /// Result type for the final outcome of an Unsubscribe operation.  Check the reason
 /// code vector on the Unsuback packet for individual success/failure indicators.
-pub type UnsubscribeResult = MqttResult<UnsubackPacket>;
+pub type UnsubscribeResult = GneissResult<UnsubackPacket>;
 
 /// Additional client options applicable to client Stop operation
 #[derive(Debug, Default, Clone)]
@@ -489,7 +489,7 @@ pub struct ListenerHandle {
     pub(crate) id: u64
 }
 
-pub(crate) type ResponseHandler<T> = Box<dyn FnOnce(T) -> MqttResult<()> + Send + Sync>;
+pub(crate) type ResponseHandler<T> = Box<dyn FnOnce(T) -> GneissResult<()> + Send + Sync>;
 
 pub(crate) struct PublishOptionsInternal {
     pub options: PublishOptions,
@@ -751,7 +751,7 @@ impl MqttClientImpl {
         self.packet_events.clear();
     }
 
-    pub(crate) fn handle_incoming_bytes(&mut self, bytes: &[u8]) -> MqttResult<()> {
+    pub(crate) fn handle_incoming_bytes(&mut self, bytes: &[u8]) -> GneissResult<()> {
         debug!("client impl - handle_incoming_bytes: {} bytes", bytes.len());
 
         let mut context = NetworkEventContext {
@@ -765,7 +765,7 @@ impl MqttClientImpl {
         result
     }
 
-    pub(crate) fn handle_write_completion(&mut self) -> MqttResult<()> {
+    pub(crate) fn handle_write_completion(&mut self) -> GneissResult<()> {
         debug!("client impl - handle_write_completion");
 
         let mut context = NetworkEventContext {
@@ -777,7 +777,7 @@ impl MqttClientImpl {
         self.protocol_state.handle_network_event(&mut context)
     }
 
-    pub(crate) fn handle_service(&mut self, outbound_data: &mut Vec<u8>) -> MqttResult<()> {
+    pub(crate) fn handle_service(&mut self, outbound_data: &mut Vec<u8>) -> GneissResult<()> {
         debug!("client impl - handle_service");
 
         let mut context = ServiceContext {
@@ -923,7 +923,7 @@ impl MqttClientImpl {
         self.emit_connection_attempt_event();
     }
 
-    pub(crate) fn transition_to_state(&mut self, mut new_state: ClientImplState) -> MqttResult<()> {
+    pub(crate) fn transition_to_state(&mut self, mut new_state: ClientImplState) -> GneissResult<()> {
         let current_time = Instant::now();
         let old_state = self.current_state;
         if old_state == new_state {

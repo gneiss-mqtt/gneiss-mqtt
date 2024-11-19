@@ -6,7 +6,7 @@
 #[cfg(test)]
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 use std::fmt;
 
 #[rustfmt::skip]
-fn compute_subscribe_packet_length_properties(packet: &SubscribePacket) -> MqttResult<(u32, u32)> {
+fn compute_subscribe_packet_length_properties(packet: &SubscribePacket) -> GneissResult<(u32, u32)> {
     let mut subscribe_property_section_length = compute_user_properties_length(&packet.user_properties);
     add_optional_u32_property_length!(subscribe_property_section_length, packet.subscription_identifier);
 
@@ -66,7 +66,7 @@ fn compute_subscription_options_byte(subscription: &Subscription) -> u8 {
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_subscribe_encoding_steps(packet: &SubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+pub(crate) fn write_subscribe_encoding_steps(packet: &SubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     let (total_remaining_length, subscribe_property_length) = compute_subscribe_packet_length_properties(packet)?;
 
     encode_integral_expression!(steps, Uint8, SUBSCRIBE_FIRST_BYTE);
@@ -87,7 +87,7 @@ pub(crate) fn write_subscribe_encoding_steps(packet: &SubscribePacket, _: &Encod
 }
 
 #[cfg(test)]
-fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePacket) -> MqttResult<()> {
+fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePacket) -> GneissResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
     while !mutable_property_bytes.is_empty() {
@@ -111,7 +111,7 @@ fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePac
 const SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK : u8 = 192;
 
 #[cfg(test)]
-pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
+pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
 
     if first_byte != SUBSCRIBE_FIRST_BYTE {
         error!("SubscribePacket Decode - invalid first byte");
@@ -171,11 +171,11 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Mqt
 }
 
 #[cfg(not(test))]
-pub(crate) fn decode_subscribe_packet(_: u8, _: &[u8]) -> MqttResult<Box<MqttPacket>> {
+pub(crate) fn decode_subscribe_packet(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
     Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
-pub(crate) fn validate_subscribe_packet_outbound(packet: &SubscribePacket) -> MqttResult<()> {
+pub(crate) fn validate_subscribe_packet_outbound(packet: &SubscribePacket) -> GneissResult<()> {
 
     if packet.packet_id != 0 {
         error!("SubscribePacket Outbound Validation - packet id may not be set");
@@ -192,7 +192,7 @@ pub(crate) fn validate_subscribe_packet_outbound(packet: &SubscribePacket) -> Mq
     Ok(())
 }
 
-pub(crate) fn validate_subscribe_packet_outbound_internal(packet: &SubscribePacket, context: &OutboundValidationContext) -> MqttResult<()> {
+pub(crate) fn validate_subscribe_packet_outbound_internal(packet: &SubscribePacket, context: &OutboundValidationContext) -> GneissResult<()> {
 
     let (total_remaining_length, _) = compute_subscribe_packet_length_properties(packet)?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;

@@ -5,7 +5,7 @@
 
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -15,7 +15,7 @@ use std::collections::VecDeque;
 use std::fmt;
 
 #[rustfmt::skip]
-fn compute_disconnect_packet_length_properties(packet: &DisconnectPacket) -> MqttResult<(u32, u32)> {
+fn compute_disconnect_packet_length_properties(packet: &DisconnectPacket) -> GneissResult<(u32, u32)> {
     let mut disconnect_property_section_length = compute_user_properties_length(&packet.user_properties);
 
     add_optional_u32_property_length!(disconnect_property_section_length, packet.session_expiry_interval_seconds);
@@ -55,7 +55,7 @@ fn get_disconnect_packet_user_property(packet: &MqttPacket, index: usize) -> &Us
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_disconnect_encoding_steps(packet: &DisconnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+pub(crate) fn write_disconnect_encoding_steps(packet: &DisconnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     let (total_remaining_length, disconnect_property_length) = compute_disconnect_packet_length_properties(packet)?;
 
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_DISCONNECT << 4);
@@ -83,7 +83,7 @@ pub(crate) fn write_disconnect_encoding_steps(packet: &DisconnectPacket, _: &Enc
     Ok(())
 }
 
-fn decode_disconnect_properties(property_bytes: &[u8], packet : &mut DisconnectPacket) -> MqttResult<()> {
+fn decode_disconnect_properties(property_bytes: &[u8], packet : &mut DisconnectPacket) -> GneissResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
     while !mutable_property_bytes.is_empty() {
@@ -105,7 +105,7 @@ fn decode_disconnect_properties(property_bytes: &[u8], packet : &mut DisconnectP
     Ok(())
 }
 
-pub(crate) fn decode_disconnect_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
+pub(crate) fn decode_disconnect_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if first_byte != (PACKET_TYPE_DISCONNECT << 4) {
         error!("DisconnectPacket Decode - invalid first byte");
         return Err(MqttError::new_decoding_failure("invalid first byte for disconnect packet"));
@@ -139,7 +139,7 @@ pub(crate) fn decode_disconnect_packet(first_byte: u8, packet_body: &[u8]) -> Mq
     panic!("DisconnectPacket Decode - Internal error");
 }
 
-pub(crate) fn validate_disconnect_packet_outbound(packet: &DisconnectPacket) -> MqttResult<()> {
+pub(crate) fn validate_disconnect_packet_outbound(packet: &DisconnectPacket) -> GneissResult<()> {
 
     validate_optional_string_length(&packet.reason_string, PacketType::Disconnect, "Disconnect", "reason_string")?;
     validate_user_properties(&packet.user_properties, PacketType::Disconnect, "Disconnect")?;
@@ -148,7 +148,7 @@ pub(crate) fn validate_disconnect_packet_outbound(packet: &DisconnectPacket) -> 
     Ok(())
 }
 
-pub(crate) fn validate_disconnect_packet_outbound_internal(packet: &DisconnectPacket, context: &OutboundValidationContext) -> MqttResult<()> {
+pub(crate) fn validate_disconnect_packet_outbound_internal(packet: &DisconnectPacket, context: &OutboundValidationContext) -> GneissResult<()> {
 
     let (total_remaining_length, _) = compute_disconnect_packet_length_properties(packet)?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
@@ -175,7 +175,7 @@ pub(crate) fn validate_disconnect_packet_outbound_internal(packet: &DisconnectPa
     Ok(())
 }
 
-pub(crate) fn validate_disconnect_packet_inbound_internal(packet: &DisconnectPacket, _: &InboundValidationContext) -> MqttResult<()> {
+pub(crate) fn validate_disconnect_packet_inbound_internal(packet: &DisconnectPacket, _: &InboundValidationContext) -> GneissResult<()> {
 
     /* protocol error for the server to send us a session expiry interval property */
     if packet.session_expiry_interval_seconds.is_some() {

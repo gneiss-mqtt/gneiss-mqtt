@@ -89,7 +89,7 @@ impl HttpProxyOptionsBuilder {
 
 /// Return type for a synchronous websocket handshake transformation function
 #[cfg(feature="threaded-websockets")]
-pub type SyncWebsocketHandshakeTransformReturnType = MqttResult<http::request::Builder>;
+pub type SyncWebsocketHandshakeTransformReturnType = GneissResult<http::request::Builder>;
 
 /// Synchronous websocket handshake transformation function type
 #[cfg(feature="threaded-websockets")]
@@ -144,7 +144,7 @@ impl SyncWebsocketOptionsBuilder {
 
 /// Return type for an async websocket handshake transformation function
 #[cfg(feature="tokio-websockets")]
-pub type AsyncWebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = MqttResult<http::request::Builder>> + Send >>;
+pub type AsyncWebsocketHandshakeTransformReturnType = Pin<Box<dyn Future<Output = GneissResult<http::request::Builder>> + Send >>;
 
 /// Async websocket handshake transformation function type
 #[cfg(feature="tokio-websockets")]
@@ -231,7 +231,7 @@ impl TlsOptions {
 
     /// Creates a new builder object using mutual TLS and an X509 certificate and a
     /// private key, by file path.
-    pub fn bulder_with_mtls_from_path(certificate_path: &str, private_key_path: &str) -> MqttResult<TlsOptionsBuilder> {
+    pub fn bulder_with_mtls_from_path(certificate_path: &str, private_key_path: &str) -> GneissResult<TlsOptionsBuilder> {
         TlsOptionsBuilder::new_with_mtls_from_path(certificate_path, private_key_path)
     }
 
@@ -293,7 +293,7 @@ impl TlsOptionsBuilder {
         }
     }
 
-    pub(crate) fn new_with_mtls_from_path(certificate_path: &str, private_key_path: &str) -> MqttResult<Self> {
+    pub(crate) fn new_with_mtls_from_path(certificate_path: &str, private_key_path: &str) -> GneissResult<Self> {
         let certificate_bytes = load_file(certificate_path)?;
         let private_key_bytes = load_file(private_key_path)?;
 
@@ -320,7 +320,7 @@ impl TlsOptionsBuilder {
 
     /// Configures the builder to use a trust store that *only* contains a single root certificate,
     /// supplied by file path.
-    pub fn with_root_ca_from_path(&mut self, root_ca_path: &str) -> MqttResult<&mut Self> {
+    pub fn with_root_ca_from_path(&mut self, root_ca_path: &str) -> GneissResult<&mut Self> {
         self.root_ca_bytes = Some(load_file(root_ca_path)?);
         Ok(self)
     }
@@ -1046,7 +1046,7 @@ impl ClientBuilder {
     /// Builds a new MQTT client according to all the configuration options given to the builder.
     /// Does not consume self; can be called multiple times
     #[cfg(feature="tokio")]
-    pub fn build_tokio(&self, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncClientHandle> {
+    pub fn build_tokio(&self, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<AsyncClientHandle> {
         let tls_impl = self.get_tls_impl();
         if tls_impl == TlsConfiguration::Mixed {
             return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));
@@ -1076,7 +1076,7 @@ impl ClientBuilder {
     /// Builds a new MQTT client according to all the configuration options given to the builder.
     /// Does not consume self; can be called multiple times
     #[cfg(feature="threaded")]
-    pub fn build_threaded(&self, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions) -> MqttResult<SyncClientHandle> {
+    pub fn build_threaded(&self, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions) -> GneissResult<SyncClientHandle> {
         let tls_impl = self.get_tls_impl();
         if tls_impl == TlsConfiguration::Mixed {
             return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));
@@ -1160,7 +1160,7 @@ impl IntoClientRequest for HandshakeRequest {
 }
 
 #[cfg(any(feature="tokio-websockets", feature="threaded-websockets"))]
-pub(crate) fn create_default_websocket_handshake_request(uri: String) -> MqttResult<http::request::Builder> {
+pub(crate) fn create_default_websocket_handshake_request(uri: String) -> GneissResult<http::request::Builder> {
     let uri = Uri::from_str(uri.as_str()).unwrap();
 
     Ok(http::Request::builder()

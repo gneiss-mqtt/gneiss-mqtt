@@ -12,7 +12,7 @@ that allows for custom resolution implementations to be injected into a client.
 #[cfg(test)]
 use assert_matches::assert_matches;
 
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 
 use log::*;
 use lru::LruCache;
@@ -271,7 +271,7 @@ impl InboundAliasResolver {
         self.current_aliases.clear();
     }
 
-    pub(crate) fn resolve_topic_alias(&mut self, alias: &Option<u16>, topic: &mut String) -> MqttResult<()> {
+    pub(crate) fn resolve_topic_alias(&mut self, alias: &Option<u16>, topic: &mut String) -> GneissResult<()> {
         if let Some(alias_value) = alias {
             if topic.is_empty() {
                 if let Some(existing_topic) = self.current_aliases.get(alias_value) {

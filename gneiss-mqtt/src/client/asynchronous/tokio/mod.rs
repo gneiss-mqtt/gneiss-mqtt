@@ -13,7 +13,7 @@ mod longtests;
 
 use crate::client::*;
 use crate::client::config::*;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
 use crate::protocol::is_connection_established;
@@ -81,7 +81,7 @@ pub(crate) struct ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send 
 }
 
 impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + 'static {
-    pub(crate) async fn process_stopped(&mut self, client: &mut MqttClientImpl) -> MqttResult<ClientImplState> {
+    pub(crate) async fn process_stopped(&mut self, client: &mut MqttClientImpl) -> GneissResult<ClientImplState> {
         loop {
             trace!("tokio - process_stopped loop");
 
@@ -100,7 +100,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
         }
     }
 
-    pub(crate) async fn process_connecting(&mut self, client: &mut MqttClientImpl) -> MqttResult<ClientImplState> {
+    pub(crate) async fn process_connecting(&mut self, client: &mut MqttClientImpl) -> GneissResult<ClientImplState> {
         let mut connect = (self.tokio_config.connection_factory)();
 
         let timeout = sleep(*client.connect_timeout());
@@ -143,7 +143,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
         }
     }
 
-    pub(crate) async fn process_connected(&mut self, client: &mut MqttClientImpl) -> MqttResult<ClientImplState> {
+    pub(crate) async fn process_connected(&mut self, client: &mut MqttClientImpl) -> GneissResult<ClientImplState> {
         let mut outbound_data: Vec<u8> = Vec::with_capacity(4096);
         let mut cumulative_bytes_written : usize = 0;
 
@@ -280,7 +280,7 @@ impl<T> ClientRuntimeState<T> where T : AsyncRead + AsyncWrite + Send + Sync + '
         Ok(next_state.unwrap())
     }
 
-    pub(crate) async fn process_pending_reconnect(&mut self, client: &mut MqttClientImpl, wait: Duration) -> MqttResult<ClientImplState> {
+    pub(crate) async fn process_pending_reconnect(&mut self, client: &mut MqttClientImpl, wait: Duration) -> GneissResult<ClientImplState> {
         let reconnect_timer = sleep(wait);
         tokio::pin!(reconnect_timer);
 
@@ -369,7 +369,7 @@ pub(crate) fn spawn_event_callback(event: Arc<ClientEvent>, callback: Arc<Client
     });
 }
 
-type TokioConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = MqttResult<T>> + Send>>;
+type TokioConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = GneissResult<T>> + Send>>;
 
 /// Tokio-specific client configuration
 pub struct TokioClientOptionsInternal<T> where T : AsyncRead + AsyncWrite + Send + Sync {
@@ -423,7 +423,7 @@ macro_rules! submit_tokio_operation {
 impl AsyncClient for TokioClient {
     /// Signals the client that it should attempt to recurrently maintain a connection to
     /// the broker endpoint it has been configured with.
-    fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> MqttResult<()> {
+    fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> GneissResult<()> {
         info!("tokio client start invoked");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Start(default_listener)) {
             return Err(MqttError::new_operation_channel_failure(send_error));
@@ -434,7 +434,7 @@ impl AsyncClient for TokioClient {
 
     /// Signals the client that it should close any current connection it has and enter the
     /// Stopped state, where it does nothing.
-    fn stop(&self, options: Option<StopOptions>) -> MqttResult<()> {
+    fn stop(&self, options: Option<StopOptions>) -> GneissResult<()> {
         info!("tokio client stop invoked {} a disconnect packet", if options.as_ref().is_some_and(|opts| { opts.disconnect.is_some()}) { "with" } else { "without" });
         let options = options.unwrap_or_default();
 
@@ -461,7 +461,7 @@ impl AsyncClient for TokioClient {
     /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.  Useful to ensure
     /// a full resource wipe.  If just `stop()` is used then the client will continue to track
     /// MQTT session state internally.
-    fn close(&self) -> MqttResult<()> {
+    fn close(&self) -> GneissResult<()> {
         info!("tokio client close invoked; no further operations allowed");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Shutdown()) {
             return Err(MqttError::new_operation_channel_failure(send_error));
@@ -508,7 +508,7 @@ impl AsyncClient for TokioClient {
 
     /// Adds an additional listener to the events emitted by this client.  This is useful when
     /// multiple higher-level constructs are sharing the same MQTT client.
-    fn add_event_listener(&self, listener: ClientEventListener) -> MqttResult<ListenerHandle> {
+    fn add_event_listener(&self, listener: ClientEventListener) -> GneissResult<ListenerHandle> {
         debug!("tokio client - add listener operation submitted");
         let mut current_id = self.listener_id_allocator.lock().unwrap();
         let listener_id = *current_id;
@@ -524,7 +524,7 @@ impl AsyncClient for TokioClient {
     }
 
     /// Removes a listener from this client's set of event listeners.
-    fn remove_event_listener(&self, listener: ListenerHandle) -> MqttResult<()> {
+    fn remove_event_listener(&self, listener: ListenerHandle) -> GneissResult<()> {
         debug!("tokio client - remove listener operation submitted");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::RemoveListener(listener.id)) {
             return Err(MqttError::new_operation_channel_failure(send_error));
@@ -568,7 +568,7 @@ where T: AsyncRead + AsyncWrite + Send + Sync + 'static {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn make_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncClientHandle> {
+pub(crate) fn make_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<AsyncClientHandle> {
     #[cfg(feature="tokio-websockets")]
     if async_options.websocket_options.is_some() {
         return make_websocket_client_tokio(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, async_options, tokio_options)
@@ -580,7 +580,7 @@ pub(crate) fn make_client_tokio(tls_impl: TlsConfiguration, endpoint: String, po
 
 #[allow(unused_variables)]
 #[allow(clippy::too_many_arguments)]
-fn make_direct_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncClientHandle> {
+fn make_direct_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<AsyncClientHandle> {
     match tls_impl {
         TlsConfiguration::None => { make_direct_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, async_options, tokio_options) }
         #[cfg(feature = "tokio-rustls")]
@@ -591,7 +591,7 @@ fn make_direct_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: 
     }
 }
 
-fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncClientHandle> {
+fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<AsyncClientHandle> {
     info!("make_direct_client_no_tls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
 
@@ -622,7 +622,7 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttCl
 
 #[cfg(feature = "tokio-rustls")]
 #[allow(clippy::too_many_arguments)]
-fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncClientHandle> {
+fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<AsyncClientHandle> {
     info!("make_direct_client_rustls - creating async connection establishment closure");
     let handle = tokio_options.runtime.clone();
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
@@ -693,7 +693,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
 
 #[cfg(feature = "tokio-native-tls")]
 #[allow(clippy::too_many_arguments)]
-fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncClientHandle> {
+fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<AsyncClientHandle> {
     info!("make_direct_client_native_tls - creating async connection establishment closure");
 
     let handle = tokio_options.runtime.clone();
@@ -766,7 +766,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
 #[allow(unused_variables)]
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature="tokio-websockets")]
-fn make_websocket_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncClientHandle> {
+fn make_websocket_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<AsyncClientHandle> {
     match tls_impl {
         TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, async_options, tokio_options) }
         #[cfg(feature = "tokio-rustls")]
@@ -778,7 +778,7 @@ fn make_websocket_client_tokio(tls_impl: TlsConfiguration, endpoint: String, por
 }
 
 #[cfg(feature="tokio-websockets")]
-fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncClientHandle> {
+fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<AsyncClientHandle> {
     info!("make_websocket_client_no_tls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
     let websocket_options = async_options.websocket_options.unwrap().clone();
@@ -813,7 +813,7 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: Mqt
 
 #[allow(clippy::too_many_arguments)]
 #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
-fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncClientHandle> {
+fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<AsyncClientHandle> {
     info!("make_websocket_client_rustls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
     let websocket_options = async_options.websocket_options.unwrap().clone();
@@ -889,7 +889,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
 
 #[allow(clippy::too_many_arguments)]
 #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
-fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncClientHandle> {
+fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<AsyncClientHandle> {
     info!("make_websocket_client_native_tls - creating async connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
     let websocket_options = async_options.websocket_options.unwrap().clone();
@@ -963,7 +963,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Op
     }
 }
 
-async fn make_leaf_stream(endpoint: Endpoint) -> MqttResult<TcpStream> {
+async fn make_leaf_stream(endpoint: Endpoint) -> GneissResult<TcpStream> {
     let addr = make_addr(endpoint.endpoint.as_str(), endpoint.port)?;
     debug!("make_leaf_stream - opening TCP stream");
     let stream = TcpStream::connect(&addr).await?;
@@ -973,7 +973,7 @@ async fn make_leaf_stream(endpoint: Endpoint) -> MqttResult<TcpStream> {
 }
 
 #[cfg(feature = "tokio-rustls")]
-async fn wrap_stream_with_tls_rustls<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, tls_options: TlsOptions) -> MqttResult<tokio_rustls::client::TlsStream<S>> where S : AsyncRead + AsyncWrite + Unpin {
+async fn wrap_stream_with_tls_rustls<S>(stream : Pin<Box<impl Future<Output=GneissResult<S>>+Sized>>, endpoint: String, tls_options: TlsOptions) -> GneissResult<tokio_rustls::client::TlsStream<S>> where S : AsyncRead + AsyncWrite + Unpin {
     let domain = rustls_pki_types::ServerName::try_from(endpoint)?
         .to_owned();
 
@@ -992,7 +992,7 @@ async fn wrap_stream_with_tls_rustls<S>(stream : Pin<Box<impl Future<Output=Mqtt
 }
 
 #[cfg(feature = "tokio-native-tls")]
-async fn wrap_stream_with_tls_native_tls<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, tls_options: TlsOptions) -> MqttResult<tokio_native_tls::TlsStream<S>> where S : AsyncRead + AsyncWrite + Unpin {
+async fn wrap_stream_with_tls_native_tls<S>(stream : Pin<Box<impl Future<Output=GneissResult<S>>+Sized>>, endpoint: String, tls_options: TlsOptions) -> GneissResult<tokio_native_tls::TlsStream<S>> where S : AsyncRead + AsyncWrite + Unpin {
 
     let connector =
         match tls_options.options {
@@ -1012,7 +1012,7 @@ async fn wrap_stream_with_tls_native_tls<S>(stream : Pin<Box<impl Future<Output=
 }
 
 #[cfg(feature="tokio-websockets")]
-async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, endpoint: String, scheme: &str, websocket_options: AsyncWebsocketOptions) -> MqttResult<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
+async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=GneissResult<S>>+Sized>>, endpoint: String, scheme: &str, websocket_options: AsyncWebsocketOptions) -> GneissResult<WsByteStream<WebSocketStream<S>, Message, tungstenite::Error, WsMessageHandler>> where S : AsyncRead + AsyncWrite + Unpin {
 
     let uri = format!("{}://{}/mqtt", scheme, endpoint); // scheme needs to be present but value irrelevant
     let handshake_builder = create_default_websocket_handshake_request(uri)?;
@@ -1035,7 +1035,7 @@ async fn wrap_stream_with_websockets<S>(stream : Pin<Box<impl Future<Output=Mqtt
     Ok(byte_stream)
 }
 
-async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=MqttResult<S>>+Sized>>, http_connect_endpoint: Endpoint) -> MqttResult<S> where S : AsyncRead + AsyncWrite + Unpin {
+async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=GneissResult<S>>+Sized>>, http_connect_endpoint: Endpoint) -> GneissResult<S> where S : AsyncRead + AsyncWrite + Unpin {
     let mut inner_stream = stream.await?;
 
     debug!("apply_proxy_connect_to_stream - writing CONNECT request to connection stream");
@@ -1113,7 +1113,7 @@ pub(crate) mod testing {
         handle.block_on(test_future).unwrap();
     }
 
-    async fn tokio_connect_disconnect_test(builder: ClientBuilder, async_options: AsyncClientOptions, tokio_client_options: TokioClientOptions) -> MqttResult<()> {
+    async fn tokio_connect_disconnect_test(builder: ClientBuilder, async_options: AsyncClientOptions, tokio_client_options: TokioClientOptions) -> GneissResult<()> {
         let client = builder.build_tokio(async_options, tokio_client_options).unwrap();
 
         start_async_client(&client).await?;
@@ -1240,7 +1240,7 @@ pub(crate) mod testing {
         }));
     }
 
-    async fn tokio_subscribe_unsubscribe_test(builder: ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<()> {
+    async fn tokio_subscribe_unsubscribe_test(builder: ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<()> {
         async_subscribe_unsubscribe_test(builder.build_tokio(async_options, tokio_options).unwrap()).await
     }
 
@@ -1252,7 +1252,7 @@ pub(crate) mod testing {
         }));
     }
 
-    async fn tokio_subscribe_publish_test(builder: ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, qos: QualityOfService) -> MqttResult<()> {
+    async fn tokio_subscribe_publish_test(builder: ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, qos: QualityOfService) -> GneissResult<()> {
         let client = builder.build_tokio(async_options, tokio_options).unwrap();
         async_subscribe_publish_test(client, qos).await
     }
@@ -1282,7 +1282,7 @@ pub(crate) mod testing {
     }
 
     // This primarily tests that the will configuration works.  Will functionality is mostly broker-side.
-    async fn tokio_will_test(builder: ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<()> {
+    async fn tokio_will_test(builder: ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<()> {
         async_will_test(builder, async_options, tokio_options, build_tokio_client).await
     }
 
@@ -1294,7 +1294,7 @@ pub(crate) mod testing {
         }));
     }
 
-    async fn tokio_connect_disconnect_cycle_session_rejoin_test(builder: ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<()> {
+    async fn tokio_connect_disconnect_cycle_session_rejoin_test(builder: ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<()> {
         let client = builder.build_tokio(async_options, tokio_options).unwrap();
         async_connect_disconnect_cycle_session_rejoin_test(client).await
     }
@@ -1314,7 +1314,7 @@ pub(crate) mod testing {
         handle.block_on(test_future).unwrap();
     }
 
-    async fn connection_failure_test(builder : ClientBuilder, async_options: AsyncClientOptions, tokio_client_options: TokioClientOptions) -> MqttResult<()> {
+    async fn connection_failure_test(builder : ClientBuilder, async_options: AsyncClientOptions, tokio_client_options: TokioClientOptions) -> GneissResult<()> {
         let client = builder.build_tokio(async_options, tokio_client_options).unwrap();
         let connection_failure_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
 

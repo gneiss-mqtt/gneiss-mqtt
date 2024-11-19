@@ -4,7 +4,7 @@
  */
 
 use crate::encode::*;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
 
@@ -12,7 +12,7 @@ use std::collections::VecDeque;
 use std::fmt;
 
 #[rustfmt::skip]
-pub(crate) fn write_pingreq_encoding_steps(_: &PingreqPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+pub(crate) fn write_pingreq_encoding_steps(_: &PingreqPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_PINGREQ << 4);
     encode_integral_expression!(steps, Uint8, 0);
 
@@ -23,7 +23,7 @@ pub(crate) fn write_pingreq_encoding_steps(_: &PingreqPacket, _: &EncodingContex
 const PINGREQ_FIRST_BYTE : u8 = PACKET_TYPE_PINGREQ << 4;
 
 #[cfg(test)]
-pub(crate) fn decode_pingreq_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
+pub(crate) fn decode_pingreq_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if !packet_body.is_empty() {
         error!("Packet Decode - Pingreq packet with non-zero remaining length");
         return Err(MqttError::new_decoding_failure("nonzero remaining length for pingreq packet"));
@@ -38,7 +38,7 @@ pub(crate) fn decode_pingreq_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
 }
 
 #[cfg(not(test))]
-pub(crate) fn decode_pingreq_packet(_: u8, _: &[u8]) -> MqttResult<Box<MqttPacket>> {
+pub(crate) fn decode_pingreq_packet(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
     Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 

@@ -87,7 +87,7 @@ A successful subscribe call returns the Suback packet that the broker responded 
 reason code vector to verify the success/failure result for each subscription in the original subscribe.
 
 ```no_run
-use gneiss_mqtt::error::MqttResult;
+use gneiss_mqtt::error::GneissResult;
 use gneiss_mqtt::client::SubscribeResult;
 use gneiss_mqtt::client::asynchronous::AsyncClientHandle;
 use gneiss_mqtt::mqtt::{QualityOfService, SubscribePacket, Subscription};

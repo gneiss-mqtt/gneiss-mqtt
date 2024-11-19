@@ -549,10 +549,10 @@ impl From<std::sync::mpsc::TryRecvError> for MqttError {
 
 
 /// Crate-wide result type for functions that can fail
-pub type MqttResult<T> = Result<T, MqttError>;
+pub type GneissResult<T> = Result<T, MqttError>;
 
 
-pub(crate) fn fold_mqtt_result<T>(base: MqttResult<T>, new_result: MqttResult<T>) -> MqttResult<T> {
+pub(crate) fn fold_mqtt_result<T>(base: GneissResult<T>, new_result: GneissResult<T>) -> GneissResult<T> {
     new_result?;
     base
 }

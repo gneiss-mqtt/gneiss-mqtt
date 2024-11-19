@@ -59,17 +59,17 @@ pub trait AsyncClient {
 
     /// Signals the client that it should attempt to recurrently maintain a connection to
     /// the broker endpoint it has been configured with.
-    fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> MqttResult<()>;
+    fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> GneissResult<()>;
 
     /// Signals the client that it should close any current connection it has and enter the
     /// Stopped state, where it does nothing.
-    fn stop(&self, options: Option<StopOptions>) -> MqttResult<()>;
+    fn stop(&self, options: Option<StopOptions>) -> GneissResult<()>;
 
     /// Signals the client that it should clean up all internal resources (connection, channels,
     /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.  Useful to ensure
     /// a full resource wipe.  If just `stop()` is used then the client will continue to track
     /// MQTT session state internally.
-    fn close(&self) -> MqttResult<()>;
+    fn close(&self) -> GneissResult<()>;
 
     /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
@@ -85,10 +85,10 @@ pub trait AsyncClient {
 
     /// Adds an additional listener to the events emitted by this client.  This is useful when
     /// multiple higher-level constructs are sharing the same MQTT client.
-    fn add_event_listener(&self, listener: ClientEventListener) -> MqttResult<ListenerHandle>;
+    fn add_event_listener(&self, listener: ClientEventListener) -> GneissResult<ListenerHandle>;
 
     /// Removes a listener from this client's set of event listeners.
-    fn remove_event_listener(&self, listener: ListenerHandle) -> MqttResult<()>;
+    fn remove_event_listener(&self, listener: ListenerHandle) -> GneissResult<()>;
 }
 
 /// An async network client that functions as a thin wrapper over the MQTT5 protocol.

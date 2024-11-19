@@ -6,7 +6,7 @@
 
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -17,7 +17,7 @@ use std::fmt;
 
 #[rustfmt::skip]
 #[cfg(test)]
-fn compute_connack_packet_length_properties(packet: &ConnackPacket) -> MqttResult<(u32, u32)> {
+fn compute_connack_packet_length_properties(packet: &ConnackPacket) -> GneissResult<(u32, u32)> {
 
     let mut connack_property_section_length = compute_user_properties_length(&packet.user_properties);
 
@@ -89,7 +89,7 @@ fn get_connack_packet_user_property(packet: &MqttPacket, index: usize) -> &UserP
 
 #[rustfmt::skip]
 #[cfg(test)]
-pub(crate) fn write_connack_encoding_steps(packet: &ConnackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+pub(crate) fn write_connack_encoding_steps(packet: &ConnackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     let (total_remaining_length, connack_property_length) = compute_connack_packet_length_properties(packet)?;
 
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_CONNACK << 4);
@@ -128,11 +128,11 @@ pub(crate) fn write_connack_encoding_steps(packet: &ConnackPacket, _: &EncodingC
 }
 
 #[cfg(not(test))]
-pub(crate) fn write_connack_encoding_steps(_: &ConnackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+pub(crate) fn write_connack_encoding_steps(_: &ConnackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     Err(MqttError::new_unimplemented("Test-only functionality"))
 }
 
-fn decode_connack_properties(property_bytes: &[u8], packet : &mut ConnackPacket) -> MqttResult<()> {
+fn decode_connack_properties(property_bytes: &[u8], packet : &mut ConnackPacket) -> GneissResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
     while !mutable_property_bytes.is_empty() {
@@ -167,7 +167,7 @@ fn decode_connack_properties(property_bytes: &[u8], packet : &mut ConnackPacket)
     Ok(())
 }
 
-pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
+pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
 
     if first_byte != (PACKET_TYPE_CONNACK << 4) {
         error!("ConnackPacket Decode - invalid first byte");
@@ -210,7 +210,7 @@ pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> MqttR
     panic!("ConnackPacket Decode - Internal error");
 }
 
-pub(crate) fn validate_connack_packet_inbound_internal(packet: &ConnackPacket) -> MqttResult<()> {
+pub(crate) fn validate_connack_packet_inbound_internal(packet: &ConnackPacket) -> GneissResult<()> {
 
     if packet.session_present && packet.reason_code != ConnectReasonCode::Success {
         error!("ConnackPacket Inbound Validation - session present on unsuccessful connect");

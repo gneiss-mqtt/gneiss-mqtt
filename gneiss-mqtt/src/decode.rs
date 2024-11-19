@@ -5,7 +5,7 @@
 
 
 use crate::encode::MAXIMUM_VARIABLE_LENGTH_INTEGER;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;
@@ -34,7 +34,7 @@ const DECODE_BUFFER_DEFAULT_SIZE : usize = 16 * 1024;
 
 macro_rules! define_ack_packet_decode_properties_function {
     ($function_name: ident, $packet_type: ident, $packet_type_as_string: expr) => {
-        fn $function_name(property_bytes: &[u8], packet : &mut $packet_type) -> MqttResult<()> {
+        fn $function_name(property_bytes: &[u8], packet : &mut $packet_type) -> GneissResult<()> {
             let mut mutable_property_bytes = property_bytes;
 
             while mutable_property_bytes.len() > 0 {
@@ -60,7 +60,7 @@ pub(crate) use define_ack_packet_decode_properties_function;
 
 macro_rules! define_ack_packet_decode_function {
     ($function_name: ident, $mqtt_packet_type:ident, $packet_type: ident, $packet_type_as_string: expr, $first_byte: expr, $reason_code_converter_function_name: ident, $decode_properties_function_name: ident) => {
-        pub(crate) fn $function_name(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
+        pub(crate) fn $function_name(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
             if first_byte != $first_byte {
                 error!("{}Packet Decode - invalid first byte", $packet_type_as_string);
                 return Err(MqttError::new_decoding_failure("invalid first byte for ack packet"));
@@ -132,7 +132,7 @@ pub(crate) struct Decoder {
     remaining_length : Option<usize>,
 }
 
-fn decode_packet(first_byte: u8, packet_body: &[u8]) -> MqttResult<Box<MqttPacket>> {
+fn decode_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     let packet_type = first_byte >> 4;
 
     info!("Decoding a packet of type {}", packet_type_to_str(packet_type));
@@ -247,7 +247,7 @@ impl Decoder {
         }
     }
 
-    pub fn decode_bytes(&mut self, bytes: &[u8], context: &mut DecodingContext) -> MqttResult<()> {
+    pub fn decode_bytes(&mut self, bytes: &[u8], context: &mut DecodingContext) -> GneissResult<()> {
         let mut current_slice = bytes;
 
         let mut decode_result = DecoderDirective::Continue;
@@ -299,7 +299,7 @@ pub(crate) enum DecodeVliResult<'a> {
     Value(u32, &'a[u8]), /* (decoded value, remaining bytes) */
 }
 
-pub(crate) fn decode_vli(buffer: &[u8]) -> MqttResult<DecodeVliResult> {
+pub(crate) fn decode_vli(buffer: &[u8]) -> GneissResult<DecodeVliResult> {
     let mut value: u32 = 0;
     let mut needs_data: bool;
     let mut shift: u32 = 0;
@@ -324,7 +324,7 @@ pub(crate) fn decode_vli(buffer: &[u8]) -> MqttResult<DecodeVliResult> {
     Err(MqttError::new_decoding_failure("invalid variable length integer"))
 }
 
-pub(crate) fn decode_vli_into_mutable<'a>(buffer: &'a[u8], value: &mut usize) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_vli_into_mutable<'a>(buffer: &'a[u8], value: &mut usize) -> GneissResult<&'a[u8]> {
     let decode_result = decode_vli(buffer)?;
     match decode_result {
         DecodeVliResult::InsufficientData => {
@@ -338,7 +338,7 @@ pub(crate) fn decode_vli_into_mutable<'a>(buffer: &'a[u8], value: &mut usize) ->
     }
 }
 
-pub(crate) fn decode_length_prefixed_string<'a>(bytes: &'a[u8], value: &mut String) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_length_prefixed_string<'a>(bytes: &'a[u8], value: &mut String) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
         error!("Packet Decode - Utf-8 string value does not have a full length prefix");
         return Err(MqttError::new_decoding_failure("utf-8 string value does not have a full length prefix"));
@@ -356,7 +356,7 @@ pub(crate) fn decode_length_prefixed_string<'a>(bytes: &'a[u8], value: &mut Stri
     Ok(&mutable_bytes[(value_length)..])
 }
 
-pub(crate) fn decode_optional_length_prefixed_string<'a>(bytes: &'a[u8], value: &mut Option<String>) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_optional_length_prefixed_string<'a>(bytes: &'a[u8], value: &mut Option<String>) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
         error!("Packet Decode - Utf-8 string value does not have a full length prefix");
         return Err(MqttError::new_decoding_failure("utf-8 string value does not have a full length prefix"));
@@ -380,7 +380,7 @@ pub(crate) fn decode_optional_length_prefixed_string<'a>(bytes: &'a[u8], value: 
 }
 
 #[cfg(test)]
-pub(crate) fn decode_length_prefixed_optional_string<'a>(bytes: &'a[u8], value: &mut Option<String>) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_length_prefixed_optional_string<'a>(bytes: &'a[u8], value: &mut Option<String>) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
         error!("Packet Decode - Utf-8 string value does not have a full length prefix");
         return Err(MqttError::new_decoding_failure("utf-8 string value does not have a full length prefix"));
@@ -409,7 +409,7 @@ pub(crate) fn decode_length_prefixed_optional_string<'a>(bytes: &'a[u8], value: 
     Ok(&mutable_bytes[(value_length)..])
 }
 
-pub(crate) fn decode_optional_length_prefixed_bytes<'a>(bytes: &'a[u8], value: &mut Option<Vec<u8>>) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_optional_length_prefixed_bytes<'a>(bytes: &'a[u8], value: &mut Option<Vec<u8>>) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
         error!("Packet Decode - Binary data value does not have a full length prefix");
         return Err(MqttError::new_decoding_failure("binary value does not have a full length prefix"));
@@ -432,7 +432,7 @@ pub(crate) fn decode_optional_length_prefixed_bytes<'a>(bytes: &'a[u8], value: &
 }
 
 #[cfg(test)]
-pub(crate) fn decode_length_prefixed_optional_bytes<'a>(bytes: &'a[u8], value: &mut Option<Vec<u8>>) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_length_prefixed_optional_bytes<'a>(bytes: &'a[u8], value: &mut Option<Vec<u8>>) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
         error!("Packet Decode - Binary data value does not have a full length prefix");
         return Err(MqttError::new_decoding_failure("binary value does not have a full length prefix"));
@@ -460,7 +460,7 @@ pub(crate) fn decode_length_prefixed_optional_bytes<'a>(bytes: &'a[u8], value: &
     Ok(&mutable_bytes[(value_length)..])
 }
 
-pub(crate) fn decode_user_property<'a>(bytes: &'a[u8], properties: &mut Option<Vec<UserProperty>>) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_user_property<'a>(bytes: &'a[u8], properties: &mut Option<Vec<UserProperty>>) -> GneissResult<&'a[u8]> {
     let mut property : UserProperty = UserProperty { ..Default::default() };
 
     let mut mutable_bytes = bytes;
@@ -477,7 +477,7 @@ pub(crate) fn decode_user_property<'a>(bytes: &'a[u8], properties: &mut Option<V
 }
 
 #[cfg(test)]
-pub(crate) fn decode_u8<'a>(bytes: &'a[u8], value: &mut u8) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_u8<'a>(bytes: &'a[u8], value: &mut u8) -> GneissResult<&'a[u8]> {
     if bytes.is_empty() {
         return Err(MqttError::new_decoding_failure("insufficient packet data for u8 property value"));
     }
@@ -487,7 +487,7 @@ pub(crate) fn decode_u8<'a>(bytes: &'a[u8], value: &mut u8) -> MqttResult<&'a[u8
     Ok(&bytes[1..])
 }
 
-pub(crate) fn decode_optional_u8_as_bool<'a>(bytes: &'a[u8], value: &mut Option<bool>) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_optional_u8_as_bool<'a>(bytes: &'a[u8], value: &mut Option<bool>) -> GneissResult<&'a[u8]> {
     if bytes.is_empty() {
         error!("Packet Decode - Insufficent packet bytes for boolean property");
         return Err(MqttError::new_decoding_failure("insufficient packet data for boolean property value"));
@@ -510,7 +510,7 @@ pub(crate) fn decode_optional_u8_as_bool<'a>(bytes: &'a[u8], value: &mut Option<
     Ok(&bytes[1..])
 }
 
-pub(crate) fn decode_u8_as_enum<'a, T>(bytes: &'a[u8], value: &mut T, converter: fn(u8) -> MqttResult<T>) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_u8_as_enum<'a, T>(bytes: &'a[u8], value: &mut T, converter: fn(u8) -> GneissResult<T>) -> GneissResult<&'a[u8]> {
     if bytes.is_empty() {
         error!("Packet Decode - Insufficent packet bytes for enum property");
         return Err(MqttError::new_decoding_failure("insufficient packet data for enum property value"));
@@ -521,7 +521,7 @@ pub(crate) fn decode_u8_as_enum<'a, T>(bytes: &'a[u8], value: &mut T, converter:
     Ok(&bytes[1..])
 }
 
-pub(crate) fn decode_optional_u8_as_enum<'a, T>(bytes: &'a[u8], value: &mut Option<T>, converter: fn(u8) -> MqttResult<T>) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_optional_u8_as_enum<'a, T>(bytes: &'a[u8], value: &mut Option<T>, converter: fn(u8) -> GneissResult<T>) -> GneissResult<&'a[u8]> {
     if bytes.is_empty() {
         error!("Packet Decode - Insufficent packet bytes for enum property");
         return Err(MqttError::new_decoding_failure("insufficient packet data for enum property value"));
@@ -537,7 +537,7 @@ pub(crate) fn decode_optional_u8_as_enum<'a, T>(bytes: &'a[u8], value: &mut Opti
     Ok(&bytes[1..])
 }
 
-pub(crate) fn decode_u16<'a>(bytes: &'a[u8], value: &mut u16) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_u16<'a>(bytes: &'a[u8], value: &mut u16) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
         error!("Packet Decode - Insufficent packet bytes for u16 property");
         return Err(MqttError::new_decoding_failure("insufficient packet data for u16 property value"));
@@ -548,7 +548,7 @@ pub(crate) fn decode_u16<'a>(bytes: &'a[u8], value: &mut u16) -> MqttResult<&'a[
     Ok(&bytes[2..])
 }
 
-pub(crate) fn decode_optional_u16<'a>(bytes: &'a[u8], value: &mut Option<u16>) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_optional_u16<'a>(bytes: &'a[u8], value: &mut Option<u16>) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
         error!("Packet Decode - Insufficent packet bytes for u16 property");
         return Err(MqttError::new_decoding_failure("insufficient packet data for u16 property value"));
@@ -564,7 +564,7 @@ pub(crate) fn decode_optional_u16<'a>(bytes: &'a[u8], value: &mut Option<u16>) -
     Ok(&bytes[2..])
 }
 
-pub(crate) fn decode_optional_u32<'a>(bytes: &'a[u8], value: &mut Option<u32>) -> MqttResult<&'a[u8]> {
+pub(crate) fn decode_optional_u32<'a>(bytes: &'a[u8], value: &mut Option<u32>) -> GneissResult<&'a[u8]> {
     if bytes.len() < 4 {
         error!("Packet Decode - Insufficent packet bytes for u32 property");
         return Err(MqttError::new_decoding_failure("insufficient packet data for u32 property value"));

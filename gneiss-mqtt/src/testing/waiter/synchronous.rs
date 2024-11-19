@@ -7,7 +7,7 @@
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Instant;
 use crate::client::synchronous::*;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{MqttError, GneissResult};
 use super::*;
 
 /// Simple debug type that uses the client listener framework to allow tests to asynchronously wait for
@@ -85,7 +85,7 @@ impl SyncClientEventWaiter {
         Self::new(client, config, 1)
     }
 
-    pub fn wait(self) -> MqttResult<Vec<ClientEventRecord>> {
+    pub fn wait(self) -> GneissResult<Vec<ClientEventRecord>> {
         let mut current_events_option = self.events.lock().unwrap();
         loop {
             match &*current_events_option {
