@@ -28,7 +28,7 @@ use std::time::{Duration, Instant};
 /// Additional client options applicable to an MQTT Publish operation
 #[derive(Debug, Default, Clone)]
 pub struct PublishOptions {
-    pub(crate) timeout: Option<Duration>,
+    pub(crate) ack_timeout: Option<Duration>,
 }
 
 impl PublishOptions {
@@ -49,16 +49,16 @@ impl PublishOptionsBuilder {
     pub(crate) fn new() -> Self {
         PublishOptionsBuilder {
             options: PublishOptions {
-                timeout : None,
+                ack_timeout: None,
             }
         }
     }
 
-    /// Sets the operation timeout for a Publish operation.  The operation timeout only applies
+    /// Sets the ack timeout for a Publish operation.  The ack timeout only applies
     /// to the time interval between when the operation's packet is written to the socket and when
     /// the corresponding ACK packet is received from the broker.  Has no effect on QoS0 publishes.
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.options.timeout = Some(timeout);
+    pub fn with_ack_timeout(mut self, timeout: Duration) -> Self {
+        self.options.ack_timeout = Some(timeout);
         self
     }
 
@@ -133,7 +133,7 @@ pub type PublishResult = GneissResult<PublishResponse>;
 /// Additional client options applicable to an MQTT Subscribe operation
 #[derive(Debug, Default, Clone)]
 pub struct SubscribeOptions {
-    pub(crate) timeout: Option<Duration>,
+    pub(crate) ack_timeout: Option<Duration>,
 }
 
 impl SubscribeOptions {
@@ -154,16 +154,16 @@ impl SubscribeOptionsBuilder {
     pub(crate) fn new() -> Self {
         SubscribeOptionsBuilder {
             options: SubscribeOptions {
-                timeout: None
+                ack_timeout: None
             }
         }
     }
 
-    /// Sets the operation timeout for a Subscribe operation.  The operation timeout only applies
+    /// Sets the ack timeout for a Subscribe operation.  The ack timeout only applies
     /// to the time interval between when the operation's packet is written to the socket and when
     /// the corresponding Suback packet is received from the broker.
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.options.timeout = Some(timeout);
+    pub fn with_ack_timeout(mut self, timeout: Duration) -> Self {
+        self.options.ack_timeout = Some(timeout);
         self
     }
 
@@ -180,7 +180,7 @@ pub type SubscribeResult = GneissResult<SubackPacket>;
 /// Additional client options applicable to an MQTT Unsubscribe operation
 #[derive(Debug, Default, Clone)]
 pub struct UnsubscribeOptions {
-    pub(crate) timeout: Option<Duration>,
+    pub(crate) ack_timeout: Option<Duration>,
 }
 
 impl UnsubscribeOptions {
@@ -201,16 +201,16 @@ impl UnsubscribeOptionsBuilder {
     pub(crate) fn new() -> Self {
         UnsubscribeOptionsBuilder {
             options: UnsubscribeOptions {
-                timeout: None
+                ack_timeout: None
             }
         }
     }
 
-    /// Sets the operation timeout for a Unsubscribe operation.  The operation timeout only applies
+    /// Sets the ack timeout for a Unsubscribe operation.  The ack timeout only applies
     /// to the time interval between when the operation's packet is written to the socket and when
     /// the corresponding Unsuback packet is received from the broker.
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.options.timeout = Some(timeout);
+    pub fn with_ack_timeout(mut self, timeout: Duration) -> Self {
+        self.options.ack_timeout = Some(timeout);
         self
     }
 

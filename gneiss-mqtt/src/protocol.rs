@@ -1120,17 +1120,17 @@ impl ProtocolState {
     fn get_operation_timeout_duration(&self, operation: &MqttOperation) -> Option<Duration> {
         match &operation.options {
             Some(MqttOperationOptions::Unsubscribe(unsubscribe_options)) => {
-                if let Some(timeout) = &unsubscribe_options.options.timeout {
+                if let Some(timeout) = &unsubscribe_options.options.ack_timeout {
                     return Some(*timeout);
                 }
             }
             Some(MqttOperationOptions::Subscribe(subscribe_options)) => {
-                if let Some(timeout) = &subscribe_options.options.timeout {
+                if let Some(timeout) = &subscribe_options.options.ack_timeout {
                     return Some(*timeout);
                 }
             }
             Some(MqttOperationOptions::Publish(publish_options)) => {
-                if let Some(timeout) = &publish_options.options.timeout {
+                if let Some(timeout) = &publish_options.options.ack_timeout {
                     return Some(*timeout);
                 }
             }

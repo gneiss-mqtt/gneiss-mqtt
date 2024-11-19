@@ -2465,7 +2465,7 @@ macro_rules! define_operation_failure_timeout_helper {
 
                 let packet = $build_operation_function_name();
 
-                let operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type_builder::new().with_timeout(Duration::from_secs(30)).build()).unwrap();
+                let operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type_builder::new().with_ack_timeout(Duration::from_secs(30)).build()).unwrap();
                 assert!(fixture.service_round_trip(0, 0, 4096).is_ok());
 
                 let (index, _) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::$packet_type, 1, None, None).unwrap();
@@ -2552,7 +2552,7 @@ fn connected_state_qos2_publish_failure_pubrel_timeout() {
 
     let packet = build_qos2_publish_success_packet();
 
-    let operation_result_receiver = fixture.publish(0, packet, PublishOptions::builder().with_timeout(Duration::from_secs(30)).build()).unwrap();
+    let operation_result_receiver = fixture.publish(0, packet, PublishOptions::builder().with_ack_timeout(Duration::from_secs(30)).build()).unwrap();
     assert!(fixture.service_round_trip(0, 0, 4096).is_ok());
     assert!(fixture.service_round_trip(10, 10, 4096).is_ok());
 
