@@ -5,8 +5,9 @@
 
 
 use argh::FromArgs;
-use gneiss_mqtt::error::{MqttError};
+use gneiss_mqtt::error::{GneissError};
 use gneiss_mqtt::client::*;
+use gneiss_mqtt::client::asynchronous::{AsyncClientHandle};
 use gneiss_mqtt::mqtt::*;
 use std::fmt;
 use std::sync::Arc;
@@ -106,7 +107,7 @@ struct CommandArgs {
 #[derive(Debug)]
 pub enum ElastiError {
     Unimplemented,
-    ClientError(MqttError),
+    ClientError(GneissError),
     InvalidUri(String),
     UnsupportedUriScheme(String),
     MissingArguments(&'static str),
@@ -136,8 +137,8 @@ impl std::error::Error for ElastiError {
 
 }
 
-impl From<MqttError> for ElastiError {
-    fn from(value: MqttError) -> Self {
+impl From<GneissError> for ElastiError {
+    fn from(value: GneissError) -> Self {
         ElastiError::ClientError(value)
     }
 }
@@ -175,15 +176,15 @@ pub fn client_event_callback(event: Arc<ClientEvent>) {
     }
 }
 
-fn handle_start(client: &AsyncGneissClient, _: StartArgs) {
+fn handle_start(client: &AsyncClientHandle, _: StartArgs) {
     let function = |event|{ client_event_callback(event) };
     let listener_callback = Arc::new(function);
 
     let _ = client.start(Some(listener_callback));
 }
 
-fn handle_stop(client: &AsyncGneissClient, args: StopArgs) {
-    let mut stop_options_builder = StopOptionsBuilder::new();
+fn handle_stop(client: &AsyncClientHandle, args: StopArgs) {
+    let mut stop_options_builder = StopOptions::builder();
 
     if let Some(reason_code_u8) = args.reason_code {
         if let Ok(reason_code) = DisconnectReasonCode::try_from(reason_code_u8) {
@@ -197,11 +198,11 @@ fn handle_stop(client: &AsyncGneissClient, args: StopArgs) {
     let _ = client.stop(Some(stop_options_builder.build()));
 }
 
-fn handle_close(client: &AsyncGneissClient, _ : CloseArgs) {
+fn handle_close(client: &AsyncClientHandle, _ : CloseArgs) {
     let _ = client.close();
 }
 
-async fn handle_publish(client: &AsyncGneissClient, args: PublishArgs) {
+async fn handle_publish(client: &AsyncClientHandle, args: PublishArgs) {
 
     let qos_result = QualityOfService::try_from(args.qos);
     if qos_result.is_err() {
@@ -229,7 +230,7 @@ async fn handle_publish(client: &AsyncGneissClient, args: PublishArgs) {
     }
 }
 
-async fn handle_subscribe(client: &AsyncGneissClient, args: SubscribeArgs) {
+async fn handle_subscribe(client: &AsyncClientHandle, args: SubscribeArgs) {
     let qos_result = QualityOfService::try_from(args.qos);
     if qos_result.is_err() {
         println!("Invalid input!  Qos must be 0, 1, or 2");
@@ -252,7 +253,7 @@ async fn handle_subscribe(client: &AsyncGneissClient, args: SubscribeArgs) {
     }
 }
 
-async fn handle_unsubscribe(client: &AsyncGneissClient, args: UnsubscribeArgs) {
+async fn handle_unsubscribe(client: &AsyncClientHandle, args: UnsubscribeArgs) {
 
     let unsubscribe = UnsubscribePacket::builder().with_topic_filter(args.topic_filter).build();
 
@@ -268,7 +269,7 @@ async fn handle_unsubscribe(client: &AsyncGneissClient, args: UnsubscribeArgs) {
     }
 }
 
-async fn handle_input(value: String, client: &AsyncGneissClient) -> bool {
+async fn handle_input(value: String, client: &AsyncClientHandle) -> bool {
     let args : Vec<&str> = value.split_whitespace().collect();
     if args.is_empty() {
         println!("Invalid input!");
@@ -295,7 +296,7 @@ async fn handle_input(value: String, client: &AsyncGneissClient) -> bool {
     false
 }
 
-pub async fn main_loop(client: AsyncGneissClient) {
+pub async fn main_loop(client: AsyncClientHandle) {
 
     let stdin = tokio::io::stdin();
     let mut lines = BufReader::new(stdin).lines();

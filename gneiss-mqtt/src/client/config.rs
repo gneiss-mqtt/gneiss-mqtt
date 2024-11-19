@@ -231,7 +231,7 @@ impl TlsOptions {
 
     /// Creates a new builder object using mutual TLS and an X509 certificate and a
     /// private key, by file path.
-    pub fn bulder_with_mtls_from_path(certificate_path: &str, private_key_path: &str) -> GneissResult<TlsOptionsBuilder> {
+    pub fn builder_with_mtls_from_path(certificate_path: &str, private_key_path: &str) -> GneissResult<TlsOptionsBuilder> {
         TlsOptionsBuilder::new_with_mtls_from_path(certificate_path, private_key_path)
     }
 

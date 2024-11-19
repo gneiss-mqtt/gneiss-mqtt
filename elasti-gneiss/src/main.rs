@@ -6,8 +6,9 @@
 use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult, main_loop};
-use gneiss_mqtt::client::AsyncGneissClient;
-use gneiss_mqtt::config::*;
+use gneiss_mqtt::client::asynchronous::{AsyncClientHandle, AsyncClientOptions};
+use gneiss_mqtt::client::asynchronous::tokio::TokioClientOptions;
+use gneiss_mqtt::client::config::*;
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
 use tokio::runtime::Handle;
@@ -48,7 +49,7 @@ struct CommandLineArgs {
     http_proxy_uri: Option<String>
 }
 
-fn build_client(connect_options: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<AsyncGneissClient> {
+fn build_client(connect_options: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<AsyncClientHandle> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&args.endpoint_uri);
@@ -70,7 +71,7 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
     let port = uri.port().unwrap();
     let scheme = uri.scheme().to_lowercase();
 
-    let mut builder = GenericClientBuilder::new(&endpoint, port);
+    let mut builder = ClientBuilder::new(&endpoint, port);
     builder.with_connect_options(connect_options);
     builder.with_client_options(client_config);
 
@@ -91,17 +92,19 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
             return Err(ElastiError::InvalidUri(uri_string));
         }
 
-        let http_proxy_options = HttpProxyOptionsBuilder::new(proxy_endpoint.as_str(), proxy_uri.port().unwrap()).build();
+        let http_proxy_options = HttpProxyOptions::builder(proxy_endpoint.as_str(), proxy_uri.port().unwrap()).build();
         builder.with_http_proxy_options(http_proxy_options);
     }
+
+    let mut async_client_builder = AsyncClientOptions::builder();
 
     match scheme.as_str() {
         "mqtts" => {
             let mut tls_options_builder =
                 if args.cert.is_some() && args.key.is_some() {
-                    TlsOptionsBuilder::new_with_mtls_from_path(args.cert.as_ref().unwrap(), args.key.as_ref().unwrap()).unwrap()
+                    TlsOptions::builder_with_mtls_from_path(args.cert.as_ref().unwrap(), args.key.as_ref().unwrap()).unwrap()
                 } else {
-                    TlsOptionsBuilder::new()
+                    TlsOptions::builder()
                 };
 
             if let Some(capath) = &args.capath {
@@ -113,11 +116,11 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
             builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
         }
         "ws" => {
-            let websocket_options = AsyncWebsocketOptionsBuilder::new().build();
-            builder.with_websocket_options(websocket_options);
+            let websocket_options = AsyncWebsocketOptions::builder().build();
+            async_client_builder.with_websocket_options(websocket_options);
         }
         "wss" => {
-            let mut tls_options_builder = TlsOptionsBuilder::new();
+            let mut tls_options_builder = TlsOptions::builder();
             tls_options_builder.with_verify_peer(!args.no_verify_peer);
             if let Some(capath) = &args.capath {
                 tls_options_builder.with_root_ca_from_path(capath.as_str()).unwrap();
@@ -126,13 +129,14 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
             let tls_options = tls_options_builder.build_rustls().unwrap();
             builder.with_tls_options(tls_options);
 
-            let websocket_options = AsyncWebsocketOptionsBuilder::new().build();
-            builder.with_websocket_options(websocket_options);
+            let websocket_options = AsyncWebsocketOptions::builder().build();
+            async_client_builder.with_websocket_options(websocket_options);
         }
         _ => {}
     }
 
-    Ok(builder.build_tokio(runtime)?)
+    let tokio_options = TokioClientOptions::builder(runtime.clone()).build();
+    Ok(builder.build_tokio(async_client_builder.build(), tokio_options)?)
 }
 
 #[tokio::main]
@@ -151,13 +155,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         WriteLogger::init(LevelFilter::Debug, log_config, log_file_result.unwrap()).unwrap();
     }
 
-    let connect_options = ConnectOptionsBuilder::new()
+    let connect_options = ConnectOptions::builder()
         .with_keep_alive_interval_seconds(Some(60))
         .with_client_id("HelloClient-wss")
         .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
         .build();
 
-    let config = MqttClientOptionsBuilder::new()
+    let config = MqttClientOptions::builder()
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::None)
         .with_outbound_alias_resolver_factory(OutboundAliasResolverFactory::new_lru_factory(10))
