@@ -7,7 +7,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
-use crate::client::asynchronous::AsyncGneissClient;
+use crate::client::asynchronous::AsyncClientHandle;
 use crate::error::{MqttError, MqttResult};
 use super::*;
 
@@ -22,7 +22,7 @@ pub type ClientEventWaitFuture = dyn Future<Output = MqttResult<Vec<ClientEventR
 pub struct AsyncClientEventWaiter {
     event_count: usize,
 
-    client: AsyncGneissClient,
+    client: AsyncClientHandle,
 
     listener: Option<ListenerHandle>,
 
@@ -34,7 +34,7 @@ pub struct AsyncClientEventWaiter {
 impl AsyncClientEventWaiter {
 
     /// Creates a new ClientEventWaiter instance from full configuration
-    pub fn new(client: AsyncGneissClient, config: ClientEventWaiterOptions, event_count: usize) -> Self {
+    pub fn new(client: AsyncClientHandle, config: ClientEventWaiterOptions, event_count: usize) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
         let mut waiter = AsyncClientEventWaiter {
@@ -72,7 +72,7 @@ impl AsyncClientEventWaiter {
     }
 
     /// Creates a new ClientEventWaiter instance that will wait for a single occurrence of a single event type
-    pub fn new_single(client: AsyncGneissClient, event_type: ClientEventType) -> Self {
+    pub fn new_single(client: AsyncClientHandle, event_type: ClientEventType) -> Self {
         let config = ClientEventWaiterOptions {
             wait_type: ClientEventWaitType::Type(event_type),
         };

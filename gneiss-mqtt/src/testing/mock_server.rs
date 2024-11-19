@@ -212,7 +212,7 @@ pub(crate) struct ClientTestOptions {
     pub(crate) connect_options_mutator_fn: Option<Box<dyn Fn(&mut ConnectOptionsBuilder)>>
 }
 
-pub(crate) fn build_mock_client_server(mut config: ClientTestOptions) -> (GenericClientBuilder, MockBroker) {
+pub(crate) fn build_mock_client_server(mut config: ClientTestOptions) -> (ClientBuilder, MockBroker) {
     let handler_set_factory : PacketHandlerSetFactory =
         if config.packet_handler_set_factory_fn.is_some() {
             config.packet_handler_set_factory_fn.take().unwrap()
@@ -234,7 +234,7 @@ pub(crate) fn build_mock_client_server(mut config: ClientTestOptions) -> (Generi
         (*connect_options_mutator)(&mut connect_options_builder);
     }
 
-    let mut client_builder = GenericClientBuilder::new("127.0.0.1", broker.port);
+    let mut client_builder = ClientBuilder::new("127.0.0.1", broker.port);
     client_builder.with_client_options(client_options_builder.build());
     client_builder.with_connect_options(connect_options_builder.build());
 

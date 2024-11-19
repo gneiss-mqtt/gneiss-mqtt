@@ -12,7 +12,7 @@ use crate::testing::protocol::*;
 use crate::testing::waiter::*;
 use crate::testing::waiter::synchronous::*;
 
-fn simple_reconnect_test(builder : GenericClientBuilder, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> MqttResult<()> {
+fn simple_reconnect_test(builder : ClientBuilder, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> MqttResult<()> {
     let client = builder.build_threaded(sync_options, threaded_options).unwrap();
 
     let wait_options = ClientEventWaiterOptions {
@@ -43,7 +43,7 @@ fn client_reconnect_with_backoff() {
     server.close();
 }
 
-fn reconnect_backoff_reset_test(builder : GenericClientBuilder, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> MqttResult<()> {
+fn reconnect_backoff_reset_test(builder : ClientBuilder, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> MqttResult<()> {
     let client = builder.build_threaded(sync_options, threaded_options).unwrap();
 
     let first_wait_options = ClientEventWaiterOptions {

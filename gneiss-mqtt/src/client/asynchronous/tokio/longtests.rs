@@ -15,7 +15,7 @@ use crate::testing::protocol::*;
 use crate::testing::waiter::*;
 use crate::testing::waiter::asynchronous::*;
 
-async fn simple_reconnect_test(builder : GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> MqttResult<()> {
+async fn simple_reconnect_test(builder : ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> MqttResult<()> {
     let client = builder.build_tokio(async_options, tokio_options).unwrap();
 
     let wait_options = ClientEventWaiterOptions {
@@ -47,7 +47,7 @@ fn client_reconnect_with_backoff() {
     server.close();
 }
 
-async fn reconnect_backoff_reset_test(builder : GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> MqttResult<()> {
+async fn reconnect_backoff_reset_test(builder : ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> MqttResult<()> {
     let client = builder.build_tokio(async_options, tokio_options).unwrap();
 
     let first_wait_options = ClientEventWaiterOptions {

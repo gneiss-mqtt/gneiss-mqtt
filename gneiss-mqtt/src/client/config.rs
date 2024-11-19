@@ -944,7 +944,7 @@ impl MqttClientOptionsBuilder {
 
 /// A basic builder for creating MQTT clients.  Specialized builders for particular brokers may
 /// exist in other crates.
-pub struct GenericClientBuilder {
+pub struct ClientBuilder {
     endpoint: String,
     port: u16,
 
@@ -979,11 +979,11 @@ fn get_tls_impl_from_options(tls_options: Option<&TlsOptions>) -> TlsConfigurati
     TlsConfiguration::None
 }
 
-impl GenericClientBuilder {
+impl ClientBuilder {
 
     /// Creates a new client builder attuned to a given host name and port.
     pub fn new(endpoint: &str, port: u16) -> Self {
-        GenericClientBuilder {
+        ClientBuilder {
             endpoint: endpoint.to_string(),
             port,
             tls_options: None,
@@ -1046,7 +1046,7 @@ impl GenericClientBuilder {
     /// Builds a new MQTT client according to all the configuration options given to the builder.
     /// Does not consume self; can be called multiple times
     #[cfg(feature="tokio")]
-    pub fn build_tokio(&self, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncGneissClient> {
+    pub fn build_tokio(&self, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> MqttResult<AsyncClientHandle> {
         let tls_impl = self.get_tls_impl();
         if tls_impl == TlsConfiguration::Mixed {
             return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));
@@ -1076,7 +1076,7 @@ impl GenericClientBuilder {
     /// Builds a new MQTT client according to all the configuration options given to the builder.
     /// Does not consume self; can be called multiple times
     #[cfg(feature="threaded")]
-    pub fn build_threaded(&self, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+    pub fn build_threaded(&self, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions) -> MqttResult<SyncClientHandle> {
         let tls_impl = self.get_tls_impl();
         if tls_impl == TlsConfiguration::Mixed {
             return Err(MqttError::new_tls_error("Cannot mix two different tls implementations in one client"));

@@ -507,7 +507,7 @@ struct ThreadedClient {
     pub(crate) listener_id_allocator: Mutex<u64>
 }
 
-impl SyncMqttClient for ThreadedClient {
+impl SyncClient for ThreadedClient {
 
     /// Signals the client that it should attempt to recurrently maintain a connection to
     /// the broker endpoint it has been configured with.
@@ -642,7 +642,8 @@ pub(crate) fn create_runtime_states<T>(threaded_config: ThreadedClientOptions, c
 }
 
 /// Creates a new sync MQTT5 client that will use background threads for the client and connection attempts
-pub fn new_threaded<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, threaded_config: ThreadedClientOptions, connection_factory: ConnectionFactory<T>) -> SyncGneissClient where T: Read + Write + Send + Sync + 'static {
+pub fn new_threaded<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, threaded_config: ThreadedClientOptions, connection_factory: ConnectionFactory<T>) -> SyncClientHandle
+where T: Read + Write + Send + Sync + 'static {
     let (operation_sender, internal_state) = create_runtime_states(threaded_config, connection_factory);
 
     let callback_spawner : CallbackSpawnerFunction = Box::new(|event, callback| {
@@ -660,7 +661,7 @@ pub fn new_threaded<T>(client_config: MqttClientOptions, connect_config: Connect
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn make_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+pub(crate) fn make_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncClientHandle> {
     #[cfg(feature="threaded-websockets")]
     if sync_options.websocket_options.is_some() {
         return make_websocket_client_threaded(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, sync_options, threaded_config);
@@ -671,7 +672,7 @@ pub(crate) fn make_client_threaded(tls_impl: TlsConfiguration, endpoint: String,
 
 #[allow(clippy::too_many_arguments)]
 #[allow(unused_variables)]
-fn make_direct_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_direct_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncClientHandle> {
     match tls_impl {
         TlsConfiguration::None => { make_direct_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, sync_options, threaded_config) }
         #[cfg(feature = "threaded-rustls")]
@@ -682,7 +683,7 @@ fn make_direct_client_threaded(tls_impl: TlsConfiguration, endpoint: String, por
     }
 }
 
-fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncClientHandle> {
     info!("threaded make_direct_client_no_tls - creating connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
 
@@ -711,7 +712,7 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttCl
 
 #[cfg(feature = "threaded-rustls")]
 #[allow(clippy::too_many_arguments)]
-fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncClientHandle> {
     info!("threaded make_direct_client_rustls - creating connection establishment closure");
 
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
@@ -778,7 +779,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
 
 #[cfg(feature = "threaded-native-tls")]
 #[allow(clippy::too_many_arguments)]
-fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncClientHandle> {
     info!("threaded make_direct_client_native_tls - creating async connection establishment closure");
 
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint.clone(), port, &http_proxy_options);
@@ -846,7 +847,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
 #[allow(clippy::too_many_arguments)]
 #[allow(unused_variables)]
 #[cfg(feature="threaded-websockets")]
-pub(crate) fn make_websocket_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+pub(crate) fn make_websocket_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncClientHandle> {
     match tls_impl {
         TlsConfiguration::None => { make_websocket_client_no_tls(endpoint, port, client_options, connect_options, http_proxy_options, sync_options, threaded_config) }
         #[cfg(feature = "threaded-rustls")]
@@ -858,7 +859,7 @@ pub(crate) fn make_websocket_client_threaded(tls_impl: TlsConfiguration, endpoin
 }
 
 #[cfg(feature="threaded-websockets")]
-fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncClientHandle> {
     info!("threaded make_websocket_client_no_tls - creating connection establishment closure");
     let (stream_endpoint, http_connect_endpoint) = compute_endpoints(endpoint, port, &http_proxy_options);
     let ws_options = sync_options.websocket_options.clone().unwrap();
@@ -890,7 +891,7 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: Mqt
 
 #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
 #[allow(clippy::too_many_arguments)]
-fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options: SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncClientHandle> {
     info!("threaded make_websocket_client_rustls - creating connection establishment closure");
 
     let ws_options = sync_options.websocket_options.unwrap().clone();
@@ -966,7 +967,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
 
 #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
 #[allow(clippy::too_many_arguments)]
-fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options : SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncGneissClient> {
+fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, sync_options : SyncClientOptions, threaded_config: ThreadedClientOptions) -> MqttResult<SyncClientHandle> {
     info!("threaded make_websocket_client_native_tls - creating async connection establishment closure");
 
     let ws_options = sync_options.websocket_options.unwrap().clone();
@@ -1171,7 +1172,7 @@ pub(crate) mod testing {
     use crate::testing::waiter::synchronous::*;
     use super::*;
 
-    fn threaded_connect_disconnect_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
+    fn threaded_connect_disconnect_test(builder: ClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
         let client = builder.build_threaded(sync_options, client_options).unwrap();
 
         start_sync_client(&client)?;
@@ -1290,7 +1291,7 @@ pub(crate) mod testing {
         }));
     }
 
-    fn threaded_subscribe_unsubscribe_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
+    fn threaded_subscribe_unsubscribe_test(builder: ClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
         sync_subscribe_unsubscribe_test(builder.build_threaded(sync_options, client_options).unwrap())
     }
 
@@ -1301,7 +1302,7 @@ pub(crate) mod testing {
         }));
     }
 
-    fn threaded_subscribe_publish_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions, qos: QualityOfService) -> MqttResult<()> {
+    fn threaded_subscribe_publish_test(builder: ClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions, qos: QualityOfService) -> MqttResult<()> {
         let client = builder.build_threaded(sync_options, client_options).unwrap();
         sync_subscribe_publish_test(client, qos)
     }
@@ -1327,12 +1328,12 @@ pub(crate) mod testing {
         }));
     }
 
-    fn build_threaded_client(builder: GenericClientBuilder, sync_client_options: SyncClientOptions, threaded_client_options: ThreadedClientOptions) -> SyncGneissClient {
+    fn build_threaded_client(builder: ClientBuilder, sync_client_options: SyncClientOptions, threaded_client_options: ThreadedClientOptions) -> SyncClientHandle {
         builder.build_threaded(sync_client_options, threaded_client_options).unwrap()
     }
 
     // This primarily tests that the will configuration works.  Will functionality is mostly broker-side.
-    fn threaded_will_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
+    fn threaded_will_test(builder: ClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
         sync_will_test(builder, sync_options, client_options, build_threaded_client)
     }
 
@@ -1343,7 +1344,7 @@ pub(crate) mod testing {
         }));
     }
 
-    fn threaded_connect_disconnect_cycle_session_rejoin_test(builder: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
+    fn threaded_connect_disconnect_cycle_session_rejoin_test(builder: ClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions) -> MqttResult<()> {
         let client = builder.build_threaded(sync_options, client_options).unwrap();
         sync_connect_disconnect_cycle_session_rejoin_test(client)
     }
@@ -1355,12 +1356,12 @@ pub(crate) mod testing {
         }));
     }
 
-    pub(crate) fn do_builder_test(test_factory: ThreadedTestFactory, builder: GenericClientBuilder, sync_options: SyncClientOptions) {
+    pub(crate) fn do_builder_test(test_factory: ThreadedTestFactory, builder: ClientBuilder, sync_options: SyncClientOptions) {
         let threaded_options = ThreadedClientOptionsBuilder::new().build();
         (*test_factory)(builder, sync_options, threaded_options).unwrap();
     }
 
-    fn connection_failure_test(builder : GenericClientBuilder, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions) -> MqttResult<()> {
+    fn connection_failure_test(builder : ClientBuilder, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions) -> MqttResult<()> {
         let client = builder.build_threaded(sync_options, threaded_options).unwrap();
         let connection_failure_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
 
@@ -1373,7 +1374,7 @@ pub(crate) mod testing {
     }
 
     #[cfg(any(feature = "threaded-websockets", feature="threaded-rustls", feature="threaded-native-tls"))]
-    fn create_mismatch_builder(tls_config: TlsUsage, ws_config: WebsocketUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
+    fn create_mismatch_builder(tls_config: TlsUsage, ws_config: WebsocketUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> ClientBuilder {
         assert!(tls_config != tls_endpoint || ws_config != ws_endpoint);
 
         let connect_options = ConnectOptions::builder().build();
@@ -1624,7 +1625,7 @@ pub(crate) mod testing {
             .build();
         let sync_client_options = SyncClientOptionsBuilder::new().build();
 
-        let mut builder = GenericClientBuilder::new("example.com", 8000);
+        let mut builder = ClientBuilder::new("example.com", 8000);
         builder.with_client_options(client_options);
 
         do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
@@ -1635,7 +1636,7 @@ pub(crate) mod testing {
     #[test]
     fn connection_failure_invalid_endpoint_http() {
         let sync_client_options = SyncClientOptionsBuilder::new().build();
-        let builder = GenericClientBuilder::new("amazon.com", 443);
+        let builder = ClientBuilder::new("amazon.com", 443);
         do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
             connection_failure_test(builder, sync_options, threaded_options)
         }), builder, sync_client_options);

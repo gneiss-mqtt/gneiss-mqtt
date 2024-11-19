@@ -12,11 +12,11 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use crate::client::*;
 #[cfg(feature="tokio")]
-use crate::client::asynchronous::{AsyncClientOptions, AsyncGneissClient};
+use crate::client::asynchronous::{AsyncClientOptions, AsyncClientHandle};
 #[cfg(feature="tokio")]
 use crate::client::asynchronous::tokio::{TokioClientOptions};
 #[cfg(feature="threaded")]
-use crate::client::synchronous::{SyncClientOptions, SyncClientOptionsBuilder, SyncGneissClient};
+use crate::client::synchronous::{SyncClientOptions, SyncClientOptionsBuilder, SyncClientHandle};
 #[cfg(feature="threaded")]
 use crate::client::synchronous::threaded::{ThreadedClientOptions, ThreadedClientOptionsBuilder};
 use crate::client::config::*;
@@ -104,7 +104,7 @@ pub(crate) fn get_broker_port(tls: TlsUsage, ws: WebsocketUsage) -> u16 {
     port_string.parse().unwrap()
 }
 
-pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _tls_usage: TlsUsage, proxy_config: ProxyUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> GenericClientBuilder {
+pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _tls_usage: TlsUsage, proxy_config: ProxyUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> ClientBuilder {
     let client_config = MqttClientOptionsBuilder::new()
         .with_connect_timeout(Duration::from_secs(5))
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
@@ -113,7 +113,7 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
     let endpoint = get_broker_endpoint(tls_endpoint, ws_endpoint);
     let port = get_broker_port(tls_endpoint, ws_endpoint);
 
-    let mut builder = GenericClientBuilder::new(&endpoint, port);
+    let mut builder = ClientBuilder::new(&endpoint, port);
     builder.with_connect_options(connect_options);
     builder.with_client_options(client_config);
 
@@ -145,7 +145,7 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
     builder
 }
 
-pub(crate) fn create_good_client_builder(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage) -> GenericClientBuilder {
+pub(crate) fn create_good_client_builder(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage) -> ClientBuilder {
     let connect_options = ConnectOptions::builder()
         .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
         .with_session_expiry_interval_seconds(3600)
@@ -172,12 +172,12 @@ pub(crate) fn create_websocket_options_sync(ws: WebsocketUsage) -> Option<SyncWe
 #[cfg(feature = "tokio")]
 pub(crate) type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output=MqttResult<()>> + Send>>;
 #[cfg(feature = "tokio")]
-pub(crate) type TokioTestFactory = Box<dyn Fn(GenericClientBuilder, AsyncClientOptions, TokioClientOptions) -> AsyncTestFactoryReturnType + Send + Sync>;
+pub(crate) type TokioTestFactory = Box<dyn Fn(ClientBuilder, AsyncClientOptions, TokioClientOptions) -> AsyncTestFactoryReturnType + Send + Sync>;
 #[cfg(feature = "threaded")]
-pub(crate) type ThreadedTestFactory = Box<dyn Fn(GenericClientBuilder, SyncClientOptions, ThreadedClientOptions) -> MqttResult<()>>;
+pub(crate) type ThreadedTestFactory = Box<dyn Fn(ClientBuilder, SyncClientOptions, ThreadedClientOptions) -> MqttResult<()>>;
 
 #[cfg(feature = "tokio")]
-pub(crate) async fn start_async_client(client: &AsyncGneissClient) -> MqttResult<()> {
+pub(crate) async fn start_async_client(client: &AsyncClientHandle) -> MqttResult<()> {
     let connection_attempt_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionAttempt);
     let connection_success_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
 
@@ -198,7 +198,7 @@ pub(crate) async fn start_async_client(client: &AsyncGneissClient) -> MqttResult
 }
 
 #[cfg(feature = "tokio")]
-pub(crate) async fn stop_async_client(client: &AsyncGneissClient) -> MqttResult<()> {
+pub(crate) async fn stop_async_client(client: &AsyncClientHandle) -> MqttResult<()> {
     let disconnection_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
     let stopped_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
 
@@ -220,7 +220,7 @@ pub(crate) async fn stop_async_client(client: &AsyncGneissClient) -> MqttResult<
 }
 
 #[cfg(feature = "threaded")]
-pub(crate) fn start_sync_client(client: &SyncGneissClient) -> MqttResult<()> {
+pub(crate) fn start_sync_client(client: &SyncClientHandle) -> MqttResult<()> {
     let connection_attempt_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionAttempt);
     let connection_success_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
 
@@ -245,7 +245,7 @@ pub(crate) fn start_sync_client(client: &SyncGneissClient) -> MqttResult<()> {
 }
 
 #[cfg(feature = "threaded")]
-pub(crate) fn stop_sync_client(client: &SyncGneissClient) -> MqttResult<()> {
+pub(crate) fn stop_sync_client(client: &SyncClientHandle) -> MqttResult<()> {
     let disconnection_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
     let stopped_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
 
@@ -267,7 +267,7 @@ pub(crate) fn stop_sync_client(client: &SyncGneissClient) -> MqttResult<()> {
 }
 
 #[cfg(feature = "threaded")]
-pub(crate) fn sync_subscribe_unsubscribe_test(client: SyncGneissClient) -> MqttResult<()> {
+pub(crate) fn sync_subscribe_unsubscribe_test(client: SyncClientHandle) -> MqttResult<()> {
     start_sync_client(&client)?;
 
     let subscribe = SubscribePacket::builder()
@@ -298,7 +298,7 @@ pub(crate) fn sync_subscribe_unsubscribe_test(client: SyncGneissClient) -> MqttR
 }
 
 #[cfg(feature = "tokio")]
-pub(crate) async fn async_subscribe_unsubscribe_test(client: AsyncGneissClient) -> MqttResult<()> {
+pub(crate) async fn async_subscribe_unsubscribe_test(client: AsyncClientHandle) -> MqttResult<()> {
     start_async_client(&client).await?;
 
     let subscribe = SubscribePacket::builder()
@@ -356,7 +356,7 @@ pub(crate) fn verify_publish_received(event: &PublishReceivedEvent, expected_top
 }
 
 #[cfg(feature = "threaded")]
-pub(crate) fn sync_subscribe_publish_test(client: SyncGneissClient, qos: QualityOfService) -> MqttResult<()> {
+pub(crate) fn sync_subscribe_publish_test(client: SyncClientHandle, qos: QualityOfService) -> MqttResult<()> {
     start_sync_client(&client)?;
 
     let payload = "derp".as_bytes().to_vec();
@@ -395,7 +395,7 @@ pub(crate) fn sync_subscribe_publish_test(client: SyncGneissClient, qos: Quality
 }
 
 #[cfg(feature = "tokio")]
-pub(crate) async fn async_subscribe_publish_test(client: AsyncGneissClient, qos: QualityOfService) -> MqttResult<()> {
+pub(crate) async fn async_subscribe_publish_test(client: AsyncClientHandle, qos: QualityOfService) -> MqttResult<()> {
     start_async_client(&client).await?;
 
     let payload = "derp".as_bytes().to_vec();
@@ -434,7 +434,7 @@ pub(crate) async fn async_subscribe_publish_test(client: AsyncGneissClient, qos:
 }
 
 #[cfg(feature = "threaded")]
-pub(crate) fn sync_will_test(base_client_options: GenericClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions, client_factory: fn(GenericClientBuilder, SyncClientOptions, ThreadedClientOptions) -> SyncGneissClient) -> MqttResult<()> {
+pub(crate) fn sync_will_test(base_client_options: ClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions, client_factory: fn(ClientBuilder, SyncClientOptions, ThreadedClientOptions) -> SyncClientHandle) -> MqttResult<()> {
     let client = client_factory(base_client_options, sync_options, client_options);
 
     let payload = "Onsecondthought".as_bytes().to_vec();
@@ -486,7 +486,7 @@ pub(crate) fn sync_will_test(base_client_options: GenericClientBuilder, sync_opt
 }
 
 #[cfg(feature = "tokio")]
-pub(crate) async fn async_will_test(base_client_options: GenericClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, client_factory: fn(GenericClientBuilder, AsyncClientOptions, TokioClientOptions) -> AsyncGneissClient) -> MqttResult<()> {
+pub(crate) async fn async_will_test(base_client_options: ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, client_factory: fn(ClientBuilder, AsyncClientOptions, TokioClientOptions) -> AsyncClientHandle) -> MqttResult<()> {
     let client = client_factory(base_client_options, async_options, tokio_options);
 
     let payload = "Onsecondthought".as_bytes().to_vec();
@@ -538,7 +538,7 @@ pub(crate) async fn async_will_test(base_client_options: GenericClientBuilder, a
 }
 
 #[cfg(feature = "threaded")]
-pub(crate) fn sync_connect_disconnect_cycle_session_rejoin_test(client: SyncGneissClient) -> MqttResult<()> {
+pub(crate) fn sync_connect_disconnect_cycle_session_rejoin_test(client: SyncClientHandle) -> MqttResult<()> {
     start_sync_client(&client)?;
     stop_sync_client(&client)?;
 
@@ -566,7 +566,7 @@ pub(crate) fn sync_connect_disconnect_cycle_session_rejoin_test(client: SyncGnei
 }
 
 #[cfg(feature = "tokio")]
-pub(crate) async fn async_connect_disconnect_cycle_session_rejoin_test(client: AsyncGneissClient) -> MqttResult<()> {
+pub(crate) async fn async_connect_disconnect_cycle_session_rejoin_test(client: AsyncClientHandle) -> MqttResult<()> {
     start_async_client(&client).await?;
     stop_async_client(&client).await?;
 

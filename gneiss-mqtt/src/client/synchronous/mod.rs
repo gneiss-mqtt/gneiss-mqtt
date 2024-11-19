@@ -141,7 +141,7 @@ pub type SyncUnsubscribeResultCallback = Box<dyn Fn(UnsubscribeResult) + Send + 
 /// Direct client construction is messy due to the different possibilities for TLS, async runtime,
 /// etc...  We encourage you to use the various client builders in this crate, or in other crates,
 /// to simplify this process.
-pub trait SyncMqttClient {
+pub trait SyncClient {
 
     /// Signals the client that it should attempt to recurrently maintain a connection to
     /// the broker endpoint it has been configured with.
@@ -218,7 +218,7 @@ pub trait SyncMqttClient {
 /// Direct client construction is messy due to the different possibilities for TLS, async runtime,
 /// etc...  We encourage you to use the various client builders in this crate, or in other crates,
 /// to simplify this process.
-pub type SyncGneissClient = Arc<dyn SyncMqttClient + Send + Sync>;
+pub type SyncClientHandle = Arc<dyn SyncClient + Send + Sync>;
 
 /// A structure that holds configuration related to a client's synchronous properties and
 /// internal implementation.  Only relevant to synchronous clients.

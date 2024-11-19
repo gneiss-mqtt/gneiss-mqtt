@@ -18,7 +18,7 @@ use super::*;
 pub struct SyncClientEventWaiter {
     event_count: usize,
 
-    client: SyncGneissClient,
+    client: SyncClientHandle,
 
     listener: Option<ListenerHandle>,
 
@@ -30,7 +30,7 @@ pub struct SyncClientEventWaiter {
 impl SyncClientEventWaiter {
 
     /// Creates a new ClientEventWaiter instance from full configuration
-    pub fn new(client: SyncGneissClient, config: ClientEventWaiterOptions, event_count: usize) -> Self {
+    pub fn new(client: SyncClientHandle, config: ClientEventWaiterOptions, event_count: usize) -> Self {
         let lock = Arc::new(Mutex::new(Some(Vec::new())));
         let signal = Arc::new(Condvar::new());
 
@@ -77,7 +77,7 @@ impl SyncClientEventWaiter {
     }
 
     /// Creates a new ClientEventWaiter instance that will wait for a single occurrence of a single event type
-    pub fn new_single(client: SyncGneissClient, event_type: ClientEventType) -> Self {
+    pub fn new_single(client: SyncClientHandle, event_type: ClientEventType) -> Self {
         let config = ClientEventWaiterOptions {
             wait_type: ClientEventWaitType::Type(event_type),
         };

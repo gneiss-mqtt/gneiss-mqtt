@@ -51,7 +51,7 @@ Assuming a default Mosquitto installation, you can connect locally by plaintext 
 ```no_run
 use gneiss_mqtt::client::asynchronous::AsyncClientOptions;
 use gneiss_mqtt::client::asynchronous::tokio::TokioClientOptions;
-use gneiss_mqtt::client::config::GenericClientBuilder;
+use gneiss_mqtt::client::config::ClientBuilder;
 use tokio::runtime::Handle;
 
 #[tokio::main]
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // In the common case, you will not need a root CA certificate
     let client =
-        GenericClientBuilder::new("127.0.0.1", 1883)
+        ClientBuilder::new("127.0.0.1", 1883)
             .build_tokio(async_options, tokio_options)?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
@@ -89,11 +89,11 @@ reason code vector to verify the success/failure result for each subscription in
 ```no_run
 use gneiss_mqtt::error::MqttResult;
 use gneiss_mqtt::client::SubscribeResult;
-use gneiss_mqtt::client::asynchronous::AsyncGneissClient;
+use gneiss_mqtt::client::asynchronous::AsyncClientHandle;
 use gneiss_mqtt::mqtt::{QualityOfService, SubscribePacket, Subscription};
 use std::sync::Arc;
 
-async fn subscribe_to_topic(client: AsyncGneissClient) {
+async fn subscribe_to_topic(client: AsyncClientHandle) {
     let subscribe = SubscribePacket::builder()
         .with_subscription(Subscription::new_simple("hello/world/+".to_string(), QualityOfService::AtLeastOnce))
         .build();
@@ -135,12 +135,12 @@ every time we receive a "Ping" publish:
 
 ```no_run
 use gneiss_mqtt::client::ClientEvent;
-use gneiss_mqtt::client::asynchronous::{AsyncClientOptions, AsyncGneissClient};
+use gneiss_mqtt::client::asynchronous::{AsyncClientOptions, AsyncClientHandle};
 use gneiss_mqtt::client::asynchronous::tokio::TokioClientOptions;
 use gneiss_mqtt::mqtt::{PublishPacket, QualityOfService};
 use std::sync::Arc;
 
-pub fn client_event_callback(client: AsyncGneissClient, event: Arc<ClientEvent>) {
+pub fn client_event_callback(client: AsyncClientHandle, event: Arc<ClientEvent>) {
     if let ClientEvent::PublishReceived(publish_received_event) = event.as_ref() {
         let publish = &publish_received_event.publish;
         if let Some(payload) = publish.payload() {
@@ -165,7 +165,7 @@ pub fn client_event_callback(client: AsyncGneissClient, event: Arc<ClientEvent>)
     }
 }
 
-use gneiss_mqtt::client::config::GenericClientBuilder;
+use gneiss_mqtt::client::config::ClientBuilder;
 use tokio::runtime::Handle;
 
 #[tokio::main]
@@ -175,8 +175,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tokio_client_options = TokioClientOptions::builder(Handle::current().clone()).build();
 
     // put the client in an Arc so we can capture an Arc clone in the event handler closure
-    let client : AsyncGneissClient =
-        GenericClientBuilder::new("127.0.0.1", 1883)
+    let client =
+        ClientBuilder::new("127.0.0.1", 1883)
             .build_tokio(async_options, tokio_client_options)?;
 
     // make a client event handler closure

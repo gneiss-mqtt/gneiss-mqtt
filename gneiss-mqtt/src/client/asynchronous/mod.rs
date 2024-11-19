@@ -55,7 +55,7 @@ pub type AsyncUnsubscribeResult = Pin<Box<dyn Future<Output = UnsubscribeResult>
 /// Direct client construction is messy due to the different possibilities for TLS, async runtime,
 /// etc...  We encourage you to use the various client builders in this crate, or in other crates,
 /// to simplify this process.
-pub trait AsyncMqttClient {
+pub trait AsyncClient {
 
     /// Signals the client that it should attempt to recurrently maintain a connection to
     /// the broker endpoint it has been configured with.
@@ -114,7 +114,7 @@ pub trait AsyncMqttClient {
 /// Direct client construction is messy due to the different possibilities for TLS, async runtime,
 /// etc...  We encourage you to use the various client builders in this crate, or in other crates,
 /// to simplify this process.
-pub type AsyncGneissClient = Arc<dyn AsyncMqttClient + Send + Sync>;
+pub type AsyncClientHandle = Arc<dyn AsyncClient + Send + Sync>;
 
 /// A structure that holds configuration related to a client's asynchronous properties and
 /// internal implementation.  Only relevant to asynchronous clients.
