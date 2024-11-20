@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 argh = { version = "0.1" }
-gneiss-mqtt = { path = "../gneiss-mqtt", features = ["tokio"] }
+gneiss-mqtt = { path = "../../gneiss-mqtt", features = ["tokio"] }
 tokio = { version = "1", features = ["full"] }
 elasti-gneiss-core = { path = "../elasti-gneiss-core" }

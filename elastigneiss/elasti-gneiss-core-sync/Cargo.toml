@@ -7,5 +7,5 @@ edition = "2021"
 
 [dependencies]
 argh = { version = "0.1" }
-gneiss-mqtt = { path = "../gneiss-mqtt", features = ["threaded"] }
+gneiss-mqtt = { path = "../../gneiss-mqtt", features = ["threaded"] }
 elasti-gneiss-core = { path = "../elasti-gneiss-core" }

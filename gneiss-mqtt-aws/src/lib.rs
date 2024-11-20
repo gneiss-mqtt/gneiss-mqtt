@@ -245,14 +245,22 @@ different combinations expected by users.
 
  */
 
+#![cfg_attr(feature = "strict", deny(warnings))]
 #![warn(missing_docs)]
 
+#[cfg(feature = "tokio")]
 use gneiss_mqtt::client::asynchronous::{AsyncClientHandle, AsyncClientOptions};
+#[cfg(feature = "tokio")]
 use gneiss_mqtt::client::asynchronous::tokio::TokioClientOptions;
+#[cfg(feature = "threaded")]
+use gneiss_mqtt::client::synchronous::{SyncClientHandle, SyncClientOptions};
+#[cfg(feature = "threaded")]
+use gneiss_mqtt::client::synchronous::threaded::ThreadedClientOptions;
 use gneiss_mqtt::client::config::*;
 #[allow(unused_imports)]
 use gneiss_mqtt::error::{GneissError, GneissResult};
 use std::fmt::Write;
+#[cfg(feature = "tokio")]
 use tokio::runtime::Handle;
 
 #[cfg(feature = "tokio-websockets")]
@@ -338,34 +346,17 @@ pub struct AwsCustomAuthOptions {
     pub(crate) password: Option<Vec<u8>>
 }
 
-/// Builder type for AwsCustomAuthOptions
-pub struct AwsCustomAuthOptionsBuilder {
-    authorizer_name: Option<String>,
-    authorizer_signature: Option<String>,
-    authorizer_token_key_name: Option<String>,
-    authorizer_token_key_value: Option<String>,
-    username: Option<String>,
-    password: Option<Vec<u8>>
-}
+impl AwsCustomAuthOptions {
 
-impl AwsCustomAuthOptionsBuilder {
-
-    /// Creates a new custom authentication options configuration to use an unsigned authorizer.
+    /// Creates a new custom authentication options builder to use an unsigned authorizer.
     ///
     /// `authorizer_name` - name of the AWS IoT authorizer to use.  This value must be URI-encoded if necessary.  A
     /// value is required unless the AWS account has a default authorizer configured for it.
-    pub fn new_unsigned(authorizer_name: Option<&str>) -> Self {
-        AwsCustomAuthOptionsBuilder {
-            authorizer_name: authorizer_name.map(|name| { name.to_string() }),
-            authorizer_signature: None,
-            authorizer_token_key_name: None,
-            authorizer_token_key_value: None,
-            username: None,
-            password: None
-        }
+    pub fn builder_unsigned(authorizer_name: Option<&str>) -> AwsCustomAuthOptionsBuilder {
+        AwsCustomAuthOptionsBuilder::new_unsigned(authorizer_name)
     }
 
-    /// Creates a new custom authentication options configuration to use a signed authorizer. See
+    /// Creates a new custom authentication options builder to use a signed authorizer. See
     /// [AWS IoT Custom Authentication](https://docs.aws.amazon.com/iot/latest/developerguide/custom-authentication.html)
     /// for more details.  The authenticator's Lambda will not be invoked unless `authorizer_signature`
     /// is the URI-encoded Base64-encoded signature of `authorizer_token_key_value` via the private key
@@ -382,7 +373,35 @@ impl AwsCustomAuthOptionsBuilder {
     /// `authorizer_token_key_value` - arbitrary value whose digital signature is provided in the `authorizer_signature`
     ///
     /// `authorizer_token_key_name` and `authorizer_name` must be valid URI-encoded values.
-    pub fn new_signed(authorizer_name: Option<&str>, authorizer_signature: &str, authorizer_token_key_name: &str, authorizer_token_key_value: &str) -> Self {
+    pub fn builder_signed(authorizer_name: Option<&str>, authorizer_signature: &str, authorizer_token_key_name: &str, authorizer_token_key_value: &str) -> AwsCustomAuthOptionsBuilder {
+        AwsCustomAuthOptionsBuilder::new_signed(authorizer_name, authorizer_signature, authorizer_token_key_name, authorizer_token_key_value)
+    }
+}
+
+/// Builder type for AwsCustomAuthOptions
+pub struct AwsCustomAuthOptionsBuilder {
+    authorizer_name: Option<String>,
+    authorizer_signature: Option<String>,
+    authorizer_token_key_name: Option<String>,
+    authorizer_token_key_value: Option<String>,
+    username: Option<String>,
+    password: Option<Vec<u8>>
+}
+
+impl AwsCustomAuthOptionsBuilder {
+
+    pub(crate) fn new_unsigned(authorizer_name: Option<&str>) -> Self {
+        AwsCustomAuthOptionsBuilder {
+            authorizer_name: authorizer_name.map(|name| { name.to_string() }),
+            authorizer_signature: None,
+            authorizer_token_key_name: None,
+            authorizer_token_key_value: None,
+            username: None,
+            password: None
+        }
+    }
+
+    pub(crate) fn new_signed(authorizer_name: Option<&str>, authorizer_signature: &str, authorizer_token_key_name: &str, authorizer_token_key_value: &str) -> Self {
         AwsCustomAuthOptionsBuilder {
             authorizer_name: authorizer_name.map(|name| { name.to_string() }),
             authorizer_signature: Some(authorizer_signature.to_string()),
@@ -465,11 +484,11 @@ pub enum TlsImplementation {
     Default,
 
     /// Use rustls as the TLS implementation
-    #[cfg(feature = "tokio-rustls")]
+    #[cfg(any(feature = "tokio-rustls", feature="threaded-rustls"))]
     Rustls,
 
     /// Use native-tls as the TLS implementation
-    #[cfg(feature = "tokio-native-tls")]
+    #[cfg(any(feature = "tokio-native-tls", feature="threaded-native-tls"))]
     Nativetls,
 }
 
@@ -644,13 +663,13 @@ impl AwsClientBuilder {
         self
     }
 
-    #[cfg(not(any(feature = "tokio-rustls", feature = "tokio-native-tls")))]
+    #[cfg(not(any(feature = "tokio-rustls", feature = "tokio-native-tls", feature = "threaded-rustls", feature = "threaded-native-tls")))]
     fn build_tls_options(&self) -> GneissResult<TlsOptions> {
         compile_error!("gneiss-mqtt-aws must be built with a TLS feature (rustls, native-tls) enabled");
         Err(GneissError::new_tls_error("Connecting to AWS IoT Core requires a TLS implementation feature to be configured"))
     }
 
-    #[cfg(all(feature = "tokio-rustls", feature = "tokio-native-tls"))]
+    #[cfg(all(any(feature = "tokio-rustls", feature = "threaded-rustls"), any(feature = "tokio-native-tls", feature = "threaded-native-tls")))]
     fn build_tls_options(&self) -> GneissResult<TlsOptions> {
         match self.tls_impl {
             TlsImplementation::Nativetls => {
@@ -662,17 +681,18 @@ impl AwsClientBuilder {
         }
     }
 
-    #[cfg(all(feature = "tokio-rustls", not(feature = "tokio-native-tls")))]
+    #[cfg(all(any(feature = "tokio-rustls", feature = "threaded-rustls"), not(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))))]
     fn build_tls_options(&self) -> GneissResult<TlsOptions> {
         return self.tls_options_builder.build_rustls();
     }
 
-    #[cfg(all(not(feature = "tokio-rustls"), feature = "tokio-native-tls"))]
+    #[cfg(all(not(any(feature = "tokio-rustls", feature = "threaded-rustls")), any(feature = "tokio-native-tls", feature = "threaded-native-tls")))]
     fn build_tls_options(&self) -> GneissResult<TlsOptions> {
         return self.tls_options_builder.build_native_tls();
     }
 
-    /// Creates a new MQTT5 client from all of the configuration options registered with the
+    #[cfg(feature = "tokio")]
+    /// Creates a new tokio-based MQTT5 client from all of the configuration options registered with the
     /// builder.
     pub fn build_tokio(&self, runtime: &Handle) -> GneissResult<AsyncClientHandle> {
         let user_connect_options =
@@ -698,6 +718,7 @@ impl AwsClientBuilder {
             .with_client_options(client_options)
             .with_tls_options(tls_options);
 
+        #[cfg_attr(not(feature = "tokio-websockets"), allow(unused_mut))]
         let mut async_options_builder = AsyncClientOptions::builder();
 
         #[cfg(feature = "tokio-websockets")]
@@ -719,6 +740,43 @@ impl AwsClientBuilder {
 
         let tokio_options = TokioClientOptions::builder(runtime.clone()).build();
         builder.build_tokio(async_options_builder.build(), tokio_options)
+    }
+
+    #[cfg(feature = "threaded")]
+    /// Creates a new thread-based MQTT5 client from all of the configuration options registered with the
+    /// builder.
+    pub fn build_threaded(&self, threaded_options: Option<ThreadedClientOptions>) -> GneissResult<SyncClientHandle> {
+        let user_connect_options =
+            if let Some(options) = &self.connect_options {
+                options.clone()
+            } else {
+                ConnectOptions::builder().build()
+            };
+
+        let final_connect_options = self.build_final_connect_options(user_connect_options);
+
+        let client_options =
+            if let Some(options) = &self.client_options {
+                options.clone()
+            } else {
+                MqttClientOptions::builder().build()
+            };
+
+        let tls_options = self.build_tls_options()?;
+
+        let mut builder = ClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
+        builder.with_connect_options(final_connect_options)
+            .with_client_options(client_options)
+            .with_tls_options(tls_options);
+
+        let final_thread_options =
+            if let Some(opts) = threaded_options {
+                opts.clone()
+            } else {
+                ThreadedClientOptions::builder().build()
+            };
+
+        builder.build_threaded(SyncClientOptions::builder().build(), final_thread_options)
     }
 
     fn build_final_connect_options(&self, connect_options: ConnectOptions) -> ConnectOptions {

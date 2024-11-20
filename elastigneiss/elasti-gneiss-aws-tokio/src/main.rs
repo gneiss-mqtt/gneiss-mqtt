@@ -9,14 +9,14 @@ use elasti_gneiss_core::{ElastiError, ElastiResult};
 use elasti_gneiss_core_async::main_loop;
 use gneiss_mqtt::client::asynchronous::AsyncClientHandle;
 use gneiss_mqtt::client::config::*;
-use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptionsBuilder, WebsocketSigv4OptionsBuilder};
+use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions, WebsocketSigv4OptionsBuilder};
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
 use tokio::runtime::Handle;
 use url::Url;
 
 #[derive(FromArgs, Debug, PartialEq)]
-/// elasti-gneiss-aws - an interactive MQTT5 console
+/// elasti-gneiss-aws-tokio - an interactive MQTT5 console
 struct CommandLineArgs {
 
     /// path to the root CA to use when connecting.  If the endpoint URI is a TLS-enabled
@@ -101,14 +101,14 @@ async fn build_client(connect_config: ConnectOptions, client_config: MqttClientO
         "aws-custom-auth" => {
             let mut config =
                 if args.authorizer_signature.is_some() && args.authorizer_token_key_value.is_some() && args.authorizer_token_key_name.is_some() {
-                    AwsCustomAuthOptionsBuilder::new_signed(
+                    AwsCustomAuthOptions::builder_signed(
                         args.authorizer.as_deref(),
                         args.authorizer_signature.as_ref().unwrap(),
                         args.authorizer_token_key_name.as_ref().unwrap(),
                         args.authorizer_token_key_value.as_ref().unwrap(),
                     )
                 } else {
-                    AwsCustomAuthOptionsBuilder::new_unsigned(
+                    AwsCustomAuthOptions::builder_unsigned(
                         args.authorizer.as_deref()
                     )
                 };
@@ -167,7 +167,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let client = build_client(connect_options, config, &Handle::current(), &cli_args).await.unwrap();
 
-    println!("elasti-gneiss - an interactive MQTT5 console application\n");
+    println!("elasti-gneiss-aws-tokio - an interactive MQTT5 console application\n");
     println!(" `help` for command assistance\n");
 
     main_loop(client).await;

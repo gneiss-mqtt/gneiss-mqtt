@@ -89,6 +89,7 @@ impl SyncClientEventWaiter {
         Self::new(client, config, 1)
     }
 
+    /// Waits for the configured event(s) and returns a result with them
     pub fn wait(self) -> GneissResult<Vec<ClientEventRecord>> {
         let mut current_events_option = self.events.lock().unwrap();
         loop {

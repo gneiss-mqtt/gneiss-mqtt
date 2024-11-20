@@ -13,16 +13,19 @@ readme = "README.md"
 resolver = "2"
 
 [package.metadata.docs.rs]
-features = []
-all-features = true
+features = [ "threaded-rustls", "threaded-native-tls", "tokio-rustls", "tokio-native-tls", "tokio-websockets" ]
 
 [features]
-default = []
+strict = [] # treats warnings as errors, only intended for internal checks
 testing = [] # enable when running tests to also run environmentally-controlled integration tests
-tokio-rustls = [ "dep:tokio", "gneiss-mqtt/tokio-rustls" ]
-tokio-native-tls = [ "dep:tokio", "gneiss-mqtt/tokio-native-tls" ]
+threaded = []
+threaded-rustls = [ "threaded", "gneiss-mqtt/threaded-rustls" ]
+threaded-native-tls = [ "threaded", "gneiss-mqtt/threaded-native-tls" ]
+tokio = [ "dep:tokio" ]
+tokio-rustls = [ "tokio", "gneiss-mqtt/tokio-rustls" ]
+tokio-native-tls = [ "tokio", "gneiss-mqtt/tokio-native-tls" ]
 tokio-websockets = [
-    "dep:tokio",
+    "tokio",
     "gneiss-mqtt/tokio-websockets",
     "dep:aws-config",
     "dep:aws-credential-types",
