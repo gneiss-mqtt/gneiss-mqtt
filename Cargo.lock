@@ -625,6 +625,7 @@ name = "elasti-gneiss-aws-tokio"
 version = "0.1.0"
 dependencies = [
  "argh",
+ "elasti-gneiss-core",
  "elasti-gneiss-core-async",
  "gneiss-mqtt",
  "gneiss-mqtt-aws",
@@ -634,12 +635,42 @@ dependencies = [
 ]
 
 [[package]]
-name = "elasti-gneiss-core-async"
+name = "elasti-gneiss-core"
 version = "0.1.0"
 dependencies = [
  "argh",
  "gneiss-mqtt",
+]
+
+[[package]]
+name = "elasti-gneiss-core-async"
+version = "0.1.0"
+dependencies = [
+ "argh",
+ "elasti-gneiss-core",
+ "gneiss-mqtt",
  "tokio",
+]
+
+[[package]]
+name = "elasti-gneiss-core-sync"
+version = "0.1.0"
+dependencies = [
+ "argh",
+ "elasti-gneiss-core",
+ "gneiss-mqtt",
+]
+
+[[package]]
+name = "elasti-gneiss-threaded"
+version = "0.1.0"
+dependencies = [
+ "argh",
+ "elasti-gneiss-core",
+ "elasti-gneiss-core-sync",
+ "gneiss-mqtt",
+ "simplelog",
+ "url",
 ]
 
 [[package]]
@@ -647,6 +678,7 @@ name = "elasti-gneiss-tokio"
 version = "0.1.0"
 dependencies = [
  "argh",
+ "elasti-gneiss-core",
  "elasti-gneiss-core-async",
  "gneiss-mqtt",
  "simplelog",

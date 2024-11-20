@@ -1,5 +1,5 @@
 [package]
-name = "elasti-gneiss-core-async"
+name = "elasti-gneiss-core-sync"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,6 +7,5 @@ edition = "2021"
 
 [dependencies]
 argh = { version = "0.1" }
-gneiss-mqtt = { path = "../gneiss-mqtt", features = ["tokio"] }
-tokio = { version = "1", features = ["full"] }
+gneiss-mqtt = { path = "../gneiss-mqtt", features = ["threaded"] }
 elasti-gneiss-core = { path = "../elasti-gneiss-core" }

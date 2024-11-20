@@ -6,21 +6,20 @@
 
 use argh::FromArgs;
 use gneiss_mqtt::client::*;
-use gneiss_mqtt::client::asynchronous::{AsyncClientHandle};
+use gneiss_mqtt::client::synchronous::{SyncClientHandle};
 use gneiss_mqtt::mqtt::*;
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, BufReader};
-
+use std::io::{self, BufRead};
 use elasti_gneiss_core::*;
 
-fn handle_start(client: &AsyncClientHandle, _: StartArgs) {
+fn handle_start(client: &SyncClientHandle, _: StartArgs) {
     let function = |event|{ client_event_callback(event) };
     let listener_callback = Arc::new(function);
 
     let _ = client.start(Some(listener_callback));
 }
 
-fn handle_stop(client: &AsyncClientHandle, args: StopArgs) {
+fn handle_stop(client: &SyncClientHandle, args: StopArgs) {
     let mut stop_options_builder = StopOptions::builder();
 
     if let Some(reason_code_u8) = args.reason_code {
@@ -35,11 +34,11 @@ fn handle_stop(client: &AsyncClientHandle, args: StopArgs) {
     let _ = client.stop(Some(stop_options_builder.build()));
 }
 
-fn handle_close(client: &AsyncClientHandle, _ : CloseArgs) {
+fn handle_close(client: &SyncClientHandle, _ : CloseArgs) {
     let _ = client.close();
 }
 
-async fn handle_publish(client: &AsyncClientHandle, args: PublishArgs) {
+fn handle_publish(client: &SyncClientHandle, args: PublishArgs) {
 
     let qos_result = QualityOfService::try_from(args.qos);
     if qos_result.is_err() {
@@ -56,7 +55,7 @@ async fn handle_publish(client: &AsyncClientHandle, args: PublishArgs) {
     let correlation_data = vec![0; 1024 * 9];
     publish_builder = publish_builder.with_correlation_data(correlation_data);
 
-    let publish_result = client.publish(publish_builder.build(), None).await;
+    let publish_result = client.publish(publish_builder.build(), None).recv();
     match &publish_result {
         Ok(publish_response) => {
             println!("Publish Result: Ok( {} )\n", publish_response);
@@ -67,7 +66,7 @@ async fn handle_publish(client: &AsyncClientHandle, args: PublishArgs) {
     }
 }
 
-async fn handle_subscribe(client: &AsyncClientHandle, args: SubscribeArgs) {
+fn handle_subscribe(client: &SyncClientHandle, args: SubscribeArgs) {
     let qos_result = QualityOfService::try_from(args.qos);
     if qos_result.is_err() {
         println!("Invalid input!  Qos must be 0, 1, or 2");
@@ -78,7 +77,7 @@ async fn handle_subscribe(client: &AsyncClientHandle, args: SubscribeArgs) {
         .with_subscription(Subscription::builder(args.topic_filter, qos_result.unwrap()).build())
         .build();
 
-    let subscribe_result = client.subscribe(subscribe, None).await;
+    let subscribe_result = client.subscribe(subscribe, None).recv();
 
     match &subscribe_result {
         Ok(subscribe_response) => {
@@ -90,11 +89,11 @@ async fn handle_subscribe(client: &AsyncClientHandle, args: SubscribeArgs) {
     }
 }
 
-async fn handle_unsubscribe(client: &AsyncClientHandle, args: UnsubscribeArgs) {
+fn handle_unsubscribe(client: &SyncClientHandle, args: UnsubscribeArgs) {
 
     let unsubscribe = UnsubscribePacket::builder().with_topic_filter(args.topic_filter).build();
 
-    let unsubscribe_result = client.unsubscribe(unsubscribe, None).await;
+    let unsubscribe_result = client.unsubscribe(unsubscribe, None).recv();
 
     match &unsubscribe_result {
         Ok(unsubscribe_response) => {
@@ -106,7 +105,7 @@ async fn handle_unsubscribe(client: &AsyncClientHandle, args: UnsubscribeArgs) {
     }
 }
 
-async fn handle_input(value: String, client: &AsyncClientHandle) -> bool {
+fn handle_input(value: String, client: &SyncClientHandle) -> bool {
     let args : Vec<&str> = value.split_whitespace().collect();
     if args.is_empty() {
         println!("Invalid input!");
@@ -125,21 +124,18 @@ async fn handle_input(value: String, client: &AsyncClientHandle) -> bool {
         SubCommandEnum::Stop(args) => { handle_stop(client, args) }
         SubCommandEnum::Close(args) => { handle_close(client, args) }
         SubCommandEnum::Quit(_) => { return true; }
-        SubCommandEnum::Publish(args) => { handle_publish(client, args).await }
-        SubCommandEnum::Subscribe(args) => { handle_subscribe(client, args).await }
-        SubCommandEnum::Unsubscribe(args) => { handle_unsubscribe(client, args).await }
+        SubCommandEnum::Publish(args) => { handle_publish(client, args) }
+        SubCommandEnum::Subscribe(args) => { handle_subscribe(client, args) }
+        SubCommandEnum::Unsubscribe(args) => { handle_unsubscribe(client, args) }
     }
 
     false
 }
 
-pub async fn main_loop(client: AsyncClientHandle) {
-
-    let stdin = tokio::io::stdin();
-    let mut lines = BufReader::new(stdin).lines();
-
-    while let Ok(Some(line)) = lines.next_line().await {
-        if handle_input(line, &client).await {
+pub fn main_loop(client: SyncClientHandle) {
+    let stdin = io::stdin();
+    for line in stdin.lock().lines() {
+        if handle_input(line.unwrap(), &client) {
             break;
         }
     }

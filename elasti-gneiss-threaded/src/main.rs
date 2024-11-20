@@ -6,18 +6,17 @@
 use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult};
-use elasti_gneiss_core_async::main_loop;
-use gneiss_mqtt::client::asynchronous::{AsyncClientHandle, AsyncClientOptions};
-use gneiss_mqtt::client::asynchronous::tokio::TokioClientOptions;
+use elasti_gneiss_core_sync::main_loop;
+use gneiss_mqtt::client::synchronous::{SyncClientHandle, SyncClientOptions};
+use gneiss_mqtt::client::synchronous::threaded::ThreadedClientOptions;
 use gneiss_mqtt::client::config::*;
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
-use tokio::runtime::Handle;
 use url::Url;
 use gneiss_mqtt::alias::OutboundAliasResolverFactory;
 
 #[derive(FromArgs, Debug, PartialEq)]
-/// elasti-gneiss-tokio - an interactive MQTT5 console
+/// elasti-gneiss-threaded - an interactive MQTT5 console
 struct CommandLineArgs {
 
     /// path to the root CA to use when connecting.  If the endpoint URI is a TLS-enabled
@@ -50,7 +49,7 @@ struct CommandLineArgs {
     http_proxy_uri: Option<String>
 }
 
-fn build_client(connect_options: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<AsyncClientHandle> {
+fn build_client(connect_options: ConnectOptions, client_config: MqttClientOptions, args: &CommandLineArgs) -> ElastiResult<SyncClientHandle> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&args.endpoint_uri);
@@ -97,7 +96,7 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
         builder.with_http_proxy_options(http_proxy_options);
     }
 
-    let mut async_client_builder = AsyncClientOptions::builder();
+    let mut sync_client_builder = SyncClientOptions::builder();
 
     match scheme.as_str() {
         "mqtts" => {
@@ -117,8 +116,8 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
             builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
         }
         "ws" => {
-            let websocket_options = AsyncWebsocketOptions::builder().build();
-            async_client_builder.with_websocket_options(websocket_options);
+            let websocket_options = SyncWebsocketOptions::builder().build();
+            sync_client_builder.with_websocket_options(websocket_options);
         }
         "wss" => {
             let mut tls_options_builder = TlsOptions::builder();
@@ -130,18 +129,17 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
             let tls_options = tls_options_builder.build_rustls().unwrap();
             builder.with_tls_options(tls_options);
 
-            let websocket_options = AsyncWebsocketOptions::builder().build();
-            async_client_builder.with_websocket_options(websocket_options);
+            let websocket_options = SyncWebsocketOptions::builder().build();
+            sync_client_builder.with_websocket_options(websocket_options);
         }
         _ => {}
     }
 
-    let tokio_options = TokioClientOptions::builder(runtime.clone()).build();
-    Ok(builder.build_tokio(async_client_builder.build(), tokio_options)?)
+    let threaded_options = ThreadedClientOptions::builder().build();
+    Ok(builder.build_threaded(sync_client_builder.build(), threaded_options)?)
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli_args: CommandLineArgs = argh::from_env();
 
     if let Some(log_file_path) = &cli_args.logpath {
@@ -168,12 +166,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_outbound_alias_resolver_factory(OutboundAliasResolverFactory::new_lru_factory(10))
         .build();
 
-    let client = build_client(connect_options, config, &Handle::current(), &cli_args).unwrap();
+    let client = build_client(connect_options, config, &cli_args).unwrap();
 
-    println!("elasti-gneiss-tokio - an interactive MQTT5 console application\n");
+    println!("elasti-gneiss-threaded - an interactive MQTT5 console application\n");
     println!(" `help` for command assistance\n");
 
-    main_loop(client).await;
+    main_loop(client);
 
     Ok(())
 }
