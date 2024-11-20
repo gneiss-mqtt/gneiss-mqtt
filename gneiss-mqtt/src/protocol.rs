@@ -25,7 +25,7 @@ use std::fmt::*;
 use std::mem;
 use std::time::*;
 
-enum MqttOperationOptions {
+enum ClientOperationOptions {
     Publish(PublishOptionsInternal),
     Subscribe(SubscribeOptionsInternal),
     Unsubscribe(UnsubscribeOptionsInternal),
@@ -35,7 +35,7 @@ enum MqttOperationOptions {
 // operations and internally-generated ones.  Every outbound packet corresponds to an operation.
 // This packet correspondence is 1-1 with the single exception of a pubrel being associated with a
 // qos2 publish.
-pub(crate) struct MqttOperation {
+pub(crate) struct ClientOperation {
 
     // Every operation has a unique id, starting at 1.  Id allocation is serialized based on
     // time-of-submission.  In this way, complying with MQTT spec ordering requirements ends up
@@ -54,7 +54,7 @@ pub(crate) struct MqttOperation {
     packet_id: Option<u16>,
 
     // Additional options (primarily completion channel) for an operation
-    options: Option<MqttOperationOptions>,
+    options: Option<ClientOperationOptions>,
 
     // Always starts as None
     //
@@ -70,7 +70,7 @@ pub(crate) struct MqttOperation {
     ping_extension_base_timepoint: Option<Instant>,
 }
 
-impl MqttOperation {
+impl ClientOperation {
     pub fn bind_packet_id(&mut self, packet_id: u16) {
         self.packet_id = Some(packet_id);
         match &mut *self.packet {
@@ -281,7 +281,7 @@ pub(crate) struct ProtocolState {
     pub(crate) pending_write_completion: bool,
 
     // All incomplete operations tracked by the client
-    pub(crate) operations: HashMap<u64, MqttOperation>,
+    pub(crate) operations: HashMap<u64, ClientOperation>,
 
     // (Optional) Timeouts for all ack-based operations (qos1+ publish, subscribe, unsubscribe)
     // The timeout only covers the period between operation-written-to-socket and
@@ -483,13 +483,13 @@ impl ProtocolState {
         let (op_id, queue, position) =
             match event {
                 UserEvent::Subscribe(packet, subscribe_options) => {
-                    (self.create_operation(packet, Some(MqttOperationOptions::Subscribe(subscribe_options))), ProtocolQueueType::User, ProtocolEnqueuePosition::Back)
+                    (self.create_operation(packet, Some(ClientOperationOptions::Subscribe(subscribe_options))), ProtocolQueueType::User, ProtocolEnqueuePosition::Back)
                 }
                 UserEvent::Unsubscribe(packet, unsubscribe_options) => {
-                    (self.create_operation(packet, Some(MqttOperationOptions::Unsubscribe(unsubscribe_options))), ProtocolQueueType::User, ProtocolEnqueuePosition::Back)
+                    (self.create_operation(packet, Some(ClientOperationOptions::Unsubscribe(unsubscribe_options))), ProtocolQueueType::User, ProtocolEnqueuePosition::Back)
                 }
                 UserEvent::Publish(packet, publish_options) => {
-                    (self.create_operation(packet, Some(MqttOperationOptions::Publish(publish_options))), ProtocolQueueType::User, ProtocolEnqueuePosition::Back)
+                    (self.create_operation(packet, Some(ClientOperationOptions::Publish(publish_options))), ProtocolQueueType::User, ProtocolEnqueuePosition::Back)
                 }
                 UserEvent::Disconnect(disconnect) => {
                     (self.create_operation(disconnect, None), ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Front)
@@ -692,7 +692,7 @@ impl ProtocolState {
         (retained, rejected)
     }
 
-    fn apply_disconnect_completion(&mut self, operation: &MqttOperation) -> GneissResult<()> {
+    fn apply_disconnect_completion(&mut self, operation: &ClientOperation) -> GneissResult<()> {
         if let MqttPacket::Disconnect(_) = &*operation.packet {
             if self.state == ProtocolStateType::PendingDisconnect {
                 self.state = ProtocolStateType::Halted;
@@ -1117,19 +1117,19 @@ impl ProtocolState {
         result
     }
 
-    fn get_operation_timeout_duration(&self, operation: &MqttOperation) -> Option<Duration> {
+    fn get_operation_timeout_duration(&self, operation: &ClientOperation) -> Option<Duration> {
         match &operation.options {
-            Some(MqttOperationOptions::Unsubscribe(unsubscribe_options)) => {
+            Some(ClientOperationOptions::Unsubscribe(unsubscribe_options)) => {
                 if let Some(timeout) = &unsubscribe_options.options.ack_timeout {
                     return Some(*timeout);
                 }
             }
-            Some(MqttOperationOptions::Subscribe(subscribe_options)) => {
+            Some(ClientOperationOptions::Subscribe(subscribe_options)) => {
                 if let Some(timeout) = &subscribe_options.options.ack_timeout {
                     return Some(*timeout);
                 }
             }
-            Some(MqttOperationOptions::Publish(publish_options)) => {
+            Some(ClientOperationOptions::Publish(publish_options)) => {
                 if let Some(timeout) = &publish_options.options.ack_timeout {
                     return Some(*timeout);
                 }
@@ -1158,7 +1158,7 @@ impl ProtocolState {
         }
     }
 
-    fn apply_ping_extension_on_operation_success(&mut self, operation: &MqttOperation) {
+    fn apply_ping_extension_on_operation_success(&mut self, operation: &ClientOperation) {
         let mut extension_base_option : Option<Instant> = None;
 
         match &*operation.packet {
@@ -1866,14 +1866,14 @@ impl ProtocolState {
         }
     }
 
-    fn create_operation(&mut self, packet: Box<MqttPacket>, options: Option<MqttOperationOptions>) -> u64 {
+    fn create_operation(&mut self, packet: Box<MqttPacket>, options: Option<ClientOperationOptions>) -> u64 {
         let id = self.next_operation_id;
         self.next_operation_id += 1;
 
         info!("[{} ms] create_operation - building {} operation with id {}", self.elapsed_time_ms, mqtt_packet_to_str(&packet), id);
         debug!("[{} ms] create_operation - operation {}: {}", self.elapsed_time_ms, id, &packet);
 
-        let operation = MqttOperation {
+        let operation = ClientOperation {
             id,
             packet,
             qos2_pubrel: None,
@@ -1994,9 +1994,9 @@ fn build_negotiated_settings(config: &ProtocolStateConfig, packet: &ConnackPacke
     }
 }
 
-fn complete_operation_with_result(operation_options: &mut MqttOperationOptions, completion_result: Option<OperationResponse>) -> GneissResult<()> {
+fn complete_operation_with_result(operation_options: &mut ClientOperationOptions, completion_result: Option<OperationResponse>) -> GneissResult<()> {
     match operation_options {
-        MqttOperationOptions::Publish(publish_options) => {
+        ClientOperationOptions::Publish(publish_options) => {
             let mut publish_response = PublishResponse::Qos0;
             if completion_result.is_some() {
                 if let Some(OperationResponse::Publish(publish_result)) = completion_result {
@@ -2011,7 +2011,7 @@ fn complete_operation_with_result(operation_options: &mut MqttOperationOptions, 
 
             return Ok(());
         }
-        MqttOperationOptions::Subscribe(subscribe_options) => {
+        ClientOperationOptions::Subscribe(subscribe_options) => {
             if let OperationResponse::Subscribe(suback) = completion_result.unwrap() {
                 let handler = subscribe_options.response_handler.take().unwrap();
                 let _ = handler(Ok(suback));
@@ -2019,7 +2019,7 @@ fn complete_operation_with_result(operation_options: &mut MqttOperationOptions, 
                 return Ok(());
             }
         }
-        MqttOperationOptions::Unsubscribe(unsubscribe_options) => {
+        ClientOperationOptions::Unsubscribe(unsubscribe_options) => {
             if let OperationResponse::Unsubscribe(unsuback) = completion_result.unwrap() {
                 let handler = unsubscribe_options.response_handler.take().unwrap();
                 let _ = handler(Ok(unsuback));
@@ -2032,17 +2032,17 @@ fn complete_operation_with_result(operation_options: &mut MqttOperationOptions, 
     Err(GneissError::new_internal_state_error("operation result does not match operation type"))
 }
 
-fn complete_operation_with_error(operation_options: &mut MqttOperationOptions, error: GneissError) -> GneissResult<()> {
+fn complete_operation_with_error(operation_options: &mut ClientOperationOptions, error: GneissError) -> GneissResult<()> {
     match operation_options {
-        MqttOperationOptions::Publish(publish_options) => {
+        ClientOperationOptions::Publish(publish_options) => {
             let handler = publish_options.response_handler.take().unwrap();
             let _ = handler(Err(error));
         }
-        MqttOperationOptions::Subscribe(subscribe_options) => {
+        ClientOperationOptions::Subscribe(subscribe_options) => {
             let handler = subscribe_options.response_handler.take().unwrap();
             let _ = handler(Err(error));
         }
-        MqttOperationOptions::Unsubscribe(unsubscribe_options) => {
+        ClientOperationOptions::Unsubscribe(unsubscribe_options) => {
             let handler = unsubscribe_options.response_handler.take().unwrap();
             let _ = handler(Err(error));
         }

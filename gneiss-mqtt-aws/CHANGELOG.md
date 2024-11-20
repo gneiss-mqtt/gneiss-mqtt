@@ -17,3 +17,6 @@ This document is currently hand-written and non-authoritative.
 * * Rustls support feature-gated
 * * Native-tls support added and feature-gated
 * * Websocket support feature-gated
+
+## 0.4.0
+* Threaded client support for mtls and custom auth

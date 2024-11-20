@@ -47,7 +47,8 @@ This document is currently hand-written and non-authoritative.
 
 ## 0.4.0
 * Refactoring/chores
-* * Too many to list, everything has changed
+* * Too many to list, many things have changed
 * Features
 * * Non-async client interface
 * * Thread-based client implementation and tests
+* * Rustls, Native-tls, and websocket support for thread-based client
