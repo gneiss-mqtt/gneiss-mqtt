@@ -10,6 +10,7 @@ homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 documentation = "https://docs.rs/gneiss-mqtt-aws"
 repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 readme = "README.md"
+resolver = "2"
 
 [package.metadata.docs.rs]
 features = []
@@ -29,6 +30,9 @@ tokio-websockets = [
     "dep:aws-smithy-runtime-api",
     "dep:http",
 ]
+
+[dev-dependencies]
+gneiss-mqtt = { path = "../gneiss-mqtt", features = [ "testing" ] }
 
 [dependencies]
 aws-config = { version = "1", optional = true }

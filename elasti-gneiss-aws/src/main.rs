@@ -6,8 +6,8 @@
 use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult, main_loop};
-use gneiss_mqtt::client::AsyncGneissClient;
-use gneiss_mqtt::config::*;
+use gneiss_mqtt::client::asynchronous::AsyncClientHandle;
+use gneiss_mqtt::client::config::*;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptionsBuilder, WebsocketSigv4OptionsBuilder};
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
@@ -68,7 +68,7 @@ struct CommandLineArgs {
     signing_region: Option<String>
 }
 
-async fn build_client(connect_config: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<AsyncGneissClient> {
+async fn build_client(connect_config: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<AsyncClientHandle> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&uri_string);
@@ -157,9 +157,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         WriteLogger::init(LevelFilter::Debug, log_config, log_file_result.unwrap()).unwrap();
     }
 
-    let connect_options = ConnectOptionsBuilder::new().build();
+    let connect_options = ConnectOptions::builder().build();
 
-    let config = MqttClientOptionsBuilder::new()
+    let config = MqttClientOptions::builder()
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::Uniform)
         .build();

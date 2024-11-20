@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+/*!
+Testing functionality used throughout the gneiss ecosystem to wait for specific conditions in sync
+client execution.  Only enabled with the`testing` feature.  Should never be enabled in production.
+*/
 
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Instant;
