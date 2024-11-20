@@ -1,5 +1,5 @@
 [package]
-name = "elasti-gneiss-core"
+name = "elasti-gneiss-core-async"
 version = "0.1.0"
 edition = "2021"
 

@@ -2,8 +2,8 @@
 resolver = "2"
 members = [
 	"gneiss-mqtt",
-	"elasti-gneiss-core",
-	"elasti-gneiss",
+	"elasti-gneiss-core-async",
+	"elasti-gneiss-tokio",
 	"gneiss-mqtt-aws",
-	"elasti-gneiss-aws",
+	"elasti-gneiss-aws-tokio",
 ]

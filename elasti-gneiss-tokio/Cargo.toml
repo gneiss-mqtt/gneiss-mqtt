@@ -1,5 +1,5 @@
 [package]
-name = "elasti-gneiss"
+name = "elasti-gneiss-tokio"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 gneiss-mqtt = { path = "../gneiss-mqtt", features = ["tokio-rustls", "tokio-native-tls", "tokio-websockets"] }
-elasti-gneiss-core = { path = "../elasti-gneiss-core" }
+elasti-gneiss-core-async = { path = "../elasti-gneiss-core-async" }
 tokio = { version = "1", features = ["full"] }
 simplelog = { version = "0.12" }
 argh = { version = "0.1" }

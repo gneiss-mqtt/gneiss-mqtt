@@ -621,23 +621,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 
 [[package]]
-name = "elasti-gneiss"
+name = "elasti-gneiss-aws-tokio"
 version = "0.1.0"
 dependencies = [
  "argh",
- "elasti-gneiss-core",
- "gneiss-mqtt",
- "simplelog",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "elasti-gneiss-aws"
-version = "0.1.0"
-dependencies = [
- "argh",
- "elasti-gneiss-core",
+ "elasti-gneiss-core-async",
  "gneiss-mqtt",
  "gneiss-mqtt-aws",
  "simplelog",
@@ -646,12 +634,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "elasti-gneiss-core"
+name = "elasti-gneiss-core-async"
 version = "0.1.0"
 dependencies = [
  "argh",
  "gneiss-mqtt",
  "tokio",
+]
+
+[[package]]
+name = "elasti-gneiss-tokio"
+version = "0.1.0"
+dependencies = [
+ "argh",
+ "elasti-gneiss-core-async",
+ "gneiss-mqtt",
+ "simplelog",
+ "tokio",
+ "url",
 ]
 
 [[package]]

@@ -900,7 +900,7 @@ mod testing {
                 }
             })),
         };
-        
+
         let connection_result_waiter = AsyncClientEventWaiter::new(client.clone(), waiter_config, 1);
 
         client.start(None)?;
