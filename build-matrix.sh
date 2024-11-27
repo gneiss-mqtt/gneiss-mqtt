@@ -33,10 +33,10 @@ cargo build --package=gneiss-mqtt-aws --all-features
 
 echo "Building elastigneiss variants..."
 echo "Building elasti-gneiss-tokio"
-cargo build --package=elasti-gneiss-tokio --all-features
+cargo build --package=elasti-gneiss-tokio
 echo "Building elasti-gneiss-threaded"
-cargo build --package=elasti-gneiss-threaded --all-features
+cargo build --package=elasti-gneiss-threaded
 echo "Building elasti-gneiss-aws-tokio"
-cargo build --package=elasti-gneiss-aws-tokio --all-features
+cargo build --package=elasti-gneiss-aws-tokio
 echo "Building elasti-gneiss-aws-threaded"
-cargo build --package=elasti-gneiss-aws-threaded --all-features
+cargo build --package=elasti-gneiss-aws-threaded
