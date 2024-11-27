@@ -6,8 +6,8 @@
 use crate::mqtt::PacketType;
 use crate::alias::*;
 use crate::client::*;
-use crate::config::*;
-use crate::error::{MqttError, MqttResult};
+use crate::client::config::*;
+use crate::error::{GneissError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::auth::*;
 use crate::mqtt::connack::*;
@@ -45,7 +45,7 @@ pub(crate) struct InboundValidationContext<'a> {
     pub negotiated_settings : Option<&'a NegotiatedSettings>,
 }
 
-pub(crate) fn validate_user_properties(properties: &Option<Vec<UserProperty>>, packet_type: PacketType, packet_name: &str) -> MqttResult<()> {
+pub(crate) fn validate_user_properties(properties: &Option<Vec<UserProperty>>, packet_type: PacketType, packet_name: &str) -> GneissResult<()> {
     if let Some(props) = properties {
         for property in props {
             validate_string_length(property.name.as_str(), packet_type, packet_name, "UserProperty Name")?;
@@ -64,7 +64,7 @@ pub(crate) fn validate_user_properties(properties: &Option<Vec<UserProperty>>, p
 /// the async boundary into the client implementation.
 ///
 /// Utf-8 codepoints are not currently checked by any validation function.
-pub(crate) fn validate_packet_outbound(packet: &MqttPacket) -> MqttResult<()> {
+pub(crate) fn validate_packet_outbound(packet: &MqttPacket) -> GneissResult<()> {
     match packet {
         MqttPacket::Auth(auth) => { validate_auth_packet_outbound(auth) }
         MqttPacket::Connect(connect) => { validate_connect_packet_outbound(connect) }
@@ -79,14 +79,14 @@ pub(crate) fn validate_packet_outbound(packet: &MqttPacket) -> MqttResult<()> {
         MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound(unsubscribe) }
         _ => {
             error!("Packet Outbound Validation - unexpected packet type");
-            Err(MqttError::new_protocol_error("unexpected outbound packet type"))
+            Err(GneissError::new_protocol_error("unexpected outbound packet type"))
         }
     }
 }
 
 /// Validates outbound packets against per-connection dynamic constraints.  Called internally
 /// right before a packet is seated as the current operation of the client.
-pub(crate) fn validate_packet_outbound_internal(packet: &MqttPacket, context: &OutboundValidationContext) -> MqttResult<()> {
+pub(crate) fn validate_packet_outbound_internal(packet: &MqttPacket, context: &OutboundValidationContext) -> GneissResult<()> {
     match packet {
         MqttPacket::Auth(auth) => { validate_auth_packet_outbound_internal(auth, context) }
         MqttPacket::Connect(_) => { Ok(()) }
@@ -101,7 +101,7 @@ pub(crate) fn validate_packet_outbound_internal(packet: &MqttPacket, context: &O
         MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound_internal(unsubscribe, context) }
         _ => {
             error!("Packet Outbound Internal Validation - unexpected packet type");
-            Err(MqttError::new_protocol_error("unexpected outbound packet type"))
+            Err(GneissError::new_protocol_error("unexpected outbound packet type"))
         }
     }
 }
@@ -109,7 +109,7 @@ pub(crate) fn validate_packet_outbound_internal(packet: &MqttPacket, context: &O
 /// Validates client-inbound packets against the MQTT5 spec requirements.  Many things can be
 /// skipped during inbound validation based on the fact that we assume the decoder created the
 /// packet, and so problems like invalid string or binary lengths are impossible.
-pub(crate) fn validate_packet_inbound_internal(packet: &MqttPacket, context: &InboundValidationContext) -> MqttResult<()> {
+pub(crate) fn validate_packet_inbound_internal(packet: &MqttPacket, context: &InboundValidationContext) -> GneissResult<()> {
     match packet {
         MqttPacket::Auth(auth) => { validate_auth_packet_inbound_internal(auth, context) }
         MqttPacket::Connack(connack) => { validate_connack_packet_inbound_internal(connack) }
@@ -124,37 +124,37 @@ pub(crate) fn validate_packet_inbound_internal(packet: &MqttPacket, context: &In
         MqttPacket::Unsuback(unsuback) => { validate_unsuback_packet_inbound_internal(unsuback, context) }
         _ => {
             error!("Packet Inbound Validation - unexpected packet type");
-            Err(MqttError::new_protocol_error("unexpected inbound packet type"))
+            Err(GneissError::new_protocol_error("unexpected inbound packet type"))
         }
     }
 }
 
 
-pub(crate) fn validate_string_length(value: &str, packet_type: PacketType, packet_name: &str, field_name: &str) -> MqttResult<()> {
+pub(crate) fn validate_string_length(value: &str, packet_type: PacketType, packet_name: &str, field_name: &str) -> GneissResult<()> {
     if value.len() > MAXIMUM_STRING_PROPERTY_LENGTH {
         error!("{}Packet Validation - {} string field too long", packet_name, field_name);
-        return Err(MqttError::new_packet_validation(packet_type, field_name));
+        return Err(GneissError::new_packet_validation(packet_type, field_name));
     }
 
     Ok(())
 }
 
-pub(crate) fn validate_optional_string_length(optional_string: &Option<String>, packet_type: PacketType, packet_name: &str, field_name: &str) -> MqttResult<()> {
+pub(crate) fn validate_optional_string_length(optional_string: &Option<String>, packet_type: PacketType, packet_name: &str, field_name: &str) -> GneissResult<()> {
     if let Some(value) = &optional_string {
         if value.len() > MAXIMUM_STRING_PROPERTY_LENGTH {
             error!("{}Packet Validation - {} string field too long", packet_name, field_name);
-            return Err(MqttError::new_packet_validation(packet_type, field_name));
+            return Err(GneissError::new_packet_validation(packet_type, field_name));
         }
     }
 
     Ok(())
 }
 
-pub(crate) fn validate_optional_binary_length(optional_data: &Option<Vec<u8>>, packet_type: PacketType, packet_name: &str, field_name: &str) -> MqttResult<()> {
+pub(crate) fn validate_optional_binary_length(optional_data: &Option<Vec<u8>>, packet_type: PacketType, packet_name: &str, field_name: &str) -> GneissResult<()> {
     if let Some(value) = &optional_data {
         if value.len() > MAXIMUM_BINARY_PROPERTY_LENGTH {
             error!("{}Packet Validation - {} binary field too long", packet_name, field_name);
-            return Err(MqttError::new_packet_validation(packet_type, field_name));
+            return Err(GneissError::new_packet_validation(packet_type, field_name));
         }
     }
 
@@ -166,7 +166,7 @@ macro_rules! validate_optional_integer_non_zero {
         if let Some($value_name) = $optional_integer_expr {
             if $value_name == 0 {
                 error!("{}Packet Validation - {} integer field is zero", $packet_name, $field_name);
-                return Err(MqttError::new_packet_validation($packet_type, $field_name));
+                return Err(GneissError::new_packet_validation($packet_type, $field_name));
             }
         }
     };
@@ -176,7 +176,7 @@ pub(crate) use validate_optional_integer_non_zero;
 
 macro_rules! validate_ack_outbound {
     ($function_name: ident, $packet_type_name: ident, $packet_type: expr, $packet_type_string: expr) => {
-        pub(crate) fn $function_name(packet: &$packet_type_name) -> MqttResult<()> {
+        pub(crate) fn $function_name(packet: &$packet_type_name) -> GneissResult<()> {
 
             validate_optional_string_length(&packet.reason_string, $packet_type, $packet_type_string, "reason_string")?;
             validate_user_properties(&packet.user_properties, $packet_type, $packet_type_string)?;
@@ -190,18 +190,18 @@ pub(crate) use validate_ack_outbound;
 
 macro_rules! validate_ack_outbound_internal {
     ($function_name: ident, $packet_type_name: ident, $packet_type: expr, $packet_length_function_name: ident, $packet_type_string: expr) => {
-        pub(crate) fn $function_name(packet: &$packet_type_name, context: &OutboundValidationContext) -> MqttResult<()> {
+        pub(crate) fn $function_name(packet: &$packet_type_name, context: &OutboundValidationContext) -> GneissResult<()> {
 
             let (total_remaining_length, _) = $packet_length_function_name(packet)?;
             let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
             if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
                 error!("{}Packet Validation - packet length exceeds allowed maximum to server", $packet_type_string);
-                return Err(MqttError::new_packet_validation($packet_type, "packet length exceeds maximum allowed"));
+                return Err(GneissError::new_packet_validation($packet_type, "packet length exceeds maximum allowed"));
             }
 
             if packet.packet_id == 0 {
                 error!("{}Packet Validation - packet id is zero", $packet_type_string);
-                return Err(MqttError::new_packet_validation($packet_type, "packet id is zero"));
+                return Err(GneissError::new_packet_validation($packet_type, "packet id is zero"));
             }
 
             Ok(())
@@ -213,11 +213,11 @@ pub(crate) use validate_ack_outbound_internal;
 
 macro_rules! validate_ack_inbound_internal {
     ($function_name: ident, $packet_type_name: ident, $packet_type: expr, $packet_type_string: expr) => {
-        pub(crate) fn $function_name(packet: &$packet_type_name, _: &InboundValidationContext) -> MqttResult<()> {
+        pub(crate) fn $function_name(packet: &$packet_type_name, _: &InboundValidationContext) -> GneissResult<()> {
 
             if packet.packet_id == 0 {
                 error!("{}Packet Validation - packet id is zero", $packet_type_string);
-                return Err(MqttError::new_packet_validation($packet_type, "packet id is zero"));
+                return Err(GneissError::new_packet_validation($packet_type, "packet id is zero"));
             }
 
             Ok(())
@@ -321,7 +321,7 @@ pub(crate) fn is_valid_topic_filter_internal(filter: &str, context: &OutboundVal
     true
 }
 
-#[cfg(test)]
+#[cfg(feature = "testing")]
 pub(crate) mod testing {
     use super::*;
     use crate::encode::MAXIMUM_VARIABLE_LENGTH_INTEGER;
@@ -334,7 +334,7 @@ pub(crate) mod testing {
     pub(crate) fn create_pinned_validation_context() -> PinnedValidationContext {
         let mut pinned_context = PinnedValidationContext {
             settings : NegotiatedSettings {..Default::default() },
-            connect_options : ConnectOptionsBuilder::new().build(),
+            connect_options : ConnectOptions::builder().build(),
         };
 
         pinned_context.settings.maximum_packet_size_to_server = MAXIMUM_VARIABLE_LENGTH_INTEGER as u32;
@@ -385,8 +385,8 @@ pub(crate) mod testing {
 
         let validate_result = validate_packet_outbound_internal(packet, &outbound_context2);
         assert!(validate_result.is_err());
-        assert_matches!(validate_result, Err(MqttError::PacketValidation(_)));
-        if let Err(MqttError::PacketValidation(packet_validation_context)) = validate_result {
+        assert_matches!(validate_result, Err(GneissError::PacketValidation(_)));
+        if let Err(GneissError::PacketValidation(packet_validation_context)) = validate_result {
             assert_eq!(expected_packet_type, packet_validation_context.packet_type);
         }
     }
@@ -394,7 +394,7 @@ pub(crate) mod testing {
     macro_rules! verify_validation_failure {
         ($validation_expr: expr, $packet_type: expr) => {
             let validation_result = $validation_expr;
-            if let Err(MqttError::PacketValidation(packet_validation_context)) = validation_result {
+            if let Err(GneissError::PacketValidation(packet_validation_context)) = validation_result {
                 assert_eq!(packet_validation_context.packet_type, $packet_type)
             } else {
                 panic!("expected validation error")

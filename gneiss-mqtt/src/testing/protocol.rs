@@ -5,25 +5,28 @@
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use crate::protocol::*;
 use assert_matches::assert_matches;
 use crate::alias::{OutboundAliasResolution, OutboundAliasResolverFactory};
 use crate::client::*;
-use crate::config::{ConnectOptionsBuilder, OfflineQueuePolicy, RejoinSessionPolicy};
+use crate::testing::waiter::ClientEventRecord;
+use crate::client::config::*;
 use crate::decode::{Decoder, DecodingContext};
 use crate::encode::{Encoder, EncodeResult, EncodingContext};
 use crate::encode::MAXIMUM_VARIABLE_LENGTH_INTEGER;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{GneissError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::utils::mqtt_packet_to_packet_type;
+use crate::testing::mock_server::ClientTestOptions;
 use crate::validate::testing::verify_validation_failure;
 
 const CONNACK_TIMEOUT_MILLIS: u64 = 10000;
 
 fn build_standard_test_config() -> ProtocolStateConfig {
     ProtocolStateConfig {
-        connect_options : ConnectOptionsBuilder::new().with_client_id("DefaultTesting").with_keep_alive_interval_seconds(None).build(),
+        connect_options : ConnectOptions::builder().with_client_id("DefaultTesting").with_keep_alive_interval_seconds(None).build(),
         base_timestamp: Instant::now(),
         offline_queue_policy: OfflineQueuePolicy::PreserveAll,
         ping_timeout: Duration::from_millis(30000),
@@ -33,17 +36,14 @@ fn build_standard_test_config() -> ProtocolStateConfig {
 
 #[derive(Default)]
 pub(crate) struct BrokerTestContext {
-    #[cfg(feature = "testing")]
     pub(crate) connect_count: usize,
 }
 
-pub(crate) type PacketHandler = Box<dyn Fn(&Box<MqttPacket>, &mut VecDeque<Box<MqttPacket>>, &mut BrokerTestContext) -> MqttResult<()> + Send + Sync + 'static>;
+pub(crate) type PacketHandler = Box<dyn Fn(&Box<MqttPacket>, &mut VecDeque<Box<MqttPacket>>, &mut BrokerTestContext) -> GneissResult<()> + Send + Sync + 'static>;
 pub(crate) type PacketHandlerSet = HashMap<PacketType, PacketHandler>;
-
-#[cfg(feature = "testing")]
 pub(crate) type PacketHandlerSetFactory = Box<dyn Fn() -> PacketHandlerSet + Send + Sync>;
 
-fn handle_connect_with_successful_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_connect_with_successful_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Connect(connect) = &**packet {
         let mut assigned_client_identifier = None;
         if connect.client_id.is_none() {
@@ -62,7 +62,7 @@ fn handle_connect_with_successful_connack(packet: &Box<MqttPacket>, response_pac
     panic!("Invalid packet handler state")
 }
 
-fn handle_connect_with_session_resumption(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_connect_with_session_resumption(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Connect(connect) = &**packet {
         let mut assigned_client_identifier = None;
         if connect.client_id.is_none() {
@@ -82,7 +82,7 @@ fn handle_connect_with_session_resumption(packet: &Box<MqttPacket>, response_pac
     panic!("Invalid packet handler state")
 }
 
-fn handle_connect_with_low_receive_maximum(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_connect_with_low_receive_maximum(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Connect(connect) = &**packet {
         let mut assigned_client_identifier = None;
         if connect.client_id.is_none() {
@@ -102,7 +102,7 @@ fn handle_connect_with_low_receive_maximum(packet: &Box<MqttPacket>, response_pa
     panic!("Invalid packet handler state")
 }
 
-fn handle_connect_with_topic_aliasing(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_connect_with_topic_aliasing(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Connect(connect) = &**packet {
         let mut assigned_client_identifier = None;
         if connect.client_id.is_none() {
@@ -129,7 +129,7 @@ fn create_connack_rejection() -> ConnackPacket {
     }
 }
 
-pub(crate) fn handle_connect_with_failure_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+pub(crate) fn handle_connect_with_failure_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Connect(_) = &**packet {
         let response = Box::new(MqttPacket::Connack(create_connack_rejection()));
         response_packets.push_back(response);
@@ -140,7 +140,7 @@ pub(crate) fn handle_connect_with_failure_connack(packet: &Box<MqttPacket>, resp
     panic!("Invalid packet handler state")
 }
 
-fn handle_connect_with_tiny_maximum_packet_size(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_connect_with_tiny_maximum_packet_size(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Connect(_) = &**packet {
         let response = Box::new(MqttPacket::Connack(ConnackPacket {
             maximum_packet_size: Some(10),
@@ -154,14 +154,14 @@ fn handle_connect_with_tiny_maximum_packet_size(packet: &Box<MqttPacket>, respon
     panic!("Invalid packet handler state")
 }
 
-fn handle_pingreq_with_pingresp(_: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_pingreq_with_pingresp(_: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     let response = Box::new(MqttPacket::Pingresp(PingrespPacket{}));
     response_packets.push_back(response);
 
     Ok(())
 }
 
-fn handle_publish_with_success_no_relay(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_publish_with_success_no_relay(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Publish(publish) = &**packet {
         match publish.qos {
             QualityOfService::AtMostOnce => {}
@@ -187,7 +187,7 @@ fn handle_publish_with_success_no_relay(packet: &Box<MqttPacket>, response_packe
     panic!("Invalid packet handler state")
 }
 
-fn handle_publish_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_publish_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Publish(publish) = &**packet {
         match publish.qos {
             QualityOfService::AtMostOnce => {}
@@ -215,7 +215,7 @@ fn handle_publish_with_failure(packet: &Box<MqttPacket>, response_packets: &mut 
     panic!("Invalid packet handler state")
 }
 
-fn handle_pubrec_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_pubrec_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Pubrec(pubrec) = &**packet {
         let response = Box::new(MqttPacket::Pubrel(PubrelPacket{
             packet_id : pubrec.packet_id,
@@ -229,7 +229,7 @@ fn handle_pubrec_with_success(packet: &Box<MqttPacket>, response_packets: &mut V
     panic!("Invalid packet handler state")
 }
 
-fn handle_pubrel_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_pubrel_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Pubrel(pubrel) = &**packet {
         let response = Box::new(MqttPacket::Pubcomp(PubcompPacket{
             packet_id : pubrel.packet_id,
@@ -243,7 +243,7 @@ fn handle_pubrel_with_success(packet: &Box<MqttPacket>, response_packets: &mut V
     panic!("Invalid packet handler state")
 }
 
-fn handle_pubrel_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_pubrel_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Pubrel(pubrel) = &**packet {
         let response = Box::new(MqttPacket::Pubcomp(PubcompPacket{
             packet_id : pubrel.packet_id,
@@ -258,7 +258,7 @@ fn handle_pubrel_with_failure(packet: &Box<MqttPacket>, response_packets: &mut V
     panic!("Invalid packet handler state")
 }
 
-fn handle_subscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_subscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Subscribe(subscribe) = &**packet {
         let mut reason_codes = Vec::new();
         for subscription in &subscribe.subscriptions {
@@ -282,7 +282,7 @@ fn handle_subscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mu
     panic!("Invalid packet handler state")
 }
 
-fn handle_subscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_subscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Subscribe(subscribe) = &**packet {
         let mut reason_codes = Vec::new();
         for _ in &subscribe.subscriptions {
@@ -302,7 +302,7 @@ fn handle_subscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mu
     panic!("Invalid packet handler state")
 }
 
-fn handle_unsubscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_unsubscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Unsubscribe(unsubscribe) = &**packet {
         let mut reason_codes = Vec::new();
         for _ in &unsubscribe.topic_filters {
@@ -322,7 +322,7 @@ fn handle_unsubscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &
     panic!("Invalid packet handler state")
 }
 
-fn handle_unsubscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_unsubscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Unsubscribe(unsubscribe) = &**packet {
         let mut reason_codes = Vec::new();
         for _ in &unsubscribe.topic_filters {
@@ -342,11 +342,11 @@ fn handle_unsubscribe_with_success(packet: &Box<MqttPacket>, response_packets: &
     panic!("Invalid packet handler state")
 }
 
-fn handle_with_panic(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_with_panic(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     panic!("Invalid packet handler state")
 }
 
-fn handle_with_nothing(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> MqttResult<()> {
+fn handle_with_nothing(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     Ok(())
 }
 
@@ -409,7 +409,7 @@ impl ProtocolStateTestFixture {
         }
     }
 
-    fn handle_to_broker_packet(&mut self, packet: &Box<MqttPacket>, response_bytes: &mut Vec<u8>) -> MqttResult<()> {
+    fn handle_to_broker_packet(&mut self, packet: &Box<MqttPacket>, response_bytes: &mut Vec<u8>) -> GneissResult<()> {
         let mut response_packets = VecDeque::new();
         let packet_type = mqtt_packet_to_packet_type(&*packet);
 
@@ -442,7 +442,7 @@ impl ProtocolStateTestFixture {
         Ok(())
     }
 
-    pub(crate) fn service_once(&mut self, elapsed_millis: u64, socket_buffer_size: usize) -> MqttResult<Vec<u8>> {
+    pub(crate) fn service_once(&mut self, elapsed_millis: u64, socket_buffer_size: usize) -> GneissResult<Vec<u8>> {
         let current_time = self.base_timestamp + Duration::from_millis(elapsed_millis);
 
         let mut to_socket = Vec::with_capacity(socket_buffer_size);
@@ -457,7 +457,7 @@ impl ProtocolStateTestFixture {
         Ok(to_socket)
     }
 
-    pub(crate) fn write_to_socket(&mut self, bytes: &[u8]) -> MqttResult<Vec<u8>> {
+    pub(crate) fn write_to_socket(&mut self, bytes: &[u8]) -> GneissResult<Vec<u8>> {
         let mut response_bytes = Vec::new();
         let mut broker_packets = VecDeque::new();
 
@@ -487,7 +487,7 @@ impl ProtocolStateTestFixture {
         self.client_state.reset(&current_time);
     }
 
-    pub(crate) fn service_with_drain(&mut self, elapsed_millis: u64, socket_buffer_size: usize) -> MqttResult<Vec<u8>> {
+    pub(crate) fn service_with_drain(&mut self, elapsed_millis: u64, socket_buffer_size: usize) -> GneissResult<Vec<u8>> {
         let current_time = self.base_timestamp + Duration::from_millis(elapsed_millis);
         let mut done = false;
         let mut response_bytes = Vec::new();
@@ -543,7 +543,7 @@ impl ProtocolStateTestFixture {
         Ok(response_bytes)
     }
 
-    pub(crate) fn service_round_trip(&mut self, service_time: u64, response_time: u64, socket_buffer_size: usize) -> MqttResult<()> {
+    pub(crate) fn service_round_trip(&mut self, service_time: u64, response_time: u64, socket_buffer_size: usize) -> GneissResult<()> {
         let server_bytes = self.service_with_drain(service_time, socket_buffer_size)?;
 
         self.on_incoming_bytes(response_time, server_bytes.as_slice())?;
@@ -551,7 +551,7 @@ impl ProtocolStateTestFixture {
         Ok(())
     }
 
-    pub(crate) fn on_connection_opened(&mut self, elapsed_millis: u64) -> MqttResult<()> {
+    pub(crate) fn on_connection_opened(&mut self, elapsed_millis: u64) -> GneissResult<()> {
         let now = self.base_timestamp + Duration::from_millis(elapsed_millis);
         let establishment_timeout = now + Duration::from_millis(CONNACK_TIMEOUT_MILLIS);
 
@@ -566,7 +566,7 @@ impl ProtocolStateTestFixture {
         self.client_state.handle_network_event(&mut context)
     }
 
-    pub(crate) fn on_write_completion(&mut self, elapsed_millis: u64) -> MqttResult<()> {
+    pub(crate) fn on_write_completion(&mut self, elapsed_millis: u64) -> GneissResult<()> {
         let mut context = NetworkEventContext {
             current_time : self.base_timestamp + Duration::from_millis(elapsed_millis),
             event: NetworkEvent::WriteCompletion,
@@ -576,7 +576,7 @@ impl ProtocolStateTestFixture {
         self.client_state.handle_network_event(&mut context)
     }
 
-    pub(crate) fn on_connection_closed(&mut self, elapsed_millis: u64) -> MqttResult<()> {
+    pub(crate) fn on_connection_closed(&mut self, elapsed_millis: u64) -> GneissResult<()> {
         self.broker_decoder.reset_for_new_connection();
 
         let mut context = NetworkEventContext {
@@ -588,7 +588,7 @@ impl ProtocolStateTestFixture {
         self.client_state.handle_network_event(&mut context)
     }
 
-    pub(crate) fn on_incoming_bytes(&mut self, elapsed_millis: u64, bytes: &[u8]) -> MqttResult<()> {
+    pub(crate) fn on_incoming_bytes(&mut self, elapsed_millis: u64, bytes: &[u8]) -> GneissResult<()> {
         let mut context = NetworkEventContext {
             current_time : self.base_timestamp + Duration::from_millis(elapsed_millis),
             event: NetworkEvent::IncomingData(bytes),
@@ -610,7 +610,7 @@ impl ProtocolStateTestFixture {
         None
     }
 
-    pub(crate) fn subscribe(&mut self, elapsed_millis: u64, subscribe: SubscribePacket, options: SubscribeOptions) -> MqttResult<std::sync::mpsc::Receiver<SubscribeResult>> {
+    pub(crate) fn subscribe(&mut self, elapsed_millis: u64, subscribe: SubscribePacket, options: SubscribeOptions) -> GneissResult<std::sync::mpsc::Receiver<SubscribeResult>> {
         let (sender, receiver) = std::sync::mpsc::channel();
         let packet = Box::new(MqttPacket::Subscribe(subscribe));
         let handler: ResponseHandler<SubscribeResult> = Box::new(move |res| {
@@ -632,7 +632,7 @@ impl ProtocolStateTestFixture {
         Ok(receiver)
     }
 
-    pub(crate) fn unsubscribe(&mut self, elapsed_millis: u64, unsubscribe: UnsubscribePacket, options: UnsubscribeOptions) -> MqttResult<std::sync::mpsc::Receiver<UnsubscribeResult>> {
+    pub(crate) fn unsubscribe(&mut self, elapsed_millis: u64, unsubscribe: UnsubscribePacket, options: UnsubscribeOptions) -> GneissResult<std::sync::mpsc::Receiver<UnsubscribeResult>> {
         let (sender, receiver) = std::sync::mpsc::channel();
         let packet = Box::new(MqttPacket::Unsubscribe(unsubscribe));
         let handler : ResponseHandler<UnsubscribeResult> = Box::new(move |res| {
@@ -654,7 +654,7 @@ impl ProtocolStateTestFixture {
         Ok(receiver)
     }
 
-    pub(crate) fn publish(&mut self, elapsed_millis: u64, publish: PublishPacket, options: PublishOptions) -> MqttResult<std::sync::mpsc::Receiver<PublishResult>> {
+    pub(crate) fn publish(&mut self, elapsed_millis: u64, publish: PublishPacket, options: PublishOptions) -> GneissResult<std::sync::mpsc::Receiver<PublishResult>> {
         let (sender, receiver) = std::sync::mpsc::channel();
         let packet = Box::new(MqttPacket::Publish(publish));
         let handler : ResponseHandler<PublishResult> = Box::new(move |res| {
@@ -676,7 +676,7 @@ impl ProtocolStateTestFixture {
         Ok(receiver)
     }
 
-    pub(crate) fn disconnect(&mut self, elapsed_millis: u64, disconnect: DisconnectPacket) -> MqttResult<()> {
+    pub(crate) fn disconnect(&mut self, elapsed_millis: u64, disconnect: DisconnectPacket) -> GneissResult<()> {
         let packet = Box::new(MqttPacket::Disconnect(disconnect));
         let disconnect_event = UserEvent::Disconnect(packet);
 
@@ -688,7 +688,7 @@ impl ProtocolStateTestFixture {
         Ok(())
     }
 
-    pub(crate) fn advance_disconnected_to_state(&mut self, state: ProtocolStateType, elapsed_millis: u64) -> MqttResult<()> {
+    pub(crate) fn advance_disconnected_to_state(&mut self, state: ProtocolStateType, elapsed_millis: u64) -> GneissResult<()> {
         assert_eq!(ProtocolStateType::Disconnected, self.client_state.state);
 
         let result = match state {
@@ -760,19 +760,185 @@ fn verify_protocol_state_empty(fixture: &ProtocolStateTestFixture) {
     assert_eq!(0, fixture.client_state.pending_write_completion_operations.len());
 }
 
+pub(crate) fn is_reconnect_related_event(event: &Arc<ClientEvent>) -> bool {
+    match **event {
+        ClientEvent::Stopped(_) | ClientEvent::PublishReceived(_) => {
+            false
+        }
+        _ => {
+            true
+        }
+    }
+}
+
+pub(crate) fn build_reconnect_test_options() -> ClientTestOptions {
+    let mut test_options = ClientTestOptions::default();
+
+    test_options.client_options_mutator_fn = Some(Box::new(|builder| {
+        builder.with_base_reconnect_period(Duration::from_millis(250));
+        builder.with_max_reconnect_period(Duration::from_millis(6000));
+        builder.with_reconnect_period_jitter(ExponentialBackoffJitterType::None);
+        builder.with_reconnect_stability_reset_period(Duration::from_millis(5000));
+    }));
+
+    test_options.packet_handler_set_factory_fn = Some(Box::new(|| {
+        let mut handlers = create_default_packet_handlers();
+
+        handlers.insert(PacketType::Connect, Box::new(crate::testing::protocol::handle_connect_with_failure_connack));
+
+        handlers
+    }));
+
+    test_options
+}
+
+pub(crate) fn validate_reconnect_failure_sequence(events: &Vec<ClientEventRecord>) -> GneissResult<()> {
+    let mut connection_failures: usize = 0;
+    let mut previous_failure_time : Option<Instant> = None;
+    let mut actual_delays : Vec<Duration> = Vec::new();
+
+    for (i, event_record) in events.iter().enumerate() {
+        if i % 2 == 0 {
+            assert_matches!(*event_record.event, ClientEvent::ConnectionAttempt(_));
+            if let Some(previous_timestamp) = &previous_failure_time {
+                assert!(*previous_timestamp < event_record.timestamp);
+                actual_delays.push(event_record.timestamp - *previous_timestamp);
+            }
+        } else {
+            assert_matches!(*event_record.event, ClientEvent::ConnectionFailure(_));
+            connection_failures += 1;
+            if let Some(old_failure_time) = previous_failure_time {
+                assert!(old_failure_time < event_record.timestamp);
+            }
+            previous_failure_time = Some(event_record.timestamp);
+        }
+    }
+
+    assert_eq!(7, connection_failures);
+
+    let expected_delays : Vec<Duration> = vec!(250, 500, 1000, 2000, 4000, 6000).into_iter().map(|val| {Duration::from_millis(val)}).collect();
+    assert_eq!(expected_delays.len(), actual_delays.len());
+
+    let zipped_iter = expected_delays.iter().zip(actual_delays.iter());
+
+    for (_, (expected_delay, actual_delay)) in zipped_iter.enumerate() {
+        assert!(*actual_delay >= *expected_delay);
+    }
+
+    Ok(())
+}
+
+pub(crate) type ReconnectEventTestValidatorFn = Box<dyn Fn(&Vec<ClientEventRecord>) -> GneissResult<()> + Send + Sync>;
+
+pub(crate) fn handle_connect_with_conditional_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, context: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Connect(_) = &**packet {
+        context.connect_count += 1;
+
+        if context.connect_count < 6 {
+            let response = Box::new(MqttPacket::Connack(ConnackPacket {
+                reason_code: ConnectReasonCode::Banned,
+                ..Default::default()
+            }));
+            response_packets.push_back(response);
+        } else {
+            let response = Box::new(MqttPacket::Connack(ConnackPacket {
+                reason_code: ConnectReasonCode::Success,
+                assigned_client_identifier: Some("client-id".to_string()),
+                ..Default::default()
+            }));
+            response_packets.push_back(response);
+        }
+
+        return Ok(());
+    }
+
+    panic!("Invalid packet handler state")
+}
+
+pub(crate) fn handle_publish_with_disconnect(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Publish(_) = &**packet {
+        let response = Box::new(MqttPacket::Disconnect(DisconnectPacket {
+            reason_code: DisconnectReasonCode::NotAuthorized,
+            ..Default::default()
+        }));
+        response_packets.push_back(response);
+
+        return Ok(());
+    }
+
+    panic!("Invalid packet handler state")
+}
+
+pub(crate) fn build_reconnect_reset_test_options() -> ClientTestOptions {
+    let mut test_options = ClientTestOptions::default();
+
+    test_options.client_options_mutator_fn = Some(Box::new(|builder| {
+        builder.with_base_reconnect_period(Duration::from_millis(500));
+        builder.with_max_reconnect_period(Duration::from_millis(6000));
+        builder.with_reconnect_period_jitter(ExponentialBackoffJitterType::None);
+        builder.with_reconnect_stability_reset_period(Duration::from_millis(3000));
+    }));
+
+    test_options.packet_handler_set_factory_fn = Some(Box::new(|| {
+        let mut handlers = create_default_packet_handlers();
+
+        handlers.insert(PacketType::Connect, Box::new(handle_connect_with_conditional_connack));
+        handlers.insert(PacketType::Publish, Box::new(handle_publish_with_disconnect));
+
+        handlers
+    }));
+
+    test_options
+}
+
+pub(crate) fn validate_reconnect_backoff_failure_sequence(events: &Vec<ClientEventRecord>) -> GneissResult<()> {
+    let mut connection_failures: usize = 0;
+
+    for (i, event_record) in events.iter().enumerate() {
+        if i % 2 == 0 {
+            assert_matches!(*event_record.event, ClientEvent::ConnectionAttempt(_));
+        } else if i < 11 {
+            assert_matches!(*event_record.event, ClientEvent::ConnectionFailure(_));
+            connection_failures += 1;
+        } else {
+            assert_matches!(*event_record.event, ClientEvent::ConnectionSuccess(_));
+        }
+    }
+
+    assert_eq!(5, connection_failures);
+    Ok(())
+}
+
+pub(crate) fn validate_reconnect_backoff_reset_sequence(events: &Vec<ClientEventRecord>, expected_reconnect_delay: Duration) -> GneissResult<()> {
+
+    let record1 = &events[0];
+    let record2 = &events[1];
+    let record3 = &events[2];
+
+    assert_matches!(*record1.event, ClientEvent::Disconnection(_));
+    assert_matches!(*record2.event, ClientEvent::ConnectionAttempt(_));
+    assert_matches!(*record3.event, ClientEvent::ConnectionSuccess(_));
+
+    let reconnect_delay = record2.timestamp - record1.timestamp;
+
+    assert!(reconnect_delay >= expected_reconnect_delay && reconnect_delay < 2 * expected_reconnect_delay);
+
+    Ok(())
+}
+
 #[test]
 fn disconnected_state_network_event_handler_fails() {
     let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
     assert_eq!(ProtocolStateType::Disconnected, fixture.client_state.state);
 
-    assert_matches!(fixture.on_connection_closed(0).err().unwrap(), MqttError::InternalStateError(_));
+    assert_matches!(fixture.on_connection_closed(0).err().unwrap(), GneissError::InternalStateError(_));
     assert!(fixture.client_packet_events.is_empty());
 
-    assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError(_));
+    assert_matches!(fixture.on_write_completion(0).err().unwrap(), GneissError::InternalStateError(_));
     assert!(fixture.client_packet_events.is_empty());
 
     let bytes : Vec<u8> = vec!(0, 1, 2, 3, 4, 5);
-    assert_matches!(fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap(), MqttError::InternalStateError(_));
+    assert_matches!(fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap(), GneissError::InternalStateError(_));
     assert!(fixture.client_packet_events.is_empty());
 }
 
@@ -795,7 +961,7 @@ fn verify_service_does_nothing(fixture : &mut ProtocolStateTestFixture) {
                                                qos: QualityOfService::AtLeastOnce,
                                                ..Default::default()
                                            },
-                                           PublishOptionsBuilder::new().build());
+                                           PublishOptions::builder().build());
     assert!(publish_receiver.is_ok());
     assert!(fixture.client_state.operations.len() > 0);
     assert!(fixture.client_state.user_operation_queue.len() > 0);
@@ -822,16 +988,16 @@ fn halted_state_network_event_handler_fails() {
     let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Halted, 0).is_ok());
 
-    assert_matches!(fixture.on_connection_opened(0).err().unwrap(), MqttError::InternalStateError(_));
+    assert_matches!(fixture.on_connection_opened(0).err().unwrap(), GneissError::InternalStateError(_));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert!(fixture.client_packet_events.is_empty());
 
-    assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError(_));
+    assert_matches!(fixture.on_write_completion(0).err().unwrap(), GneissError::InternalStateError(_));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert!(fixture.client_packet_events.is_empty());
 
     let bytes : Vec<u8> = vec!(0, 1, 2, 3, 4, 5);
-    assert_matches!(fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap(), MqttError::InternalStateError(_));
+    assert_matches!(fixture.on_incoming_bytes(0, bytes.as_slice()).err().unwrap(), GneissError::InternalStateError(_));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert!(fixture.client_packet_events.is_empty());
 }
@@ -868,7 +1034,7 @@ fn pending_connack_state_network_event_connection_opened_fails() {
     assert!(fixture.on_connection_opened(0).is_ok());
     assert_eq!(ProtocolStateType::PendingConnack, fixture.client_state.state);
 
-    assert_matches!(fixture.on_connection_opened(0).err().unwrap(), MqttError::InternalStateError(_));
+    assert_matches!(fixture.on_connection_opened(0).err().unwrap(), GneissError::InternalStateError(_));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert!(fixture.client_packet_events.is_empty());
 }
@@ -880,7 +1046,7 @@ fn pending_connack_state_network_event_write_completion_fails() {
     assert!(fixture.on_connection_opened(0).is_ok());
     assert_eq!(ProtocolStateType::PendingConnack, fixture.client_state.state);
 
-    assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError(_));
+    assert_matches!(fixture.on_write_completion(0).err().unwrap(), GneissError::InternalStateError(_));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert!(fixture.client_packet_events.is_empty());
 }
@@ -901,7 +1067,7 @@ fn pending_connack_state_connack_timeout() {
     assert_eq!(Some(1 + connack_timeout_millis as u64), fixture.get_next_service_time(1));
 
     // service post-timeout
-    assert_matches!(fixture.service_with_drain(1 + connack_timeout_millis as u64, 4096), Err(MqttError::ConnectionEstablishmentFailure(_)));
+    assert_matches!(fixture.service_with_drain(1 + connack_timeout_millis as u64, 4096), Err(GneissError::ConnectionEstablishmentFailure(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert!(fixture.client_packet_events.is_empty());
     verify_protocol_state_empty(&fixture);
@@ -917,7 +1083,7 @@ fn pending_connack_state_failure_connack() {
 
     let server_bytes = fixture.service_with_drain(0, 4096).unwrap();
 
-    assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::ConnectionEstablishmentFailure(_)));
+    assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(GneissError::ConnectionEstablishmentFailure(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
 
     let expected_events = VecDeque::from(vec!(PacketEvent::Connack(create_connack_rejection())));
@@ -951,20 +1117,20 @@ fn pending_connack_state_incoming_garbage_data() {
     let mut garbage = vec!(1, 2, 3, 4, 5, 6, 7, 8);
     server_bytes.append(&mut garbage);
 
-    assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::DecodingFailure(_)));
+    assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(GneissError::DecodingFailure(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert!(fixture.client_packet_events.is_empty());
     verify_protocol_state_empty(&fixture);
 }
 
-fn encode_packet_to_buffer(packet: MqttPacket, buffer: &mut Vec<u8>) -> MqttResult<()> {
+fn encode_packet_to_buffer(packet: MqttPacket, buffer: &mut Vec<u8>) -> GneissResult<()> {
     encode_packet_to_buffer_with_alias_resolution(packet, buffer, OutboundAliasResolution{
         skip_topic: false,
         alias: None,
     })
 }
 
-fn encode_packet_to_buffer_with_alias_resolution(packet: MqttPacket, buffer: &mut Vec<u8>, alias_resolution: OutboundAliasResolution) -> MqttResult<()> {
+fn encode_packet_to_buffer_with_alias_resolution(packet: MqttPacket, buffer: &mut Vec<u8>, alias_resolution: OutboundAliasResolution) -> GneissResult<()> {
     let mut encode_buffer = Vec::with_capacity(4096);
     let encoding_context = EncodingContext {
         outbound_alias_resolution: alias_resolution
@@ -992,7 +1158,7 @@ fn do_pending_connack_state_non_connack_packet_test(packet: MqttPacket) {
 
     assert!(encode_packet_to_buffer(packet, &mut server_bytes).is_ok());
 
-    assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::ProtocolError(_)));
+    assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(GneissError::ProtocolError(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert!(fixture.client_packet_events.is_empty());
     verify_protocol_state_empty(&fixture);
@@ -1065,7 +1231,7 @@ fn pending_connack_state_connack_received_too_soon() {
         ..Default::default()
     }), &mut server_bytes).is_ok());
 
-    assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(MqttError::ProtocolError(_)));
+    assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(GneissError::ProtocolError(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert!(fixture.client_packet_events.is_empty());
 }
@@ -1105,7 +1271,7 @@ fn connected_state_network_event_connection_opened_fails() {
 
     let client_event_count = fixture.client_packet_events.len();
 
-    assert_matches!(fixture.on_connection_opened(0).err().unwrap(), MqttError::InternalStateError(_));
+    assert_matches!(fixture.on_connection_opened(0).err().unwrap(), GneissError::InternalStateError(_));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert_eq!(client_event_count, fixture.client_packet_events.len());
     verify_protocol_state_empty(&fixture);
@@ -1117,7 +1283,7 @@ fn connected_state_network_event_write_completion_fails() {
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
-    assert_matches!(fixture.on_write_completion(0).err().unwrap(), MqttError::InternalStateError(_));
+    assert_matches!(fixture.on_write_completion(0).err().unwrap(), GneissError::InternalStateError(_));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     verify_protocol_state_empty(&fixture);
 }
@@ -1141,7 +1307,7 @@ fn connected_state_incoming_garbage_data() {
 
     let garbage = vec!(1, 2, 3, 4, 5, 6, 7, 8);
 
-    assert_matches!(fixture.on_incoming_bytes(0, garbage.as_slice()), Err(MqttError::DecodingFailure(_)));
+    assert_matches!(fixture.on_incoming_bytes(0, garbage.as_slice()), Err(GneissError::DecodingFailure(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     verify_protocol_state_empty(&fixture);
 }
@@ -1154,7 +1320,7 @@ fn do_connected_state_unexpected_packet_test(packet : MqttPacket) {
     let mut buffer = Vec::new();
     assert!(encode_packet_to_buffer(packet, &mut buffer).is_ok());
 
-    assert_matches!(fixture.on_incoming_bytes(0, buffer.as_slice()), Err(MqttError::ProtocolError(_)));
+    assert_matches!(fixture.on_incoming_bytes(0, buffer.as_slice()), Err(GneissError::ProtocolError(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     verify_protocol_state_empty(&fixture);
 }
@@ -1182,7 +1348,7 @@ fn connected_state_unexpected_packets() {
     }
 }
 
-fn do_connected_state_invalid_ack_packet_id_test(packet : MqttPacket) -> MqttResult<()> {
+fn do_connected_state_invalid_ack_packet_id_test(packet : MqttPacket) -> GneissResult<()> {
     let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
@@ -1225,7 +1391,7 @@ fn connected_state_unknown_ack_packet_id() {
     );
 
     for packet in packets {
-        assert_matches!(do_connected_state_invalid_ack_packet_id_test(packet), Err(MqttError::ProtocolError(_)));
+        assert_matches!(do_connected_state_invalid_ack_packet_id_test(packet), Err(GneissError::ProtocolError(_)));
     }
 }
 
@@ -1256,8 +1422,8 @@ fn connected_state_invalid_ack_packet_id() {
     for (packet, validation_error_packet_type) in packets {
         let result = do_connected_state_invalid_ack_packet_id_test(packet);
         assert!(result.is_err());
-        assert_matches!(result, Err(MqttError::PacketValidation(_)));
-        if let Err(MqttError::PacketValidation(packet_validation_context)) = result {
+        assert_matches!(result, Err(GneissError::PacketValidation(_)));
+        if let Err(GneissError::PacketValidation(packet_validation_context)) = result {
             assert_eq!(validation_error_packet_type, packet_validation_context.packet_type);
         }
     }
@@ -1594,7 +1760,7 @@ fn do_connected_state_ping_pingresp_timeout(ping_timeout_millis: u64, keep_alive
     assert_eq!(outbound_packet_count, fixture.to_broker_packet_stream.len());
 
     // invoke service after timeout, verify failure and halt
-    assert_matches!(fixture.service_once(ping_timeout_timepoint, 4096), Err(MqttError::ConnectionClosed(_)));
+    assert_matches!(fixture.service_once(ping_timeout_timepoint, 4096), Err(GneissError::ConnectionClosed(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert_eq!(outbound_packet_count, fixture.to_broker_packet_stream.len());
     verify_protocol_state_empty(&fixture);
@@ -2299,7 +2465,7 @@ macro_rules! define_operation_failure_timeout_helper {
 
                 let packet = $build_operation_function_name();
 
-                let operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type_builder::new().with_timeout(Duration::from_secs(30)).build()).unwrap();
+                let operation_result_receiver = fixture.$operation_api(0, packet, $operation_options_type_builder::new().with_ack_timeout(Duration::from_secs(30)).build()).unwrap();
                 assert!(fixture.service_round_trip(0, 0, 4096).is_ok());
 
                 let (index, _) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::$packet_type, 1, None, None).unwrap();
@@ -2313,13 +2479,13 @@ macro_rules! define_operation_failure_timeout_helper {
                     assert!(fixture.service_round_trip(elapsed_millis, elapsed_millis, 4096).is_ok());
                     let recv_result = operation_result_receiver.try_recv();
                     assert!(recv_result.is_err());
-                    let mqtt_error = MqttError::from(recv_result.unwrap_err());
-                    assert_matches!(mqtt_error, MqttError::OperationChannelFailure(_));
+                    let mqtt_error = GneissError::from(recv_result.unwrap_err());
+                    assert_matches!(mqtt_error, GneissError::OperationChannelFailure(_));
                 }
 
                 assert!(fixture.service_round_trip(30000, 30000, 4096).is_ok());
                 let result = operation_result_receiver.recv();
-                assert_matches!(result.unwrap().unwrap_err(), MqttError::AckTimeout(_));
+                assert_matches!(result.unwrap().unwrap_err(), GneissError::AckTimeout(_));
                 verify_protocol_state_empty(&fixture);
             }
         };
@@ -2386,7 +2552,7 @@ fn connected_state_qos2_publish_failure_pubrel_timeout() {
 
     let packet = build_qos2_publish_success_packet();
 
-    let operation_result_receiver = fixture.publish(0, packet, PublishOptionsBuilder::new().with_timeout(Duration::from_secs(30)).build()).unwrap();
+    let operation_result_receiver = fixture.publish(0, packet, PublishOptions::builder().with_ack_timeout(Duration::from_secs(30)).build()).unwrap();
     assert!(fixture.service_round_trip(0, 0, 4096).is_ok());
     assert!(fixture.service_round_trip(10, 10, 4096).is_ok());
 
@@ -2402,13 +2568,13 @@ fn connected_state_qos2_publish_failure_pubrel_timeout() {
         let elapsed_millis = i * 1000;
         assert_eq!(Some(30000), fixture.get_next_service_time(elapsed_millis));
         assert!(fixture.service_round_trip(elapsed_millis, elapsed_millis, 4096).is_ok());
-        let error = MqttError::from(operation_result_receiver.try_recv().unwrap_err());
-        assert_matches!(error, MqttError::OperationChannelFailure(_));
+        let error = GneissError::from(operation_result_receiver.try_recv().unwrap_err());
+        assert_matches!(error, GneissError::OperationChannelFailure(_));
     }
 
     assert!(fixture.service_round_trip(30000, 30000, 4096).is_ok());
     let result = operation_result_receiver.recv();
-    assert_matches!(result.unwrap().unwrap_err(), MqttError::AckTimeout(_));
+    assert_matches!(result.unwrap().unwrap_err(), GneissError::AckTimeout(_));
     assert!(fixture.service_round_trip(30010, 30010, 4096).is_ok());
     verify_protocol_state_empty(&fixture);
 }
@@ -2431,7 +2597,7 @@ macro_rules! define_operation_failure_offline_submit_and_policy_fail_helper {
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
+                assert_matches!(operation_result.unwrap_err(), GneissError::OfflineQueuePolicyFailed(_));
                 verify_protocol_state_empty(&fixture);
             }
         };
@@ -2527,7 +2693,7 @@ macro_rules! define_operation_failure_disconnect_user_queue_with_failing_offline
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
+                assert_matches!(operation_result.unwrap_err(), GneissError::OfflineQueuePolicyFailed(_));
                 verify_protocol_state_empty(&fixture);
             }
         };
@@ -2629,7 +2795,7 @@ macro_rules! define_operation_failure_disconnect_current_operation_with_failing_
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
+                assert_matches!(operation_result.unwrap_err(), GneissError::OfflineQueuePolicyFailed(_));
                 verify_protocol_state_empty(&fixture);
             }
         };
@@ -2735,7 +2901,7 @@ macro_rules! define_operation_failure_disconnect_pending_with_failing_offline_po
                 let operation_result = result.unwrap();
                 assert!(operation_result.is_err());
 
-                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
+                assert_matches!(operation_result.unwrap_err(), GneissError::OfflineQueuePolicyFailed(_));
                 verify_protocol_state_empty(&fixture);
             }
         };
@@ -2829,7 +2995,7 @@ macro_rules! define_acked_publish_failure_disconnect_pending_no_session_resumpti
                 assert!(!result.is_err());
 
                 let operation_result = result.unwrap();
-                assert_matches!(operation_result.unwrap_err(), MqttError::OfflineQueuePolicyFailed(_));
+                assert_matches!(operation_result.unwrap_err(), GneissError::OfflineQueuePolicyFailed(_));
             }
         };
     }
@@ -3042,7 +3208,7 @@ fn connected_state_user_disconnect_success_empty_queues() {
     assert_eq!(1, fixture.client_state.pending_write_completion_operations.len());
 
     // write complete and verify final state
-    assert_matches!(fixture.on_write_completion(20), Err(MqttError::UserInitiatedDisconnect(_)));
+    assert_matches!(fixture.on_write_completion(20), Err(GneissError::UserInitiatedDisconnect(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     verify_protocol_state_empty(&fixture);
 }
@@ -3143,7 +3309,7 @@ fn connected_state_user_disconnect_success_non_empty_queues() {
 
     // (8) do a complete service
     let disconnect_service_result = fixture.service_round_trip(70, 80, 4096);
-    assert_matches!(disconnect_service_result, Err(MqttError::UserInitiatedDisconnect(_)));
+    assert_matches!(disconnect_service_result, Err(GneissError::UserInitiatedDisconnect(_)));
 
     // (9) verify the current operation got sent, the disconnect was sent and nothing else happened
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
@@ -3193,7 +3359,7 @@ fn connected_state_user_disconnect_failure_invalid_packet() {
 
     assert!(fixture.disconnect(10, disconnect).is_ok());
 
-    assert_matches!(fixture.service_round_trip(0, 0, 4096), Err(MqttError::UserInitiatedDisconnect(_)));
+    assert_matches!(fixture.service_round_trip(0, 0, 4096), Err(GneissError::UserInitiatedDisconnect(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
 
     verify_protocol_state_empty(&fixture);
@@ -3227,7 +3393,7 @@ fn connected_state_server_disconnect() {
     let encode_result = fixture.broker_encoder.encode(&packet, &mut encoded_buffer).unwrap();
     assert_eq!(EncodeResult::Complete, encode_result);
 
-    assert_matches!(fixture.on_incoming_bytes(10, encoded_buffer.as_slice()), Err(MqttError::ConnectionClosed(_)));
+    assert_matches!(fixture.on_incoming_bytes(10, encoded_buffer.as_slice()), Err(GneissError::ConnectionClosed(_)));
     verify_protocol_state_empty(&fixture);
 
     assert_eq!(2, fixture.client_packet_events.len());
@@ -3393,7 +3559,7 @@ fn connected_state_maximum_inflight_publish_limit_respected() {
 #[test]
 fn connected_state_ack_order() {
     let mut config = build_standard_test_config();
-    config.connect_options = ConnectOptionsBuilder::new().with_topic_alias_maximum(2).build();
+    config.connect_options = ConnectOptions::builder().with_topic_alias_maximum(2).build();
 
     let mut fixture = ProtocolStateTestFixture::new(config);
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
@@ -3527,7 +3693,7 @@ fn connected_state_ack_order() {
     assert_eq!(expected_ack_sequence, sent_acks);
 }
 
-fn packet_to_sequence_number(packet: &MqttPacket) -> MqttResult<Option<u64>> {
+fn packet_to_sequence_number(packet: &MqttPacket) -> GneissResult<Option<u64>> {
     match packet {
         MqttPacket::Publish(publish) => {
             if let Some(payload) = &publish.payload {
@@ -3551,7 +3717,7 @@ fn packet_to_sequence_number(packet: &MqttPacket) -> MqttResult<Option<u64>> {
         _ => {}
     }
 
-    Err(MqttError::new_internal_state_error("unexpected packet type"))
+    Err(GneissError::new_internal_state_error("unexpected packet type"))
 }
 
 struct MultiOperationContext {
@@ -3776,7 +3942,7 @@ fn verify_offline_failures_and_build_sorted_successful_sequence_id_list(context:
         if result_value.is_ok() {
             successful_sequence_ids.push(*sequence_id);
         } else {
-            assert_matches!(result_value, Err(MqttError::OfflineQueuePolicyFailed(_)));
+            assert_matches!(result_value, Err(GneissError::OfflineQueuePolicyFailed(_)));
             failing_sequence_ids.push(*sequence_id);
         }
     }
@@ -3786,7 +3952,7 @@ fn verify_offline_failures_and_build_sorted_successful_sequence_id_list(context:
         if result_value.is_ok() {
             successful_sequence_ids.push(*sequence_id);
         } else {
-            assert_matches!(result_value, Err(MqttError::OfflineQueuePolicyFailed(_)));
+            assert_matches!(result_value, Err(GneissError::OfflineQueuePolicyFailed(_)));
             failing_sequence_ids.push(*sequence_id);
         }
     }
@@ -3796,7 +3962,7 @@ fn verify_offline_failures_and_build_sorted_successful_sequence_id_list(context:
         if result_value.is_ok() {
             successful_sequence_ids.push(*sequence_id);
         } else {
-            assert_matches!(result_value, Err(MqttError::OfflineQueuePolicyFailed(_)));
+            assert_matches!(result_value, Err(GneissError::OfflineQueuePolicyFailed(_)));
             failing_sequence_ids.push(*sequence_id);
         }
     }

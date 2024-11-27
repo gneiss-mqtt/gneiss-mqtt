@@ -1,0 +1,12 @@
+[package]
+name = "elasti-gneiss-threaded"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gneiss-mqtt = { path = "../../gneiss-mqtt", features = ["threaded-rustls", "threaded-native-tls", "threaded-websockets"] }
+elasti-gneiss-core = { path = "../elasti-gneiss-core" }
+elasti-gneiss-core-sync = { path = "../elasti-gneiss-core-sync" }
+simplelog = { version = "0.12" }
+argh = { version = "0.1" }
+url = { version = "2.5" }

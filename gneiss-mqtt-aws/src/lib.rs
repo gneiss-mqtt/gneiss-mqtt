@@ -24,8 +24,8 @@ enabling a TLS implementation as well:
 
 ```toml
 [dependencies]
-gneiss-mqtt = { version = "0.2", features = [ "rustls" ] }
-gneiss-mqtt-aws = { version = "0.2", features = [ "rustls" ] }
+gneiss-mqtt = { version = "0.3", features = [ "rustls" ] }
+gneiss-mqtt-aws = { version = "0.3", features = [ "rustls" ] }
 ```
 
 (Temporary) If your project does not include [`tokio`](https://crates.io/crates/tokio), you will need to add it too:
@@ -133,7 +133,7 @@ supported custom authentication modes:
 For an unsigned custom authorizer (for testing/internal purposes only, not recommended for production):
 
 ```no_run
-use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptionsBuilder};
+use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
 use tokio::runtime::Handle;
 
 #[tokio::main]
@@ -143,7 +143,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let username = "<username value to pass to the authorizer>"; // only necessary if the authorizer's lambda uses it
     let password = "<password value to pass to the authorizer>".as_bytes(); // only necessary if the authorizer's lambda uses it
 
-    let mut custom_auth_options_builder = AwsCustomAuthOptionsBuilder::new_unsigned(
+    let mut custom_auth_options_builder = AwsCustomAuthOptions::builder_unsigned(
         Some(authorizer_name)
     );
 
@@ -170,7 +170,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 For a signed custom authorizer (recommended for production):
 
 ```no_run
-use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptionsBuilder};
+use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
 use tokio::runtime::Handle;
 
 #[tokio::main]
@@ -183,7 +183,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let username = "<username value to pass to the authorizer>"; // only necessary if the authorizer's lambda uses it
     let password = "<password value to pass to the authorizer>".as_bytes(); // only necessary if the authorizer's lambda uses it
 
-    let mut custom_auth_options_builder = AwsCustomAuthOptionsBuilder::new_signed(
+    let mut custom_auth_options_builder = AwsCustomAuthOptions::builder_signed(
         Some(authorizer_name),
         authorizer_signature,
         authorizer_token_key_name,
@@ -245,13 +245,22 @@ different combinations expected by users.
 
  */
 
+#![cfg_attr(feature = "strict", deny(warnings))]
 #![warn(missing_docs)]
 
-use gneiss_mqtt::client::{AsyncGneissClient};
-use gneiss_mqtt::config::*;
+#[cfg(feature = "tokio")]
+use gneiss_mqtt::client::asynchronous::{AsyncClientHandle, AsyncClientOptions};
+#[cfg(feature = "tokio")]
+use gneiss_mqtt::client::asynchronous::tokio::TokioClientOptions;
+#[cfg(feature = "threaded")]
+use gneiss_mqtt::client::synchronous::{SyncClientHandle, SyncClientOptions};
+#[cfg(feature = "threaded")]
+use gneiss_mqtt::client::synchronous::threaded::ThreadedClientOptions;
+use gneiss_mqtt::client::config::*;
 #[allow(unused_imports)]
-use gneiss_mqtt::error::{MqttError, MqttResult};
+use gneiss_mqtt::error::{GneissError, GneissResult};
 use std::fmt::Write;
+#[cfg(feature = "tokio")]
 use tokio::runtime::Handle;
 
 #[cfg(feature = "tokio-websockets")]
@@ -337,34 +346,17 @@ pub struct AwsCustomAuthOptions {
     pub(crate) password: Option<Vec<u8>>
 }
 
-/// Builder type for AwsCustomAuthOptions
-pub struct AwsCustomAuthOptionsBuilder {
-    authorizer_name: Option<String>,
-    authorizer_signature: Option<String>,
-    authorizer_token_key_name: Option<String>,
-    authorizer_token_key_value: Option<String>,
-    username: Option<String>,
-    password: Option<Vec<u8>>
-}
+impl AwsCustomAuthOptions {
 
-impl AwsCustomAuthOptionsBuilder {
-
-    /// Creates a new custom authentication options configuration to use an unsigned authorizer.
+    /// Creates a new custom authentication options builder to use an unsigned authorizer.
     ///
     /// `authorizer_name` - name of the AWS IoT authorizer to use.  This value must be URI-encoded if necessary.  A
     /// value is required unless the AWS account has a default authorizer configured for it.
-    pub fn new_unsigned(authorizer_name: Option<&str>) -> Self {
-        AwsCustomAuthOptionsBuilder {
-            authorizer_name: authorizer_name.map(|name| { name.to_string() }),
-            authorizer_signature: None,
-            authorizer_token_key_name: None,
-            authorizer_token_key_value: None,
-            username: None,
-            password: None
-        }
+    pub fn builder_unsigned(authorizer_name: Option<&str>) -> AwsCustomAuthOptionsBuilder {
+        AwsCustomAuthOptionsBuilder::new_unsigned(authorizer_name)
     }
 
-    /// Creates a new custom authentication options configuration to use a signed authorizer. See
+    /// Creates a new custom authentication options builder to use a signed authorizer. See
     /// [AWS IoT Custom Authentication](https://docs.aws.amazon.com/iot/latest/developerguide/custom-authentication.html)
     /// for more details.  The authenticator's Lambda will not be invoked unless `authorizer_signature`
     /// is the URI-encoded Base64-encoded signature of `authorizer_token_key_value` via the private key
@@ -378,10 +370,38 @@ impl AwsCustomAuthOptionsBuilder {
     ///
     /// `authorizer_token_key_name` - key name registered with the signing authorizer that indicates the name of the field whose value will contain the `authorizer_token_key_value`
     ///
-    /// `authorizer_token_key_value` - arbitrary value whose digital signature is provided in the `authorizer_signature`
+    /// `authorizer_token_key_value` - arbitrary, developer-selected value whose digital signature must be provided in the `authorizer_signature`
     ///
-    /// `authorizer_token_key_name` and `authorizer_name` must be valid URI-encoded values.
-    pub fn new_signed(authorizer_name: Option<&str>, authorizer_signature: &str, authorizer_token_key_name: &str, authorizer_token_key_value: &str) -> Self {
+    /// Both `authorizer_token_key_name` and `authorizer_name` must be valid URI-encoded values.
+    pub fn builder_signed(authorizer_name: Option<&str>, authorizer_signature: &str, authorizer_token_key_name: &str, authorizer_token_key_value: &str) -> AwsCustomAuthOptionsBuilder {
+        AwsCustomAuthOptionsBuilder::new_signed(authorizer_name, authorizer_signature, authorizer_token_key_name, authorizer_token_key_value)
+    }
+}
+
+/// Builder type for AwsCustomAuthOptions
+pub struct AwsCustomAuthOptionsBuilder {
+    authorizer_name: Option<String>,
+    authorizer_signature: Option<String>,
+    authorizer_token_key_name: Option<String>,
+    authorizer_token_key_value: Option<String>,
+    username: Option<String>,
+    password: Option<Vec<u8>>
+}
+
+impl AwsCustomAuthOptionsBuilder {
+
+    pub(crate) fn new_unsigned(authorizer_name: Option<&str>) -> Self {
+        AwsCustomAuthOptionsBuilder {
+            authorizer_name: authorizer_name.map(|name| { name.to_string() }),
+            authorizer_signature: None,
+            authorizer_token_key_name: None,
+            authorizer_token_key_value: None,
+            username: None,
+            password: None
+        }
+    }
+
+    pub(crate) fn new_signed(authorizer_name: Option<&str>, authorizer_signature: &str, authorizer_token_key_name: &str, authorizer_token_key_value: &str) -> Self {
         AwsCustomAuthOptionsBuilder {
             authorizer_name: authorizer_name.map(|name| { name.to_string() }),
             authorizer_signature: Some(authorizer_signature.to_string()),
@@ -394,7 +414,7 @@ impl AwsCustomAuthOptionsBuilder {
 
     /// specifies additional data to pass to the authorizer's Lambda function via the `protocolData.mqtt.username` field.
     /// It is strongly advised to either URI encode this value or make sure it does not contain characters that
-    /// need to be URI-encoded
+    /// need to be URI-encoded.
     pub fn with_username(&mut self, username: &str) -> &mut Self {
         self.username = Some(username.to_string());
         self
@@ -464,11 +484,11 @@ pub enum TlsImplementation {
     Default,
 
     /// Use rustls as the TLS implementation
-    #[cfg(feature = "tokio-rustls")]
+    #[cfg(any(feature = "tokio-rustls", feature="threaded-rustls"))]
     Rustls,
 
     /// Use native-tls as the TLS implementation
-    #[cfg(feature = "tokio-native-tls")]
+    #[cfg(any(feature = "tokio-native-tls", feature="threaded-native-tls"))]
     Nativetls,
 }
 
@@ -503,7 +523,7 @@ const CUSTOM_AUTH_ALPN_PROTOCOL : &str = "mqtt";
 impl AwsClientBuilder {
 
     /// Creates a new builder that will construct an MQTT5 client that connects to AWS IoT Core
-    /// using mutual TLS where the certificate and private key are read from files.
+    /// using mutual TLS where the certificate and private key are read from the filesystem.
     ///
     /// `certificate_path` - path to a PEM-encoded file of the X509 certificate to use in mTLS
     ///
@@ -511,8 +531,8 @@ impl AwsClientBuilder {
     ///
     /// `root_ca_path` - path to a root CA to use in the TLS context of the connection.  Generally
     /// not needed unless a custom domain is involved.
-    pub fn new_direct_with_mtls_from_fs(endpoint: &str, certificate_path: &str, private_key_path: &str, root_ca_path: Option<&str>) -> MqttResult<Self> {
-        let mut tls_options_builder = TlsOptionsBuilder::new_with_mtls_from_path(certificate_path, private_key_path)?;
+    pub fn new_direct_with_mtls_from_fs(endpoint: &str, certificate_path: &str, private_key_path: &str, root_ca_path: Option<&str>) -> GneissResult<Self> {
+        let mut tls_options_builder = TlsOptions::builder_with_mtls_from_path(certificate_path, private_key_path)?;
         if let Some(root_ca) = root_ca_path {
             tls_options_builder.with_root_ca_from_path(root_ca)?;
         }
@@ -542,8 +562,8 @@ impl AwsClientBuilder {
     ///
     /// `root_ca_bytes` - root CA PEM data to use in the TLS context of the connection.  Generally
     /// not needed unless a custom domain is involved.
-    pub fn new_direct_with_mtls_from_memory(endpoint: &str, certificate_bytes: &[u8], private_key_bytes: &[u8], root_ca_bytes: Option<&[u8]>) -> MqttResult<Self> {
-        let mut tls_options_builder = TlsOptionsBuilder::new_with_mtls_from_memory(certificate_bytes, private_key_bytes);
+    pub fn new_direct_with_mtls_from_memory(endpoint: &str, certificate_bytes: &[u8], private_key_bytes: &[u8], root_ca_bytes: Option<&[u8]>) -> GneissResult<Self> {
+        let mut tls_options_builder = TlsOptions::builder_with_mtls_from_memory(certificate_bytes, private_key_bytes);
         if let Some(root_ca) = root_ca_bytes {
             tls_options_builder.with_root_ca_from_memory(root_ca);
         }
@@ -571,8 +591,8 @@ impl AwsClientBuilder {
     ///
     /// `root_ca_path` - path to a root CA to use in the TLS context of the connection.  Generally
     /// not needed unless a custom domain is involved.
-    pub fn new_direct_with_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthOptions, root_ca_path: Option<&str>) -> MqttResult<Self> {
-        let mut tls_options_builder = TlsOptionsBuilder::new();
+    pub fn new_direct_with_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthOptions, root_ca_path: Option<&str>) -> GneissResult<Self> {
+        let mut tls_options_builder = TlsOptions::builder();
         if let Some(root_ca) = root_ca_path {
             tls_options_builder.with_root_ca_from_path(root_ca)?;
         }
@@ -601,8 +621,8 @@ impl AwsClientBuilder {
     /// `root_ca_path` - path to a root CA to use in the TLS context of the connection.  Generally
     /// not needed unless a custom domain is involved.
     #[cfg(feature = "tokio-websockets")]
-    pub fn new_websockets_with_sigv4(endpoint: &str, sigv4_options: WebsocketSigv4Options, root_ca_path: Option<&str>) -> MqttResult<Self> {
-        let mut tls_options_builder = TlsOptionsBuilder::new();
+    pub fn new_websockets_with_sigv4(endpoint: &str, sigv4_options: WebsocketSigv4Options, root_ca_path: Option<&str>) -> GneissResult<Self> {
+        let mut tls_options_builder = TlsOptions::builder();
         if let Some(root_ca) = root_ca_path {
             tls_options_builder.with_root_ca_from_path(root_ca)?;
         }
@@ -643,14 +663,14 @@ impl AwsClientBuilder {
         self
     }
 
-    #[cfg(not(any(feature = "tokio-rustls", feature = "tokio-native-tls")))]
-    fn build_tls_options(&self) -> MqttResult<TlsOptions> {
+    #[cfg(not(any(feature = "tokio-rustls", feature = "tokio-native-tls", feature = "threaded-rustls", feature = "threaded-native-tls")))]
+    fn build_tls_options(&self) -> GneissResult<TlsOptions> {
         compile_error!("gneiss-mqtt-aws must be built with a TLS feature (rustls, native-tls) enabled");
-        Err(MqttError::new_tls_error("Connecting to AWS IoT Core requires a TLS implementation feature to be configured"))
+        Err(GneissError::new_tls_error("Connecting to AWS IoT Core requires a TLS implementation feature to be configured"))
     }
 
-    #[cfg(all(feature = "tokio-rustls", feature = "tokio-native-tls"))]
-    fn build_tls_options(&self) -> MqttResult<TlsOptions> {
+    #[cfg(all(any(feature = "tokio-rustls", feature = "threaded-rustls"), any(feature = "tokio-native-tls", feature = "threaded-native-tls")))]
+    fn build_tls_options(&self) -> GneissResult<TlsOptions> {
         match self.tls_impl {
             TlsImplementation::Nativetls => {
                 self.tls_options_builder.build_native_tls()
@@ -661,24 +681,25 @@ impl AwsClientBuilder {
         }
     }
 
-    #[cfg(all(feature = "tokio-rustls", not(feature = "tokio-native-tls")))]
-    fn build_tls_options(&self) -> MqttResult<TlsOptions> {
+    #[cfg(all(any(feature = "tokio-rustls", feature = "threaded-rustls"), not(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))))]
+    fn build_tls_options(&self) -> GneissResult<TlsOptions> {
         return self.tls_options_builder.build_rustls();
     }
 
-    #[cfg(all(not(feature = "tokio-rustls"), feature = "tokio-native-tls"))]
-    fn build_tls_options(&self) -> MqttResult<TlsOptions> {
+    #[cfg(all(not(any(feature = "tokio-rustls", feature = "threaded-rustls")), any(feature = "tokio-native-tls", feature = "threaded-native-tls")))]
+    fn build_tls_options(&self) -> GneissResult<TlsOptions> {
         return self.tls_options_builder.build_native_tls();
     }
 
-    /// Creates a new MQTT5 client from all of the configuration options registered with the
+    #[cfg(feature = "tokio")]
+    /// Creates a new tokio-based MQTT5 client from all of the configuration options registered with the
     /// builder.
-    pub fn build_tokio(&self, runtime: &Handle) -> MqttResult<AsyncGneissClient> {
+    pub fn build_tokio(&self, runtime: &Handle) -> GneissResult<AsyncClientHandle> {
         let user_connect_options =
             if let Some(options) = &self.connect_options {
                 options.clone()
             } else {
-                ConnectOptionsBuilder::new().build()
+                ConnectOptions::builder().build()
             };
 
         let final_connect_options = self.build_final_connect_options(user_connect_options);
@@ -687,15 +708,18 @@ impl AwsClientBuilder {
             if let Some(options) = &self.client_options {
                 options.clone()
             } else {
-                MqttClientOptionsBuilder::new().build()
+                MqttClientOptions::builder().build()
             };
 
         let tls_options = self.build_tls_options()?;
 
-        let mut builder = GenericClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
+        let mut builder = ClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
         builder.with_connect_options(final_connect_options)
             .with_client_options(client_options)
             .with_tls_options(tls_options);
+
+        #[cfg_attr(not(feature = "tokio-websockets"), allow(unused_mut))]
+        let mut async_options_builder = AsyncClientOptions::builder();
 
         #[cfg(feature = "tokio-websockets")]
         if self.auth_type == AuthType::Sigv4Websockets {
@@ -704,22 +728,60 @@ impl AwsClientBuilder {
             let signing_region = sigv4_options.signing_region.clone();
             let credentials_provider = sigv4_options.credentials_provider.clone();
 
-            let mut websocket_options_builder = WebsocketOptionsBuilder::new();
+            let mut websocket_options_builder = AsyncWebsocketOptions::builder();
             websocket_options_builder.with_handshake_transform(Box::new(move |request_builder| {
                 Box::pin(sign_websocket_upgrade_sigv4(request_builder, signing_region.clone(), credentials_provider.clone()))
             }));
 
             let websocket_options = websocket_options_builder.build();
 
-            builder.with_websocket_options(websocket_options);
+            async_options_builder.with_websocket_options(websocket_options);
         }
 
-        builder.build_tokio(runtime)
+        let tokio_options = TokioClientOptions::builder(runtime.clone()).build();
+        builder.build_tokio(async_options_builder.build(), tokio_options)
+    }
+
+    #[cfg(feature = "threaded")]
+    /// Creates a new thread-based MQTT5 client from all of the configuration options registered with the
+    /// builder.
+    pub fn build_threaded(&self, threaded_options: Option<ThreadedClientOptions>) -> GneissResult<SyncClientHandle> {
+        let user_connect_options =
+            if let Some(options) = &self.connect_options {
+                options.clone()
+            } else {
+                ConnectOptions::builder().build()
+            };
+
+        let final_connect_options = self.build_final_connect_options(user_connect_options);
+
+        let client_options =
+            if let Some(options) = &self.client_options {
+                options.clone()
+            } else {
+                MqttClientOptions::builder().build()
+            };
+
+        let tls_options = self.build_tls_options()?;
+
+        let mut builder = ClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
+        builder.with_connect_options(final_connect_options)
+            .with_client_options(client_options)
+            .with_tls_options(tls_options);
+
+        let final_thread_options =
+            if let Some(opts) = threaded_options {
+                opts.clone()
+            } else {
+                ThreadedClientOptions::builder().build()
+            };
+
+        builder.build_threaded(SyncClientOptions::builder().build(), final_thread_options)
     }
 
     fn build_final_connect_options(&self, connect_options: ConnectOptions) -> ConnectOptions {
         let is_auto_assigned_client_id = connect_options.client_id().is_none();
-        let mut final_connect_options_builder = ConnectOptionsBuilder::new_from_existing(connect_options);
+        let mut final_connect_options_builder = ConnectOptions::builder_from_existing(connect_options);
 
         if let Some(options) = &self.custom_auth_options {
             final_connect_options_builder.with_username(options.username.as_str());
@@ -741,8 +803,8 @@ impl AwsClientBuilder {
 }
 
 #[cfg(feature = "tokio-websockets")]
-async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, signing_region: String, credentials_provider: std::sync::Arc<dyn ProvideCredentials>) -> MqttResult<http::request::Builder> {
-    let credentials = credentials_provider.provide_credentials().await.map_err(|e| { MqttError::new_other_error(e) })?;
+async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, signing_region: String, credentials_provider: std::sync::Arc<dyn ProvideCredentials>) -> GneissResult<http::request::Builder> {
+    let credentials = credentials_provider.provide_credentials().await.map_err(|e| { GneissError::new_other_error(e) })?;
     let session_token = credentials.session_token().map(|st| { st.to_string() });
 
     let identity = Identity::from(credentials);
@@ -774,7 +836,7 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     ).expect("signable request");
 
     let (signing_instructions, _signature) = sign(signable_request, &signing_params)
-        .map_err(|e| { MqttError::new_other_error(e) })?
+        .map_err(|e| { GneissError::new_other_error(e) })?
         .into_parts();
 
     let mut signed_request_builder = http::request::Builder::default()
@@ -802,16 +864,21 @@ async fn sign_websocket_upgrade_sigv4(request_builder: http::request::Builder, s
     Ok(signed_request_builder)
 }
 
-#[cfg(all(feature = "testing", feature = "tokio"))]
+#[cfg(feature = "testing")]
 #[cfg(test)]
 mod testing {
-    use gneiss_mqtt::error::MqttResult;
+    use gneiss_mqtt::error::GneissResult;
     use std::env;
+    #[cfg(feature = "tokio")]
     use std::future::Future;
+    #[cfg(feature = "tokio")]
     use std::pin::Pin;
     use gneiss_mqtt::client::{ClientEvent};
-    use gneiss_mqtt::client::waiter::{ClientEventWaiterOptions, ClientEventWaitType, AsyncClientEventWaiter};
-    use gneiss_mqtt::features::tokio::TokioClientEventWaiter;
+    use gneiss_mqtt::testing::waiter::*;
+    #[cfg(feature = "tokio")]
+    use gneiss_mqtt::testing::waiter::asynchronous::AsyncClientEventWaiter;
+    #[cfg(feature = "threaded")]
+    use gneiss_mqtt::testing::waiter::synchronous::SyncClientEventWaiter;
     use super::*;
 
     fn get_iot_core_endpoint() -> String {
@@ -826,12 +893,12 @@ mod testing {
         env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_MTLS_KEY_PATH").unwrap()
     }
 
-    #[cfg(feature = "tokio-native-tls")]
+    #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
     fn get_iot_core_cert_path_pkcs8() -> String {
         env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_MTLS_CERT_PATH_PKCS8").unwrap()
     }
 
-    #[cfg(feature = "tokio-native-tls")]
+    #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
     fn get_iot_core_key_path_pkcs8() -> String {
         env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_MTLS_KEY_PATH_PKCS8").unwrap()
     }
@@ -873,20 +940,27 @@ mod testing {
         env::var("GNEISS_MQTT_TEST_AWS_IOT_CORE_CUSTOM_AUTH_TOKEN_KEY_VALUE").unwrap()
     }
 
-    type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output = MqttResult<()>> + Send>>;
-    type AsyncTestFactory = Box<dyn Fn() -> AsyncTestFactoryReturnType + Send + Sync>;
+    fn create_mtls_client_builder(tls_impl: TlsImplementation) -> AwsClientBuilder {
+        let endpoint = get_iot_core_endpoint();
 
-    fn do_builder_test(test_factory: AsyncTestFactory) {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let test_future = (*test_factory)();
-
-        runtime.block_on(test_future).unwrap();
+        match tls_impl {
+            #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
+            TlsImplementation::Nativetls => {
+                // native-tls only supports pkcs8/12 private keys
+                let cert_path_pkcs8 = get_iot_core_cert_path_pkcs8();
+                let key_path_pkcs8 = get_iot_core_key_path_pkcs8();
+                AwsClientBuilder::new_direct_with_mtls_from_fs(endpoint.as_str(), cert_path_pkcs8.as_str(), key_path_pkcs8.as_str(), None).unwrap()
+            }
+            _ => {
+                let cert_path = get_iot_core_cert_path();
+                let key_path = get_iot_core_key_path();
+                AwsClientBuilder::new_direct_with_mtls_from_fs(endpoint.as_str(), cert_path.as_str(), key_path.as_str(), None).unwrap()
+            }
+        }
     }
 
-    async fn do_connect_test(builder: AwsClientBuilder) -> MqttResult<()> {
-        let client = builder.build_tokio(&Handle::current())?;
-
-        let waiter_config = ClientEventWaiterOptions {
+    fn create_connect_waiter_options() -> ClientEventWaiterOptions {
+        ClientEventWaiterOptions {
             wait_type: ClientEventWaitType::Predicate(Box::new(|ev| {
                 match &**ev {
                     ClientEvent::ConnectionSuccess(_) | ClientEvent::ConnectionFailure(_) => {
@@ -895,17 +969,14 @@ mod testing {
                     _ => { false }
                 }
             })),
-        };
+        }
+    }
 
-        let mut connection_result_waiter = TokioClientEventWaiter::new(client.clone(), waiter_config, 1);
-
-        client.start(None)?;
-
-        let connection_result_events = connection_result_waiter.wait().await?;
-        assert_eq!(1, connection_result_events.len());
+    fn verify_connection_result(events: Vec<ClientEventRecord>) -> GneissResult<()> {
+        assert_eq!(1, events.len());
 
         let succeeded =
-            if let ClientEvent::ConnectionSuccess(_) = &*connection_result_events[0].event {
+            if let ClientEvent::ConnectionSuccess(_) = &*events[0].event {
                 true
             } else {
                 false
@@ -914,52 +985,95 @@ mod testing {
         if succeeded {
             Ok(())
         } else {
-            Err(MqttError::new_other_error("connection failed"))
+            Err(GneissError::new_other_error("connection failed"))
         }
     }
 
-    async fn do_mtls_builder_test(tls_impl: TlsImplementation) -> MqttResult<()> {
-        let endpoint = get_iot_core_endpoint();
+    #[cfg(feature = "threaded")]
+    fn do_sync_connect_test(builder: AwsClientBuilder) -> GneissResult<()> {
+        let client = builder.build_threaded(None)?;
 
-        let mut builder =
-            match tls_impl {
-                #[cfg(feature = "tokio-native-tls")]
-                TlsImplementation::Nativetls => {
-                    // native-tls only supports pkcs8/12 private keys
-                    let cert_path_pkcs8 = get_iot_core_cert_path_pkcs8();
-                    let key_path_pkcs8 = get_iot_core_key_path_pkcs8();
-                    AwsClientBuilder::new_direct_with_mtls_from_fs(endpoint.as_str(), cert_path_pkcs8.as_str(), key_path_pkcs8.as_str(), None).unwrap()
-                }
-                _ => {
-                    let cert_path = get_iot_core_cert_path();
-                    let key_path = get_iot_core_key_path();
-                    AwsClientBuilder::new_direct_with_mtls_from_fs(endpoint.as_str(), cert_path.as_str(), key_path.as_str(), None).unwrap()
-                }
-            };
+        let waiter_config = create_connect_waiter_options();
+        let connection_result_waiter = SyncClientEventWaiter::new(client.clone(), waiter_config, 1);
 
+        client.start(None)?;
+
+        let connection_result_events = connection_result_waiter.wait()?;
+        verify_connection_result(connection_result_events)
+    }
+
+    #[cfg(feature = "threaded")]
+    fn do_sync_mtls_builder_test(tls_impl: TlsImplementation) -> () {
+        let mut builder = create_mtls_client_builder(tls_impl);
         builder = builder.with_default_tls_implementation(tls_impl);
 
-        do_connect_test(builder).await
+        do_sync_connect_test(builder).unwrap();
+    }
+
+    #[cfg(feature = "tokio")]
+    type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output = GneissResult<()>> + Send>>;
+    #[cfg(feature = "tokio")]
+    type AsyncTestFactory = Box<dyn Fn() -> AsyncTestFactoryReturnType + Send + Sync>;
+
+    #[cfg(feature = "tokio")]
+    fn do_async_builder_test(test_factory: AsyncTestFactory) {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let test_future = (*test_factory)();
+
+        runtime.block_on(test_future).unwrap();
+    }
+
+    #[cfg(feature = "tokio")]
+    async fn do_async_connect_test(builder: AwsClientBuilder) -> GneissResult<()> {
+        let client = builder.build_tokio(&Handle::current())?;
+
+        let waiter_config = create_connect_waiter_options();
+        let connection_result_waiter = AsyncClientEventWaiter::new(client.clone(), waiter_config, 1);
+
+        client.start(None)?;
+
+        let connection_result_events = connection_result_waiter.wait().await?;
+        verify_connection_result(connection_result_events)
+    }
+
+    #[cfg(feature = "tokio")]
+    async fn do_async_mtls_builder_test(tls_impl: TlsImplementation) -> GneissResult<()> {
+        let mut builder = create_mtls_client_builder(tls_impl);
+        builder = builder.with_default_tls_implementation(tls_impl);
+
+        do_async_connect_test(builder).await
     }
 
     #[test]
     #[cfg(feature = "tokio-rustls")]
-    fn connect_success_aws_iot_core_mtls_rustls() {
-        do_builder_test(Box::new(||{
-            Box::pin(do_mtls_builder_test(TlsImplementation::Rustls))
+    fn connect_success_aws_iot_core_mtls_rustls_tokio() {
+        do_async_builder_test(Box::new(||{
+            Box::pin(do_async_mtls_builder_test(TlsImplementation::Rustls))
         }))
     }
 
     #[test]
+    #[cfg(feature = "threaded-rustls")]
+    fn connect_success_aws_iot_core_mtls_rustls_threaded() {
+        do_sync_mtls_builder_test(TlsImplementation::Rustls);
+    }
+
+    #[test]
     #[cfg(feature = "tokio-native-tls")]
-    fn connect_success_aws_iot_core_mtls_native_tls() {
-        do_builder_test(Box::new(||{
-            Box::pin(do_mtls_builder_test(TlsImplementation::Nativetls))
+    fn connect_success_aws_iot_core_mtls_native_tls_tokio() {
+        do_async_builder_test(Box::new(||{
+            Box::pin(do_async_mtls_builder_test(TlsImplementation::Nativetls))
         }))
     }
 
+    #[test]
+    #[cfg(feature = "threaded-native-tls")]
+    fn connect_success_aws_iot_core_mtls_native_tls_threaded() {
+        do_sync_mtls_builder_test(TlsImplementation::Nativetls);
+    }
+
     #[cfg(feature = "tokio-websockets")]
-    async fn do_sigv4_builder_test(tls_impl: TlsImplementation) -> MqttResult<()> {
+    async fn do_sigv4_builder_test(tls_impl: TlsImplementation) -> GneissResult<()> {
         let signing_region = get_iot_core_sigv4_region();
         let endpoint = get_iot_core_endpoint();
 
@@ -969,26 +1083,26 @@ mod testing {
             AwsClientBuilder::new_websockets_with_sigv4(endpoint.as_str(), sigv4_options, None).unwrap();
         builder = builder.with_default_tls_implementation(tls_impl);
 
-        do_connect_test(builder).await
+        do_async_connect_test(builder).await
     }
 
     #[test]
     #[cfg(all(feature = "tokio-rustls", feature = "tokio-websockets"))]
-    fn connect_success_aws_iot_core_ws_sigv4_rustls() {
-        do_builder_test(Box::new(||{
+    fn connect_success_aws_iot_core_ws_sigv4_rustls_tokio() {
+        do_async_builder_test(Box::new(||{
             Box::pin(do_sigv4_builder_test(TlsImplementation::Rustls))
         }))
     }
 
     #[test]
     #[cfg(all(feature = "tokio-native-tls", feature = "tokio-websockets"))]
-    fn connect_success_aws_iot_core_ws_sigv4_native_tls() {
-        do_builder_test(Box::new(||{
+    fn connect_success_aws_iot_core_ws_sigv4_native_tls_tokio() {
+        do_async_builder_test(Box::new(||{
             Box::pin(do_sigv4_builder_test(TlsImplementation::Nativetls))
         }))
     }
 
-    async fn do_unsigned_custom_auth_test(tls_impl: TlsImplementation) -> MqttResult<()> {
+    fn create_unsigned_custom_auth_builder(tls_impl: TlsImplementation) -> AwsClientBuilder {
         let endpoint = get_iot_core_endpoint();
         let authorizer_name = get_iot_core_unsigned_authorizer_name();
         let username = get_iot_core_custom_auth_username();
@@ -1004,27 +1118,48 @@ mod testing {
         let mut builder =
             AwsClientBuilder::new_direct_with_custom_auth(endpoint.as_str(), custom_auth_options_builder.build(), None).unwrap();
         builder = builder.with_default_tls_implementation(tls_impl);
+        builder
+    }
 
-        do_connect_test(builder).await
+    #[cfg(feature = "threaded")]
+    fn do_sync_unsigned_custom_auth_test(tls_impl: TlsImplementation) -> () {
+        do_sync_connect_test(create_unsigned_custom_auth_builder(tls_impl)).unwrap()
+    }
+
+    #[cfg(feature = "tokio")]
+    async fn do_async_unsigned_custom_auth_test(tls_impl: TlsImplementation) -> GneissResult<()> {
+        do_async_connect_test(create_unsigned_custom_auth_builder(tls_impl)).await
     }
 
     #[test]
     #[cfg(feature = "tokio-rustls")]
-    fn connect_success_aws_iot_core_custom_auth_unsigned_rustls() {
-        do_builder_test(Box::new(||{
-            Box::pin(do_unsigned_custom_auth_test(TlsImplementation::Rustls))
+    fn connect_success_aws_iot_core_custom_auth_unsigned_rustls_tokio() {
+        do_async_builder_test(Box::new(||{
+            Box::pin(do_async_unsigned_custom_auth_test(TlsImplementation::Rustls))
         }))
     }
 
     #[test]
+    #[cfg(feature = "threaded-rustls")]
+    fn connect_success_aws_iot_core_custom_auth_unsigned_rustls_threaded() {
+        do_sync_unsigned_custom_auth_test(TlsImplementation::Rustls)
+    }
+
+    #[test]
     #[cfg(feature = "tokio-native-tls")]
-    fn connect_success_aws_iot_core_custom_auth_unsigned_native_tls() {
-        do_builder_test(Box::new(||{
-            Box::pin(do_unsigned_custom_auth_test(TlsImplementation::Nativetls))
+    fn connect_success_aws_iot_core_custom_auth_unsigned_native_tls_tokio() {
+        do_async_builder_test(Box::new(||{
+            Box::pin(do_async_unsigned_custom_auth_test(TlsImplementation::Nativetls))
         }))
     }
 
-    async fn do_signed_custom_auth_test(tls_impl: TlsImplementation, use_unencoded_signature: bool) -> MqttResult<()> {
+    #[test]
+    #[cfg(feature = "threaded-native-tls")]
+    fn connect_success_aws_iot_core_custom_auth_unsigned_native_tls_threaded() {
+        do_sync_unsigned_custom_auth_test(TlsImplementation::Nativetls);
+    }
+
+    fn create_signed_custom_auth_builder(tls_impl: TlsImplementation, use_unencoded_signature: bool) -> AwsClientBuilder {
         let endpoint = get_iot_core_endpoint();
         let authorizer_name = get_iot_core_signed_authorizer_name();
         let username = get_iot_core_custom_auth_username();
@@ -1052,39 +1187,72 @@ mod testing {
         let mut builder =
             AwsClientBuilder::new_direct_with_custom_auth(endpoint.as_str(), custom_auth_options_builder.build(), None).unwrap();
         builder = builder.with_default_tls_implementation(tls_impl);
+        builder
+    }
 
-        do_connect_test(builder).await
+    #[cfg(feature = "threaded")]
+    fn do_sync_signed_custom_auth_test(tls_impl: TlsImplementation, use_unencoded_signature: bool) -> () {
+        do_sync_connect_test(create_signed_custom_auth_builder(tls_impl, use_unencoded_signature)).unwrap();
+    }
+
+    #[cfg(feature = "tokio")]
+    async fn do_async_signed_custom_auth_test(tls_impl: TlsImplementation, use_unencoded_signature: bool) -> GneissResult<()> {
+        do_async_connect_test(create_signed_custom_auth_builder(tls_impl, use_unencoded_signature)).await
     }
 
     #[test]
     #[cfg(feature = "tokio-rustls")]
-    fn connect_success_aws_iot_core_custom_auth_signed_preencoded_rustls() {
-        do_builder_test(Box::new(||{
-            Box::pin(do_signed_custom_auth_test(TlsImplementation::Rustls, false))
+    fn connect_success_aws_iot_core_custom_auth_signed_preencoded_rustls_tokio() {
+        do_async_builder_test(Box::new(||{
+            Box::pin(do_async_signed_custom_auth_test(TlsImplementation::Rustls, false))
         }))
     }
 
     #[test]
+    #[cfg(feature = "threaded-rustls")]
+    fn connect_success_aws_iot_core_custom_auth_signed_preencoded_rustls_threaded() {
+        do_sync_signed_custom_auth_test(TlsImplementation::Rustls, false)
+    }
+
+    #[test]
     #[cfg(feature = "tokio-native-tls")]
-    fn connect_success_aws_iot_core_custom_auth_signed_preencoded_native_tls() {
-        do_builder_test(Box::new(||{
-            Box::pin(do_signed_custom_auth_test(TlsImplementation::Nativetls, false))
+    fn connect_success_aws_iot_core_custom_auth_signed_preencoded_native_tls_tokio() {
+        do_async_builder_test(Box::new(||{
+            Box::pin(do_async_signed_custom_auth_test(TlsImplementation::Nativetls, false))
         }))
+    }
+
+    #[test]
+    #[cfg(feature = "threaded-native-tls")]
+    fn connect_success_aws_iot_core_custom_auth_signed_preencoded_native_tls_threaded() {
+        do_sync_signed_custom_auth_test(TlsImplementation::Nativetls, false)
     }
 
     #[test]
     #[cfg(feature = "tokio-rustls")]
-    fn connect_success_aws_iot_core_custom_auth_signed_unencoded_rustls() {
-        do_builder_test(Box::new(||{
-            Box::pin(do_signed_custom_auth_test(TlsImplementation::Rustls, true))
+    fn connect_success_aws_iot_core_custom_auth_signed_unencoded_rustls_tokio() {
+        do_async_builder_test(Box::new(||{
+            Box::pin(do_async_signed_custom_auth_test(TlsImplementation::Rustls, true))
         }))
     }
 
     #[test]
+    #[cfg(feature = "threaded-rustls")]
+    fn connect_success_aws_iot_core_custom_auth_signed_unencoded_rustls_threaded() {
+        do_sync_signed_custom_auth_test(TlsImplementation::Rustls, true)
+    }
+
+    #[test]
     #[cfg(feature = "tokio-native-tls")]
-    fn connect_success_aws_iot_core_custom_auth_signed_unencoded_native_tls() {
-        do_builder_test(Box::new(||{
-            Box::pin(do_signed_custom_auth_test(TlsImplementation::Nativetls, true))
+    fn connect_success_aws_iot_core_custom_auth_signed_unencoded_native_tls_tokio() {
+        do_async_builder_test(Box::new(||{
+            Box::pin(do_async_signed_custom_auth_test(TlsImplementation::Nativetls, true))
         }))
+    }
+
+    #[test]
+    #[cfg(feature = "threaded-native-tls")]
+    fn connect_success_aws_iot_core_custom_auth_signed_unencoded_native_tls_threaded() {
+        do_sync_signed_custom_auth_test(TlsImplementation::Nativetls, true)
     }
 }

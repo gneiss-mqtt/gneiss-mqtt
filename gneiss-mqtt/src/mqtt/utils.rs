@@ -9,7 +9,7 @@ While currently public, this is unstable and probably going to change because th
 integer -> mqtt spec enum conversion functions.
  */
 
-use crate::error::{MqttError, MqttResult};
+use crate::error::{GneissError, GneissResult};
 use crate::mqtt::*;
 
 pub(crate) const PACKET_TYPE_CONNECT: u8 = 1;
@@ -87,14 +87,14 @@ pub(crate) const SUBSCRIPTION_OPTIONS_RETAIN_AS_PUBLISHED_MASK : u8 = 1u8 << 3;
 pub(crate) const SUBSCRIPTION_OPTIONS_RETAIN_HANDLING_SHIFT : u8 = 4;
 
 
-pub(crate) fn convert_u8_to_quality_of_service(value: u8) -> MqttResult<QualityOfService> {
+pub(crate) fn convert_u8_to_quality_of_service(value: u8) -> GneissResult<QualityOfService> {
     match value {
         0 => { Ok(QualityOfService::AtMostOnce) }
         1 => { Ok(QualityOfService::AtLeastOnce) }
         2 => { Ok(QualityOfService::ExactlyOnce) }
         _ => {
             error!("Packet Decode - Invalid quality of service value ({})", value);
-            Err(MqttError::new_decoding_failure("invalid qos value"))
+            Err(GneissError::new_decoding_failure("invalid qos value"))
         }
     }
 }
@@ -107,13 +107,13 @@ pub(crate) fn quality_of_service_to_str (qos: QualityOfService) -> &'static str 
     }
 }
 
-pub(crate) fn convert_u8_to_payload_format_indicator(value: u8) -> MqttResult<PayloadFormatIndicator> {
+pub(crate) fn convert_u8_to_payload_format_indicator(value: u8) -> GneissResult<PayloadFormatIndicator> {
     match value {
         0 => { Ok(PayloadFormatIndicator::Bytes) }
         1 => { Ok(PayloadFormatIndicator::Utf8) }
         _ => {
             error!("Packet Decode - Invalid payload format indicator value ({})", value);
-            Err(MqttError::new_decoding_failure("invalid payload format indicator value"))
+            Err(GneissError::new_decoding_failure("invalid payload format indicator value"))
         }
     }
 }
@@ -125,7 +125,7 @@ pub(crate) fn payload_format_indicator_to_str (pfi: PayloadFormatIndicator) -> &
     }
 }
 
-pub(crate) fn convert_u8_to_puback_reason_code(value: u8) -> MqttResult<PubackReasonCode> {
+pub(crate) fn convert_u8_to_puback_reason_code(value: u8) -> GneissResult<PubackReasonCode> {
     match value {
         0 => { Ok(PubackReasonCode::Success) }
         16 => { Ok(PubackReasonCode::NoMatchingSubscribers) }
@@ -138,7 +138,7 @@ pub(crate) fn convert_u8_to_puback_reason_code(value: u8) -> MqttResult<PubackRe
         153 => { Ok(PubackReasonCode::PayloadFormatInvalid) }
         _ => {
             error!("Packet Decode - Invalid puback reason code value ({})", value);
-            Err(MqttError::new_decoding_failure("invalid puback reason code value"))
+            Err(GneissError::new_decoding_failure("invalid puback reason code value"))
         }
     }
 }
@@ -157,7 +157,7 @@ pub(crate) fn puback_reason_code_to_str (reason_code: PubackReasonCode) -> &'sta
     }
 }
 
-pub(crate) fn convert_u8_to_pubrec_reason_code(value: u8) -> MqttResult<PubrecReasonCode> {
+pub(crate) fn convert_u8_to_pubrec_reason_code(value: u8) -> GneissResult<PubrecReasonCode> {
     match value {
         0 => { Ok(PubrecReasonCode::Success) }
         16 => { Ok(PubrecReasonCode::NoMatchingSubscribers) }
@@ -170,7 +170,7 @@ pub(crate) fn convert_u8_to_pubrec_reason_code(value: u8) -> MqttResult<PubrecRe
         153 => { Ok(PubrecReasonCode::PayloadFormatInvalid) }
         _ => {
             error!("Packet Decode - Invalid pubrec reason code value ({})", value);
-            Err(MqttError::new_decoding_failure("invalid pubrec reason code value"))
+            Err(GneissError::new_decoding_failure("invalid pubrec reason code value"))
         }
     }
 }
@@ -189,13 +189,13 @@ pub(crate) fn pubrec_reason_code_to_str (reason_code: PubrecReasonCode) -> &'sta
     }
 }
 
-pub(crate) fn convert_u8_to_pubrel_reason_code(value: u8) -> MqttResult<PubrelReasonCode> {
+pub(crate) fn convert_u8_to_pubrel_reason_code(value: u8) -> GneissResult<PubrelReasonCode> {
     match value {
         0 => { Ok(PubrelReasonCode::Success) }
         146 => { Ok(PubrelReasonCode::PacketIdentifierNotFound) }
         _ => {
             error!("Packet Decode - Invalid pubrel reason code value ({})", value);
-            Err(MqttError::new_decoding_failure("invalid pubrel reason code value"))
+            Err(GneissError::new_decoding_failure("invalid pubrel reason code value"))
         }
     }
 }
@@ -207,13 +207,13 @@ pub(crate) fn pubrel_reason_code_to_str (reason_code: PubrelReasonCode) -> &'sta
     }
 }
 
-pub(crate) fn convert_u8_to_pubcomp_reason_code(value: u8) -> MqttResult<PubcompReasonCode> {
+pub(crate) fn convert_u8_to_pubcomp_reason_code(value: u8) -> GneissResult<PubcompReasonCode> {
     match value {
         0 => { Ok(PubcompReasonCode::Success) }
         146 => { Ok(PubcompReasonCode::PacketIdentifierNotFound) }
         _ => {
             error!("Packet Decode - Invalid pubcomp reason code value ({})", value);
-            Err(MqttError::new_decoding_failure("invalid pubcomp reason code value"))
+            Err(GneissError::new_decoding_failure("invalid pubcomp reason code value"))
         }
     }
 }
@@ -225,7 +225,7 @@ pub(crate) fn pubcomp_reason_code_to_str (reason_code: PubcompReasonCode) -> &'s
     }
 }
 
-pub(crate) fn convert_u8_to_connect_reason_code(value: u8) -> MqttResult<ConnectReasonCode> {
+pub(crate) fn convert_u8_to_connect_reason_code(value: u8) -> GneissResult<ConnectReasonCode> {
     match value {
         0 => { Ok(ConnectReasonCode::Success) }
         128 => { Ok(ConnectReasonCode::UnspecifiedError) }
@@ -251,7 +251,7 @@ pub(crate) fn convert_u8_to_connect_reason_code(value: u8) -> MqttResult<Connect
         159 => { Ok(ConnectReasonCode::ConnectionRateExceeded) }
         _ => {
             error!("Packet Decode - Invalid connect reason code value ({})", value);
-            Err(MqttError::new_decoding_failure("invalid connect reason code value"))
+            Err(GneissError::new_decoding_failure("invalid connect reason code value"))
         }
     }
 }
@@ -284,7 +284,7 @@ pub(crate) fn connect_reason_code_to_str (reason_code: ConnectReasonCode) -> &'s
 }
 
 /// Converts an integer to a modeled DisconnectReasonCode value
-pub(crate) fn convert_u8_to_disconnect_reason_code(value: u8) -> MqttResult<DisconnectReasonCode> {
+pub(crate) fn convert_u8_to_disconnect_reason_code(value: u8) -> GneissResult<DisconnectReasonCode> {
     match value {
         0 => { Ok(DisconnectReasonCode::NormalDisconnection) }
         4 => { Ok(DisconnectReasonCode::DisconnectWithWillMessage) }
@@ -317,7 +317,7 @@ pub(crate) fn convert_u8_to_disconnect_reason_code(value: u8) -> MqttResult<Disc
         162 => { Ok(DisconnectReasonCode::WildcardSubscriptionsNotSupported) }
         _ => {
             error!("Packet Decode - Invalid disconnect reason code value ({})", value);
-            Err(MqttError::new_decoding_failure("invalid disconnect reason code value"))
+            Err(GneissError::new_decoding_failure("invalid disconnect reason code value"))
         }
     }
 }
@@ -356,14 +356,14 @@ pub(crate) fn disconnect_reason_code_to_str (reason_code: DisconnectReasonCode) 
     }
 }
 
-pub(crate) fn convert_u8_to_authenticate_reason_code(value: u8) -> MqttResult<AuthenticateReasonCode> {
+pub(crate) fn convert_u8_to_authenticate_reason_code(value: u8) -> GneissResult<AuthenticateReasonCode> {
     match value {
         0 => { Ok(AuthenticateReasonCode::Success) }
         24 => { Ok(AuthenticateReasonCode::ContinueAuthentication) }
         25 => { Ok(AuthenticateReasonCode::ReAuthenticate) }
         _ => {
             error!("Packet Decode - Invalid authenticate reason code value ({})", value);
-            Err(MqttError::new_decoding_failure("invalid authenticate reason code value"))
+            Err(GneissError::new_decoding_failure("invalid authenticate reason code value"))
         }
     }
 }
@@ -376,7 +376,7 @@ pub(crate) fn authenticate_reason_code_to_str (reason_code: AuthenticateReasonCo
     }
 }
 
-pub(crate) fn convert_u8_to_unsuback_reason_code(value: u8) -> MqttResult<UnsubackReasonCode> {
+pub(crate) fn convert_u8_to_unsuback_reason_code(value: u8) -> GneissResult<UnsubackReasonCode> {
     match value {
         0 => { Ok(UnsubackReasonCode::Success) }
         17 => { Ok(UnsubackReasonCode::NoSubscriptionExisted) }
@@ -387,7 +387,7 @@ pub(crate) fn convert_u8_to_unsuback_reason_code(value: u8) -> MqttResult<Unsuba
         145 => { Ok(UnsubackReasonCode::PacketIdentifierInUse) }
         _ => {
             error!("Packet Decode - Invalid unsuback reason code value ({})", value);
-            Err(MqttError::new_decoding_failure("invalid unsuback reason code value"))
+            Err(GneissError::new_decoding_failure("invalid unsuback reason code value"))
         }
     }
 }
@@ -404,7 +404,7 @@ pub(crate) fn unsuback_reason_code_to_str (reason_code: UnsubackReasonCode) -> &
     }
 }
 
-pub(crate) fn convert_u8_to_suback_reason_code(value: u8) -> MqttResult<SubackReasonCode> {
+pub(crate) fn convert_u8_to_suback_reason_code(value: u8) -> GneissResult<SubackReasonCode> {
     match value {
         0 => { Ok(SubackReasonCode::GrantedQos0) }
         1 => { Ok(SubackReasonCode::GrantedQos1) }
@@ -420,7 +420,7 @@ pub(crate) fn convert_u8_to_suback_reason_code(value: u8) -> MqttResult<SubackRe
         162 => { Ok(SubackReasonCode::WildcardSubscriptionsNotSupported) }
         _ => {
             error!("Packet Decode - Invalid suback reason code value ({})", value);
-            Err(MqttError::new_decoding_failure("invalid suback reason code value"))
+            Err(GneissError::new_decoding_failure("invalid suback reason code value"))
         }
     }
 }
@@ -443,14 +443,14 @@ pub(crate) fn suback_reason_code_to_str (reason_code: SubackReasonCode) -> &'sta
 }
 
 #[cfg(test)]
-pub(crate) fn convert_u8_to_retain_handling_type(value: u8) -> MqttResult<RetainHandlingType> {
+pub(crate) fn convert_u8_to_retain_handling_type(value: u8) -> GneissResult<RetainHandlingType> {
     match value {
         0 => { Ok(RetainHandlingType::SendOnSubscribe) }
         1 => { Ok(RetainHandlingType::SendOnSubscribeIfNew) }
         2 => { Ok(RetainHandlingType::DontSend) }
         _ => {
             error!("Packet Decode - Invalid retain handling type value ({})", value);
-            Err(MqttError::new_decoding_failure("invalid retain handling type value"))
+            Err(GneissError::new_decoding_failure("invalid retain handling type value"))
         }
     }
 }

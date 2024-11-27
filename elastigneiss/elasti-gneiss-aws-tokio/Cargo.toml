@@ -1,0 +1,16 @@
+[package]
+name = "elasti-gneiss-aws-tokio"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+elasti-gneiss-core = { path = "../elasti-gneiss-core" }
+elasti-gneiss-core-async = { path = "../elasti-gneiss-core-async" }
+gneiss-mqtt = { path = "../../gneiss-mqtt", features = ["tokio-rustls", "tokio-native-tls", "tokio-websockets"] }
+gneiss-mqtt-aws = { path = "../../gneiss-mqtt-aws", features = ["tokio-rustls", "tokio-native-tls", "tokio-websockets"] }
+tokio = { version = "1", features = ["full"] }
+simplelog = { version = "0.12" }
+argh = { version = "0.1" }
+url = { version = "2.5" }

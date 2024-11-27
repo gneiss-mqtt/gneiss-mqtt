@@ -4,7 +4,7 @@
  */
 
 use crate::alias::*;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{GneissError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::auth::*;
@@ -30,7 +30,7 @@ pub(crate) struct EncodingContext {
     pub outbound_alias_resolution: OutboundAliasResolution,
 }
 
-fn write_encoding_steps(mqtt_packet: &MqttPacket, context: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+fn write_encoding_steps(mqtt_packet: &MqttPacket, context: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     log_packet("Writing encode steps for packet: ", mqtt_packet);
 
     match mqtt_packet {
@@ -69,7 +69,7 @@ impl Encoder {
         }
     }
 
-    pub fn reset(&mut self, packet: &MqttPacket, context: &EncodingContext) -> MqttResult<()> {
+    pub fn reset(&mut self, packet: &MqttPacket, context: &EncodingContext) -> GneissResult<()> {
         self.steps.clear();
 
         write_encoding_steps(packet, context, &mut self.steps)
@@ -79,7 +79,7 @@ impl Encoder {
         &mut self,
         packet: &MqttPacket,
         dest: &mut Vec<u8>,
-    ) -> MqttResult<EncodeResult> {
+    ) -> GneissResult<EncodeResult> {
         let capacity = dest.capacity();
         if capacity < 4 {
             panic!("Encoder - target buffer too small");
@@ -322,7 +322,7 @@ pub(crate) use encode_enum;
 
 macro_rules! define_ack_packet_lengths_function {
     ($function_name: ident, $packet_type: ident, $reason_code_type: ident) => {
-        fn $function_name(packet: &$packet_type) -> MqttResult<(u32, u32)> {
+        fn $function_name(packet: &$packet_type) -> GneissResult<(u32, u32)> {
             let mut property_section_length = compute_user_properties_length(&packet.user_properties);
 
             add_optional_string_property_length!(property_section_length, packet.reason_string);
@@ -370,7 +370,7 @@ pub(crate) use define_ack_packet_user_property_accessor;
 
 macro_rules! define_ack_packet_encoding_impl {
     ($function_name: ident, $packet_type: ident, $reason_code_type: ident, $first_byte: expr, $length_function: ident, $reason_string_accessor: ident, $user_property_accessor: ident) => {
-        pub(crate) fn $function_name(packet: &$packet_type, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> MqttResult<()> {
+        pub(crate) fn $function_name(packet: &$packet_type, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
             let (total_remaining_length, property_length) = $length_function(packet)?;
 
             encode_integral_expression!(steps, Uint8, $first_byte);
@@ -494,7 +494,7 @@ pub fn compute_user_properties_length(properties: &Option<Vec<UserProperty>>) ->
     total
 }
 
-pub fn compute_variable_length_integer_encode_size(value: usize) -> MqttResult<usize> {
+pub fn compute_variable_length_integer_encode_size(value: usize) -> GneissResult<usize> {
     if value < 1usize << 7 {
         Ok(1)
     } else if value < 1usize << 14 {
@@ -504,13 +504,13 @@ pub fn compute_variable_length_integer_encode_size(value: usize) -> MqttResult<u
     } else if value < 1usize << 28 {
         Ok(4)
     } else {
-        Err(MqttError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"))
+        Err(GneissError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"))
     }
 }
 
-fn encode_vli(value: u32, dest: &mut Vec<u8>) -> MqttResult<()> {
+fn encode_vli(value: u32, dest: &mut Vec<u8>) -> GneissResult<()> {
     if value > MAXIMUM_VARIABLE_LENGTH_INTEGER as u32 {
-        return Err(MqttError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
+        return Err(GneissError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
     }
 
     let mut done = false;
@@ -551,7 +551,7 @@ pub(crate) fn process_encoding_step(
     step: EncodingStep,
     packet: &MqttPacket,
     dest: &mut Vec<u8>,
-) -> MqttResult<()> {
+) -> GneissResult<()> {
     match step {
         EncodingStep::Uint8(val) => {
             dest.push(val);
@@ -606,8 +606,8 @@ pub(crate) fn process_encoding_step(
 }
 
 
-#[cfg(test)]
-mod tests {
+#[cfg(feature = "testing")]
+mod testing {
     use super::*;
     use crate::decode::*;
 

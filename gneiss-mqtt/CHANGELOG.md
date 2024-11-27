@@ -44,3 +44,11 @@ This document is currently hand-written and non-authoritative.
 * * Tokio client feature-gated
 * Bug fixes
 * * Tokio client - fixed an issue where an assert would trigger a panic if another future was executed in-between a socket write and socket flush
+
+## 0.4.0
+* Refactoring/chores
+* * Too many to list, many things have changed
+* Features
+* * Non-async client interface
+* * Thread-based client implementation and tests
+* * Rustls, Native-tls, and websocket support for thread-based client

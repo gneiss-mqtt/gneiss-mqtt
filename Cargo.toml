@@ -1,9 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
+	"elastigneiss/elasti-gneiss-aws-threaded",
+	"elastigneiss/elasti-gneiss-aws-tokio",
+	"elastigneiss/elasti-gneiss-core",
+	"elastigneiss/elasti-gneiss-core-async",
+	"elastigneiss/elasti-gneiss-core-sync",
+	"elastigneiss/elasti-gneiss-threaded",
+	"elastigneiss/elasti-gneiss-tokio",
 	"gneiss-mqtt",
-	"elasti-gneiss-core",
-	"elasti-gneiss",
-	"gneiss-mqtt-aws",
-	"elasti-gneiss-aws",
+	"gneiss-mqtt-aws"
 ]

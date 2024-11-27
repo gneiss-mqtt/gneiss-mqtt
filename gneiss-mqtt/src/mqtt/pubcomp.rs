@@ -5,7 +5,7 @@
 
 use crate::decode::*;
 use crate::encode::*;
-use crate::error::{MqttError, MqttResult};
+use crate::error::{GneissError, GneissResult};
 use crate::logging::*;
 use crate::mqtt::*;
 use crate::mqtt::utils::*;

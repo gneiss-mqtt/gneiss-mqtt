@@ -125,7 +125,7 @@ pub struct OtherErrorContext {
 /// Basic error type for the entire gneiss-mqtt crate.
 #[derive(Debug)]
 #[non_exhaustive]
-pub enum MqttError {
+pub enum GneissError {
 
     /// Functionality was invoked that has not yet been implemented.
     Unimplemented(UnimplementedContext),
@@ -194,14 +194,14 @@ pub enum MqttError {
 
     /// Error to be used when no other error variant is appropriate.  Generally used by
     /// auxiliary crates whose error category doesn't match anything but that want to restrict
-    /// results to MqttError.
+    /// results to GneissError.
     OtherError(OtherErrorContext),
 }
 
-impl MqttError {
+impl GneissError {
 
     pub(crate) fn new_unimplemented(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::Unimplemented(
+        GneissError::Unimplemented(
             UnimplementedContext {
                 source : source.into()
             }
@@ -209,7 +209,7 @@ impl MqttError {
     }
 
     pub(crate) fn new_operation_channel_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::OperationChannelFailure(
+        GneissError::OperationChannelFailure(
             OperationChannelFailureContext {
                 source : source.into()
             }
@@ -217,7 +217,7 @@ impl MqttError {
     }
 
     pub(crate) fn new_decoding_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::DecodingFailure(
+        GneissError::DecodingFailure(
             DecodingFailureContext {
                 source : source.into()
             }
@@ -225,7 +225,7 @@ impl MqttError {
     }
 
     pub(crate) fn new_encoding_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::EncodingFailure(
+        GneissError::EncodingFailure(
             EncodingFailureContext {
                 source : source.into()
             }
@@ -233,7 +233,7 @@ impl MqttError {
     }
 
     pub(crate) fn new_protocol_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::ProtocolError(
+        GneissError::ProtocolError(
             ProtocolErrorContext {
                 source : source.into()
             }
@@ -241,7 +241,7 @@ impl MqttError {
     }
 
     pub(crate) fn new_inbound_topic_alias_not_valid(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::InboundTopicAliasNotValid(
+        GneissError::InboundTopicAliasNotValid(
             InboundTopicAliasNotValidContext{
                 source : source.into()
             }
@@ -249,7 +249,7 @@ impl MqttError {
     }
 
     pub(crate) fn new_connection_establishment_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::ConnectionEstablishmentFailure(
+        GneissError::ConnectionEstablishmentFailure(
             ConnectionEstablishmentFailureContext{
                 source : source.into()
             }
@@ -257,7 +257,7 @@ impl MqttError {
     }
 
     pub(crate) fn new_internal_state_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::InternalStateError(
+        GneissError::InternalStateError(
             InternalStateErrorContext {
                 source : source.into()
             }
@@ -265,7 +265,7 @@ impl MqttError {
     }
 
     pub(crate) fn new_connection_closed(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::ConnectionClosed(
+        GneissError::ConnectionClosed(
             ConnectionClosedContext {
                 source : source.into()
             }
@@ -273,28 +273,28 @@ impl MqttError {
     }
 
     pub(crate) fn new_offline_queue_policy_failed() -> Self {
-        MqttError::OfflineQueuePolicyFailed(
+        GneissError::OfflineQueuePolicyFailed(
             OfflineQueuePolicyFailedContext {
             }
         )
     }
 
     pub(crate) fn new_ack_timeout() -> Self {
-        MqttError::AckTimeout(
+        GneissError::AckTimeout(
             AckTimeoutContext {
             }
         )
     }
 
     pub(crate) fn new_client_closed() -> Self {
-        MqttError::ClientClosed(
+        GneissError::ClientClosed(
             ClientClosedContext {
             }
         )
     }
 
     pub(crate) fn new_user_initiated_disconnect() -> Self {
-        MqttError::UserInitiatedDisconnect(
+        GneissError::UserInitiatedDisconnect(
             UserInitiatedDisconnectContext {
             }
         )
@@ -303,7 +303,7 @@ impl MqttError {
     /// Constructs a StdIoError variant from an existing error.  Typically this should be a
     /// std::io::Error
     pub fn new_std_io_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::StdIoError(
+        GneissError::StdIoError(
             StdIoErrorContext {
                 source : source.into()
             }
@@ -314,7 +314,7 @@ impl MqttError {
     /// an error surfacing from a third-party TLS library or an attempt to initialize configuration
     /// for one.
     pub fn new_tls_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::TlsError(
+        GneissError::TlsError(
             TlsErrorContext {
                 source : source.into()
             }
@@ -324,7 +324,7 @@ impl MqttError {
     /// Constructs a new TransportError variant from an existing error.  Typically this should be
     /// an error surfacing from a third-party transport library.
     pub fn new_transport_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::TransportError(
+        GneissError::TransportError(
             TransportErrorContext {
                 source : source.into()
             }
@@ -332,7 +332,7 @@ impl MqttError {
     }
 
     pub(crate) fn new_packet_validation(packet_type: PacketType, source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::PacketValidation(
+        GneissError::PacketValidation(
             PacketValidationContext {
                 packet_type,
                 source : source.into()
@@ -343,7 +343,7 @@ impl MqttError {
     /// Constructs a new OtherError variant from an existing error.  Use this to wrap errors that
     /// do not fall into any appropriate existing category.
     pub fn new_other_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        MqttError::OtherError (
+        GneissError::OtherError (
             OtherErrorContext {
                 source : source.into()
             }
@@ -351,49 +351,49 @@ impl MqttError {
     }
 }
 
-impl Error for MqttError {
+impl Error for GneissError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            MqttError::Unimplemented(context) => {
+            GneissError::Unimplemented(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::OperationChannelFailure(context) => {
+            GneissError::OperationChannelFailure(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::DecodingFailure(context) => {
+            GneissError::DecodingFailure(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::EncodingFailure(context) => {
+            GneissError::EncodingFailure(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::ProtocolError(context) => {
+            GneissError::ProtocolError(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::InboundTopicAliasNotValid(context) => {
+            GneissError::InboundTopicAliasNotValid(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::ConnectionEstablishmentFailure(context) => {
+            GneissError::ConnectionEstablishmentFailure(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::InternalStateError(context) => {
+            GneissError::InternalStateError(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::ConnectionClosed(context) => {
+            GneissError::ConnectionClosed(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::StdIoError(context) => {
+            GneissError::StdIoError(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::TlsError(context) => {
+            GneissError::TlsError(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::TransportError(context) => {
+            GneissError::TransportError(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::PacketValidation(context) => {
+            GneissError::PacketValidation(context) => {
                 Some(context.source.as_ref())
             }
-            MqttError::OtherError(context) => {
+            GneissError::OtherError(context) => {
                 Some(context.source.as_ref())
             }
             _ => { None }
@@ -401,139 +401,160 @@ impl Error for MqttError {
     }
 }
 
-impl fmt::Display for MqttError {
+impl fmt::Display for GneissError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MqttError::Unimplemented(_) => {
+            GneissError::Unimplemented(_) => {
                 write!(f, "attempt to invoke stubbed functionality that has not been completed")
             }
-            MqttError::OperationChannelFailure(_) => {
+            GneissError::OperationChannelFailure(_) => {
                 write!(f, "failure encountered while sending/receiving on an MQTT operation-related channel")
             }
-            MqttError::DecodingFailure(_) => {
+            GneissError::DecodingFailure(_) => {
                 write!(f, "failure encountered while decoding an incoming MQTT packet")
             }
-            MqttError::EncodingFailure(_) => {
+            GneissError::EncodingFailure(_) => {
                 write!(f, "failure encountered while encoding an outbound MQTT packet")
             }
-            MqttError::ProtocolError(_) => {
+            GneissError::ProtocolError(_) => {
                 write!(f, "broker behavior disallowed by the mqtt spec")
             }
-            MqttError::InboundTopicAliasNotValid(_) => {
+            GneissError::InboundTopicAliasNotValid(_) => {
                 write!(f, "topic alias value on incoming publish is not valid")
             }
-            MqttError::InternalStateError(_) => {
+            GneissError::InternalStateError(_) => {
                 write!(f, "client reached an invalid internal state; almost certainly a client bug")
             }
-            MqttError::ConnectionClosed(_) => {
+            GneissError::ConnectionClosed(_) => {
                 write!(f, "client connection was closed; source contains further details")
             }
-            MqttError::OfflineQueuePolicyFailed(_) => {
+            GneissError::OfflineQueuePolicyFailed(_) => {
                 write!(f, "operation failed due to the offline queue policy and the fact that the client is currently offline")
             }
-            MqttError::AckTimeout(_) => {
+            GneissError::AckTimeout(_) => {
                 write!(f, "the operation's timeout triggered prior to receiving an ack from the broker")
             }
-            MqttError::ClientClosed(_) => {
+            GneissError::ClientClosed(_) => {
                 write!(f, "the operation was incomplete prior to the client being closed")
             }
-            MqttError::UserInitiatedDisconnect(_) => {
+            GneissError::UserInitiatedDisconnect(_) => {
                 write!(f, "connection was shut down by user action")
             }
-            MqttError::ConnectionEstablishmentFailure(_) => {
+            GneissError::ConnectionEstablishmentFailure(_) => {
                 write!(f, "failed to establish an MQTT connection to the broker")
             }
-            MqttError::StdIoError(_) => {
+            GneissError::StdIoError(_) => {
                 write!(f, "generic error wrapper for std::io::Error when no more specialized error is appropriate; source contains further details")
             }
-            MqttError::TlsError(_) => {
+            GneissError::TlsError(_) => {
                 write!(f, "generic error when setting up a tls context")
             }
-            MqttError::TransportError(_) => {
+            GneissError::TransportError(_) => {
                 write!(f, "transport error; source contains further details")
             }
-            MqttError::PacketValidation(context) => {
+            GneissError::PacketValidation(context) => {
                 write!(f, "{} contains a property that violates the mqtt spec", context.packet_type)
             }
-            MqttError::OtherError(_) => {
+            GneissError::OtherError(_) => {
                 write!(f, "fallback error type; source contains further details")
             }
         }
     }
 }
 
-impl From<std::io::Error> for MqttError {
+impl From<std::io::Error> for GneissError {
     fn from(error: std::io::Error) -> Self {
-        MqttError::new_std_io_error(error)
+        GneissError::new_std_io_error(error)
     }
 }
 
-impl From<core::str::Utf8Error> for MqttError {
+impl From<core::str::Utf8Error> for GneissError {
     fn from(err: core::str::Utf8Error) -> Self {
-        MqttError::new_decoding_failure(err)
+        GneissError::new_decoding_failure(err)
     }
 }
 
-#[cfg(feature = "tokio-rustls")]
-impl From<rustls_pki_types::InvalidDnsNameError> for MqttError {
+#[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
+impl From<rustls_pki_types::InvalidDnsNameError> for GneissError {
     fn from(err: rustls_pki_types::InvalidDnsNameError) -> Self {
-        MqttError::new_connection_establishment_failure(err)
+        GneissError::new_connection_establishment_failure(err)
     }
 }
 
-#[cfg(feature = "tokio-rustls")]
-impl From<rustls::Error> for MqttError {
+#[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
+impl From<rustls::Error> for GneissError {
     fn from(err: rustls::Error) -> Self {
-        MqttError::new_tls_error(err)
+        GneissError::new_tls_error(err)
     }
 }
 
-#[cfg(feature = "tokio-native-tls")]
-impl From<native_tls::Error> for MqttError {
+#[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
+impl From<native_tls::Error> for GneissError {
     fn from(err: native_tls::Error) -> Self {
-        MqttError::new_tls_error(err)
+        GneissError::new_tls_error(err)
+    }
+}
+
+#[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
+impl<S> From<native_tls::HandshakeError<S>> for GneissError {
+    fn from(_err: native_tls::HandshakeError<S>) -> Self {
+        // TODO: is there a better way of handling this?  S is the transport stream which
+        // isn't copy/clone so it doesn't seem like we can wrap it
+        GneissError::new_tls_error("native-tls handshake error")
     }
 }
 
 #[cfg(feature="tokio-websockets")]
-impl From<tungstenite::error::Error> for MqttError {
+impl From<tungstenite::error::Error> for GneissError {
     fn from(err: tungstenite::error::Error) -> Self {
-        MqttError::new_transport_error(err)
+        GneissError::new_transport_error(err)
+    }
+}
+
+#[cfg(feature="threaded-websockets")]
+use std::io::{Read, Write};
+
+#[cfg(feature="threaded-websockets")]
+impl <S> From<tungstenite::HandshakeError<tungstenite::ClientHandshake<S>>>  for GneissError
+where S : Read + Write {
+    fn from(err: tungstenite::HandshakeError<tungstenite::ClientHandshake<S>>) -> Self {
+        let message = format!("websocket handshake error: {}", err);
+        GneissError::new_transport_error(message)
     }
 }
 
 #[cfg(feature="tokio")]
-impl From<tokio::sync::oneshot::error::RecvError> for MqttError {
+impl From<tokio::sync::oneshot::error::RecvError> for GneissError {
     fn from(err: tokio::sync::oneshot::error::RecvError) -> Self {
-        MqttError::new_operation_channel_failure(err)
+        GneissError::new_operation_channel_failure(err)
     }
 }
 
-
-impl <T> From<std::sync::mpsc::SendError<T>> for MqttError where T : Send + Sync + 'static {
+impl <T> From<std::sync::mpsc::SendError<T>> for GneissError
+where T : Send + Sync + 'static {
     fn from(err: std::sync::mpsc::SendError<T>) -> Self {
-        MqttError::new_operation_channel_failure(err)
+        GneissError::new_operation_channel_failure(err)
     }
 }
 
-impl From<std::sync::mpsc::RecvError> for MqttError {
+impl From<std::sync::mpsc::RecvError> for GneissError {
     fn from(err: std::sync::mpsc::RecvError) -> Self {
-        MqttError::new_operation_channel_failure(err)
+        GneissError::new_operation_channel_failure(err)
     }
 }
 
-impl From<std::sync::mpsc::TryRecvError> for MqttError {
+impl From<std::sync::mpsc::TryRecvError> for GneissError {
     fn from(err: std::sync::mpsc::TryRecvError) -> Self {
-        MqttError::new_operation_channel_failure(err)
+        GneissError::new_operation_channel_failure(err)
     }
 }
 
 
 /// Crate-wide result type for functions that can fail
-pub type MqttResult<T> = Result<T, MqttError>;
+pub type GneissResult<T> = Result<T, GneissError>;
 
 
-pub(crate) fn fold_mqtt_result<T>(base: MqttResult<T>, new_result: MqttResult<T>) -> MqttResult<T> {
+pub(crate) fn fold_mqtt_result<T>(base: GneissResult<T>, new_result: GneissResult<T>) -> GneissResult<T> {
     new_result?;
     base
 }

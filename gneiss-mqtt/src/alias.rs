@@ -12,7 +12,7 @@ that allows for custom resolution implementations to be injected into a client.
 #[cfg(test)]
 use assert_matches::assert_matches;
 
-use crate::error::{MqttError, MqttResult};
+use crate::error::{GneissError, GneissResult};
 
 use log::*;
 use lru::LruCache;
@@ -24,7 +24,7 @@ use std::sync::Arc;
 /// resolution is performed as the client encodes a Publish packet before writing it to the
 /// socket.
 #[derive(Default, Copy, Clone)]
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+#[cfg_attr(feature = "testing", derive(Debug, Eq, PartialEq))]
 pub struct OutboundAliasResolution {
     /// Should the client use an empty topic during packet encoding?
     pub skip_topic : bool,
@@ -271,7 +271,7 @@ impl InboundAliasResolver {
         self.current_aliases.clear();
     }
 
-    pub(crate) fn resolve_topic_alias(&mut self, alias: &Option<u16>, topic: &mut String) -> MqttResult<()> {
+    pub(crate) fn resolve_topic_alias(&mut self, alias: &Option<u16>, topic: &mut String) -> GneissResult<()> {
         if let Some(alias_value) = alias {
             if topic.is_empty() {
                 if let Some(existing_topic) = self.current_aliases.get(alias_value) {
@@ -280,12 +280,12 @@ impl InboundAliasResolver {
                 }
 
                 error!("Topic Alias Resolution - zero length topic");
-                return Err(MqttError::new_inbound_topic_alias_not_valid("No alias binding exists for topic-less publish"));
+                return Err(GneissError::new_inbound_topic_alias_not_valid("No alias binding exists for topic-less publish"));
             }
 
             if *alias_value == 0 || *alias_value > self.maximum_alias_value {
                 error!("Topic Alias Resolution - inbound alias out of range");
-                return Err(MqttError::new_inbound_topic_alias_not_valid("Publish alias value out of negotiated range"));
+                return Err(GneissError::new_inbound_topic_alias_not_valid("Publish alias value out of negotiated range"));
             }
 
             self.current_aliases.insert(*alias_value, topic.clone());
@@ -509,11 +509,11 @@ mod tests {
 
         let mut topic1 = "topic1".to_string();
 
-        assert_matches!(resolver.resolve_topic_alias(&Some(0), &mut topic1), Err(MqttError::InboundTopicAliasNotValid(_)));
-        assert_matches!(resolver.resolve_topic_alias(&Some(11), &mut topic1), Err(MqttError::InboundTopicAliasNotValid(_)));
+        assert_matches!(resolver.resolve_topic_alias(&Some(0), &mut topic1), Err(GneissError::InboundTopicAliasNotValid(_)));
+        assert_matches!(resolver.resolve_topic_alias(&Some(11), &mut topic1), Err(GneissError::InboundTopicAliasNotValid(_)));
 
         let mut empty_topic = "".to_string();
-        assert_matches!(resolver.resolve_topic_alias(&Some(2), &mut empty_topic), Err(MqttError::InboundTopicAliasNotValid(_)));
+        assert_matches!(resolver.resolve_topic_alias(&Some(2), &mut empty_topic), Err(GneissError::InboundTopicAliasNotValid(_)));
     }
 
     #[test]
@@ -530,7 +530,7 @@ mod tests {
 
         resolver.reset_for_new_connection();
         empty_topic = "".to_string();
-        assert_matches!(resolver.resolve_topic_alias(&Some(1), &mut empty_topic), Err(MqttError::InboundTopicAliasNotValid(_)));
+        assert_matches!(resolver.resolve_topic_alias(&Some(1), &mut empty_topic), Err(GneissError::InboundTopicAliasNotValid(_)));
     }
 }
 

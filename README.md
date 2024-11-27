@@ -10,33 +10,28 @@ Feedback is always welcome.
 * **elasti-gneiss** - (Unpublished, Workspace only) Interactive client test application using gneiss-mqtt
 * **elasti-gneiss-aws** - (Unpublished, Workspace only) Interactive client test application using gneiss-mqtt-aws to connect to AWS IoT Core
 
-### Tentative User-Facing Roadmap (dates non-binding)
-* 0.3.0 Release (April 2024)
-* * Internal refactoring and unit/integration tests that were delayed once "it worked"
-* * Support native-tls as a TLS option
-* * Misc chores: error unification and polish
-* * Misc chores: conversion impls
-* * Misc chores: logging/display/debug polish
-* 0.4.0 Release (May 2024)
+### Roadmap
+* 0.4.0 Release 
 * * Background thread client for no-async support
-* 0.5.0 Release (July 2024)
+* 0.5.0 Release
+* * crate refactor/split to reduce complexity
+* * Client features - throttled resubmit on reconnect, max retries on delivery
+* 0.6.0 Release
 * * MQTT311 support
-* * CI/CD
-* 1.0.0 Release (GA, September 2024)
-* * Public API finalization
-* * Performance measurements and tuning
-* * Canaries, soak testing, samples
-* * Non-AWS cloud provider builders (Azure, HiveMQ, etc...)
-* 1.1.0 Release
-* * Bridging support
-* 1.2.0 Release
 * * MQTT5 authentication exchange support
+* 0.7.0
+* * Intern/reimplement unwanted/glue/wrapper dependencies
+* * Non-AWS broker builders (Azure, HiveMQ, etc...)
+* * Performance measurements and tuning
+* 1.0.0 Release 
+* * CI/CD
+* * Canaries, soak testing, samples
+* 1.1.0 Release
+* * Request-response service clients for AWS MQTT services: shadow, jobs, identity
+* 1.2.0 Release
+* * Bridging support
 * 1.3.0 Release
 * * Persistence support
-
-### Additional post GA ideas
-* Request-response client crates for known MQTT services (AWS Shadow, Jobs, Fleet Provisioning, etc...)
-* gneiss-mqtt-embedded: Embedded implementation targeting highly-constrained environments
 
 ## License
 

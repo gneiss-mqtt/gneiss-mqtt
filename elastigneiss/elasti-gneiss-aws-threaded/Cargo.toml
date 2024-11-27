@@ -1,0 +1,15 @@
+[package]
+name = "elasti-gneiss-aws-threaded"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+elasti-gneiss-core = { path = "../elasti-gneiss-core" }
+elasti-gneiss-core-sync = { path = "../elasti-gneiss-core-sync" }
+gneiss-mqtt = { path = "../../gneiss-mqtt", features = ["threaded-rustls", "threaded-native-tls"] }
+gneiss-mqtt-aws = { path = "../../gneiss-mqtt-aws", features = ["threaded-rustls", "threaded-native-tls"] }
+simplelog = { version = "0.12" }
+argh = { version = "0.1" }
+url = { version = "2.5" }

@@ -1,7 +1,7 @@
 [package]
 name = "gneiss-mqtt-aws"
 license = "Apache-2.0"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 keywords = ["mqtt", "mqtt5", "iot", "aws", "iotcore"]
 categories = [ "asynchronous", "network-programming", "web-programming::websocket"]
@@ -10,18 +10,22 @@ homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 documentation = "https://docs.rs/gneiss-mqtt-aws"
 repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
 readme = "README.md"
+resolver = "2"
 
 [package.metadata.docs.rs]
-features = []
-all-features = true
+features = [ "threaded-rustls", "threaded-native-tls", "tokio-rustls", "tokio-native-tls", "tokio-websockets" ]
 
 [features]
-default = []
+strict = [] # treats warnings as errors, only intended for internal checks
 testing = [] # enable when running tests to also run environmentally-controlled integration tests
-tokio-rustls = [ "dep:tokio", "gneiss-mqtt/tokio-rustls" ]
-tokio-native-tls = [ "dep:tokio", "gneiss-mqtt/tokio-native-tls" ]
+threaded = [ "gneiss-mqtt/threaded" ]
+threaded-rustls = [ "threaded", "gneiss-mqtt/threaded-rustls" ]
+threaded-native-tls = [ "threaded", "gneiss-mqtt/threaded-native-tls" ]
+tokio = [ "dep:tokio", "gneiss-mqtt/tokio" ]
+tokio-rustls = [ "tokio", "gneiss-mqtt/tokio-rustls" ]
+tokio-native-tls = [ "tokio", "gneiss-mqtt/tokio-native-tls" ]
 tokio-websockets = [
-    "dep:tokio",
+    "tokio",
     "gneiss-mqtt/tokio-websockets",
     "dep:aws-config",
     "dep:aws-credential-types",
@@ -29,6 +33,10 @@ tokio-websockets = [
     "dep:aws-smithy-runtime-api",
     "dep:http",
 ]
+
+[dev-dependencies]
+gneiss-mqtt = { path = "../gneiss-mqtt", features = [ "testing" ] }
+gneiss-mqtt-aws = { path = ".", features = [ "testing" ]}
 
 [dependencies]
 aws-config = { version = "1", optional = true }
@@ -39,4 +47,4 @@ gneiss-mqtt = { path = "../gneiss-mqtt" }
 http = { version = "0.2", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 urlencoding = { version = "2" }
-uuid = { version = "1", features = [ "v4", "fast-rng" ] }
+uuid = { version = "1", features = [ "v4", "fast-rng" ] } # required until IoT Core fixes auto-assigned client id handling

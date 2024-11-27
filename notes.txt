@@ -1,0 +1,42 @@
+Slow Start
+
+MqttClientOptions enum and field:
+
+ReconnectThrottleType
+  None,
+  SlowStart
+
+Add support to MqttOperation for non-packet based marker operation types
+
+OnDisconnectionEvent:
+  if reconnect_throttle is SlowStart:
+     user_operation_queue.append(EndSlowStartOperation)
+
+OnTransitionToConnected:
+  if reconnect_throttle is SlowStart:
+     set operation queue state to SlowStart
+
+
+service_queue:
+  // before acquire packet id
+  handle_non_packet_operations
+     set operation queue state to Unthrottled
+
+
+dequeue_operation:
+  // after high priority check
+  if state is Connected &&
+     operation queue state is SlowStart &&
+     pending_ack_exist(sub_unsub, publish)
+  return None   
+
+// verify that on ack receipt (removal) we guarantee a service schedule
+
+
+
+Max Retries support
+
+Add max_operation_retries config field to MqttClientOptions
+Add retry_count to Operation
+All unacked operations have their retry_count increased on disconnect
+Add a retry count check to the end of disconnection event handling, log failed publish resubmits appropriately
