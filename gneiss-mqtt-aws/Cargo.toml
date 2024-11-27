@@ -18,10 +18,10 @@ features = [ "threaded-rustls", "threaded-native-tls", "tokio-rustls", "tokio-na
 [features]
 strict = [] # treats warnings as errors, only intended for internal checks
 testing = [] # enable when running tests to also run environmentally-controlled integration tests
-threaded = []
+threaded = [ "gneiss-mqtt/threaded" ]
 threaded-rustls = [ "threaded", "gneiss-mqtt/threaded-rustls" ]
 threaded-native-tls = [ "threaded", "gneiss-mqtt/threaded-native-tls" ]
-tokio = [ "dep:tokio" ]
+tokio = [ "dep:tokio", "gneiss-mqtt/tokio" ]
 tokio-rustls = [ "tokio", "gneiss-mqtt/tokio-rustls" ]
 tokio-native-tls = [ "tokio", "gneiss-mqtt/tokio-native-tls" ]
 tokio-websockets = [
@@ -36,6 +36,7 @@ tokio-websockets = [
 
 [dev-dependencies]
 gneiss-mqtt = { path = "../gneiss-mqtt", features = [ "testing" ] }
+gneiss-mqtt-aws = { path = ".", features = [ "testing" ]}
 
 [dependencies]
 aws-config = { version = "1", optional = true }
@@ -46,4 +47,4 @@ gneiss-mqtt = { path = "../gneiss-mqtt" }
 http = { version = "0.2", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 urlencoding = { version = "2" }
-uuid = { version = "1", features = [ "v4", "fast-rng" ] }
+uuid = { version = "1", features = [ "v4", "fast-rng" ] } # required until IoT Core fixes auto-assigned client id handling

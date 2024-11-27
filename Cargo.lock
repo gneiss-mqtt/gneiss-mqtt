@@ -919,6 +919,7 @@ dependencies = [
  "aws-sigv4",
  "aws-smithy-runtime-api",
  "gneiss-mqtt",
+ "gneiss-mqtt-aws",
  "http 0.2.12",
  "tokio",
  "urlencoding",
