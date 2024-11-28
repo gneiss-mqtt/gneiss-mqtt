@@ -7,13 +7,12 @@ use std::time::{Duration};
 use crate::client::config::*;
 use crate::error::GneissResult;
 use crate::client::asynchronous::*;
-use crate::client::asynchronous::tokio::{TokioClientOptions};
+use crate::client::asynchronous::tokio::{TokioClientEventWaiter, TokioClientOptions};
 use crate::client::asynchronous::tokio::testing::*;
+use crate::client::waiter::*;
 use crate::mqtt::*;
 use crate::testing::mock_server::build_mock_client_server;
 use crate::testing::protocol::*;
-use crate::testing::waiter::*;
-use crate::testing::waiter::asynchronous::*;
 
 async fn simple_reconnect_test(builder : ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> GneissResult<()> {
     let client = builder.build_tokio(async_options, tokio_options).unwrap();
@@ -22,7 +21,7 @@ async fn simple_reconnect_test(builder : ClientBuilder, async_options: AsyncClie
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
     };
 
-    let reconnect_waiter = AsyncClientEventWaiter::new(client.clone(), wait_options, event_count);
+    let reconnect_waiter = TokioClientEventWaiter::new(client.clone(), wait_options, event_count);
 
     client.start(None)?;
 
@@ -54,8 +53,8 @@ async fn reconnect_backoff_reset_test(builder : ClientBuilder, async_options: As
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
     };
 
-    let first_reconnect_waiter = AsyncClientEventWaiter::new(client.clone(), first_wait_options, 12);
-    let success_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
+    let first_reconnect_waiter = TokioClientEventWaiter::new(client.clone(), first_wait_options, 12);
+    let success_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
 
     client.start(None)?;
 
@@ -66,7 +65,7 @@ async fn reconnect_backoff_reset_test(builder : ClientBuilder, async_options: As
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
     };
 
-    let final_reconnect_waiter = AsyncClientEventWaiter::new(client.clone(), final_wait_options, 3);
+    let final_reconnect_waiter = TokioClientEventWaiter::new(client.clone(), final_wait_options, 3);
 
     ::tokio::time::sleep(Duration::from_millis(connection_success_wait_millis)).await;
 
