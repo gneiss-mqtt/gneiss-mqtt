@@ -572,6 +572,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "custom-auth-signed"
+version = "0.1.0"
+
+[[package]]
+name = "custom-auth-unsigned"
+version = "0.1.0"
+
+[[package]]
 name = "data-encoding"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1370,6 +1378,16 @@ name = "mirai-annotations"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9be0862c1b3f26a88803c4a49de6889c10e608b3ee9344e6ef5b45fb37ad3d1"
+
+[[package]]
+name = "mtls"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+ "tokio",
+]
 
 [[package]]
 name = "native-tls"
@@ -2365,6 +2383,10 @@ name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
+
+[[package]]
+name = "websockets"
+version = "0.1.0"
 
 [[package]]
 name = "which"

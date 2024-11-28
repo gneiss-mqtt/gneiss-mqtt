@@ -9,5 +9,9 @@ members = [
 	"elastigneiss/elasti-gneiss-threaded",
 	"elastigneiss/elasti-gneiss-tokio",
 	"gneiss-mqtt",
-	"gneiss-mqtt-aws"
+	"gneiss-mqtt-aws",
+	"gneiss-mqtt-aws/examples/tokio/custom-auth-signed",
+	"gneiss-mqtt-aws/examples/tokio/custom-auth-unsigned",
+	"gneiss-mqtt-aws/examples/tokio/mtls",
+	"gneiss-mqtt-aws/examples/tokio/websockets",
 ]

@@ -1,0 +1,18 @@
+[package]
+name = "mtls"
+license = "Apache-2.0"
+version = "0.0.0"
+edition = "2021"
+keywords = ["mqtt", "mqtt5", "iot", "aws", "iotcore"]
+categories = [ "asynchronous", "network-programming", "web-programming::websocket"]
+description = "Tokio-based example that connects to AWS IoT Core via MTLS"
+homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+readme = "README.md"
+resolver = "2"
+
+[dependencies]
+argh = { version = "0.1" }
+gneiss-mqtt = { path = "../../../../gneiss-mqtt", features = [ "tokio-rustls" ] }
+gneiss-mqtt-aws = { path = "../../../", features = [ "tokio-rustls" ]}
+tokio = { version = "1", features = ["full"] }
