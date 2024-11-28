@@ -50,6 +50,7 @@ for guidance on this process.
 To create a client and connect:
 
 ```no_run
+use gneiss_mqtt::client::asynchronous::AsyncClient;
 use gneiss_mqtt_aws::AwsClientBuilder;
 use tokio::runtime::Handle;
 
@@ -85,6 +86,7 @@ details.
 To create a client and connect:
 
 ```no_run
+use gneiss_mqtt::client::asynchronous::AsyncClient;
 use gneiss_mqtt_aws::{AwsClientBuilder, WebsocketSigv4OptionsBuilder};
 use tokio::runtime::Handle;
 
@@ -133,6 +135,7 @@ supported custom authentication modes:
 For an unsigned custom authorizer (for testing/internal purposes only, not recommended for production):
 
 ```no_run
+use gneiss_mqtt::client::asynchronous::AsyncClient;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
 use tokio::runtime::Handle;
 
@@ -170,6 +173,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 For a signed custom authorizer (recommended for production):
 
 ```no_run
+use gneiss_mqtt::client::asynchronous::AsyncClient;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
 use tokio::runtime::Handle;
 
@@ -876,9 +880,13 @@ mod testing {
     use gneiss_mqtt::client::{ClientEvent};
     use gneiss_mqtt::client::waiter::*;
     #[cfg(feature = "tokio")]
+    use gneiss_mqtt::client::asynchronous::AsyncClient;
+    #[cfg(feature = "tokio")]
     use gneiss_mqtt::client::asynchronous::tokio::TokioClientEventWaiter;
     #[cfg(feature = "threaded")]
     use gneiss_mqtt::client::synchronous::threaded::ThreadedClientEventWaiter;
+    #[cfg(feature = "threaded")]
+    use gneiss_mqtt::client::synchronous::SyncClient;
     use super::*;
 
     fn get_iot_core_endpoint() -> String {

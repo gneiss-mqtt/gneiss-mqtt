@@ -114,7 +114,52 @@ pub trait AsyncClient {
 /// Direct client construction is messy due to the different possibilities for TLS, async runtime,
 /// etc...  We encourage you to use the various client builders in this crate, or in other crates,
 /// to simplify this process.
-pub type AsyncClientHandle = Arc<dyn AsyncClient + Send + Sync>;
+#[derive(Clone)]
+pub struct AsyncClientHandle {
+    client: Arc<dyn AsyncClient + Send + Sync>
+}
+
+impl AsyncClientHandle {
+
+    #[cfg_attr(not(any(feature = "tokio-rustls", feature = "tokio-native-tls", feature = "tokio-websockets")), allow(dead_code))]
+    pub(crate) fn new(client: Arc<dyn AsyncClient + Send + Sync>) -> Self {
+        Self { client }
+    }
+}
+
+impl AsyncClient for AsyncClientHandle {
+    fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> GneissResult<()> {
+        self.client.start(default_listener)
+    }
+
+    fn stop(&self, options: Option<StopOptions>) -> GneissResult<()> {
+        self.client.stop(options)
+    }
+
+    fn close(&self) -> GneissResult<()> {
+        self.client.close()
+    }
+
+    fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> AsyncPublishResult {
+        self.client.publish(packet, options)
+    }
+
+    fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> AsyncSubscribeResult {
+        self.client.subscribe(packet, options)
+    }
+
+    fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> AsyncUnsubscribeResult {
+        self.client.unsubscribe(packet, options)
+    }
+
+    fn add_event_listener(&self, listener: ClientEventListener) -> GneissResult<ListenerHandle> {
+        self.client.add_event_listener(listener)
+    }
+
+    fn remove_event_listener(&self, listener: ListenerHandle) -> GneissResult<()> {
+        self.client.remove_event_listener(listener)
+    }
+}
 
 /// A structure that holds configuration related to a client's asynchronous properties and
 /// internal implementation.  Only relevant to asynchronous clients.
