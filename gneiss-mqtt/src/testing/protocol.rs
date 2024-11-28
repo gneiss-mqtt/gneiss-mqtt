@@ -715,8 +715,7 @@ impl ProtocolStateTestFixture {
     }
 }
 
-#[allow(clippy::borrowed_box)]
-fn find_nth_packet_of_type<'a, T>(packet_sequence : T, packet_type : PacketType, count: usize, start_position : Option<usize>, end_position : Option<usize>) -> Option<(usize, &'a Box<MqttPacket>)> where T : Iterator<Item = &'a Box<MqttPacket>> {
+fn find_nth_packet_of_type<'a, T>(packet_sequence : T, packet_type : PacketType, count: usize, start_position : Option<usize>, end_position : Option<usize>) -> Option<(usize, &'a MqttPacket)> where T : Iterator<Item = &'a Box<MqttPacket>> {
     let start = start_position.unwrap_or(0);
     let mut index = start;
     let mut seen = 0;
@@ -1531,7 +1530,7 @@ fn do_subscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_ti
 
     let (index, to_broker_packet) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Subscribe, 1, None, None).unwrap();
     assert_eq!(1, index);
-    if let MqttPacket::Subscribe(to_broker_subscribe) = &**to_broker_packet {
+    if let MqttPacket::Subscribe(to_broker_subscribe) = to_broker_packet {
         assert_eq!(subscribe.subscriptions, to_broker_subscribe.subscriptions);
     } else {
         panic!("Expected subscribe");
@@ -1549,7 +1548,7 @@ fn do_subscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_ti
 
     let (index, to_client_packet) = find_nth_packet_of_type(fixture.to_client_packet_stream.iter(), PacketType::Suback, 1, None, None).unwrap();
     assert_eq!(1, index);
-    if let MqttPacket::Suback(to_client_suback) = &**to_client_packet {
+    if let MqttPacket::Suback(to_client_suback) = to_client_packet {
         assert_eq!(suback_result, *to_client_suback);
     } else {
         panic!("Expected suback");
@@ -1570,7 +1569,7 @@ fn do_publish_success(fixture : &mut ProtocolStateTestFixture, qos: QualityOfSer
 
     let (index, to_broker_packet) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Publish, 1, None, None).unwrap();
     assert_eq!(1, index);
-    if let MqttPacket::Publish(to_broker_publish) = &**to_broker_packet {
+    if let MqttPacket::Publish(to_broker_publish) = to_broker_packet {
         assert_eq!(publish.qos, to_broker_publish.qos);
         assert_eq!(publish.topic, to_broker_publish.topic);
     } else {
@@ -1649,7 +1648,7 @@ fn do_unsubscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_
 
     let (index, to_broker_packet) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Unsubscribe, 1, None, None).unwrap();
     assert_eq!(1, index);
-    if let MqttPacket::Unsubscribe(to_broker_unsubscribe) = &**to_broker_packet {
+    if let MqttPacket::Unsubscribe(to_broker_unsubscribe) = to_broker_packet {
         assert_eq!(unsubscribe.topic_filters, to_broker_unsubscribe.topic_filters);
     } else {
         panic!("Expected unsubscribe");
@@ -1667,7 +1666,7 @@ fn do_unsubscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_
 
     let (index, to_client_packet) = find_nth_packet_of_type(fixture.to_client_packet_stream.iter(), PacketType::Unsuback, 1, None, None).unwrap();
     assert_eq!(1, index);
-    if let MqttPacket::Unsuback(to_client_unsuback) = &**to_client_packet {
+    if let MqttPacket::Unsuback(to_client_unsuback) = to_client_packet {
         assert_eq!(unsuback_result, *to_client_unsuback);
     } else {
         panic!("Expected unsuback");
@@ -3091,7 +3090,7 @@ macro_rules! define_acked_publish_success_disconnect_pending_with_session_resump
 
                 let (_, first_publish_packet) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Publish, 1, None, None).unwrap();
                 let packet_id =
-                    match &**first_publish_packet {
+                    match first_publish_packet {
                         MqttPacket::Publish(first_publish) => {
                             assert_eq!(false, first_publish.duplicate);
                             first_publish.packet_id
@@ -3104,21 +3103,21 @@ macro_rules! define_acked_publish_success_disconnect_pending_with_session_resump
                 if $qos2_pubrel_timeout {
                     assert!(find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Publish, 2, None, None).is_none());
                     let (_, first_pubrel_packet) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Pubrel, 1, None, None).unwrap();
-                    if let MqttPacket::Pubrel(first_pubrel) = &**first_pubrel_packet {
+                    if let MqttPacket::Pubrel(first_pubrel) = first_pubrel_packet {
                         assert_eq!(packet_id, first_pubrel.packet_id);
                     } else {
                         panic!("Expected pubrel");
                     }
 
                     let (_, second_pubrel_packet) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Pubrel, 2, None, None).unwrap();
-                    if let MqttPacket::Pubrel(second_pubrel) = &**second_pubrel_packet {
+                    if let MqttPacket::Pubrel(second_pubrel) = second_pubrel_packet {
                         assert_eq!(packet_id, second_pubrel.packet_id);
                     } else {
                         panic!("Expected pubrel");
                     }
                 } else {
                     let (_, second_publish_packet) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Publish, 2, None, None).unwrap();
-                    if let MqttPacket::Publish(second_publish) = &**second_publish_packet {
+                    if let MqttPacket::Publish(second_publish) = second_publish_packet {
                         assert!(second_publish.duplicate);
                         assert_eq!(second_publish.packet_id, packet_id);
                     } else {
@@ -3321,7 +3320,7 @@ fn connected_state_user_disconnect_success_non_empty_queues() {
     verify_packet_type_sequence(fixture.to_broker_packet_stream.iter(), packet_types.into_iter(), Some(second_connect_index));
 
     let (_, expected_qos2_publish) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Publish, 1, Some(second_connect_index), None).unwrap();
-    if let MqttPacket::Publish(expected_qos2) = &**expected_qos2_publish {
+    if let MqttPacket::Publish(expected_qos2) = expected_qos2_publish {
         assert_eq!(QualityOfService::ExactlyOnce, expected_qos2.qos);
         assert_eq!(Some("qos2".as_bytes().to_vec()), expected_qos2.payload);
     } else {
@@ -3329,7 +3328,7 @@ fn connected_state_user_disconnect_success_non_empty_queues() {
     }
 
     let (_, expected_qos1_publish) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Publish, 2, Some(second_connect_index), None).unwrap();
-    if let MqttPacket::Publish(expected_qos1) = &**expected_qos1_publish {
+    if let MqttPacket::Publish(expected_qos1) = expected_qos1_publish {
         assert_eq!(QualityOfService::AtLeastOnce, expected_qos1.qos);
         assert_eq!(Some("qos1-1".as_bytes().to_vec()), expected_qos1.payload);
     } else {
@@ -4265,7 +4264,7 @@ fn connected_state_outbound_topic_aliasing_used() {
     verify_protocol_state_empty(&fixture);
 
     let (_, first_packet) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Publish, 1, None, None).unwrap();
-    if let MqttPacket::Publish(publish) = &**first_packet {
+    if let MqttPacket::Publish(publish) = first_packet {
         assert_eq!(Some(1), publish.topic_alias);
         assert_eq!("hello/world".to_string(), publish.topic);
     } else {
@@ -4273,7 +4272,7 @@ fn connected_state_outbound_topic_aliasing_used() {
     }
 
     let (_, second_packet) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Publish, 2, None, None).unwrap();
-    if let MqttPacket::Publish(publish) = &**second_packet {
+    if let MqttPacket::Publish(publish) = second_packet {
         assert_eq!(Some(1), publish.topic_alias);
         assert_eq!(0, publish.topic.len());
     } else {
@@ -4281,7 +4280,7 @@ fn connected_state_outbound_topic_aliasing_used() {
     }
 
     let (_, third_packet) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Publish, 3, None, None).unwrap();
-    if let MqttPacket::Publish(publish) = &**third_packet {
+    if let MqttPacket::Publish(publish) = third_packet {
         assert_eq!(Some(1), publish.topic_alias);
         assert_eq!(0, publish.topic.len());
     } else {
