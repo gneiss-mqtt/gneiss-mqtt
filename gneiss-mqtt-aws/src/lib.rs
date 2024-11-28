@@ -874,11 +874,11 @@ mod testing {
     #[cfg(feature = "tokio")]
     use std::pin::Pin;
     use gneiss_mqtt::client::{ClientEvent};
-    use gneiss_mqtt::testing::waiter::*;
+    use gneiss_mqtt::client::waiter::*;
     #[cfg(feature = "tokio")]
-    use gneiss_mqtt::testing::waiter::asynchronous::AsyncClientEventWaiter;
+    use gneiss_mqtt::client::asynchronous::tokio::TokioClientEventWaiter;
     #[cfg(feature = "threaded")]
-    use gneiss_mqtt::testing::waiter::synchronous::SyncClientEventWaiter;
+    use gneiss_mqtt::client::synchronous::threaded::ThreadedClientEventWaiter;
     use super::*;
 
     fn get_iot_core_endpoint() -> String {
@@ -994,7 +994,7 @@ mod testing {
         let client = builder.build_threaded(None)?;
 
         let waiter_config = create_connect_waiter_options();
-        let connection_result_waiter = SyncClientEventWaiter::new(client.clone(), waiter_config, 1);
+        let connection_result_waiter = ThreadedClientEventWaiter::new(client.clone(), waiter_config, 1);
 
         client.start(None)?;
 
@@ -1028,7 +1028,7 @@ mod testing {
         let client = builder.build_tokio(&Handle::current())?;
 
         let waiter_config = create_connect_waiter_options();
-        let connection_result_waiter = AsyncClientEventWaiter::new(client.clone(), waiter_config, 1);
+        let connection_result_waiter = TokioClientEventWaiter::new(client.clone(), waiter_config, 1);
 
         client.start(None)?;
 

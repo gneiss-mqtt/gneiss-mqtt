@@ -12,5 +12,3 @@ Integration test functionality used throughout the gneiss ecosystem.  Only enabl
 pub(crate) mod integration;
 pub(crate) mod protocol;
 pub(crate) mod mock_server;
-pub mod waiter;
-

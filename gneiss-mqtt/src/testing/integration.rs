@@ -14,20 +14,15 @@ use crate::client::*;
 #[cfg(feature="tokio")]
 use crate::client::asynchronous::{AsyncClientOptions, AsyncClientHandle};
 #[cfg(feature="tokio")]
-use crate::client::asynchronous::tokio::{TokioClientOptions};
+use crate::client::asynchronous::tokio::{TokioClientEventWaiter, TokioClientOptions};
 #[cfg(feature="threaded")]
 use crate::client::synchronous::{SyncClientOptions, SyncClientOptionsBuilder, SyncClientHandle};
 #[cfg(feature="threaded")]
-use crate::client::synchronous::threaded::{ThreadedClientOptions, ThreadedClientOptionsBuilder};
+use crate::client::synchronous::threaded::{ThreadedClientEventWaiter, ThreadedClientOptions, ThreadedClientOptionsBuilder};
 use crate::client::config::*;
+use crate::client::waiter::*;
 use crate::error::{GneissError, GneissResult};
 use crate::mqtt::*;
-
-use crate::testing::waiter::*;
-#[cfg(feature="tokio")]
-use crate::testing::waiter::asynchronous::*;
-#[cfg(feature="threaded")]
-use crate::testing::waiter::synchronous::*;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub(crate) enum TlsUsage {
@@ -178,8 +173,8 @@ pub(crate) type ThreadedTestFactory = Box<dyn Fn(ClientBuilder, SyncClientOption
 
 #[cfg(feature = "tokio")]
 pub(crate) async fn start_async_client(client: &AsyncClientHandle) -> GneissResult<()> {
-    let connection_attempt_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionAttempt);
-    let connection_success_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
+    let connection_attempt_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionAttempt);
+    let connection_success_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
 
     client.start(None)?;
 
@@ -199,8 +194,8 @@ pub(crate) async fn start_async_client(client: &AsyncClientHandle) -> GneissResu
 
 #[cfg(feature = "tokio")]
 pub(crate) async fn stop_async_client(client: &AsyncClientHandle) -> GneissResult<()> {
-    let disconnection_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
-    let stopped_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
+    let disconnection_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
+    let stopped_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
 
     client.stop(None)?;
 
@@ -221,8 +216,8 @@ pub(crate) async fn stop_async_client(client: &AsyncClientHandle) -> GneissResul
 
 #[cfg(feature = "threaded")]
 pub(crate) fn start_sync_client(client: &SyncClientHandle) -> GneissResult<()> {
-    let connection_attempt_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionAttempt);
-    let connection_success_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
+    let connection_attempt_waiter = ThreadedClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionAttempt);
+    let connection_success_waiter = ThreadedClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
 
     client.start(None)?;
 
@@ -246,8 +241,8 @@ pub(crate) fn start_sync_client(client: &SyncClientHandle) -> GneissResult<()> {
 
 #[cfg(feature = "threaded")]
 pub(crate) fn stop_sync_client(client: &SyncClientHandle) -> GneissResult<()> {
-    let disconnection_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
-    let stopped_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
+    let disconnection_waiter = ThreadedClientEventWaiter::new_single(client.clone(), ClientEventType::Disconnection);
+    let stopped_waiter = ThreadedClientEventWaiter::new_single(client.clone(), ClientEventType::Stopped);
 
     client.stop(None)?;
 
@@ -370,7 +365,7 @@ pub(crate) fn sync_subscribe_publish_test(client: SyncClientHandle, qos: Quality
 
     let _ = client.subscribe(subscribe, None).recv();
 
-    let publish_received_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
+    let publish_received_waiter = ThreadedClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
 
     let publish = PublishPacket::builder(topic.clone(), qos)
         .with_payload(payload.clone())
@@ -409,7 +404,7 @@ pub(crate) async fn async_subscribe_publish_test(client: AsyncClientHandle, qos:
 
     let _ = client.subscribe(subscribe, None).await?;
 
-    let publish_received_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
+    let publish_received_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
 
     let publish = PublishPacket::builder(topic.clone(), qos)
         .with_payload(payload.clone())
@@ -465,7 +460,7 @@ pub(crate) fn sync_will_test(base_client_options: ClientBuilder, sync_options: S
         .build();
     let _ = client.subscribe(subscribe, None).recv()?;
 
-    let publish_received_waiter = SyncClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
+    let publish_received_waiter = ThreadedClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
 
     // no stop options, so we just close the socket locally; the broker should send the will
     stop_sync_client(&will_client)?;
@@ -517,7 +512,7 @@ pub(crate) async fn async_will_test(base_client_options: ClientBuilder, async_op
         .build();
     let _ = client.subscribe(subscribe, None).await?;
 
-    let publish_received_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
+    let publish_received_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::PublishReceived);
 
     // no stop options, so we just close the socket locally; the broker should send the will
     stop_async_client(&will_client).await?;
@@ -552,7 +547,7 @@ pub(crate) fn sync_connect_disconnect_cycle_session_rejoin_test(client: SyncClie
                 false
             })),
         };
-        let connection_success_waiter = SyncClientEventWaiter::new(client.clone(), waiter_config, 1);
+        let connection_success_waiter = ThreadedClientEventWaiter::new(client.clone(), waiter_config, 1);
 
         client.start(None)?;
 
@@ -580,7 +575,7 @@ pub(crate) async fn async_connect_disconnect_cycle_session_rejoin_test(client: A
                 false
             })),
         };
-        let connection_success_waiter = AsyncClientEventWaiter::new(client.clone(), waiter_config, 1);
+        let connection_success_waiter = TokioClientEventWaiter::new(client.clone(), waiter_config, 1);
 
         client.start(None)?;
 

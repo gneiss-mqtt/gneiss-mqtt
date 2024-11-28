@@ -13,6 +13,7 @@ mod longtests;
 
 use crate::client::*;
 use crate::client::config::*;
+use crate::client::waiter::*;
 use crate::error::{GneissError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
@@ -1084,13 +1085,109 @@ async fn apply_proxy_connect_to_stream<S>(stream : Pin<Box<impl Future<Output=Gn
     }
 }
 
+/// Result type for calling wait() on an async client event waiter
+pub type ClientEventWaitFuture = dyn Future<Output=GneissResult<Vec<ClientEventRecord>>> + Send;
+
+/// Simple debug type that uses the client listener framework to allow logic to wait for
+/// configurable client event sequences.
+pub struct TokioClientEventWaiter {
+    event_count: usize,
+
+    client: AsyncClientHandle,
+
+    listener: Option<ListenerHandle>,
+
+    event_receiver: ::tokio::sync::mpsc::UnboundedReceiver<ClientEventRecord>,
+
+    events: Vec<ClientEventRecord>,
+}
+
+impl TokioClientEventWaiter {
+
+    fn new_internal(client: AsyncClientHandle, config: ClientEventWaiterOptions, event_count: usize) -> Self {
+        let (tx, rx) = ::tokio::sync::mpsc::unbounded_channel();
+
+        let mut waiter = TokioClientEventWaiter {
+            event_count,
+            client: client.clone(),
+            listener: None,
+            event_receiver: rx,
+            events: Vec::new(),
+        };
+
+        let listener_fn = move |event: Arc<ClientEvent>| {
+            match &config.wait_type {
+                ClientEventWaitType::Type(event_type) => {
+                    if !client_event_matches(&event, *event_type) {
+                        return;
+                    }
+                }
+                ClientEventWaitType::Predicate(event_predicate) => {
+                    if !(*event_predicate)(&event) {
+                        return;
+                    }
+                }
+            }
+
+            let event_record = ClientEventRecord {
+                event: event.clone(),
+                timestamp: Instant::now(),
+            };
+
+            let _ = tx.send(event_record);
+        };
+
+        waiter.listener = Some(client.add_event_listener(Arc::new(listener_fn)).unwrap());
+        waiter
+    }
+
+    /// Creates a new ClientEventWaiter instance from full configuration
+    #[cfg(feature = "testing")]
+    pub fn new(client: AsyncClientHandle, config: ClientEventWaiterOptions, event_count: usize) -> Self {
+        Self::new_internal(client, config, event_count)
+    }
+
+    /// Creates a new ClientEventWaiter instance that will wait for a single occurrence of a single event type
+    pub fn new_single(client: AsyncClientHandle, event_type: ClientEventType) -> Self {
+        let config = ClientEventWaiterOptions {
+            wait_type: ClientEventWaitType::Type(event_type),
+        };
+
+        Self::new_internal(client, config, 1)
+    }
+
+    /// Waits for and returns an event sequence that matches the original configuration
+    pub fn wait(mut self) -> Pin<Box<ClientEventWaitFuture>> {
+        Box::pin(async move {
+            while self.events.len() < self.event_count {
+                match self.event_receiver.recv().await {
+                    None => {
+                        return Err(GneissError::new_other_error("Channel closed"));
+                    }
+                    Some(event) => {
+                        self.events.push(event);
+                    }
+                }
+            }
+
+            Ok(self.events.clone())
+        })
+    }
+}
+
+impl Drop for TokioClientEventWaiter {
+    fn drop(&mut self) {
+        let listener_handler = self.listener.take().unwrap();
+
+        let _ = self.client.remove_event_listener(listener_handler);
+    }
+}
+
 #[cfg(all(test, feature = "testing"))]
 pub(crate) mod testing {
     use std::time::Duration;
     use crate::error::*;
     use crate::testing::integration::*;
-    use crate::testing::waiter::*;
-    use crate::testing::waiter::asynchronous::*;
     use super::*;
 
     fn build_tokio_client(builder: ClientBuilder, async_client_options: AsyncClientOptions, tokio_client_options: TokioClientOptions) -> AsyncClientHandle {
@@ -1316,7 +1413,7 @@ pub(crate) mod testing {
 
     async fn connection_failure_test(builder : ClientBuilder, async_options: AsyncClientOptions, tokio_client_options: TokioClientOptions) -> GneissResult<()> {
         let client = builder.build_tokio(async_options, tokio_client_options).unwrap();
-        let connection_failure_waiter = AsyncClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
+        let connection_failure_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
 
         client.start(None)?;
 

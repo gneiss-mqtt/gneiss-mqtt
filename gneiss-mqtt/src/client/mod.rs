@@ -10,6 +10,7 @@ Module containing the public MQTT client and associated types necessary to invok
 pub mod config;
 pub mod synchronous;
 pub mod asynchronous;
+pub mod waiter;
 
 use crate::client::config::*;
 use crate::error::{GneissError, GneissResult};
