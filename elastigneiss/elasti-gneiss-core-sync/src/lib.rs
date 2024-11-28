@@ -6,7 +6,7 @@
 
 use argh::FromArgs;
 use gneiss_mqtt::client::*;
-use gneiss_mqtt::client::synchronous::{SyncClientHandle};
+use gneiss_mqtt::client::synchronous::{SyncClient, SyncClientHandle};
 use gneiss_mqtt::mqtt::*;
 use std::sync::Arc;
 use std::io::{self, BufRead};

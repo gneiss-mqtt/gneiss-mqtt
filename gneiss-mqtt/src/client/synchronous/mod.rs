@@ -218,7 +218,67 @@ pub trait SyncClient {
 /// Direct client construction is messy due to the different possibilities for TLS, async runtime,
 /// etc...  We encourage you to use the various client builders in this crate, or in other crates,
 /// to simplify this process.
-pub type SyncClientHandle = Arc<dyn SyncClient + Send + Sync>;
+//pub type SyncClientHandle = Arc<dyn SyncClient + Send + Sync>;
+#[derive(Clone)]
+pub struct SyncClientHandle {
+    client: Arc<dyn SyncClient + Send + Sync>
+}
+
+impl SyncClientHandle {
+
+    #[cfg_attr(not(any(feature = "threaded-rustls", feature = "threaded-native-tls", feature = "threaded-websockets")), allow(dead_code))]
+    pub(crate) fn new(client: Arc<dyn SyncClient + Send + Sync>) -> SyncClientHandle {
+        SyncClientHandle {
+            client,
+        }
+    }
+}
+
+impl SyncClient for SyncClientHandle {
+    fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> GneissResult<()> {
+        self.client.start(default_listener)
+    }
+
+    fn stop(&self, options: Option<StopOptions>) -> GneissResult<()> {
+        self.client.stop(options)
+    }
+
+    fn close(&self) -> GneissResult<()> {
+        self.client.close()
+    }
+
+    fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> SyncPublishResult {
+        self.client.publish(packet, options)
+    }
+
+    fn publish_with_callback(&self, packet: PublishPacket, options: Option<PublishOptions>, completion_callback: SyncPublishResultCallback) -> GneissResult<()> {
+        self.client.publish_with_callback(packet, options, completion_callback)
+    }
+
+    fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> SyncSubscribeResult {
+        self.client.subscribe(packet, options)
+    }
+
+    fn subscribe_with_callback(&self, packet: SubscribePacket, options: Option<SubscribeOptions>, completion_callback: SyncSubscribeResultCallback) -> GneissResult<()> {
+        self.client.subscribe_with_callback(packet, options, completion_callback)
+    }
+
+    fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> SyncUnsubscribeResult {
+        self.client.unsubscribe(packet, options)
+    }
+
+    fn unsubscribe_with_callback(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>, completion_callback: SyncUnsubscribeResultCallback) -> GneissResult<()> {
+        self.client.unsubscribe_with_callback(packet, options, completion_callback)
+    }
+
+    fn add_event_listener(&self, listener: ClientEventListener) -> GneissResult<ListenerHandle> {
+        self.client.add_event_listener(listener)
+    }
+
+    fn remove_event_listener(&self, listener: ListenerHandle) -> GneissResult<()> {
+        self.client.remove_event_listener(listener)
+    }
+}
 
 /// A structure that holds configuration related to a client's synchronous properties and
 /// internal implementation.  Only relevant to synchronous clients.

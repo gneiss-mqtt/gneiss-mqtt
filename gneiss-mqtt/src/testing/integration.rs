@@ -12,11 +12,11 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use crate::client::*;
 #[cfg(feature="tokio")]
-use crate::client::asynchronous::{AsyncClientOptions, AsyncClientHandle};
+use crate::client::asynchronous::{AsyncClient, AsyncClientOptions, AsyncClientHandle};
 #[cfg(feature="tokio")]
 use crate::client::asynchronous::tokio::{TokioClientEventWaiter, TokioClientOptions};
 #[cfg(feature="threaded")]
-use crate::client::synchronous::{SyncClientOptions, SyncClientOptionsBuilder, SyncClientHandle};
+use crate::client::synchronous::{SyncClient, SyncClientOptions, SyncClientOptionsBuilder, SyncClientHandle};
 #[cfg(feature="threaded")]
 use crate::client::synchronous::threaded::{ThreadedClientEventWaiter, ThreadedClientOptions, ThreadedClientOptionsBuilder};
 use crate::client::config::*;

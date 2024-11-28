@@ -549,7 +549,7 @@ pub(crate) fn create_runtime_states<T>(tokio_config: TokioClientOptionsInternal<
 
 
 /// Creates a new async MQTT5 client that will use the tokio async runtime
-pub fn new_with_tokio<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, tokio_config: TokioClientOptionsInternal<T>) -> AsyncClientHandle
+pub fn new_tokio_client<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, tokio_config: TokioClientOptionsInternal<T>) -> AsyncClientHandle
 where T: AsyncRead + AsyncWrite + Send + Sync + 'static {
     let handle = tokio_config.runtime_handle.clone();
     let (operation_sender, internal_state) = create_runtime_states(tokio_config);
@@ -562,10 +562,12 @@ where T: AsyncRead + AsyncWrite + Send + Sync + 'static {
 
     spawn_client_impl(client_impl, internal_state, handle);
 
-    Arc::new(TokioClient{
-        operation_sender,
-        listener_id_allocator: Mutex::new(1),
-    })
+    AsyncClientHandle::new(
+        Arc::new(TokioClient{
+            operation_sender,
+            listener_id_allocator: Mutex::new(1),
+        })
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -607,7 +609,7 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttCl
         };
 
         info!("make_direct_client_no_tls - plaintext-to-proxy -> plaintext-to-broker");
-        Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+        Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
     } else {
         let tokio_options_internal = TokioClientOptionsInternal {
             connection_factory: Box::new(move || {
@@ -617,7 +619,7 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttCl
         };
 
         info!("make_direct_client_no_tls - plaintext-to-broker");
-        Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+        Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
     }
 }
 
@@ -643,7 +645,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
                 };
 
                 info!("make_direct_client_rustls - tls-to-proxy -> tls-to-broker");
-                Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+                Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
             } else {
                 let tokio_options_internal = TokioClientOptionsInternal {
                     connection_factory: Box::new(move || {
@@ -656,7 +658,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
                 };
 
                 info!("make_direct_client_rustls - plaintext-to-proxy -> tls-to-broker");
-                Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+                Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
             }
         } else {
             let tokio_options_internal = TokioClientOptionsInternal {
@@ -668,7 +670,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
             };
 
             info!("make_direct_client_rustls - tls-to-broker");
-            Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+            Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
         if let Some(proxy_tls_options) = http_proxy_options.tls_options {
@@ -683,7 +685,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
             };
 
             info!("make_direct_client_rustls - tls-to-proxy -> plaintext-to-broker");
-            Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+            Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
         } else {
             panic!("Tls direct client creation invoked without tls configuration")
         }
@@ -715,7 +717,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
                 };
 
                 info!("make_direct_client_native_tls - tls-to-proxy -> tls-to-broker");
-                Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+                Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
             } else {
                 let tokio_options_internal = TokioClientOptionsInternal {
                     connection_factory: Box::new(move || {
@@ -728,7 +730,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
                 };
 
                 info!("make_direct_client_native_tls - plaintext-to-proxy -> tls-to-broker");
-                Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+                Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
             }
         } else {
             let tokio_options_internal = TokioClientOptionsInternal {
@@ -740,7 +742,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
             };
 
             info!("make_direct_client_native_tls - tls-to-broker");
-            Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+            Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
         if let Some(proxy_tls_options) = http_proxy_options.tls_options {
@@ -755,7 +757,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
             };
 
             info!("make_direct_client_native_tls - tls-to-proxy -> plaintext-to-broker");
-            Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+            Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
         } else {
             panic!("Tls direct client creation invoked without tls configuration")
         }
@@ -797,7 +799,7 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: Mqt
         };
 
         info!("create_websocket_client_plaintext_to_proxy_plaintext_to_broker");
-        Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+        Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
     } else {
         let tokio_options_internal = TokioClientOptionsInternal {
             connection_factory: Box::new(move || {
@@ -808,7 +810,7 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: Mqt
         };
 
         info!("create_websocket_client_plaintext_to_broker");
-        Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+        Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
     }
 }
 
@@ -836,7 +838,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
                 };
 
                 info!("make_websocket_client_rustls - tls-to-proxy -> tls-to-broker");
-                Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+                Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
             } else {
                 let tokio_options_internal = TokioClientOptionsInternal {
                     connection_factory: Box::new(move || {
@@ -850,7 +852,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
                 };
 
                 info!("make_websocket_client_rustls - plaintext-to-proxy -> tls-to-broker");
-                Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+                Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
             }
         } else {
             let tokio_options_internal = TokioClientOptionsInternal {
@@ -863,7 +865,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
             };
 
             info!("make_websocket_client_rustls - tls-to-broker");
-            Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+            Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
         if let Some(proxy_tls_options) = http_proxy_options.tls_options {
@@ -879,7 +881,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
             };
 
             info!("make_websocket_client_rustls - tls-to-proxy -> plaintext-to-broker");
-            Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+            Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
         } else {
             panic!("Tls websocket client creation invoked without tls configuration")
         }
@@ -912,7 +914,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Op
                 };
 
                 info!("make_websocket_client_native_tls - tls-to-proxy -> tls-to-broker");
-                Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+                Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
             } else {
                 let tokio_options_internal = TokioClientOptionsInternal {
                     connection_factory: Box::new(move || {
@@ -926,7 +928,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Op
                 };
 
                 info!("make_websocket_client_native_tls - plaintext-to-proxy -> tls-to-broker");
-                Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+                Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
             }
         } else {
             let tokio_options_internal = TokioClientOptionsInternal {
@@ -939,7 +941,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Op
             };
 
             info!("make_websocket_client_native_tls - tls-to-broker");
-            Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+            Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
         if let Some(proxy_tls_options) = http_proxy_options.tls_options {
@@ -955,7 +957,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Op
             };
 
             info!("make_websocket_client_native_tls - tls-to-proxy -> plaintext-to-broker");
-            Ok(new_with_tokio(client_options, connect_options, tokio_options_internal))
+            Ok(new_tokio_client(client_options, connect_options, tokio_options_internal))
         } else {
             panic!("Tls websocket client creation invoked without tls configuration")
         }

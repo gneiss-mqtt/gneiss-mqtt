@@ -643,7 +643,7 @@ pub(crate) fn create_runtime_states<T>(threaded_config: ThreadedClientOptions, c
 }
 
 /// Creates a new sync MQTT5 client that will use background threads for the client and connection attempts
-pub fn new_threaded<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, threaded_config: ThreadedClientOptions, connection_factory: ConnectionFactory<T>) -> SyncClientHandle
+pub fn new_threaded_client<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, threaded_config: ThreadedClientOptions, connection_factory: ConnectionFactory<T>) -> SyncClientHandle
 where T: Read + Write + Send + Sync + 'static {
     let (operation_sender, internal_state) = create_runtime_states(threaded_config, connection_factory);
 
@@ -655,10 +655,12 @@ where T: Read + Write + Send + Sync + 'static {
 
     spawn_client_impl(client_impl, internal_state);
 
-    Arc::new(ThreadedClient{
-        operation_sender,
-        listener_id_allocator: Mutex::new(1),
-    })
+    SyncClientHandle::new(
+        Arc::new(ThreadedClient{
+            operation_sender,
+            listener_id_allocator: Mutex::new(1),
+        })
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -698,7 +700,7 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttCl
         });
 
         info!("threaded make_direct_client_no_tls - plaintext-to-proxy -> plaintext-to-broker");
-        Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+        Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
     } else {
         let connection_factory = Arc::new(move || {
             let tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
@@ -707,7 +709,7 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttCl
         });
 
         info!("threaded make_direct_client_no_tls - plaintext-to-broker");
-        Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+        Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
     }
 }
 
@@ -732,7 +734,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
                 });
 
                 info!("threaded make_direct_client_rustls - tls-to-proxy -> tls-to-broker");
-                Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+                Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
             } else {
                 let connection_factory = Arc::new(move || {
                     let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
@@ -744,7 +746,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
                 });
 
                 info!("threaded make_direct_client_rustls - plaintext-to-proxy -> tls-to-broker");
-                Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+                Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
             }
         } else {
             let connection_factory = Arc::new(move || {
@@ -755,7 +757,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
             });
 
             info!("threaded make_direct_client_rustls - tls-to-broker");
-            Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+            Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
         if let Some(proxy_tls_options) = http_proxy_options.tls_options {
@@ -769,7 +771,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
             });
 
             info!("threaded make_direct_client_rustls - tls-to-proxy -> plaintext-to-broker");
-            Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+            Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
         } else {
             panic!("threaded make_direct_client_rustls - invoked without tls configuration")
         }
@@ -799,7 +801,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
                 });
 
                 info!("threaded make_direct_client_native_tls - tls-to-proxy -> tls-to-broker");
-                Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+                Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
             } else {
                 let connection_factory = Arc::new(move || {
                     let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
@@ -811,7 +813,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
                 });
 
                 info!("threaded make_direct_client_native_tls - plaintext-to-proxy -> tls-to-broker");
-                Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+                Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
             }
         } else {
             let connection_factory = Arc::new(move || {
@@ -822,7 +824,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
             });
 
             info!("threaded make_direct_client_native_tls - tls-to-broker");
-            Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+            Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
         if let Some(proxy_tls_options) = http_proxy_options.tls_options {
@@ -836,7 +838,7 @@ fn make_direct_client_native_tls(endpoint: String, port: u16, tls_options: Optio
             });
 
             info!("threaded make_direct_client_native_tls - tls-to-proxy -> plaintext-to-broker");
-            Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+            Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
         } else {
             panic!("threaded make_direct_client_native_tls - invoked without tls configuration")
         }
@@ -876,7 +878,7 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: Mqt
         });
 
         info!("threaded make_websocket_client_no_tls - plaintext-to-proxy -> plaintext-to-broker");
-        Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+        Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
     } else {
         let connection_factory = Arc::new(move || {
             let tcp_stream = make_leaf_stream(stream_endpoint.clone())?;
@@ -886,7 +888,7 @@ fn make_websocket_client_no_tls(endpoint: String, port: u16, client_options: Mqt
         });
 
         info!("threaded make_websocket_client_no_tls - plaintext-to-broker");
-        Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+        Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
     }
 }
 
@@ -914,7 +916,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
                 });
 
                 info!("threaded make_websocket_client_rustls - tls-to-proxy -> tls-to-broker");
-                Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+                Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
             } else {
                 let connection_factory = Arc::new(move || {
                     let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
@@ -928,7 +930,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
                 });
 
                 info!("threaded make_websocket_client_rustls - plaintext-to-proxy -> tls-to-broker");
-                Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+                Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
             }
         } else {
             let connection_factory = Arc::new(move || {
@@ -941,7 +943,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
             });
 
             info!("threaded make_websocket_client_rustls - tls-to-broker");
-            Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+            Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
         if let Some(proxy_tls_options) = http_proxy_options.tls_options {
@@ -957,7 +959,7 @@ fn make_websocket_client_rustls(endpoint: String, port: u16, tls_options: Option
             });
 
             info!("threaded make_websocket_client_rustls - tls-to-proxy -> plaintext-to-broker");
-            Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+            Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
         } else {
             panic!("threaded make_websocket_client_rustls - invoked without tls configuration")
         }
@@ -990,7 +992,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Op
                 });
 
                 info!("threaded make_websocket_client_native_tls - tls-to-proxy -> tls-to-broker");
-                Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+                Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
             } else {
                 let connection_factory = Arc::new(move || {
                     let http_connect_endpoint = http_connect_endpoint.clone().unwrap();
@@ -1004,7 +1006,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Op
                 });
 
                 info!("threaded make_websocket_client_native_tls - plaintext-to-proxy -> tls-to-broker");
-                Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+                Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
             }
         } else {
             let connection_factory = Arc::new(move || {
@@ -1017,7 +1019,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Op
             });
 
             info!("threaded make_websocket_client_native_tls - tls-to-broker");
-            Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+            Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
         }
     } else if let Some(http_proxy_options) = http_proxy_options {
         if let Some(proxy_tls_options) = http_proxy_options.tls_options {
@@ -1033,7 +1035,7 @@ fn make_websocket_client_native_tls(endpoint: String, port: u16, tls_options: Op
             });
 
             info!("threaded make_websocket_client_native_tls - tls-to-proxy -> plaintext-to-broker");
-            Ok(new_threaded(client_options, connect_options, threaded_config, connection_factory))
+            Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
         } else {
             panic!("threaded make_websocket_client_native_tls - invoked without tls configuration")
         }
