@@ -71,12 +71,10 @@ pub(crate) fn get_broker_endpoint(tls: TlsUsage, ws: WebsocketUsage) -> String {
         } else {
             env::var("GNEISS_MQTT_TEST_WEBSOCKET_PLAINTEXT_ENDPOINT").unwrap()
         }
+    } else if ws == WebsocketUsage::None {
+        env::var("GNEISS_MQTT_TEST_DIRECT_TLS_ENDPOINT").unwrap()
     } else {
-        if ws == WebsocketUsage::None {
-            env::var("GNEISS_MQTT_TEST_DIRECT_TLS_ENDPOINT").unwrap()
-        } else {
-            env::var("GNEISS_MQTT_TEST_WEBSOCKET_TLS_ENDPOINT").unwrap()
-        }
+        env::var("GNEISS_MQTT_TEST_WEBSOCKET_TLS_ENDPOINT").unwrap()
     }
 }
 
@@ -88,12 +86,10 @@ pub(crate) fn get_broker_port(tls: TlsUsage, ws: WebsocketUsage) -> u16 {
             } else {
                 env::var("GNEISS_MQTT_TEST_WEBSOCKET_PLAINTEXT_PORT").unwrap()
             }
+        } else if ws == WebsocketUsage::None {
+            env::var("GNEISS_MQTT_TEST_DIRECT_TLS_PORT").unwrap()
         } else {
-            if ws == WebsocketUsage::None {
-                env::var("GNEISS_MQTT_TEST_DIRECT_TLS_PORT").unwrap()
-            } else {
-                env::var("GNEISS_MQTT_TEST_WEBSOCKET_TLS_PORT").unwrap()
-            }
+            env::var("GNEISS_MQTT_TEST_WEBSOCKET_TLS_PORT").unwrap()
         };
 
     port_string.parse().unwrap()
@@ -358,7 +354,7 @@ pub(crate) fn sync_subscribe_publish_test(client: SyncClientHandle, qos: Quality
 
     // tests are running in parallel, need a unique topic
     let uuid = uuid::Uuid::new_v4();
-    let topic = format!("hello/world/{}", uuid.to_string());
+    let topic = format!("hello/world/{}", uuid);
     let subscribe = SubscribePacket::builder()
         .with_subscription_simple(topic.clone(), QualityOfService::ExactlyOnce)
         .build();
@@ -397,7 +393,7 @@ pub(crate) async fn async_subscribe_publish_test(client: AsyncClientHandle, qos:
 
     // tests are running in parallel, need a unique topic
     let uuid = uuid::Uuid::new_v4();
-    let topic = format!("hello/world/{}", uuid.to_string());
+    let topic = format!("hello/world/{}", uuid);
     let subscribe = SubscribePacket::builder()
         .with_subscription_simple(topic.clone(), QualityOfService::ExactlyOnce)
         .build();
@@ -436,7 +432,7 @@ pub(crate) fn sync_will_test(base_client_options: ClientBuilder, sync_options: S
 
     // tests are running in parallel, need a unique topic
     let uuid = uuid::Uuid::new_v4();
-    let will_topic = format!("goodbye/cruel/world/{}", uuid.to_string());
+    let will_topic = format!("goodbye/cruel/world/{}", uuid);
 
     let will = PublishPacket::builder(will_topic.clone(), QualityOfService::AtLeastOnce)
         .with_payload(payload.clone())
@@ -488,7 +484,7 @@ pub(crate) async fn async_will_test(base_client_options: ClientBuilder, async_op
 
     // tests are running in parallel, need a unique topic
     let uuid = uuid::Uuid::new_v4();
-    let will_topic = format!("goodbye/cruel/world/{}", uuid.to_string());
+    let will_topic = format!("goodbye/cruel/world/{}", uuid);
 
     let will = PublishPacket::builder(will_topic.clone(), QualityOfService::AtLeastOnce)
         .with_payload(payload.clone())

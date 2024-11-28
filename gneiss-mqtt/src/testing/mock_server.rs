@@ -82,7 +82,7 @@ impl MockBrokerConnection {
 
             let mut wrote_bytes = false;
             let mut remaining_bytes = response_bytes.as_slice();
-            while remaining_bytes.len() > 0 {
+            while !remaining_bytes.is_empty() {
                 let write_result = self.stream.write(remaining_bytes);
                 match write_result {
                     Ok(bytes_written) => {
@@ -95,7 +95,7 @@ impl MockBrokerConnection {
                     }
                 }
 
-                if remaining_bytes.len() > 0 {
+                if !remaining_bytes.is_empty() {
                     std::thread::sleep(Duration::from_millis(0));
                 }
             }
@@ -111,9 +111,9 @@ impl MockBrokerConnection {
         }
     }
 
-    fn handle_packet(&mut self, packet: &Box<MqttPacket>, response_bytes: &mut Vec<u8>) -> GneissResult<()> {
+    fn handle_packet(&mut self, packet: &MqttPacket, response_bytes: &mut Vec<u8>) -> GneissResult<()> {
         let mut response_packets = VecDeque::new();
-        let packet_type = mqtt_packet_to_packet_type(&*packet);
+        let packet_type = mqtt_packet_to_packet_type(packet);
 
         if let Some(handler) = self.packet_handlers.get(&packet_type) {
             let mut context = self.context.lock().unwrap();
@@ -129,11 +129,11 @@ impl MockBrokerConnection {
                     }
                 };
 
-                self.encoder.reset(&*response_packet, &encoding_context)?;
+                self.encoder.reset(response_packet, &encoding_context)?;
 
                 let mut encode_result = EncodeResult::Full;
                 while encode_result == EncodeResult::Full {
-                    encode_result = self.encoder.encode(&*response_packet, &mut encode_buffer)?;
+                    encode_result = self.encoder.encode(response_packet, &mut encode_buffer)?;
                     response_bytes.append(&mut encode_buffer);
                     encode_buffer.clear(); // redundant probably
                 }
@@ -207,8 +207,10 @@ impl MockBroker {
 pub(crate) struct ClientTestOptions {
     pub(crate) packet_handler_set_factory_fn: Option<PacketHandlerSetFactory>,
 
+    #[allow(clippy::type_complexity)]
     pub(crate) client_options_mutator_fn: Option<Box<dyn Fn(&mut MqttClientOptionsBuilder)>>,
 
+    #[allow(clippy::type_complexity)]
     pub(crate) connect_options_mutator_fn: Option<Box<dyn Fn(&mut ConnectOptionsBuilder)>>
 }
 

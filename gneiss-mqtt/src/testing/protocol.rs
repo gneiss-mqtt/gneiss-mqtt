@@ -39,12 +39,12 @@ pub(crate) struct BrokerTestContext {
     pub(crate) connect_count: usize,
 }
 
-pub(crate) type PacketHandler = Box<dyn Fn(&Box<MqttPacket>, &mut VecDeque<Box<MqttPacket>>, &mut BrokerTestContext) -> GneissResult<()> + Send + Sync + 'static>;
+pub(crate) type PacketHandler = Box<dyn Fn(&MqttPacket, &mut VecDeque<Box<MqttPacket>>, &mut BrokerTestContext) -> GneissResult<()> + Send + Sync + 'static>;
 pub(crate) type PacketHandlerSet = HashMap<PacketType, PacketHandler>;
 pub(crate) type PacketHandlerSetFactory = Box<dyn Fn() -> PacketHandlerSet + Send + Sync>;
 
-fn handle_connect_with_successful_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Connect(connect) = &**packet {
+fn handle_connect_with_successful_connack(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Connect(connect) = packet {
         let mut assigned_client_identifier = None;
         if connect.client_id.is_none() {
             assigned_client_identifier = Some("auto-assigned-client-id".to_string());
@@ -62,8 +62,8 @@ fn handle_connect_with_successful_connack(packet: &Box<MqttPacket>, response_pac
     panic!("Invalid packet handler state")
 }
 
-fn handle_connect_with_session_resumption(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Connect(connect) = &**packet {
+fn handle_connect_with_session_resumption(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Connect(connect) = packet {
         let mut assigned_client_identifier = None;
         if connect.client_id.is_none() {
             assigned_client_identifier = Some("auto-assigned-client-id".to_string());
@@ -82,8 +82,8 @@ fn handle_connect_with_session_resumption(packet: &Box<MqttPacket>, response_pac
     panic!("Invalid packet handler state")
 }
 
-fn handle_connect_with_low_receive_maximum(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Connect(connect) = &**packet {
+fn handle_connect_with_low_receive_maximum(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Connect(connect) = packet {
         let mut assigned_client_identifier = None;
         if connect.client_id.is_none() {
             assigned_client_identifier = Some("auto-assigned-client-id".to_string());
@@ -102,8 +102,8 @@ fn handle_connect_with_low_receive_maximum(packet: &Box<MqttPacket>, response_pa
     panic!("Invalid packet handler state")
 }
 
-fn handle_connect_with_topic_aliasing(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Connect(connect) = &**packet {
+fn handle_connect_with_topic_aliasing(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Connect(connect) = packet {
         let mut assigned_client_identifier = None;
         if connect.client_id.is_none() {
             assigned_client_identifier = Some("auto-assigned-client-id".to_string());
@@ -129,8 +129,8 @@ fn create_connack_rejection() -> ConnackPacket {
     }
 }
 
-pub(crate) fn handle_connect_with_failure_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Connect(_) = &**packet {
+pub(crate) fn handle_connect_with_failure_connack(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Connect(_) = packet {
         let response = Box::new(MqttPacket::Connack(create_connack_rejection()));
         response_packets.push_back(response);
 
@@ -140,8 +140,8 @@ pub(crate) fn handle_connect_with_failure_connack(packet: &Box<MqttPacket>, resp
     panic!("Invalid packet handler state")
 }
 
-fn handle_connect_with_tiny_maximum_packet_size(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Connect(_) = &**packet {
+fn handle_connect_with_tiny_maximum_packet_size(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Connect(_) = packet {
         let response = Box::new(MqttPacket::Connack(ConnackPacket {
             maximum_packet_size: Some(10),
             ..Default::default()
@@ -154,15 +154,15 @@ fn handle_connect_with_tiny_maximum_packet_size(packet: &Box<MqttPacket>, respon
     panic!("Invalid packet handler state")
 }
 
-fn handle_pingreq_with_pingresp(_: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+fn handle_pingreq_with_pingresp(_: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     let response = Box::new(MqttPacket::Pingresp(PingrespPacket{}));
     response_packets.push_back(response);
 
     Ok(())
 }
 
-fn handle_publish_with_success_no_relay(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Publish(publish) = &**packet {
+fn handle_publish_with_success_no_relay(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Publish(publish) = packet {
         match publish.qos {
             QualityOfService::AtMostOnce => {}
             QualityOfService::AtLeastOnce => {
@@ -187,8 +187,8 @@ fn handle_publish_with_success_no_relay(packet: &Box<MqttPacket>, response_packe
     panic!("Invalid packet handler state")
 }
 
-fn handle_publish_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Publish(publish) = &**packet {
+fn handle_publish_with_failure(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Publish(publish) = packet {
         match publish.qos {
             QualityOfService::AtMostOnce => {}
             QualityOfService::AtLeastOnce => {
@@ -215,8 +215,8 @@ fn handle_publish_with_failure(packet: &Box<MqttPacket>, response_packets: &mut 
     panic!("Invalid packet handler state")
 }
 
-fn handle_pubrec_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Pubrec(pubrec) = &**packet {
+fn handle_pubrec_with_success(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Pubrec(pubrec) = packet {
         let response = Box::new(MqttPacket::Pubrel(PubrelPacket{
             packet_id : pubrec.packet_id,
             ..Default::default()
@@ -229,8 +229,8 @@ fn handle_pubrec_with_success(packet: &Box<MqttPacket>, response_packets: &mut V
     panic!("Invalid packet handler state")
 }
 
-fn handle_pubrel_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Pubrel(pubrel) = &**packet {
+fn handle_pubrel_with_success(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Pubrel(pubrel) = packet {
         let response = Box::new(MqttPacket::Pubcomp(PubcompPacket{
             packet_id : pubrel.packet_id,
             ..Default::default()
@@ -243,8 +243,8 @@ fn handle_pubrel_with_success(packet: &Box<MqttPacket>, response_packets: &mut V
     panic!("Invalid packet handler state")
 }
 
-fn handle_pubrel_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Pubrel(pubrel) = &**packet {
+fn handle_pubrel_with_failure(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Pubrel(pubrel) = packet {
         let response = Box::new(MqttPacket::Pubcomp(PubcompPacket{
             packet_id : pubrel.packet_id,
             reason_code : PubcompReasonCode::PacketIdentifierNotFound,
@@ -258,8 +258,8 @@ fn handle_pubrel_with_failure(packet: &Box<MqttPacket>, response_packets: &mut V
     panic!("Invalid packet handler state")
 }
 
-fn handle_subscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Subscribe(subscribe) = &**packet {
+fn handle_subscribe_with_success(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Subscribe(subscribe) = packet {
         let mut reason_codes = Vec::new();
         for subscription in &subscribe.subscriptions {
             match subscription.qos {
@@ -282,8 +282,8 @@ fn handle_subscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mu
     panic!("Invalid packet handler state")
 }
 
-fn handle_subscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Subscribe(subscribe) = &**packet {
+fn handle_subscribe_with_failure(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Subscribe(subscribe) = packet {
         let mut reason_codes = Vec::new();
         for _ in &subscribe.subscriptions {
             reason_codes.push(SubackReasonCode::NotAuthorized);
@@ -302,8 +302,8 @@ fn handle_subscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mu
     panic!("Invalid packet handler state")
 }
 
-fn handle_unsubscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Unsubscribe(unsubscribe) = &**packet {
+fn handle_unsubscribe_with_failure(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Unsubscribe(unsubscribe) = packet {
         let mut reason_codes = Vec::new();
         for _ in &unsubscribe.topic_filters {
             reason_codes.push(UnsubackReasonCode::ImplementationSpecificError);
@@ -322,8 +322,8 @@ fn handle_unsubscribe_with_failure(packet: &Box<MqttPacket>, response_packets: &
     panic!("Invalid packet handler state")
 }
 
-fn handle_unsubscribe_with_success(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Unsubscribe(unsubscribe) = &**packet {
+fn handle_unsubscribe_with_success(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Unsubscribe(unsubscribe) = packet {
         let mut reason_codes = Vec::new();
         for _ in &unsubscribe.topic_filters {
             reason_codes.push(UnsubackReasonCode::Success);
@@ -342,11 +342,11 @@ fn handle_unsubscribe_with_success(packet: &Box<MqttPacket>, response_packets: &
     panic!("Invalid packet handler state")
 }
 
-fn handle_with_panic(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+fn handle_with_panic(_: &MqttPacket, _: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     panic!("Invalid packet handler state")
 }
 
-fn handle_with_nothing(_: &Box<MqttPacket>, _: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+fn handle_with_nothing(_: &MqttPacket, _: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     Ok(())
 }
 
@@ -397,7 +397,7 @@ impl ProtocolStateTestFixture {
 
     pub(crate) fn new(config : ProtocolStateConfig) -> Self {
         Self {
-            base_timestamp : config.base_timestamp.clone(),
+            base_timestamp : config.base_timestamp,
             broker_decoder: Decoder::new(),
             broker_encoder: Encoder::new(),
             client_state: ProtocolState::new(config),
@@ -409,9 +409,9 @@ impl ProtocolStateTestFixture {
         }
     }
 
-    fn handle_to_broker_packet(&mut self, packet: &Box<MqttPacket>, response_bytes: &mut Vec<u8>) -> GneissResult<()> {
+    fn handle_to_broker_packet(&mut self, packet: &MqttPacket, response_bytes: &mut Vec<u8>) -> GneissResult<()> {
         let mut response_packets = VecDeque::new();
-        let packet_type = mqtt_packet_to_packet_type(&*packet);
+        let packet_type = mqtt_packet_to_packet_type(packet);
 
         if let Some(handler) = self.broker_packet_handlers.get(&packet_type) {
             (*handler)(packet, &mut response_packets, &mut self.test_context)?;
@@ -426,11 +426,11 @@ impl ProtocolStateTestFixture {
                     }
                 };
 
-                self.broker_encoder.reset(&*response_packet, &encoding_context)?;
+                self.broker_encoder.reset(response_packet, &encoding_context)?;
 
                 let mut encode_result = EncodeResult::Full;
                 while encode_result == EncodeResult::Full {
-                    encode_result = self.broker_encoder.encode(&*response_packet, &mut encode_buffer)?;
+                    encode_result = self.broker_encoder.encode(response_packet, &mut encode_buffer)?;
                     response_bytes.append(&mut encode_buffer);
                     encode_buffer.clear(); // redundant probably
                 }
@@ -502,7 +502,7 @@ impl ProtocolStateTestFixture {
             };
 
             self.client_state.service(&mut service_context)?;
-            if to_socket.len() > 0 {
+            if !to_socket.is_empty() {
                 let mut network_event = NetworkEventContext {
                     event: NetworkEvent::WriteCompletion,
                     current_time,
@@ -532,9 +532,7 @@ impl ProtocolStateTestFixture {
 
                 self.to_broker_packet_stream.append(&mut broker_packets);
 
-                if let Err(error) = completion_result {
-                    return Err(error);
-                }
+                completion_result?
             } else {
                 done = true;
             }
@@ -717,13 +715,14 @@ impl ProtocolStateTestFixture {
     }
 }
 
+#[allow(clippy::borrowed_box)]
 fn find_nth_packet_of_type<'a, T>(packet_sequence : T, packet_type : PacketType, count: usize, start_position : Option<usize>, end_position : Option<usize>) -> Option<(usize, &'a Box<MqttPacket>)> where T : Iterator<Item = &'a Box<MqttPacket>> {
     let start = start_position.unwrap_or(0);
     let mut index = start;
     let mut seen = 0;
 
     for packet in packet_sequence.skip(start) {
-        if mqtt_packet_to_packet_type(&*packet) == packet_type {
+        if mqtt_packet_to_packet_type(packet) == packet_type {
             seen += 1;
             if seen == count {
                 return Some((index, packet));
@@ -761,16 +760,10 @@ fn verify_protocol_state_empty(fixture: &ProtocolStateTestFixture) {
 }
 
 pub(crate) fn is_reconnect_related_event(event: &Arc<ClientEvent>) -> bool {
-    match **event {
-        ClientEvent::Stopped(_) | ClientEvent::PublishReceived(_) => {
-            false
-        }
-        _ => {
-            true
-        }
-    }
+    !matches!(**event, ClientEvent::Stopped(_) | ClientEvent::PublishReceived(_))
 }
 
+#[allow(clippy::field_reassign_with_default)]
 pub(crate) fn build_reconnect_test_options() -> ClientTestOptions {
     let mut test_options = ClientTestOptions::default();
 
@@ -792,7 +785,7 @@ pub(crate) fn build_reconnect_test_options() -> ClientTestOptions {
     test_options
 }
 
-pub(crate) fn validate_reconnect_failure_sequence(events: &Vec<ClientEventRecord>) -> GneissResult<()> {
+pub(crate) fn validate_reconnect_failure_sequence(events: &[ClientEventRecord]) -> GneissResult<()> {
     let mut connection_failures: usize = 0;
     let mut previous_failure_time : Option<Instant> = None;
     let mut actual_delays : Vec<Duration> = Vec::new();
@@ -821,7 +814,7 @@ pub(crate) fn validate_reconnect_failure_sequence(events: &Vec<ClientEventRecord
 
     let zipped_iter = expected_delays.iter().zip(actual_delays.iter());
 
-    for (_, (expected_delay, actual_delay)) in zipped_iter.enumerate() {
+    for (expected_delay, actual_delay) in zipped_iter {
         assert!(*actual_delay >= *expected_delay);
     }
 
@@ -830,8 +823,8 @@ pub(crate) fn validate_reconnect_failure_sequence(events: &Vec<ClientEventRecord
 
 pub(crate) type ReconnectEventTestValidatorFn = Box<dyn Fn(&Vec<ClientEventRecord>) -> GneissResult<()> + Send + Sync>;
 
-pub(crate) fn handle_connect_with_conditional_connack(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, context: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Connect(_) = &**packet {
+pub(crate) fn handle_connect_with_conditional_connack(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, context: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Connect(_) = packet {
         context.connect_count += 1;
 
         if context.connect_count < 6 {
@@ -855,8 +848,8 @@ pub(crate) fn handle_connect_with_conditional_connack(packet: &Box<MqttPacket>, 
     panic!("Invalid packet handler state")
 }
 
-pub(crate) fn handle_publish_with_disconnect(packet: &Box<MqttPacket>, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Publish(_) = &**packet {
+pub(crate) fn handle_publish_with_disconnect(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    if let MqttPacket::Publish(_) = packet {
         let response = Box::new(MqttPacket::Disconnect(DisconnectPacket {
             reason_code: DisconnectReasonCode::NotAuthorized,
             ..Default::default()
@@ -869,8 +862,10 @@ pub(crate) fn handle_publish_with_disconnect(packet: &Box<MqttPacket>, response_
     panic!("Invalid packet handler state")
 }
 
+#[allow(clippy::field_reassign_with_default)]
 pub(crate) fn build_reconnect_reset_test_options() -> ClientTestOptions {
     let mut test_options = ClientTestOptions::default();
+
 
     test_options.client_options_mutator_fn = Some(Box::new(|builder| {
         builder.with_base_reconnect_period(Duration::from_millis(500));
@@ -891,7 +886,7 @@ pub(crate) fn build_reconnect_reset_test_options() -> ClientTestOptions {
     test_options
 }
 
-pub(crate) fn validate_reconnect_backoff_failure_sequence(events: &Vec<ClientEventRecord>) -> GneissResult<()> {
+pub(crate) fn validate_reconnect_backoff_failure_sequence(events: &[ClientEventRecord]) -> GneissResult<()> {
     let mut connection_failures: usize = 0;
 
     for (i, event_record) in events.iter().enumerate() {
@@ -909,7 +904,7 @@ pub(crate) fn validate_reconnect_backoff_failure_sequence(events: &Vec<ClientEve
     Ok(())
 }
 
-pub(crate) fn validate_reconnect_backoff_reset_sequence(events: &Vec<ClientEventRecord>, expected_reconnect_delay: Duration) -> GneissResult<()> {
+pub(crate) fn validate_reconnect_backoff_reset_sequence(events: &[ClientEventRecord], expected_reconnect_delay: Duration) -> GneissResult<()> {
 
     let record1 = &events[0];
     let record2 = &events[1];
@@ -963,8 +958,8 @@ fn verify_service_does_nothing(fixture : &mut ProtocolStateTestFixture) {
                                            },
                                            PublishOptions::builder().build());
     assert!(publish_receiver.is_ok());
-    assert!(fixture.client_state.operations.len() > 0);
-    assert!(fixture.client_state.user_operation_queue.len() > 0);
+    assert!(!fixture.client_state.operations.is_empty());
+    assert!(!fixture.client_state.user_operation_queue.is_empty());
 
     if let Ok(bytes) = fixture.service_with_drain(0, 4096) {
         assert_eq!(0, bytes.len());
@@ -1499,7 +1494,8 @@ fn connected_state_ping_sequence_both_delayed() {
     do_ping_sequence_test(7, 999, 131);
 }
 
-fn do_connected_state_ping_push_out_test(operation_function: Box<dyn Fn(&mut ProtocolStateTestFixture, u64, u64) -> ()>, transmission_time: u64, response_time: u64, expected_push_out: u64) {
+#[allow(clippy::type_complexity)]
+fn do_connected_state_ping_push_out_test(operation_function: Box<dyn Fn(&mut ProtocolStateTestFixture, u64, u64)>, transmission_time: u64, response_time: u64, expected_push_out: u64) {
     const PING_TIMEOUT_MILLIS: u64 = 10000;
     const KEEP_ALIVE_SECONDS: u16 = 20;
     const KEEP_ALIVE_MILLIS: u64 = (KEEP_ALIVE_SECONDS as u64) * 1000;
@@ -1542,10 +1538,10 @@ fn do_subscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_ti
     }
 
     let result = subscribe_result_receiver.recv();
-    assert!(!result.is_err());
+    assert!(result.is_ok());
 
     let subscribe_result = result.unwrap();
-    assert!(!subscribe_result.is_err());
+    assert!(subscribe_result.is_ok());
 
     let suback_result = subscribe_result.unwrap();
     assert_eq!(1, suback_result.reason_codes.len());
@@ -1559,7 +1555,7 @@ fn do_subscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_ti
         panic!("Expected suback");
     }
 
-    verify_protocol_state_empty(&fixture);
+    verify_protocol_state_empty(fixture);
 }
 
 fn do_publish_success(fixture : &mut ProtocolStateTestFixture, qos: QualityOfService, transmission_time: u64, response_time: u64, expected_response: PublishResponse) {
@@ -1587,10 +1583,10 @@ fn do_publish_success(fixture : &mut ProtocolStateTestFixture, qos: QualityOfSer
     }
 
     let result = publish_result_receiver.recv();
-    assert!(!result.is_err());
+    assert!(result.is_ok());
 
     let op_result = result.unwrap();
-    assert!(!op_result.is_err());
+    assert!(op_result.is_ok());
 
     let publish_response = op_result.unwrap();
 
@@ -1639,7 +1635,7 @@ fn do_publish_success(fixture : &mut ProtocolStateTestFixture, qos: QualityOfSer
         }
     }
 
-    verify_protocol_state_empty(&fixture);
+    verify_protocol_state_empty(fixture);
 }
 
 fn do_unsubscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_time: u64, response_time: u64, expected_reason_code: UnsubackReasonCode) {
@@ -1660,10 +1656,10 @@ fn do_unsubscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_
     }
 
     let result = unsubscribe_result_receiver.recv();
-    assert!(!result.is_err());
+    assert!(result.is_ok());
 
     let unsubscribe_result = result.unwrap();
-    assert!(!unsubscribe_result.is_err());
+    assert!(unsubscribe_result.is_ok());
 
     let unsuback_result = unsubscribe_result.unwrap();
     assert_eq!(1, unsuback_result.reason_codes.len());
@@ -1677,7 +1673,7 @@ fn do_unsubscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_
         panic!("Expected unsuback");
     }
 
-    verify_protocol_state_empty(&fixture);
+    verify_protocol_state_empty(fixture);
 }
 
 #[test]
@@ -1747,7 +1743,7 @@ fn do_connected_state_ping_pingresp_timeout(ping_timeout_millis: u64, keep_alive
 
     // trigger a ping
     assert!(fixture.service_with_drain(expected_ping_time, 4096).is_ok());
-    let ping_timeout_timepoint = CONNACK_TIME + keep_alive_millis + u64::min(ping_timeout_millis, keep_alive_millis / 2) as u64;
+    let ping_timeout_timepoint = CONNACK_TIME + keep_alive_millis + u64::min(ping_timeout_millis, keep_alive_millis / 2);
     assert_eq!(ping_timeout_timepoint, fixture.get_next_service_time(expected_ping_time).unwrap());
     let (index, _) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Pingreq, 1, None, None).unwrap();
     assert_eq!(1, index); // [connect, pingreq]
@@ -1994,11 +1990,9 @@ fn connected_state_qos1_publish_success_reconnect_while_in_user_queue() {
 }
 
 fn verify_successful_test_qos2_publish(response: &PublishResponse) {
-    if let PublishResponse::Qos2(qos2_response) = &response {
-        if let Qos2Response::Pubcomp(pubcomp) = qos2_response {
-            assert_eq!(PubcompReasonCode::Success, pubcomp.reason_code);
-            return;
-        }
+    if let PublishResponse::Qos2(Qos2Response::Pubcomp(pubcomp)) = &response {
+        assert_eq!(PubcompReasonCode::Success, pubcomp.reason_code);
+        return;
     }
 
     panic!("Expected pubcomp");
@@ -3421,7 +3415,7 @@ fn rejoin_session_test_build_clean_start_sequence(rejoin_policy : RejoinSessionP
 
     return fixture.to_broker_packet_stream.iter().map(|packet| {
         if let MqttPacket::Connect(connect) = &**packet {
-            return connect.clean_start;
+            connect.clean_start
         } else {
             panic!("Expected connect packet");
         }
@@ -3702,12 +3696,12 @@ fn packet_to_sequence_number(packet: &MqttPacket) -> GneissResult<Option<u64>> {
             }
         }
         MqttPacket::Subscribe(subscribe) => {
-            if let Some(subscription) = subscribe.subscriptions.get(0) {
+            if let Some(subscription) = subscribe.subscriptions.first() {
                 return Ok(Some(subscription.topic_filter.parse::<u64>().unwrap()));
             }
         }
         MqttPacket::Unsubscribe(unsubscribe) => {
-            if let Some(filter) = unsubscribe.topic_filters.get(0) {
+            if let Some(filter) = unsubscribe.topic_filters.first() {
                 return Ok(Some(filter.parse::<u64>().unwrap()));
             }
         }
@@ -4001,9 +3995,9 @@ fn verify_offline_failures_and_build_sorted_successful_sequence_id_list(context:
             let is_a_republish = *a < 7 && is_qos1plus_publish(&context.outbound_packets[(*a - 1) as usize]);
             let is_b_republish = *b < 7 && is_qos1plus_publish(&context.outbound_packets[(*b - 1) as usize]);
             if is_a_republish && !is_b_republish {
-                return Ordering::Less;
+                Ordering::Less
             } else if !is_a_republish && is_b_republish {
-                return Ordering::Greater;
+                Ordering::Greater
             } else {
                 a.cmp(b)
             }
@@ -4018,7 +4012,7 @@ fn verify_offline_failures_and_build_sorted_successful_sequence_id_list(context:
 fn verify_successful_reconnect_sequencing(fixture: &ProtocolStateTestFixture, successful_sequence_ids: &[u64], second_connect_index: usize) {
     let mut expected_next_sequence_id_index = 0;
     for packet in fixture.to_broker_packet_stream.iter().skip(second_connect_index + 1) {
-        let sequence_id_option = packet_to_sequence_number(&**packet).unwrap();
+        let sequence_id_option = packet_to_sequence_number(packet).unwrap();
         if let Some(sequence_id) = sequence_id_option {
             assert_eq!(successful_sequence_ids[expected_next_sequence_id_index], sequence_id);
             expected_next_sequence_id_index += 1;
@@ -4072,7 +4066,7 @@ fn do_connected_state_multi_operation_reconnect_test(offline_queue_policy: Offli
         if rejoin_session {
             &successful_sequence_ids.as_slice()[1..]
         } else {
-            &successful_sequence_ids.as_slice()
+            &successful_sequence_ids.as_slice()[0..]
         };
 
     verify_successful_reconnect_sequencing(&fixture, check_sequence, second_connect_index);
