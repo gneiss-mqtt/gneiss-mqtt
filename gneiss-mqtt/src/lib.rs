@@ -49,21 +49,16 @@ supports all connection methods allowed by the AWS MQTT broker implementation,
 Assuming a default Mosquitto installation, you can connect locally by plaintext on port 1883:
 
 ```no_run
-use gneiss_mqtt::client::asynchronous::{AsyncClient, AsyncClientOptions};
-use gneiss_mqtt::client::asynchronous::tokio::TokioClientOptions;
-use gneiss_mqtt::client::config::ClientBuilder;
+use gneiss_mqtt::client::asynchronous::AsyncClient;
+use gneiss_mqtt::client::TokioClientBuilder;
 use tokio::runtime::Handle;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
-    let async_options = AsyncClientOptions::builder().build();
-    let tokio_options = TokioClientOptions::builder(Handle::current().clone()).build();
-
-    // In the common case, you will not need a root CA certificate
     let client =
-        ClientBuilder::new("127.0.0.1", 1883)
-            .build_tokio(async_options, tokio_options)?;
+        TokioClientBuilder::new("127.0.0.1", 1883)
+            .build()?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -135,8 +130,7 @@ every time we receive a "Ping" publish:
 
 ```no_run
 use gneiss_mqtt::client::ClientEvent;
-use gneiss_mqtt::client::asynchronous::{AsyncClient, AsyncClientOptions, AsyncClientHandle};
-use gneiss_mqtt::client::asynchronous::tokio::TokioClientOptions;
+use gneiss_mqtt::client::asynchronous::{AsyncClient, AsyncClientHandle};
 use gneiss_mqtt::mqtt::{PublishPacket, QualityOfService};
 use std::sync::Arc;
 
@@ -165,19 +159,15 @@ pub fn client_event_callback(client: AsyncClientHandle, event: Arc<ClientEvent>)
     }
 }
 
-use gneiss_mqtt::client::config::ClientBuilder;
+use gneiss_mqtt::client::TokioClientBuilder;
 use tokio::runtime::Handle;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
-    let async_options = AsyncClientOptions::builder().build();
-    let tokio_client_options = TokioClientOptions::builder(Handle::current().clone()).build();
-
-    // put the client in an Arc so we can capture an Arc clone in the event handler closure
     let client =
-        ClientBuilder::new("127.0.0.1", 1883)
-            .build_tokio(async_options, tokio_client_options)?;
+        TokioClientBuilder::new("127.0.0.1", 1883)
+            .build()?;
 
     // make a client event handler closure
     let closure_client = client.clone();

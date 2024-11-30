@@ -3,16 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::client::config::*;
 use crate::error::GneissResult;
 use crate::client::synchronous::threaded::*;
 use crate::client::synchronous::threaded::testing::*;
 use crate::client::waiter::*;
-use crate::testing::mock_server::build_mock_client_server;
+use crate::testing::mock_server::*;
 use crate::testing::protocol::*;
 
-fn simple_reconnect_test(builder : ClientBuilder, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> GneissResult<()> {
-    let client = builder.build_threaded(sync_options, threaded_options).unwrap();
+fn simple_reconnect_test(builder : ThreadedClientBuilder, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> GneissResult<()> {
+    let client = builder.build()?;
 
     let wait_options = ClientEventWaiterOptions {
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
@@ -32,18 +31,17 @@ fn simple_reconnect_test(builder : ClientBuilder, sync_options: SyncClientOption
 
 #[test]
 fn client_reconnect_with_backoff() {
-    let (builder, server) = build_mock_client_server(build_reconnect_test_options());
-    let sync_options = SyncClientOptionsBuilder::new().build();
+    let (builder, server) = build_mock_client_server_threaded(build_reconnect_test_options());
 
-    do_builder_test(Box::new(|builder, sync_options, threaded_options| {
-        simple_reconnect_test(builder, sync_options, threaded_options, 14, Box::new(|events|{validate_reconnect_failure_sequence(events)}))
-    }), builder, sync_options);
+    do_builder_test(Box::new(|builder| {
+        simple_reconnect_test(builder, 14, Box::new(|events|{validate_reconnect_failure_sequence(events)}))
+    }), builder);
 
     server.close();
 }
 
-fn reconnect_backoff_reset_test(builder : ClientBuilder, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> GneissResult<()> {
-    let client = builder.build_threaded(sync_options, threaded_options).unwrap();
+fn reconnect_backoff_reset_test(builder : ThreadedClientBuilder, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> GneissResult<()> {
+    let client = builder.build()?;
 
     let first_wait_options = ClientEventWaiterOptions {
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
@@ -79,34 +77,28 @@ fn reconnect_backoff_reset_test(builder : ClientBuilder, sync_options: SyncClien
 
 #[test]
 fn client_reconnect_with_backoff_and_backoff_reset() {
-    let (builder, server) = build_mock_client_server(build_reconnect_reset_test_options());
-    let sync_options = SyncClientOptionsBuilder::new().build();
+    let (builder, server) = build_mock_client_server_threaded(build_reconnect_reset_test_options());
 
-    do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+    do_builder_test(Box::new(move |builder| {
         reconnect_backoff_reset_test(builder,
-                                     sync_options,
-                                     threaded_options,
                                      Box::new(|events|{validate_reconnect_backoff_failure_sequence(events)}),
                                      Box::new(|events|{validate_reconnect_backoff_reset_sequence(events, Duration::from_millis(500))}),
                                      4000)
-    }), builder, sync_options);
+    }), builder);
 
     server.close();
 }
 
 #[test]
 fn client_reconnect_with_backoff_and_no_backoff_reset() {
-    let (builder, server) = build_mock_client_server(build_reconnect_reset_test_options());
-    let sync_options = SyncClientOptionsBuilder::new().build();
+    let (builder, server) = build_mock_client_server_threaded(build_reconnect_reset_test_options());
 
-    do_builder_test(Box::new(move |builder, sync_options, threaded_options| {
+    do_builder_test(Box::new(move |builder| {
         reconnect_backoff_reset_test(builder,
-                                     sync_options,
-                                     threaded_options,
                                      Box::new(|events|{validate_reconnect_backoff_failure_sequence(events)}),
                                      Box::new(|events|{validate_reconnect_backoff_reset_sequence(events, Duration::from_millis(6000))}),
                                      500)
-    }), builder, sync_options);
+    }), builder);
 
     server.close();
 }

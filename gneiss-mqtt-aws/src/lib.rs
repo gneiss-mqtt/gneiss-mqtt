@@ -255,11 +255,11 @@ different combinations expected by users.
 #[cfg(feature = "tokio")]
 use gneiss_mqtt::client::asynchronous::{AsyncClientHandle, AsyncClientOptions};
 #[cfg(feature = "tokio")]
-use gneiss_mqtt::client::asynchronous::tokio::TokioClientOptions;
+use gneiss_mqtt::client::asynchronous::tokio::TokioOptions;
 #[cfg(feature = "threaded")]
 use gneiss_mqtt::client::synchronous::{SyncClientHandle, SyncClientOptions};
 #[cfg(feature = "threaded")]
-use gneiss_mqtt::client::synchronous::threaded::ThreadedClientOptions;
+use gneiss_mqtt::client::synchronous::threaded::ThreadedOptions;
 use gneiss_mqtt::client::config::*;
 #[allow(unused_imports)]
 use gneiss_mqtt::error::{GneissError, GneissResult};
@@ -742,14 +742,14 @@ impl AwsClientBuilder {
             async_options_builder.with_websocket_options(websocket_options);
         }
 
-        let tokio_options = TokioClientOptions::builder(runtime.clone()).build();
+        let tokio_options = TokioOptions::builder(runtime.clone()).build();
         builder.build_tokio(async_options_builder.build(), tokio_options)
     }
 
     #[cfg(feature = "threaded")]
     /// Creates a new thread-based MQTT5 client from all of the configuration options registered with the
     /// builder.
-    pub fn build_threaded(&self, threaded_options: Option<ThreadedClientOptions>) -> GneissResult<SyncClientHandle> {
+    pub fn build_threaded(&self, threaded_options: Option<ThreadedOptions>) -> GneissResult<SyncClientHandle> {
         let user_connect_options =
             if let Some(options) = &self.connect_options {
                 options.clone()
@@ -777,7 +777,7 @@ impl AwsClientBuilder {
             if let Some(opts) = threaded_options {
                 opts.clone()
             } else {
-                ThreadedClientOptions::builder().build()
+                ThreadedOptions::builder().build()
             };
 
         builder.build_threaded(SyncClientOptions::builder().build(), final_thread_options)

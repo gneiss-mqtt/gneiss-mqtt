@@ -8,7 +8,7 @@ use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult};
 use elasti_gneiss_core_sync::main_loop;
 use gneiss_mqtt::client::synchronous::{SyncClientHandle, SyncClientOptions};
-use gneiss_mqtt::client::synchronous::threaded::ThreadedClientOptions;
+use gneiss_mqtt::client::synchronous::threaded::ThreadedOptions;
 use gneiss_mqtt::client::config::*;
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
@@ -135,7 +135,7 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
         _ => {}
     }
 
-    let threaded_options = ThreadedClientOptions::builder().build();
+    let threaded_options = ThreadedOptions::builder().build();
     Ok(builder.build_threaded(sync_client_builder.build(), threaded_options)?)
 }
 

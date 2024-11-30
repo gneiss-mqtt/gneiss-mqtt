@@ -8,7 +8,7 @@ use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult};
 use elasti_gneiss_core_async::main_loop;
 use gneiss_mqtt::client::asynchronous::{AsyncClientHandle, AsyncClientOptions};
-use gneiss_mqtt::client::asynchronous::tokio::TokioClientOptions;
+use gneiss_mqtt::client::asynchronous::tokio::TokioOptions;
 use gneiss_mqtt::client::config::*;
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
@@ -136,7 +136,7 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
         _ => {}
     }
 
-    let tokio_options = TokioClientOptions::builder(runtime.clone()).build();
+    let tokio_options = TokioOptions::builder(runtime.clone()).build();
     Ok(builder.build_tokio(async_client_builder.build(), tokio_options)?)
 }
 
