@@ -92,3 +92,9 @@ pub struct ClientEventRecord {
     /// What time the event occurred at
     pub timestamp: Instant
 }
+
+#[cfg(feature="tokio")]
+pub use crate::client::asynchronous::tokio::{ClientEventWaitFuture, TokioClientEventWaiter};
+
+#[cfg(feature="threaded")]
+pub use crate::client::synchronous::threaded::{ThreadedClientEventWaiter};

@@ -8,8 +8,8 @@ Module containing the public MQTT client and associated types necessary to invok
  */
 
 pub mod config;
-pub mod synchronous;
-pub mod asynchronous;
+pub(crate) mod synchronous;
+pub(crate) mod asynchronous;
 pub mod waiter;
 
 use crate::client::config::*;
@@ -1015,8 +1015,16 @@ impl MqttClientImpl {
     }
 }
 
+// Re-exports to mask internal module structure
+
 #[cfg(feature = "tokio")]
-pub use crate::client::asynchronous::tokio::builder::{TokioClientBuilder, TokioOptions, TokioOptionsBuilder};
+pub use crate::client::asynchronous::{AsyncClient, AsyncClientHandle, AsyncPublishResult, AsyncSubscribeResult, AsyncUnsubscribeResult};
+
+#[cfg(feature = "tokio")]
+pub use crate::client::asynchronous::tokio::builder::TokioClientBuilder;
 
 #[cfg(feature = "threaded")]
-pub use crate::client::synchronous::threaded::builder::{ThreadedClientBuilder, ThreadedOptions, ThreadedOptionsBuilder};
+pub use crate::client::synchronous::threaded::builder::ThreadedClientBuilder;
+
+#[cfg(feature = "threaded")]
+pub use crate::client::synchronous::{SyncClient, SyncClientHandle, SyncPublishResult, SyncPublishResultCallback, SyncResultReceiver, SyncSubscribeResult, SyncSubscribeResultCallback, SyncUnsubscribeResult, SyncUnsubscribeResultCallback};

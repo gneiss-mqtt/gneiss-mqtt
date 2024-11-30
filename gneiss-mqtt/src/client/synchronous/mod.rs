@@ -58,6 +58,7 @@ impl<T> SyncResultSender<T> {
     }
 }
 
+#[cfg_attr(not(feature="threaded"), allow(dead_code))]
 impl<T> SyncResultReceiver<T> {
 
     pub(crate) fn new(result_lock: Arc<Mutex<Option<T>>>, result_signal: Arc<Condvar>) -> SyncResultReceiver<T> {

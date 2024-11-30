@@ -7,7 +7,7 @@ use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult};
 use elasti_gneiss_core_async::main_loop;
-use gneiss_mqtt::client::asynchronous::AsyncClientHandle;
+use gneiss_mqtt::client::AsyncClientHandle;
 use gneiss_mqtt::client::config::*;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions, WebsocketSigv4OptionsBuilder};
 use simplelog::{LevelFilter, WriteLogger};

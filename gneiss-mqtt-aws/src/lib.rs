@@ -50,7 +50,7 @@ for guidance on this process.
 To create a client and connect:
 
 ```no_run
-use gneiss_mqtt::client::asynchronous::AsyncClient;
+use gneiss_mqtt::client::AsyncClient;
 use gneiss_mqtt_aws::AwsClientBuilder;
 
 #[tokio::main]
@@ -85,7 +85,7 @@ details.
 To create a client and connect:
 
 ```no_run
-use gneiss_mqtt::client::asynchronous::AsyncClient;
+use gneiss_mqtt::client::AsyncClient;
 use gneiss_mqtt_aws::{AwsClientBuilder, WebsocketSigv4OptionsBuilder};
 
 #[tokio::main]
@@ -133,7 +133,7 @@ supported custom authentication modes:
 For an unsigned custom authorizer (for testing/internal purposes only, not recommended for production):
 
 ```no_run
-use gneiss_mqtt::client::asynchronous::AsyncClient;
+use gneiss_mqtt::client::AsyncClient;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
 
 #[tokio::main]
@@ -170,7 +170,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 For a signed custom authorizer (recommended for production):
 
 ```no_run
-use gneiss_mqtt::client::asynchronous::AsyncClient;
+use gneiss_mqtt::client::AsyncClient;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
 
 #[tokio::main]
@@ -249,10 +249,6 @@ different combinations expected by users.
 #![warn(missing_docs)]
 
 use gneiss_mqtt::client::*;
-#[cfg(feature = "tokio")]
-use gneiss_mqtt::client::asynchronous::AsyncClientHandle;
-#[cfg(feature = "threaded")]
-use gneiss_mqtt::client::synchronous::SyncClientHandle;
 use gneiss_mqtt::client::config::*;
 #[allow(unused_imports)]
 use gneiss_mqtt::error::{GneissError, GneissResult};
@@ -899,16 +895,8 @@ mod testing {
     use std::future::Future;
     #[cfg(feature = "tokio")]
     use std::pin::Pin;
-    use gneiss_mqtt::client::{ClientEvent};
+    use gneiss_mqtt::client::*;
     use gneiss_mqtt::client::waiter::*;
-    #[cfg(feature = "tokio")]
-    use gneiss_mqtt::client::asynchronous::AsyncClient;
-    #[cfg(feature = "tokio")]
-    use gneiss_mqtt::client::asynchronous::tokio::TokioClientEventWaiter;
-    #[cfg(feature = "threaded")]
-    use gneiss_mqtt::client::synchronous::threaded::ThreadedClientEventWaiter;
-    #[cfg(feature = "threaded")]
-    use gneiss_mqtt::client::synchronous::SyncClient;
     use super::*;
 
     fn get_iot_core_endpoint() -> String {

@@ -8,7 +8,6 @@ use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult};
 use elasti_gneiss_core_async::main_loop;
 use gneiss_mqtt::client::*;
-use gneiss_mqtt::client::asynchronous::AsyncClientHandle;
 use gneiss_mqtt::client::config::*;
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
