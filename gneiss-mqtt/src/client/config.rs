@@ -28,6 +28,8 @@ use std::str::FromStr;
 use std::{future::Future, pin::Pin,};
 #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
 use rustls_pki_types::PrivateKeyDer;
+#[cfg(feature = "tokio")]
+use ::tokio::runtime::Handle;
 #[cfg(any(feature="tokio-websockets", feature="threaded-websockets"))]
 use tungstenite::{client::*, handshake::client::generate_key};
 
@@ -1037,3 +1039,93 @@ pub(crate) fn create_default_websocket_handshake_request(uri: String) -> GneissR
         .header("Host", uri.host().unwrap()))
 }
 
+/// A structure that holds configuration related to how an asynchronous client should interact
+/// with the Tokio async runtime.
+#[cfg(feature = "tokio")]
+#[derive(Clone)]
+pub struct TokioOptions {
+    pub(crate) runtime: Handle,
+}
+
+#[cfg(feature = "tokio")]
+impl TokioOptions {
+
+    /// Creates a new builder for TokioClientOptions instances.
+    pub fn builder(runtime: Handle) -> TokioOptionsBuilder {
+        TokioOptionsBuilder::new(runtime)
+    }
+}
+
+/// Builder type for tokio-based client configuration
+#[cfg(feature = "tokio")]
+pub struct TokioOptionsBuilder {
+    options: TokioOptions
+}
+
+#[cfg(feature = "tokio")]
+impl TokioOptionsBuilder {
+
+    /// Creates a new builder object for TokioClientOptions
+    pub(crate) fn new(runtime: Handle) -> Self {
+        TokioOptionsBuilder {
+            options: TokioOptions {
+                runtime
+            }
+        }
+    }
+
+    /// Builds a new set of tokio client configuration options
+    pub fn build(self) -> TokioOptions {
+        self.options
+    }
+}
+
+/// Threaded client specific configuration
+#[cfg(feature = "threaded")]
+#[derive(Default, Clone)]
+pub struct ThreadedOptions {
+    pub(crate) idle_service_sleep: Option<Duration>,
+}
+
+#[cfg(feature = "threaded")]
+impl ThreadedOptions {
+
+    /// Creates a new builder for ThreadedClientOptions instances
+    pub fn builder() -> ThreadedOptionsBuilder {
+        ThreadedOptionsBuilder::new()
+    }
+}
+
+/// Builder type for threaded client configuration
+#[cfg(feature = "threaded")]
+pub struct ThreadedOptionsBuilder {
+    config: ThreadedOptions
+}
+
+#[cfg(feature = "threaded")]
+impl ThreadedOptionsBuilder {
+
+    /// Creates a new builder object for ThreadedClientOptions
+    pub(crate) fn new() -> Self {
+        ThreadedOptionsBuilder {
+            config: ThreadedOptions {
+                idle_service_sleep: None,
+            }
+        }
+    }
+
+    /// Configures the time interval to sleep the thread the client runs on between io
+    /// processing events.  Only used if no events occurred on the previous iteration.  If the
+    /// client is handling significant work, it will not sleep, but if there's nothing
+    /// happening, it will.
+    ///
+    /// If not set, defaults to 20 milliseconds.
+    pub fn with_idle_service_sleep(&mut self, duration: Duration) {
+        self.config.idle_service_sleep = Some(duration);
+    }
+
+    /// Builds a new set of threaded client configuration options
+    pub fn build(self) -> ThreadedOptions {
+        self.config
+    }
+}

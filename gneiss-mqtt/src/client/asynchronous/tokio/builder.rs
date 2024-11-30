@@ -9,43 +9,6 @@ use super::*;
 
 use ::tokio::runtime::Handle;
 
-/// A structure that holds configuration related to how an asynchronous client should interact
-/// with the Tokio async runtime.
-#[derive(Clone)]
-pub struct TokioOptions {
-    pub(crate) runtime: Handle,
-}
-
-impl TokioOptions {
-
-    /// Creates a new builder for TokioClientOptions instances.
-    pub fn builder(runtime: Handle) -> TokioOptionsBuilder {
-        TokioOptionsBuilder::new(runtime)
-    }
-}
-
-/// Builder type for tokio-based client configuration
-pub struct TokioOptionsBuilder {
-    options: TokioOptions
-}
-
-impl TokioOptionsBuilder {
-
-    /// Creates a new builder object for TokioClientOptions
-    pub(crate) fn new(runtime: Handle) -> Self {
-        TokioOptionsBuilder {
-            options: TokioOptions {
-                runtime
-            }
-        }
-    }
-
-    /// Builds a new set of tokio client configuration options
-    pub fn build(self) -> TokioOptions {
-        self.options
-    }
-}
-
 /// A builder for creating tokio-based MQTT clients.
 pub struct TokioClientBuilder {
     endpoint: String,
