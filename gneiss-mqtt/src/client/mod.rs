@@ -1021,10 +1021,18 @@ impl MqttClientImpl {
 pub use crate::client::asynchronous::{AsyncClient, AsyncClientHandle, AsyncPublishResult, AsyncSubscribeResult, AsyncUnsubscribeResult};
 
 #[cfg(feature = "tokio")]
+pub use crate::client::asynchronous::tokio::{new_tokio_client, TokioConnectionFactoryWrapper};
+
+#[cfg(feature = "tokio")]
 pub use crate::client::asynchronous::tokio::builder::TokioClientBuilder;
+
+#[cfg(feature = "threaded")]
+pub use crate::client::synchronous::{SyncClient, SyncClientHandle, SyncPublishResult, SyncPublishResultCallback, SyncResultReceiver, SyncSubscribeResult, SyncSubscribeResultCallback, SyncUnsubscribeResult, SyncUnsubscribeResultCallback};
+
+#[cfg(feature = "threaded")]
+pub use crate::client::synchronous::threaded::new_threaded_client;
 
 #[cfg(feature = "threaded")]
 pub use crate::client::synchronous::threaded::builder::ThreadedClientBuilder;
 
-#[cfg(feature = "threaded")]
-pub use crate::client::synchronous::{SyncClient, SyncClientHandle, SyncPublishResult, SyncPublishResultCallback, SyncResultReceiver, SyncSubscribeResult, SyncSubscribeResultCallback, SyncUnsubscribeResult, SyncUnsubscribeResultCallback};
+

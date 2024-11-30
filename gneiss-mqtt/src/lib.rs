@@ -49,9 +49,8 @@ supports all connection methods allowed by the AWS MQTT broker implementation,
 Assuming a default Mosquitto installation, you can connect locally by plaintext on port 1883:
 
 ```no_run
-use gneiss_mqtt::client::asynchronous::AsyncClient;
+use gneiss_mqtt::client::AsyncClient;
 use gneiss_mqtt::client::TokioClientBuilder;
-use tokio::runtime::Handle;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -83,10 +82,8 @@ reason code vector to verify the success/failure result for each subscription in
 
 ```no_run
 use gneiss_mqtt::error::GneissResult;
-use gneiss_mqtt::client::SubscribeResult;
-use gneiss_mqtt::client::asynchronous::{AsyncClient, AsyncClientHandle};
+use gneiss_mqtt::client::{AsyncClient, AsyncClientHandle, SubscribeResult};
 use gneiss_mqtt::mqtt::{QualityOfService, SubscribePacket, Subscription};
-use std::sync::Arc;
 
 async fn subscribe_to_topic(client: AsyncClientHandle) {
     let subscribe = SubscribePacket::builder()
@@ -129,10 +126,10 @@ operations in reaction to client events (the client's public API is immutable). 
 every time we receive a "Ping" publish:
 
 ```no_run
-use gneiss_mqtt::client::ClientEvent;
-use gneiss_mqtt::client::asynchronous::{AsyncClient, AsyncClientHandle};
+use gneiss_mqtt::client::{AsyncClient, AsyncClientHandle, ClientEvent, TokioClientBuilder};
 use gneiss_mqtt::mqtt::{PublishPacket, QualityOfService};
 use std::sync::Arc;
+use tokio::runtime::Handle;
 
 pub fn client_event_callback(client: AsyncClientHandle, event: Arc<ClientEvent>) {
     if let ClientEvent::PublishReceived(publish_received_event) = event.as_ref() {
@@ -158,9 +155,6 @@ pub fn client_event_callback(client: AsyncClientHandle, event: Arc<ClientEvent>)
         }
     }
 }
-
-use gneiss_mqtt::client::TokioClientBuilder;
-use tokio::runtime::Handle;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
