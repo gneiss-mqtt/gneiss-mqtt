@@ -118,6 +118,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-custom-auth-signed-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+]
+
+[[package]]
+name = "aws-custom-auth-signed-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+ "tokio",
+]
+
+[[package]]
+name = "aws-custom-auth-unsigned-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+]
+
+[[package]]
+name = "aws-custom-auth-unsigned-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+ "tokio",
+]
+
+[[package]]
 name = "aws-lc-rs"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -141,6 +179,25 @@ dependencies = [
  "fs_extra",
  "libc",
  "paste",
+]
+
+[[package]]
+name = "aws-mtls-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+]
+
+[[package]]
+name = "aws-mtls-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+ "tokio",
 ]
 
 [[package]]
@@ -399,6 +456,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-websockets-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+ "tokio",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -569,14 +636,6 @@ dependencies = [
  "generic-array",
  "typenum",
 ]
-
-[[package]]
-name = "custom-auth-signed"
-version = "0.1.0"
-
-[[package]]
-name = "custom-auth-unsigned"
-version = "0.1.0"
 
 [[package]]
 name = "data-encoding"
@@ -1363,16 +1422,6 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "mtls"
-version = "0.0.0"
-dependencies = [
- "argh",
- "gneiss-mqtt",
- "gneiss-mqtt-aws",
- "tokio",
 ]
 
 [[package]]
@@ -2369,10 +2418,6 @@ name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
-
-[[package]]
-name = "websockets"
-version = "0.1.0"
 
 [[package]]
 name = "which"

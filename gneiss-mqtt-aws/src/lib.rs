@@ -694,12 +694,12 @@ impl AwsClientBuilder {
 
     #[cfg(all(any(feature = "tokio-rustls", feature = "threaded-rustls"), not(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))))]
     fn build_tls_options(&self) -> GneissResult<TlsOptions> {
-        return self.tls_options_builder.build_rustls();
+        self.tls_options_builder.build_rustls()
     }
 
     #[cfg(all(not(any(feature = "tokio-rustls", feature = "threaded-rustls")), any(feature = "tokio-native-tls", feature = "threaded-native-tls")))]
     fn build_tls_options(&self) -> GneissResult<TlsOptions> {
-        return self.tls_options_builder.build_native_tls();
+        self.tls_options_builder.build_native_tls()
     }
 
     /// Configures tokio-related options that created clients should use.

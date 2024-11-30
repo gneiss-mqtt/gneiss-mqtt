@@ -20,7 +20,7 @@ echo "Building gneiss-mqtt with all features"
 cargo build --package=gneiss-mqtt --all-features
 
 echo "Building gneiss-mqtt-aws..."
-declare -a gneiss_mqtt_aws_features=("tokio-rustls" "tokio-native-tls" "tokio-websockets,tokio-rustls" "tokio-websockets,tokio-native-tls", "threaded-rustls", "threaded-native-tls")
+declare -a gneiss_mqtt_aws_features=("tokio-rustls" "tokio-native-tls" "tokio-websockets,tokio-rustls" "tokio-websockets,tokio-native-tls" "threaded-rustls" "threaded-native-tls")
 
 for i in "${gneiss_mqtt_aws_features[@]}"
 do
@@ -32,11 +32,17 @@ echo "Building gneiss-mqtt-aws with all features"
 cargo build --package=gneiss-mqtt-aws --all-features
 
 echo "Building elastigneiss variants..."
-echo "Building elasti-gneiss-tokio"
-cargo build --package=elasti-gneiss-tokio
-echo "Building elasti-gneiss-threaded"
-cargo build --package=elasti-gneiss-threaded
-echo "Building elasti-gneiss-aws-tokio"
-cargo build --package=elasti-gneiss-aws-tokio
-echo "Building elasti-gneiss-aws-threaded"
-cargo build --package=elasti-gneiss-aws-threaded
+declare -a elastigneiss_projects=("elasti-gneiss-tokio" "elasti-gneiss-threaded" "elasti-gneiss-aws-tokio" "elasti-gneiss-aws-threaded")
+for i in "${elastigneiss_projects[@]}"
+do
+   echo "Building $i"
+   cargo build --package=$i
+done
+
+echo "Building gneiss-mqtt-aws examples..."
+declare -a gneiss_mqtt_aws_examples=("aws-custom-auth-signed-threaded" "aws-custom-auth-signed-tokio" "aws-custom-auth-unsigned-threaded" "aws-custom-auth-unsigned-tokio" "aws-mtls-threaded" "aws-mtls-tokio" "aws-websockets-tokio")
+for i in "${gneiss_mqtt_aws_examples[@]}"
+do
+   echo "Building $i"
+   cargo build --package=$i
+done
