@@ -181,7 +181,7 @@ pub(crate) fn create_threaded_client_builder_internal(connect_options: ConnectOp
         builder.with_http_proxy_options(proxy_options);
     }
 
-    #[cfg(feature = "tokio-websockets")]
+    #[cfg(feature = "threaded-websockets")]
     if ws_usage == WebsocketUsage::Tungstenite {
         builder.with_websocket_options(SyncWebsocketOptions::builder().build());
     }

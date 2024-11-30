@@ -538,8 +538,8 @@ where T: AsyncRead + AsyncWrite + Send + Sync + 'static {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn make_client_tokio(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _ws_options: Option<AsyncWebsocketOptions>, tokio_options: TokioOptions) -> GneissResult<AsyncClientHandle> {
     #[cfg(feature="tokio-websockets")]
-    if _ws_options.is_some() {
-        return make_websocket_client_tokio(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, _ws_options.unwrap(), tokio_options)
+    if let Some(ws_options) = _ws_options {
+        return make_websocket_client_tokio(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, ws_options, tokio_options)
     }
 
     make_direct_client_tokio(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, tokio_options)

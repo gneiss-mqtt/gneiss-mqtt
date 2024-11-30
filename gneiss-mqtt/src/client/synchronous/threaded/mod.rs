@@ -621,8 +621,8 @@ where T: Read + Write + Send + Sync + 'static {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn make_client_threaded(tls_impl: TlsConfiguration, endpoint: String, port: u16, tls_options: Option<TlsOptions>, client_options: MqttClientOptions, connect_options: ConnectOptions, http_proxy_options: Option<HttpProxyOptions>, _ws_options: Option<SyncWebsocketOptions>, threaded_config: ThreadedOptions) -> GneissResult<SyncClientHandle> {
     #[cfg(feature="threaded-websockets")]
-    if _ws_options.is_some() {
-        return make_websocket_client_threaded(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, _ws_options.unwrap(), threaded_config);
+    if let Some(ws_options) = _ws_options {
+        return make_websocket_client_threaded(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, ws_options, threaded_config);
     }
 
     make_direct_client_threaded(tls_impl, endpoint, port, tls_options, client_options, connect_options, http_proxy_options, threaded_config)
@@ -1433,7 +1433,7 @@ pub(crate) mod testing {
     }
 
     #[cfg(any(feature = "threaded-websockets", feature="threaded-rustls", feature="threaded-native-tls"))]
-    #[cfg_attr(not(feature = "tokio-websockets"), allow(unused_mut, unused_variables))]
+    #[cfg_attr(not(feature = "threaded-websockets"), allow(unused_mut, unused_variables))]
     fn apply_mismatch_sync_client_options(builder: &mut ThreadedClientBuilder, _ws_config: WebsocketUsage) {
         #[cfg(feature = "threaded-websockets")]
         {
