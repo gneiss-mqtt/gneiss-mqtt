@@ -9,7 +9,6 @@ use elasti_gneiss_core::{ElastiError, ElastiResult};
 use elasti_gneiss_core_sync::main_loop;
 use gneiss_mqtt::client::*;
 use gneiss_mqtt::client::config::*;
-use gneiss_mqtt::client::synchronous::SyncClientHandle;
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
 use url::Url;

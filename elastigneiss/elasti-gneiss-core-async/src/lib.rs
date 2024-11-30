@@ -6,7 +6,6 @@
 
 use argh::FromArgs;
 use gneiss_mqtt::client::*;
-use gneiss_mqtt::client::asynchronous::{AsyncClient, AsyncClientHandle};
 use gneiss_mqtt::mqtt::*;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
