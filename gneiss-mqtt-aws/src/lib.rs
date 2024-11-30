@@ -24,8 +24,8 @@ enabling a TLS implementation as well:
 
 ```toml
 [dependencies]
-gneiss-mqtt = { version = "0.3", features = [ "rustls" ] }
-gneiss-mqtt-aws = { version = "0.3", features = [ "rustls" ] }
+gneiss-mqtt = { version = "0.3", features = [ "tokio-rustls" ] }
+gneiss-mqtt-aws = { version = "0.3", features = [ "tokio-rustls" ] }
 ```
 
 (Temporary) If your project does not include [`tokio`](https://crates.io/crates/tokio), you will need to add it too:
@@ -50,8 +50,8 @@ for guidance on this process.
 To create a client and connect:
 
 ```no_run
+use gneiss_mqtt::client::AsyncClient;
 use gneiss_mqtt_aws::AwsClientBuilder;
-use tokio::runtime::Handle;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_direct_with_mtls_from_fs(endpoint, cert_path, key_path, None)?
-            .build_tokio(&Handle::current())?;
+            .build_tokio()?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -85,8 +85,8 @@ details.
 To create a client and connect:
 
 ```no_run
+use gneiss_mqtt::client::AsyncClient;
 use gneiss_mqtt_aws::{AwsClientBuilder, WebsocketSigv4OptionsBuilder};
-use tokio::runtime::Handle;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -99,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_websockets_with_sigv4(endpoint, sigv4_options, None)?
-            .build_tokio(&Handle::current())?;
+            .build_tokio()?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -133,8 +133,8 @@ supported custom authentication modes:
 For an unsigned custom authorizer (for testing/internal purposes only, not recommended for production):
 
 ```no_run
+use gneiss_mqtt::client::AsyncClient;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
-use tokio::runtime::Handle;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -153,7 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_direct_with_custom_auth(endpoint, custom_auth_options_builder.build(), None)?
-            .build_tokio(&Handle::current())?;
+            .build_tokio()?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -170,8 +170,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 For a signed custom authorizer (recommended for production):
 
 ```no_run
+use gneiss_mqtt::client::AsyncClient;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
-use tokio::runtime::Handle;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -196,7 +196,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_direct_with_custom_auth(endpoint, custom_auth_options_builder.build(), None)?
-            .build_tokio(&Handle::current())?;
+            .build_tokio()?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -248,20 +248,11 @@ different combinations expected by users.
 #![cfg_attr(feature = "strict", deny(warnings))]
 #![warn(missing_docs)]
 
-#[cfg(feature = "tokio")]
-use gneiss_mqtt::client::asynchronous::{AsyncClientHandle, AsyncClientOptions};
-#[cfg(feature = "tokio")]
-use gneiss_mqtt::client::asynchronous::tokio::TokioClientOptions;
-#[cfg(feature = "threaded")]
-use gneiss_mqtt::client::synchronous::{SyncClientHandle, SyncClientOptions};
-#[cfg(feature = "threaded")]
-use gneiss_mqtt::client::synchronous::threaded::ThreadedClientOptions;
+use gneiss_mqtt::client::*;
 use gneiss_mqtt::client::config::*;
 #[allow(unused_imports)]
 use gneiss_mqtt::error::{GneissError, GneissResult};
 use std::fmt::Write;
-#[cfg(feature = "tokio")]
-use tokio::runtime::Handle;
 
 #[cfg(feature = "tokio-websockets")]
 use aws_credential_types::provider::ProvideCredentials;
@@ -509,8 +500,12 @@ pub struct AwsClientBuilder {
     connect_options: Option<ConnectOptions>,
     client_options: Option<MqttClientOptions>,
     tls_options_builder: TlsOptionsBuilder,
+    #[cfg(feature = "tokio")]
+    tokio_options: Option<TokioOptions>,
     #[cfg(feature = "tokio-websockets")]
     websocket_sigv4_options: Option<WebsocketSigv4Options>,
+    #[cfg(feature = "threaded")]
+    threaded_options: Option<ThreadedOptions>,
     endpoint: String,
     tls_impl: TlsImplementation
 }
@@ -544,8 +539,12 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options_builder,
+            #[cfg(feature = "tokio")]
+            tokio_options: None,
             #[cfg(feature = "tokio-websockets")]
             websocket_sigv4_options: None,
+            #[cfg(feature = "threaded")]
+            threaded_options: None,
             endpoint: endpoint.to_string(),
             tls_impl: TlsImplementation::Default,
         };
@@ -575,8 +574,12 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options_builder,
+            #[cfg(feature = "tokio")]
+            tokio_options: None,
             #[cfg(feature = "tokio-websockets")]
             websocket_sigv4_options: None,
+            #[cfg(feature = "threaded")]
+            threaded_options: None,
             endpoint: endpoint.to_string(),
             tls_impl: TlsImplementation::Default,
         };
@@ -604,8 +607,12 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options_builder,
+            #[cfg(feature = "tokio")]
+            tokio_options: None,
             #[cfg(feature = "tokio-websockets")]
             websocket_sigv4_options: None,
+            #[cfg(feature = "threaded")]
+            threaded_options: None,
             endpoint: endpoint.to_string(),
             tls_impl: TlsImplementation::Default,
         };
@@ -633,8 +640,12 @@ impl AwsClientBuilder {
             connect_options: None,
             client_options: None,
             tls_options_builder,
+            #[cfg(feature = "tokio")]
+            tokio_options: None,
             #[cfg(feature = "tokio-websockets")]
             websocket_sigv4_options: Some(sigv4_options),
+            #[cfg(feature = "threaded")]
+            threaded_options: None,
             endpoint: endpoint.to_string(),
             tls_impl: TlsImplementation::Default,
         };
@@ -691,10 +702,24 @@ impl AwsClientBuilder {
         return self.tls_options_builder.build_native_tls();
     }
 
+    /// Configures tokio-related options that created clients should use.
+    #[cfg(feature = "tokio")]
+    pub fn with_tokio_options(mut self, tokio_options: TokioOptions) -> Self {
+        self.tokio_options = Some(tokio_options);
+        self
+    }
+
+    /// Configures thread-related options that created clients should use.
+    #[cfg(feature = "threaded")]
+    pub fn with_threaded_options(mut self, threaded_options: ThreadedOptions) -> Self {
+        self.threaded_options = Some(threaded_options);
+        self
+    }
+
     #[cfg(feature = "tokio")]
     /// Creates a new tokio-based MQTT5 client from all of the configuration options registered with the
     /// builder.
-    pub fn build_tokio(&self, runtime: &Handle) -> GneissResult<AsyncClientHandle> {
+    pub fn build_tokio(&self) -> GneissResult<AsyncClientHandle> {
         let user_connect_options =
             if let Some(options) = &self.connect_options {
                 options.clone()
@@ -713,13 +738,10 @@ impl AwsClientBuilder {
 
         let tls_options = self.build_tls_options()?;
 
-        let mut builder = ClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
+        let mut builder = TokioClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
         builder.with_connect_options(final_connect_options)
             .with_client_options(client_options)
             .with_tls_options(tls_options);
-
-        #[cfg_attr(not(feature = "tokio-websockets"), allow(unused_mut))]
-        let mut async_options_builder = AsyncClientOptions::builder();
 
         #[cfg(feature = "tokio-websockets")]
         if self.auth_type == AuthType::Sigv4Websockets {
@@ -735,17 +757,20 @@ impl AwsClientBuilder {
 
             let websocket_options = websocket_options_builder.build();
 
-            async_options_builder.with_websocket_options(websocket_options);
+            builder.with_websocket_options(websocket_options);
         }
 
-        let tokio_options = TokioClientOptions::builder(runtime.clone()).build();
-        builder.build_tokio(async_options_builder.build(), tokio_options)
+        if self.tokio_options.is_some() {
+            builder.with_tokio_options(self.tokio_options.as_ref().unwrap().clone());
+        }
+
+        builder.build()
     }
 
     #[cfg(feature = "threaded")]
     /// Creates a new thread-based MQTT5 client from all of the configuration options registered with the
     /// builder.
-    pub fn build_threaded(&self, threaded_options: Option<ThreadedClientOptions>) -> GneissResult<SyncClientHandle> {
+    pub fn build_threaded(&self) -> GneissResult<SyncClientHandle> {
         let user_connect_options =
             if let Some(options) = &self.connect_options {
                 options.clone()
@@ -764,19 +789,16 @@ impl AwsClientBuilder {
 
         let tls_options = self.build_tls_options()?;
 
-        let mut builder = ClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
+        let mut builder = ThreadedClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
         builder.with_connect_options(final_connect_options)
             .with_client_options(client_options)
             .with_tls_options(tls_options);
 
-        let final_thread_options =
-            if let Some(opts) = threaded_options {
-                opts.clone()
-            } else {
-                ThreadedClientOptions::builder().build()
-            };
+        if self.threaded_options.is_some() {
+            builder.with_threaded_options(self.threaded_options.as_ref().unwrap().clone());
+        }
 
-        builder.build_threaded(SyncClientOptions::builder().build(), final_thread_options)
+        builder.build()
     }
 
     fn build_final_connect_options(&self, connect_options: ConnectOptions) -> ConnectOptions {
@@ -873,12 +895,8 @@ mod testing {
     use std::future::Future;
     #[cfg(feature = "tokio")]
     use std::pin::Pin;
-    use gneiss_mqtt::client::{ClientEvent};
-    use gneiss_mqtt::testing::waiter::*;
-    #[cfg(feature = "tokio")]
-    use gneiss_mqtt::testing::waiter::asynchronous::AsyncClientEventWaiter;
-    #[cfg(feature = "threaded")]
-    use gneiss_mqtt::testing::waiter::synchronous::SyncClientEventWaiter;
+    use gneiss_mqtt::client::*;
+    use gneiss_mqtt::client::waiter::*;
     use super::*;
 
     fn get_iot_core_endpoint() -> String {
@@ -991,10 +1009,10 @@ mod testing {
 
     #[cfg(feature = "threaded")]
     fn do_sync_connect_test(builder: AwsClientBuilder) -> GneissResult<()> {
-        let client = builder.build_threaded(None)?;
+        let client = builder.build_threaded()?;
 
         let waiter_config = create_connect_waiter_options();
-        let connection_result_waiter = SyncClientEventWaiter::new(client.clone(), waiter_config, 1);
+        let connection_result_waiter = ThreadedClientEventWaiter::new(client.clone(), waiter_config, 1);
 
         client.start(None)?;
 
@@ -1025,10 +1043,10 @@ mod testing {
 
     #[cfg(feature = "tokio")]
     async fn do_async_connect_test(builder: AwsClientBuilder) -> GneissResult<()> {
-        let client = builder.build_tokio(&Handle::current())?;
+        let client = builder.build_tokio()?;
 
         let waiter_config = create_connect_waiter_options();
-        let connection_result_waiter = AsyncClientEventWaiter::new(client.clone(), waiter_config, 1);
+        let connection_result_waiter = TokioClientEventWaiter::new(client.clone(), waiter_config, 1);
 
         client.start(None)?;
 

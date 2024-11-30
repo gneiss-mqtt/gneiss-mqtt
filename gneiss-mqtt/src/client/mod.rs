@@ -8,8 +8,9 @@ Module containing the public MQTT client and associated types necessary to invok
  */
 
 pub mod config;
-pub mod synchronous;
-pub mod asynchronous;
+pub(crate) mod synchronous;
+pub(crate) mod asynchronous;
+pub mod waiter;
 
 use crate::client::config::*;
 use crate::error::{GneissError, GneissResult};
@@ -1013,3 +1014,25 @@ impl MqttClientImpl {
         Ok(())
     }
 }
+
+// Re-exports to mask internal module structure
+
+#[cfg(feature = "tokio")]
+pub use crate::client::asynchronous::{AsyncClient, AsyncClientHandle, AsyncPublishResult, AsyncSubscribeResult, AsyncUnsubscribeResult};
+
+#[cfg(feature = "tokio")]
+pub use crate::client::asynchronous::tokio::{new_tokio_client, TokioConnectionFactoryWrapper};
+
+#[cfg(feature = "tokio")]
+pub use crate::client::asynchronous::tokio::builder::TokioClientBuilder;
+
+#[cfg(feature = "threaded")]
+pub use crate::client::synchronous::{SyncClient, SyncClientHandle, SyncPublishResult, SyncPublishResultCallback, SyncResultReceiver, SyncSubscribeResult, SyncSubscribeResultCallback, SyncUnsubscribeResult, SyncUnsubscribeResultCallback};
+
+#[cfg(feature = "threaded")]
+pub use crate::client::synchronous::threaded::new_threaded_client;
+
+#[cfg(feature = "threaded")]
+pub use crate::client::synchronous::threaded::builder::ThreadedClientBuilder;
+
+

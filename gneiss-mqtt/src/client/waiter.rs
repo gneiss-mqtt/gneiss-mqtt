@@ -4,8 +4,13 @@
  */
 
 /*!
-Testing functionality used throughout the gneiss ecosystem to wait for specific client conditions.
-Only enabled with the `testing` feature.  Should never be enabled in production.
+Primarily-debug functionality used throughout the gneiss ecosystem to wait for specific client event conditions.
+Typically used in two scenarios:
+  1. Tests - dramatically simplifies test coordination and control flow
+  2. Examples - helps make control flow linear and readable
+
+Using waiters in a real application is discouraged.  It's rare for it to be a good idea to
+funnel async application control flow through single event wait points.
 */
 
 use crate::client::*;
@@ -13,14 +18,8 @@ use crate::client::*;
 use std::sync::Arc;
 use std::time::Instant;
 
-#[cfg(feature="threaded")]
-pub mod synchronous;
-
-#[cfg(feature="tokio")]
-pub mod asynchronous;
-
-/// Simple C-style enum whose entries match ClientEvent.  Useful for coarse matching against event types when we don't
-/// need to dig into the variant's internal data.
+/// Simple C-style enum whose entries match the ClientEvent enum.  Useful for coarse matching against event types when we don't
+/// need to dig into the variant's internal event data.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[non_exhaustive]
 pub enum ClientEventType {
@@ -83,8 +82,8 @@ pub struct ClientEventWaiterOptions {
     pub wait_type: ClientEventWaitType,
 }
 
-#[derive(Clone)]
 /// Timestamped client event record
+#[derive(Clone)]
 pub struct ClientEventRecord {
 
     /// The event emitted by the client
@@ -93,3 +92,9 @@ pub struct ClientEventRecord {
     /// What time the event occurred at
     pub timestamp: Instant
 }
+
+#[cfg(feature="tokio")]
+pub use crate::client::asynchronous::tokio::{ClientEventWaitFuture, TokioClientEventWaiter};
+
+#[cfg(feature="threaded")]
+pub use crate::client::synchronous::threaded::{ThreadedClientEventWaiter};

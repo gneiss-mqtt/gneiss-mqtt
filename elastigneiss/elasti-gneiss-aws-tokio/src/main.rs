@@ -7,12 +7,11 @@ use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult};
 use elasti_gneiss_core_async::main_loop;
-use gneiss_mqtt::client::asynchronous::AsyncClientHandle;
+use gneiss_mqtt::client::AsyncClientHandle;
 use gneiss_mqtt::client::config::*;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions, WebsocketSigv4OptionsBuilder};
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
-use tokio::runtime::Handle;
 use url::Url;
 
 #[derive(FromArgs, Debug, PartialEq)]
@@ -69,7 +68,7 @@ struct CommandLineArgs {
     signing_region: Option<String>
 }
 
-async fn build_client(connect_config: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<AsyncClientHandle> {
+async fn build_client(connect_config: ConnectOptions, client_config: MqttClientOptions, args: &CommandLineArgs) -> ElastiResult<AsyncClientHandle> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&uri_string);
@@ -92,7 +91,7 @@ async fn build_client(connect_config: ConnectOptions, client_config: MqttClientO
                 Ok(AwsClientBuilder::new_direct_with_mtls_from_fs(&endpoint, args.cert.as_ref().unwrap(), args.key.as_ref().unwrap(), capath)?
                     .with_connect_options(connect_config)
                     .with_client_options(client_config)
-                    .build_tokio(runtime)?)
+                    .build_tokio()?)
             } else {
                 println!("ERROR: aws-mqtts scheme requires certification and private key fields for mTLS");
                 Err(ElastiError::MissingArguments("--cert, --key"))
@@ -124,7 +123,7 @@ async fn build_client(connect_config: ConnectOptions, client_config: MqttClientO
             Ok(AwsClientBuilder::new_direct_with_custom_auth(&endpoint, config.build(), capath)?
                 .with_connect_options(connect_config)
                 .with_client_options(client_config)
-                .build_tokio(runtime)?)
+                .build_tokio()?)
         }
         "aws-wss" => {
             let signing_region = args.signing_region.clone().unwrap_or("us-east-1".to_string());
@@ -134,7 +133,7 @@ async fn build_client(connect_config: ConnectOptions, client_config: MqttClientO
             Ok(AwsClientBuilder::new_websockets_with_sigv4(&endpoint, sigv4_options, capath)?
                 .with_connect_options(connect_config)
                 .with_client_options(client_config)
-                .build_tokio(runtime)?)
+                .build_tokio()?)
         }
         _ => {
             Err(ElastiError::UnsupportedUriScheme(scheme))
@@ -165,7 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::Uniform)
         .build();
 
-    let client = build_client(connect_options, config, &Handle::current(), &cli_args).await.unwrap();
+    let client = build_client(connect_options, config, &cli_args).await.unwrap();
 
     println!("elasti-gneiss-aws-tokio - an interactive MQTT5 console application\n");
     println!(" `help` for command assistance\n");

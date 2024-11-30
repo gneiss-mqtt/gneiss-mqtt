@@ -14,6 +14,8 @@ use std::io::ErrorKind::{TimedOut, WouldBlock, Interrupted};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::time::Duration;
 use crate::alias::OutboundAliasResolution;
+#[cfg(any(feature = "tokio", feature = "threaded"))]
+use crate::client::*;
 use crate::client::config::*;
 use crate::mqtt::utils::mqtt_packet_to_packet_type;
 use crate::testing::protocol::*;
@@ -82,7 +84,7 @@ impl MockBrokerConnection {
 
             let mut wrote_bytes = false;
             let mut remaining_bytes = response_bytes.as_slice();
-            while remaining_bytes.len() > 0 {
+            while !remaining_bytes.is_empty() {
                 let write_result = self.stream.write(remaining_bytes);
                 match write_result {
                     Ok(bytes_written) => {
@@ -95,7 +97,7 @@ impl MockBrokerConnection {
                     }
                 }
 
-                if remaining_bytes.len() > 0 {
+                if !remaining_bytes.is_empty() {
                     std::thread::sleep(Duration::from_millis(0));
                 }
             }
@@ -111,9 +113,9 @@ impl MockBrokerConnection {
         }
     }
 
-    fn handle_packet(&mut self, packet: &Box<MqttPacket>, response_bytes: &mut Vec<u8>) -> GneissResult<()> {
+    fn handle_packet(&mut self, packet: &MqttPacket, response_bytes: &mut Vec<u8>) -> GneissResult<()> {
         let mut response_packets = VecDeque::new();
-        let packet_type = mqtt_packet_to_packet_type(&*packet);
+        let packet_type = mqtt_packet_to_packet_type(packet);
 
         if let Some(handler) = self.packet_handlers.get(&packet_type) {
             let mut context = self.context.lock().unwrap();
@@ -129,11 +131,11 @@ impl MockBrokerConnection {
                     }
                 };
 
-                self.encoder.reset(&*response_packet, &encoding_context)?;
+                self.encoder.reset(response_packet, &encoding_context)?;
 
                 let mut encode_result = EncodeResult::Full;
                 while encode_result == EncodeResult::Full {
-                    encode_result = self.encoder.encode(&*response_packet, &mut encode_buffer)?;
+                    encode_result = self.encoder.encode(response_packet, &mut encode_buffer)?;
                     response_bytes.append(&mut encode_buffer);
                     encode_buffer.clear(); // redundant probably
                 }
@@ -207,12 +209,15 @@ impl MockBroker {
 pub(crate) struct ClientTestOptions {
     pub(crate) packet_handler_set_factory_fn: Option<PacketHandlerSetFactory>,
 
+    #[allow(clippy::type_complexity)]
     pub(crate) client_options_mutator_fn: Option<Box<dyn Fn(&mut MqttClientOptionsBuilder)>>,
 
+    #[allow(clippy::type_complexity)]
     pub(crate) connect_options_mutator_fn: Option<Box<dyn Fn(&mut ConnectOptionsBuilder)>>
 }
 
-pub(crate) fn build_mock_client_server(mut config: ClientTestOptions) -> (ClientBuilder, MockBroker) {
+#[cfg(feature = "tokio")]
+pub(crate) fn build_mock_client_server_tokio(mut config: ClientTestOptions) -> (TokioClientBuilder, MockBroker) {
     let handler_set_factory : PacketHandlerSetFactory =
         if config.packet_handler_set_factory_fn.is_some() {
             config.packet_handler_set_factory_fn.take().unwrap()
@@ -234,7 +239,37 @@ pub(crate) fn build_mock_client_server(mut config: ClientTestOptions) -> (Client
         (*connect_options_mutator)(&mut connect_options_builder);
     }
 
-    let mut client_builder = ClientBuilder::new("127.0.0.1", broker.port);
+    let mut client_builder = TokioClientBuilder::new("127.0.0.1", broker.port);
+    client_builder.with_client_options(client_options_builder.build());
+    client_builder.with_connect_options(connect_options_builder.build());
+
+    (client_builder, broker)
+}
+
+#[cfg(feature = "threaded")]
+pub(crate) fn build_mock_client_server_threaded(mut config: ClientTestOptions) -> (ThreadedClientBuilder, MockBroker) {
+    let handler_set_factory : PacketHandlerSetFactory =
+        if config.packet_handler_set_factory_fn.is_some() {
+            config.packet_handler_set_factory_fn.take().unwrap()
+        } else {
+            Box::new(|| { create_default_packet_handlers() })
+        };
+
+    let broker = MockBroker::new(handler_set_factory);
+
+    let mut client_options_builder = MqttClientOptionsBuilder::new();
+    client_options_builder.with_connect_timeout(Duration::from_secs(3));
+
+    if let Some(client_options_mutator) = config.client_options_mutator_fn {
+        (*client_options_mutator)(&mut client_options_builder);
+    }
+
+    let mut connect_options_builder = ConnectOptions::builder();
+    if let Some(connect_options_mutator) = config.connect_options_mutator_fn {
+        (*connect_options_mutator)(&mut connect_options_builder);
+    }
+
+    let mut client_builder = ThreadedClientBuilder::new("127.0.0.1", broker.port);
     client_builder.with_client_options(client_options_builder.build());
     client_builder.with_connect_options(connect_options_builder.build());
 

@@ -608,13 +608,13 @@ pub(crate) mod testing {
                 encoding_context.outbound_alias_resolution = outbound_resolver.resolve_and_apply_topic_alias(&publish.topic_alias, &publish.topic);
             }
 
-            assert!(!encoder.reset(&packet, &encoding_context).is_err());
+            assert!(encoder.reset(packet, &encoding_context).is_ok());
 
             let mut cumulative_result : EncodeResult = EncodeResult::Full;
             while cumulative_result == EncodeResult::Full {
                 encode_buffer.clear();
                 let encode_result = encoder.encode(packet, &mut encode_buffer);
-                if let Err(_) = encode_result {
+                if encode_result.is_err() {
                     break;
                 }
 
@@ -636,13 +636,13 @@ pub(crate) mod testing {
         };
 
         let mut decode_stream_slice = full_encoded_stream.as_slice();
-        while decode_stream_slice.len() > 0 {
+        while !decode_stream_slice.is_empty() {
             let fragment_size : usize = usize::min(decode_size, decode_stream_slice.len());
             let decode_slice = &decode_stream_slice[..fragment_size];
             decode_stream_slice = &decode_stream_slice[fragment_size..];
 
             let decode_result = decoder.decode_bytes(decode_slice, &mut decoding_context);
-            assert!(!decode_result.is_err());
+            assert!(decode_result.is_ok());
         }
 
         let mut matching_packets : u32 = 0;
@@ -653,7 +653,7 @@ pub(crate) mod testing {
             matching_packets += 1;
 
             if let MqttPacket::Publish(publish) = &mut(*received_packet) {
-                if let Err(_) = inbound_alias_resolver.resolve_topic_alias(&publish.topic_alias, &mut publish.topic) {
+                if inbound_alias_resolver.resolve_topic_alias(&publish.topic_alias, &mut publish.topic).is_err() {
                     return false;
                 }
             }
@@ -663,7 +663,7 @@ pub(crate) mod testing {
 
         assert_eq!(encode_repetitions, matching_packets);
 
-        return true;
+        true
     }
 
     pub(crate) fn do_round_trip_encode_decode_test(packet : &MqttPacket) -> bool {
@@ -672,11 +672,11 @@ pub(crate) mod testing {
 
         for encode_size in encode_buffer_sizes.iter() {
             for decode_size in decode_fragment_sizes.iter() {
-                assert!(do_single_encode_decode_test(&packet, *encode_size, *decode_size, 5));
+                assert!(do_single_encode_decode_test(packet, *encode_size, *decode_size, 5));
             }
         }
 
-        return true;
+        true
     }
 
     pub(crate) fn encode_packet_for_test(packet: &MqttPacket) -> Vec<u8> {
@@ -684,9 +684,9 @@ pub(crate) mod testing {
 
         let mut encoded_buffer = Vec::with_capacity( 128 * 1024);
 
-        let mut encoding_context = EncodingContext { ..Default::default() };
+        let encoding_context = EncodingContext { ..Default::default() };
 
-        assert!(!encoder.reset(&packet, &mut encoding_context).is_err());
+        assert!(encoder.reset(packet, &encoding_context).is_ok());
 
         let encode_result = encoder.encode(packet, &mut encoded_buffer);
         assert_matches!(encode_result, Ok(EncodeResult::Complete));

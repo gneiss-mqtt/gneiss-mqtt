@@ -7,12 +7,10 @@ use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult};
 use elasti_gneiss_core_async::main_loop;
-use gneiss_mqtt::client::asynchronous::{AsyncClientHandle, AsyncClientOptions};
-use gneiss_mqtt::client::asynchronous::tokio::TokioClientOptions;
+use gneiss_mqtt::client::*;
 use gneiss_mqtt::client::config::*;
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
-use tokio::runtime::Handle;
 use url::Url;
 use gneiss_mqtt::alias::OutboundAliasResolverFactory;
 
@@ -50,7 +48,7 @@ struct CommandLineArgs {
     http_proxy_uri: Option<String>
 }
 
-fn build_client(connect_options: ConnectOptions, client_config: MqttClientOptions, runtime: &Handle, args: &CommandLineArgs) -> ElastiResult<AsyncClientHandle> {
+fn build_client(connect_options: ConnectOptions, client_config: MqttClientOptions, args: &CommandLineArgs) -> ElastiResult<AsyncClientHandle> {
     let uri_string = args.endpoint_uri.clone();
 
     let url_parse_result = Url::parse(&args.endpoint_uri);
@@ -72,7 +70,7 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
     let port = uri.port().unwrap();
     let scheme = uri.scheme().to_lowercase();
 
-    let mut builder = ClientBuilder::new(&endpoint, port);
+    let mut builder = TokioClientBuilder::new(&endpoint, port);
     builder.with_connect_options(connect_options);
     builder.with_client_options(client_config);
 
@@ -97,8 +95,6 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
         builder.with_http_proxy_options(http_proxy_options);
     }
 
-    let mut async_client_builder = AsyncClientOptions::builder();
-
     match scheme.as_str() {
         "mqtts" => {
             let mut tls_options_builder =
@@ -118,7 +114,7 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
         }
         "ws" => {
             let websocket_options = AsyncWebsocketOptions::builder().build();
-            async_client_builder.with_websocket_options(websocket_options);
+            builder.with_websocket_options(websocket_options);
         }
         "wss" => {
             let mut tls_options_builder = TlsOptions::builder();
@@ -131,13 +127,12 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
             builder.with_tls_options(tls_options);
 
             let websocket_options = AsyncWebsocketOptions::builder().build();
-            async_client_builder.with_websocket_options(websocket_options);
+            builder.with_websocket_options(websocket_options);
         }
         _ => {}
     }
 
-    let tokio_options = TokioClientOptions::builder(runtime.clone()).build();
-    Ok(builder.build_tokio(async_client_builder.build(), tokio_options)?)
+    Ok(builder.build()?)
 }
 
 #[tokio::main]
@@ -168,7 +163,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_outbound_alias_resolver_factory(OutboundAliasResolverFactory::new_lru_factory(10))
         .build();
 
-    let client = build_client(connect_options, config, &Handle::current(), &cli_args).unwrap();
+    let client = build_client(connect_options, config, &cli_args).unwrap();
 
     println!("elasti-gneiss-tokio - an interactive MQTT5 console application\n");
     println!(" `help` for command assistance\n");
