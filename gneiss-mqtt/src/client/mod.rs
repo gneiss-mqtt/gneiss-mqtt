@@ -1014,3 +1014,9 @@ impl MqttClientImpl {
         Ok(())
     }
 }
+
+#[cfg(feature = "tokio")]
+pub use crate::client::asynchronous::tokio::builder::{TokioClientBuilder, TokioOptions, TokioOptionsBuilder};
+
+#[cfg(feature = "threaded")]
+pub use crate::client::synchronous::threaded::builder::{ThreadedClientBuilder, ThreadedOptions, ThreadedOptionsBuilder};

@@ -31,16 +31,6 @@ use rustls_pki_types::PrivateKeyDer;
 #[cfg(any(feature="tokio-websockets", feature="threaded-websockets"))]
 use tungstenite::{client::*, handshake::client::generate_key};
 
-#[cfg(feature="tokio")]
-use crate::client::asynchronous::*;
-#[cfg(feature="tokio")]
-use crate::client::asynchronous::tokio::{TokioClientOptions, make_client_tokio};
-
-#[cfg(feature="threaded")]
-use crate::client::synchronous::*;
-#[cfg(feature="threaded")]
-use crate::client::synchronous::threaded::*;
-
 /// Configuration options related to establishing connections through HTTP proxies
 #[derive(Clone)]
 pub struct HttpProxyOptions {
@@ -102,6 +92,11 @@ pub struct SyncWebsocketOptions {
     pub(crate) handshake_transform: Arc<Option<SyncWebsocketHandshakeTransform>>
 }
 
+/// Empty marker struct when synchronous websockets are not enabled
+#[cfg(not(feature = "threaded-websockets"))]
+#[derive(Default, Clone)]
+pub struct SyncWebsocketOptions{}
+
 #[cfg(feature="threaded-websockets")]
 impl SyncWebsocketOptions {
 
@@ -156,6 +151,11 @@ pub type AsyncWebsocketHandshakeTransform = Box<dyn Fn(http::request::Builder) -
 pub struct AsyncWebsocketOptions {
     pub(crate) handshake_transform: std::sync::Arc<Option<AsyncWebsocketHandshakeTransform>>
 }
+
+/// Empty marker struct when async websockets are not enabled
+#[cfg(not(feature = "tokio-websockets"))]
+#[derive(Default, Clone)]
+pub struct AsyncWebsocketOptions{}
 
 #[cfg(feature="tokio-websockets")]
 impl AsyncWebsocketOptions {
@@ -942,18 +942,6 @@ impl MqttClientOptionsBuilder {
     }
 }
 
-/// A basic builder for creating MQTT clients.  Specialized builders for particular brokers may
-/// exist in other crates.
-pub struct ClientBuilder {
-    endpoint: String,
-    port: u16,
-
-    tls_options: Option<TlsOptions>,
-    connect_options: Option<ConnectOptions>,
-    client_options: Option<MqttClientOptions>,
-    http_proxy_options: Option<HttpProxyOptions>
-}
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum TlsConfiguration {
     None,
@@ -964,7 +952,7 @@ pub(crate) enum TlsConfiguration {
     Mixed
 }
 
-fn get_tls_impl_from_options(tls_options: Option<&TlsOptions>) -> TlsConfiguration {
+pub(crate) fn get_tls_impl_from_options(tls_options: Option<&TlsOptions>) -> TlsConfiguration {
     if let Some(tls_opts) = tls_options {
         return
             match &tls_opts.options {
@@ -977,131 +965,6 @@ fn get_tls_impl_from_options(tls_options: Option<&TlsOptions>) -> TlsConfigurati
     }
 
     TlsConfiguration::None
-}
-
-impl ClientBuilder {
-
-    /// Creates a new client builder attuned to a given host name and port.
-    pub fn new(endpoint: &str, port: u16) -> Self {
-        ClientBuilder {
-            endpoint: endpoint.to_string(),
-            port,
-            tls_options: None,
-            connect_options: None,
-            client_options: None,
-            http_proxy_options: None
-        }
-    }
-
-    /// Configures what TLS options to use for the connection to the broker.  If not specified,
-    /// then TLS will not be used.
-    pub fn with_tls_options(&mut self, tls_options: TlsOptions) -> &mut Self {
-        self.tls_options = Some(tls_options);
-        self
-    }
-
-    /// Configures the Connect packet related options for the client.  If not specified, default
-    /// values will be used.
-    pub fn with_connect_options(&mut self, connect_options: ConnectOptions) -> &mut Self {
-        self.connect_options = Some(connect_options);
-        self
-    }
-
-    /// Configures the client behavioral options.  If not specified, default values will be used.
-    pub fn with_client_options(&mut self, client_options: MqttClientOptions) -> &mut Self {
-        self.client_options = Some(client_options);
-        self
-    }
-
-    /// Configures the client to connect through an http proxy
-    pub fn with_http_proxy_options(&mut self, http_proxy_options: HttpProxyOptions) -> &mut Self {
-        self.http_proxy_options = Some(http_proxy_options);
-        self
-    }
-
-    fn get_tls_impl(&self) -> TlsConfiguration {
-        let to_broker_tls = get_tls_impl_from_options(self.tls_options.as_ref());
-        let mut to_proxy_tls = TlsConfiguration::None;
-        if let Some(http_proxy_options) = &self.http_proxy_options {
-            to_proxy_tls = get_tls_impl_from_options(http_proxy_options.tls_options.as_ref());
-        }
-
-        if to_broker_tls == to_proxy_tls {
-            return to_broker_tls;
-        }
-
-        if to_broker_tls != TlsConfiguration::None {
-            if to_proxy_tls != TlsConfiguration::None {
-                TlsConfiguration::Mixed
-            } else {
-                to_broker_tls
-            }
-        } else {
-            to_proxy_tls
-        }
-    }
-
-
-
-    /// Builds a new MQTT client according to all the configuration options given to the builder.
-    /// Does not consume self; can be called multiple times
-    #[cfg(feature="tokio")]
-    pub fn build_tokio(&self, async_options: AsyncClientOptions, tokio_options: TokioClientOptions) -> GneissResult<AsyncClientHandle> {
-        let tls_impl = self.get_tls_impl();
-        if tls_impl == TlsConfiguration::Mixed {
-            return Err(GneissError::new_tls_error("Cannot mix two different tls implementations in one client"));
-        }
-
-        let connect_options =
-            if let Some(options) = &self.connect_options {
-                options.clone()
-            } else {
-                ConnectOptions::builder().build()
-            };
-
-        let client_options =
-            if let Some(options) = &self.client_options {
-                options.clone()
-            } else {
-                MqttClientOptionsBuilder::new().build()
-            };
-
-        let http_proxy_options = self.http_proxy_options.clone();
-        let tls_options = self.tls_options.clone();
-        let endpoint = self.endpoint.clone();
-
-        make_client_tokio(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, async_options, tokio_options)
-    }
-
-    /// Builds a new MQTT client according to all the configuration options given to the builder.
-    /// Does not consume self; can be called multiple times
-    #[cfg(feature="threaded")]
-    pub fn build_threaded(&self, sync_options: SyncClientOptions, threaded_options: ThreadedClientOptions) -> GneissResult<SyncClientHandle> {
-        let tls_impl = self.get_tls_impl();
-        if tls_impl == TlsConfiguration::Mixed {
-            return Err(GneissError::new_tls_error("Cannot mix two different tls implementations in one client"));
-        }
-
-        let connect_options =
-            if let Some(options) = &self.connect_options {
-                options.clone()
-            } else {
-                ConnectOptions::builder().build()
-            };
-
-        let client_options =
-            if let Some(options) = &self.client_options {
-                options.clone()
-            } else {
-                MqttClientOptionsBuilder::new().build()
-            };
-
-        let http_proxy_options = self.http_proxy_options.clone();
-        let tls_options = self.tls_options.clone();
-        let endpoint = self.endpoint.clone();
-
-        make_client_threaded(tls_impl, endpoint, self.port, tls_options, client_options, connect_options, http_proxy_options, sync_options, threaded_options)
-    }
 }
 
 #[derive(Clone)]

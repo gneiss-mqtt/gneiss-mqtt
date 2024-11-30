@@ -14,6 +14,8 @@ use std::io::ErrorKind::{TimedOut, WouldBlock, Interrupted};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::time::Duration;
 use crate::alias::OutboundAliasResolution;
+#[cfg(any(feature = "tokio", feature = "threaded"))]
+use crate::client::*;
 use crate::client::config::*;
 use crate::mqtt::utils::mqtt_packet_to_packet_type;
 use crate::testing::protocol::*;
@@ -214,7 +216,8 @@ pub(crate) struct ClientTestOptions {
     pub(crate) connect_options_mutator_fn: Option<Box<dyn Fn(&mut ConnectOptionsBuilder)>>
 }
 
-pub(crate) fn build_mock_client_server(mut config: ClientTestOptions) -> (ClientBuilder, MockBroker) {
+#[cfg(feature = "tokio")]
+pub(crate) fn build_mock_client_server_tokio(mut config: ClientTestOptions) -> (TokioClientBuilder, MockBroker) {
     let handler_set_factory : PacketHandlerSetFactory =
         if config.packet_handler_set_factory_fn.is_some() {
             config.packet_handler_set_factory_fn.take().unwrap()
@@ -236,7 +239,37 @@ pub(crate) fn build_mock_client_server(mut config: ClientTestOptions) -> (Client
         (*connect_options_mutator)(&mut connect_options_builder);
     }
 
-    let mut client_builder = ClientBuilder::new("127.0.0.1", broker.port);
+    let mut client_builder = TokioClientBuilder::new("127.0.0.1", broker.port);
+    client_builder.with_client_options(client_options_builder.build());
+    client_builder.with_connect_options(connect_options_builder.build());
+
+    (client_builder, broker)
+}
+
+#[cfg(feature = "threaded")]
+pub(crate) fn build_mock_client_server_threaded(mut config: ClientTestOptions) -> (ThreadedClientBuilder, MockBroker) {
+    let handler_set_factory : PacketHandlerSetFactory =
+        if config.packet_handler_set_factory_fn.is_some() {
+            config.packet_handler_set_factory_fn.take().unwrap()
+        } else {
+            Box::new(|| { create_default_packet_handlers() })
+        };
+
+    let broker = MockBroker::new(handler_set_factory);
+
+    let mut client_options_builder = MqttClientOptionsBuilder::new();
+    client_options_builder.with_connect_timeout(Duration::from_secs(3));
+
+    if let Some(client_options_mutator) = config.client_options_mutator_fn {
+        (*client_options_mutator)(&mut client_options_builder);
+    }
+
+    let mut connect_options_builder = ConnectOptions::builder();
+    if let Some(connect_options_mutator) = config.connect_options_mutator_fn {
+        (*connect_options_mutator)(&mut connect_options_builder);
+    }
+
+    let mut client_builder = ThreadedClientBuilder::new("127.0.0.1", broker.port);
     client_builder.with_client_options(client_options_builder.build());
     client_builder.with_connect_options(connect_options_builder.build());
 

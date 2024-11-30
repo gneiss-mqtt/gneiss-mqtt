@@ -87,7 +87,7 @@ fn build_client(connect_config: ConnectOptions, client_config: MqttClientOptions
                 Ok(AwsClientBuilder::new_direct_with_mtls_from_fs(&endpoint, args.cert.as_ref().unwrap(), args.key.as_ref().unwrap(), capath)?
                     .with_connect_options(connect_config)
                     .with_client_options(client_config)
-                    .build_threaded(None)?)
+                    .build_threaded()?)
             } else {
                 println!("ERROR: aws-mqtts scheme requires certification and private key fields for mTLS");
                 Err(ElastiError::MissingArguments("--cert, --key"))
@@ -119,7 +119,7 @@ fn build_client(connect_config: ConnectOptions, client_config: MqttClientOptions
             Ok(AwsClientBuilder::new_direct_with_custom_auth(&endpoint, config.build(), capath)?
                 .with_connect_options(connect_config)
                 .with_client_options(client_config)
-                .build_threaded(None)?)
+                .build_threaded()?)
         }
         _ => {
             Err(ElastiError::UnsupportedUriScheme(scheme))

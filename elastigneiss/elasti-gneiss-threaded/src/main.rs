@@ -7,9 +7,9 @@ use std::fs::File;
 use argh::FromArgs;
 use elasti_gneiss_core::{ElastiError, ElastiResult};
 use elasti_gneiss_core_sync::main_loop;
-use gneiss_mqtt::client::synchronous::{SyncClientHandle, SyncClientOptions};
-use gneiss_mqtt::client::synchronous::threaded::ThreadedClientOptions;
+use gneiss_mqtt::client::*;
 use gneiss_mqtt::client::config::*;
+use gneiss_mqtt::client::synchronous::SyncClientHandle;
 use simplelog::{LevelFilter, WriteLogger};
 use std::path::PathBuf;
 use url::Url;
@@ -71,7 +71,7 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
     let port = uri.port().unwrap();
     let scheme = uri.scheme().to_lowercase();
 
-    let mut builder = ClientBuilder::new(&endpoint, port);
+    let mut builder = ThreadedClientBuilder::new(&endpoint, port);
     builder.with_connect_options(connect_options);
     builder.with_client_options(client_config);
 
@@ -96,8 +96,6 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
         builder.with_http_proxy_options(http_proxy_options);
     }
 
-    let mut sync_client_builder = SyncClientOptions::builder();
-
     match scheme.as_str() {
         "mqtts" => {
             let mut tls_options_builder =
@@ -117,7 +115,7 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
         }
         "ws" => {
             let websocket_options = SyncWebsocketOptions::builder().build();
-            sync_client_builder.with_websocket_options(websocket_options);
+            builder.with_websocket_options(websocket_options);
         }
         "wss" => {
             let mut tls_options_builder = TlsOptions::builder();
@@ -130,13 +128,12 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
             builder.with_tls_options(tls_options);
 
             let websocket_options = SyncWebsocketOptions::builder().build();
-            sync_client_builder.with_websocket_options(websocket_options);
+            builder.with_websocket_options(websocket_options);
         }
         _ => {}
     }
 
-    let threaded_options = ThreadedClientOptions::builder().build();
-    Ok(builder.build_threaded(sync_client_builder.build(), threaded_options)?)
+    Ok(builder.build()?)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

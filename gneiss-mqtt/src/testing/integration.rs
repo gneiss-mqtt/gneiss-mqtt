@@ -12,13 +12,13 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use crate::client::*;
 #[cfg(feature="tokio")]
-use crate::client::asynchronous::{AsyncClient, AsyncClientOptions, AsyncClientHandle};
+use crate::client::asynchronous::{AsyncClient, AsyncClientHandle};
 #[cfg(feature="tokio")]
-use crate::client::asynchronous::tokio::{TokioClientEventWaiter, TokioClientOptions};
+use crate::client::asynchronous::tokio::{TokioClientEventWaiter};
 #[cfg(feature="threaded")]
-use crate::client::synchronous::{SyncClient, SyncClientOptions, SyncClientOptionsBuilder, SyncClientHandle};
+use crate::client::synchronous::{SyncClient, SyncClientHandle};
 #[cfg(feature="threaded")]
-use crate::client::synchronous::threaded::{ThreadedClientEventWaiter, ThreadedClientOptions, ThreadedClientOptionsBuilder};
+use crate::client::synchronous::threaded::{ThreadedClientEventWaiter};
 use crate::client::config::*;
 use crate::client::waiter::*;
 use crate::error::{GneissError, GneissResult};
@@ -95,16 +95,17 @@ pub(crate) fn get_broker_port(tls: TlsUsage, ws: WebsocketUsage) -> u16 {
     port_string.parse().unwrap()
 }
 
-pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _tls_usage: TlsUsage, proxy_config: ProxyUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> ClientBuilder {
+#[cfg(feature="tokio")]
+pub(crate) fn create_tokio_client_builder_internal(connect_options: ConnectOptions, _tls_usage: TlsUsage, proxy_config: ProxyUsage, tls_endpoint: TlsUsage, ws_usage: WebsocketUsage) -> TokioClientBuilder {
     let client_config = MqttClientOptionsBuilder::new()
         .with_connect_timeout(Duration::from_secs(5))
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
         .build();
 
-    let endpoint = get_broker_endpoint(tls_endpoint, ws_endpoint);
-    let port = get_broker_port(tls_endpoint, ws_endpoint);
+    let endpoint = get_broker_endpoint(tls_endpoint, ws_usage);
+    let port = get_broker_port(tls_endpoint, ws_usage);
 
-    let mut builder = ClientBuilder::new(&endpoint, port);
+    let mut builder = TokioClientBuilder::new(&endpoint, port);
     builder.with_connect_options(connect_options);
     builder.with_client_options(client_config);
 
@@ -133,16 +134,79 @@ pub(crate) fn create_client_builder_internal(connect_options: ConnectOptions, _t
         builder.with_http_proxy_options(proxy_options);
     }
 
+    #[cfg(feature = "tokio-websockets")]
+    if ws_usage == WebsocketUsage::Tungstenite {
+        builder.with_websocket_options(AsyncWebsocketOptions::builder().build());
+    }
+
     builder
 }
 
-pub(crate) fn create_good_client_builder(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage) -> ClientBuilder {
+#[cfg(feature="threaded")]
+pub(crate) fn create_threaded_client_builder_internal(connect_options: ConnectOptions, _tls_usage: TlsUsage, proxy_config: ProxyUsage, tls_endpoint: TlsUsage, ws_usage: WebsocketUsage) -> ThreadedClientBuilder {
+    let client_config = MqttClientOptionsBuilder::new()
+        .with_connect_timeout(Duration::from_secs(5))
+        .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
+        .build();
+
+    let endpoint = get_broker_endpoint(tls_endpoint, ws_usage);
+    let port = get_broker_port(tls_endpoint, ws_usage);
+
+    let mut builder = ThreadedClientBuilder::new(&endpoint, port);
+    builder.with_connect_options(connect_options);
+    builder.with_client_options(client_config);
+
+    #[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
+    if _tls_usage == TlsUsage::Rustls {
+        let mut tls_options_builder = TlsOptions::builder();
+        tls_options_builder.with_verify_peer(false);
+        tls_options_builder.with_root_ca_from_path(&get_ca_path()).unwrap();
+
+        builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
+    }
+
+    #[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
+    if _tls_usage == TlsUsage::Nativetls {
+        let mut tls_options_builder = TlsOptions::builder();
+        tls_options_builder.with_verify_peer(false);
+        tls_options_builder.with_root_ca_from_path(&get_ca_path()).unwrap();
+
+        builder.with_tls_options(tls_options_builder.build_native_tls().unwrap());
+    }
+
+    if proxy_config != ProxyUsage::None {
+        let proxy_endpoint = get_proxy_endpoint();
+        let proxy_port = get_proxy_port();
+        let proxy_options = HttpProxyOptions::builder(&proxy_endpoint, proxy_port).build();
+        builder.with_http_proxy_options(proxy_options);
+    }
+
+    #[cfg(feature = "threaded-websockets")]
+    if ws_usage == WebsocketUsage::Tungstenite {
+        builder.with_websocket_options(SyncWebsocketOptions::builder().build());
+    }
+
+    builder
+}
+
+#[cfg(feature="tokio")]
+pub(crate) fn create_good_tokio_client_builder(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage) -> TokioClientBuilder {
     let connect_options = ConnectOptions::builder()
         .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
         .with_session_expiry_interval_seconds(3600)
         .build();
 
-    create_client_builder_internal(connect_options, tls, proxy, tls, ws)
+    create_tokio_client_builder_internal(connect_options, tls, proxy, tls, ws)
+}
+
+#[cfg(feature="threaded")]
+pub(crate) fn create_good_threaded_client_builder(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage) -> ThreadedClientBuilder {
+    let connect_options = ConnectOptions::builder()
+        .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
+        .with_session_expiry_interval_seconds(3600)
+        .build();
+
+    create_threaded_client_builder_internal(connect_options, tls, proxy, tls, ws)
 }
 
 #[cfg(feature="tokio-websockets")]
@@ -163,9 +227,9 @@ pub(crate) fn create_websocket_options_sync(ws: WebsocketUsage) -> Option<SyncWe
 #[cfg(feature = "tokio")]
 pub(crate) type AsyncTestFactoryReturnType = Pin<Box<dyn Future<Output=GneissResult<()>> + Send>>;
 #[cfg(feature = "tokio")]
-pub(crate) type TokioTestFactory = Box<dyn Fn(ClientBuilder, AsyncClientOptions, TokioClientOptions) -> AsyncTestFactoryReturnType + Send + Sync>;
+pub(crate) type TokioTestFactory = Box<dyn Fn(TokioClientBuilder) -> AsyncTestFactoryReturnType + Send + Sync>;
 #[cfg(feature = "threaded")]
-pub(crate) type ThreadedTestFactory = Box<dyn Fn(ClientBuilder, SyncClientOptions, ThreadedClientOptions) -> GneissResult<()>>;
+pub(crate) type ThreadedTestFactory = Box<dyn Fn(ThreadedClientBuilder) -> GneissResult<()>>;
 
 #[cfg(feature = "tokio")]
 pub(crate) async fn start_async_client(client: &AsyncClientHandle) -> GneissResult<()> {
@@ -425,8 +489,8 @@ pub(crate) async fn async_subscribe_publish_test(client: AsyncClientHandle, qos:
 }
 
 #[cfg(feature = "threaded")]
-pub(crate) fn sync_will_test(base_client_options: ClientBuilder, sync_options: SyncClientOptions, client_options: ThreadedClientOptions, client_factory: fn(ClientBuilder, SyncClientOptions, ThreadedClientOptions) -> SyncClientHandle) -> GneissResult<()> {
-    let client = client_factory(base_client_options, sync_options, client_options);
+pub(crate) fn sync_will_test(base_client_options: ThreadedClientBuilder, client_factory: fn(ThreadedClientBuilder) -> SyncClientHandle) -> GneissResult<()> {
+    let client = client_factory(base_client_options);
 
     let payload = "Onsecondthought".as_bytes().to_vec();
 
@@ -443,10 +507,8 @@ pub(crate) fn sync_will_test(base_client_options: ClientBuilder, sync_options: S
         .with_will(will)
         .build();
 
-    let will_builder = create_client_builder_internal(connect_options, TlsUsage::None, ProxyUsage::None, TlsUsage::None, WebsocketUsage::None);
-    let will_sync_options = SyncClientOptionsBuilder::new().build();
-    let will_threaded_options = ThreadedClientOptionsBuilder::new().build();
-    let will_client = client_factory(will_builder, will_sync_options, will_threaded_options);
+    let will_builder = create_threaded_client_builder_internal(connect_options, TlsUsage::None, ProxyUsage::None, TlsUsage::None, WebsocketUsage::None);
+    let will_client = client_factory(will_builder);
 
     start_sync_client(&client)?;
     start_sync_client(&will_client)?;
@@ -477,8 +539,8 @@ pub(crate) fn sync_will_test(base_client_options: ClientBuilder, sync_options: S
 }
 
 #[cfg(feature = "tokio")]
-pub(crate) async fn async_will_test(base_client_options: ClientBuilder, async_options: AsyncClientOptions, tokio_options: TokioClientOptions, client_factory: fn(ClientBuilder, AsyncClientOptions, TokioClientOptions) -> AsyncClientHandle) -> GneissResult<()> {
-    let client = client_factory(base_client_options, async_options, tokio_options);
+pub(crate) async fn async_will_test(base_client_options: TokioClientBuilder, client_factory: fn(TokioClientBuilder) -> AsyncClientHandle) -> GneissResult<()> {
+    let client = client_factory(base_client_options);
 
     let payload = "Onsecondthought".as_bytes().to_vec();
 
@@ -495,10 +557,8 @@ pub(crate) async fn async_will_test(base_client_options: ClientBuilder, async_op
         .with_will(will)
         .build();
 
-    let will_builder = create_client_builder_internal(connect_options, TlsUsage::None, ProxyUsage::None, TlsUsage::None, WebsocketUsage::None);
-    let will_async_options = AsyncClientOptions::builder().build();
-    let will_tokio_options = TokioClientOptions::builder(tokio::runtime::Handle::current().clone()).build();
-    let will_client = client_factory(will_builder, will_async_options, will_tokio_options);
+    let will_builder = create_tokio_client_builder_internal(connect_options, TlsUsage::None, ProxyUsage::None, TlsUsage::None, WebsocketUsage::None);
+    let will_client = client_factory(will_builder);
 
     start_async_client(&client).await?;
     start_async_client(&will_client).await?;
