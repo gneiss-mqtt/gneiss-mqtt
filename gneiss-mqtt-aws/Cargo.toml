@@ -14,6 +14,7 @@ resolver = "2"
 
 [package.metadata.docs.rs]
 features = [ "threaded-rustls", "threaded-native-tls", "tokio-rustls", "tokio-native-tls", "tokio-websockets" ]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 strict = [] # treats warnings as errors, only intended for internal checks
