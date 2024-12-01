@@ -118,6 +118,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-custom-auth-signed-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+]
+
+[[package]]
+name = "aws-custom-auth-signed-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+ "tokio",
+]
+
+[[package]]
+name = "aws-custom-auth-unsigned-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+]
+
+[[package]]
+name = "aws-custom-auth-unsigned-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+ "tokio",
+]
+
+[[package]]
 name = "aws-lc-rs"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -141,6 +179,25 @@ dependencies = [
  "fs_extra",
  "libc",
  "paste",
+]
+
+[[package]]
+name = "aws-mtls-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+]
+
+[[package]]
+name = "aws-mtls-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+ "tokio",
 ]
 
 [[package]]
@@ -396,6 +453,16 @@ dependencies = [
  "aws-smithy-types",
  "rustc_version",
  "tracing",
+]
+
+[[package]]
+name = "aws-websockets-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "gneiss-mqtt-aws",
+ "tokio",
 ]
 
 [[package]]

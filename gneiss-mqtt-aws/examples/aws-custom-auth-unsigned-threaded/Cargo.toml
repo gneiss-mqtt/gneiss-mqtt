@@ -1,0 +1,17 @@
+[package]
+name = "aws-custom-auth-unsigned-threaded"
+license = "Apache-2.0"
+version = "0.0.0"
+edition = "2021"
+keywords = ["mqtt", "mqtt5", "iot", "aws", "iotcore"]
+categories = [ "asynchronous", "network-programming", "web-programming::websocket"]
+description = "Thread-based example that connects to AWS IoT Core via an unsigned custom authorizer lambda"
+homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+readme = "README.md"
+resolver = "2"
+
+[dependencies]
+argh = { version = "0.1" }
+gneiss-mqtt = { path = "../../../gneiss-mqtt", features = [ "threaded-rustls" ] }
+gneiss-mqtt-aws = { path = "../../", features = [ "threaded-rustls" ]}
