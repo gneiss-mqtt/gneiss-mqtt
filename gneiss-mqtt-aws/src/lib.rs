@@ -9,38 +9,63 @@ AWS-managed message broker that supports both MQTT5 and MQTT311.  This crate dep
 [`gneiss-mqtt`](https://crates.io/crates/gneiss-mqtt),
 which contains the MQTT client implementations.
 
-IoT Core supports three different ways to securely establish an MQTT connection:
-* MQTT over mTLS - provide an X509 certificate (registered with AWS IoT Core) and its associated private key
+IoT Core supports three different ways to securely establish and authenticate an MQTT connection:
+* MQTT over mTLS - via an X509 certificate (registered with AWS IoT Core) and its associated private key
 * MQTT over Websockets - sign the websocket upgrade request with AWS credentials using the Sigv4 signing algorithm
-* MQTT with Custom Authentication - invoke an AWS Lambda with data fields passed via the MQTT username and password fields in the Connect packet
+* MQTT with Custom Authentication - invoke an AWS Lambda with data fields passed via the MQTT username and password fields of the Connect packet
 
 This crate's builder does all the dirty work for each of these connection methods, letting you
-just supply the minimal required data.
+just supply the required data.
+
+# Feature Flags
+
+Gneiss-mqtt supports two different MQTT clients:
+* `tokio` - An asynchronous client that executes on a Tokio async runtime.  Intended for users
+comfortable with async programming in Rust.
+* `threaded` - A callback-based client that executes on a background thread.  Intended for users
+that do not wish to deal with the additional complexity (or dependencies) of async programming in
+Rust.
+
+Client support is controlled by enabling one or more of these crate features:
+
+- `tokio-rustls`: Enables the tokio client and establishing connections using the `rustls` TLS implementation.
+- `tokio-native-tls`: Enables the tokio client and establishing connections using the `native-tls` TLS implementation.
+- `tokio-websockets`: Enables the tokio client and transport over websockets.
+- `threaded-rustls`: Enables the thread-based client and establishing connections using the `rustls` TLS implementation.
+- `threaded-native-tls`: Enables the thread-based client and establishing connections using the `native-tls` TLS implementation.
+
+AWS IoT Core requires TLS to connect and the crate will not build unless at least one TLS feature
+is enabled.
 
 # Usage
 
 To use this crate, you'll first need to add it and [`gneiss-mqtt`](https://crates.io/crates/gneiss-mqtt) to your project's Cargo.toml,
-enabling a TLS implementation as well:
+enabling a TLS implementation feature as well.
+
+Enabling the tokio client:
 
 ```toml
 [dependencies]
-gneiss-mqtt = { version = "0.3", features = [ "tokio-rustls" ] }
-gneiss-mqtt-aws = { version = "0.3", features = [ "tokio-rustls" ] }
-```
-
-(Temporary) If your project does not include [`tokio`](https://crates.io/crates/tokio), you will need to add it too:
-
-```toml
-[dependencies]
+gneiss-mqtt = { version = "...", features = [ "tokio-rustls" ] }
+gneiss-mqtt-aws = { version = "...", features = [ "tokio-rustls" ] }
 tokio = { version = "1", features = ["full"] }
 ```
 
-Future releases will support other async runtimes as well as a client that runs in a background
-thread and does not need an async runtime.  For now, [`tokio`](https://crates.io/crates/tokio) is required.
+Enabling the thread-based client:
+
+```toml
+[dependencies]
+gneiss-mqtt = { version = "...", features = [ "threaded-rustls" ] }
+gneiss-mqtt-aws = { version = "...", features = [ "threaded-rustls" ] }
+```
+
+Standalone examples for each connection method can be found in the project repository
+[examples folder](https://github.com/gneiss-mqtt/gneiss-mqtt/blob/main/gneiss-mqtt-aws/examples/README.md).
+
 */
 
 #![cfg_attr(any(feature = "tokio-rustls", feature = "tokio-native-tls"), doc = r##"
-# Example: Connect to AWS IoT Core via mTLS (with tokio runtime)
+## Example: Connect to AWS IoT Core via mTLS with a tokio-based client
 
 You'll need to create and register an X509 device certificate with IoT Core and associate an IAM
 permission policy that allows IoT Core connections.  See
@@ -59,7 +84,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cert_path = "<path to your X509 certificate>";
     let key_path = "<path to the certificate's private key>";
 
-    // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_direct_with_mtls_from_fs(endpoint, cert_path, key_path, None)?
             .build_tokio()?;
@@ -75,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```"##)]
 
 #![cfg_attr(all(any(feature = "tokio-rustls", feature = "tokio-native-tls"), feature = "tokio-websockets"), doc = r##"
-# Example: Connect to AWS IoT Core via Websockets (with tokio runtime)
+## Example: Connect to AWS IoT Core via Websockets with a tokio-based client
 You'll need to configure your runtime environment to source AWS credentials whose IAM policy allows
 IoT usage.  This crate uses the AWS SDK for Rust to source the credentials necessary
 to sign the websocket upgrade request.  Consult
@@ -96,7 +120,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Creating a default credentials provider chain is an async operation
     let sigv4_options = WebsocketSigv4OptionsBuilder::new(signing_region).await.build();
 
-    // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_websockets_with_sigv4(endpoint, sigv4_options, None)?
             .build_tokio()?;
@@ -112,11 +135,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```"##)]
 
 /*!
-# Example: Connect to AWS IoT Core via AWS IoT Custom Authentication (with tokio runtime)
+## Example: Connect to AWS IoT Core via AWS IoT Custom Authentication with the thread-based client
 
 Custom authentication is an AWS IoT Core specific way to perform authentication without using
 certificates or http request signing.  Instead, an AWS Lambda is invoked to decide whether or
-not a connection is allowed.  See the
+not a connection is allowed.  The lambda function can access CONNECT packet fields (username
+and password) to determine whether the connection should be allowed and what permissions it
+should have. See the
 [custom authentication documentation](https://docs.aws.amazon.com/iot/latest/developerguide/custom-authentication.html)
 for step-by-step instructions in how to set up the AWS resources (authorizer, Lambda, etc...) to
 perform custom authentication.
@@ -127,17 +152,16 @@ supported custom authentication modes:
 * Unsigned Custom Authentication - Anyone can invoke the authorizer's lambda if they know its ARN.  This is not recommended for production since it is not protected from external abuse that may run up your AWS bill.
 * Signed Custom Authentication - Your Lambda function will only be invoked (and billed) if the Connect packet includes the cryptographic signature (based on an IoT Core registered public key) of a controllable value.  Recommended for production.
 */
-#![cfg_attr(any(feature = "tokio-rustls", feature = "tokio-native-tls"), doc = r##"
+#![cfg_attr(any(feature = "threaded-rustls", feature = "threaded-native-tls"), doc = r##"
 ### Unsigned Custom Authentication
 
 For an unsigned custom authorizer (for testing/internal purposes only, not recommended for production):
 
 ```no_run
-use gneiss_mqtt::client::AsyncClient;
+use gneiss_mqtt::client::SyncClient;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let endpoint = "<your AWS IoT Core endpoint>";
     let authorizer_name = "<name of the authorizer you want to invoke>";
     let username = "<username value to pass to the authorizer>"; // only necessary if the authorizer's lambda uses it
@@ -153,7 +177,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_direct_with_custom_auth(endpoint, custom_auth_options_builder.build(), None)?
-            .build_tokio()?;
+            .build_threaded()?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -164,17 +188,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```"##)]
-#![cfg_attr(any(feature = "tokio-rustls", feature = "tokio-native-tls"), doc = r##"
+#![cfg_attr(any(feature = "threaded-rustls", feature = "threaded-native-tls"), doc = r##"
 ### Signed Custom Authentication
 
 For a signed custom authorizer (recommended for production):
 
 ```no_run
-use gneiss_mqtt::client::AsyncClient;
+use gneiss_mqtt::client::SyncClient;
 use gneiss_mqtt_aws::{AwsClientBuilder, AwsCustomAuthOptions};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let endpoint = "<your AWS IoT Core endpoint>";
     let authorizer_name = "<name of the authorizer you want to invoke>";
     let authorizer_token_key_name = "<key name registered with the signing authorizer that indicates the name of the field whose value will contain the `authorizer_token_key_value`>";
@@ -196,7 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In the common case, you will not need a root CA certificate
     let client =
         AwsClientBuilder::new_direct_with_custom_auth(endpoint, custom_auth_options_builder.build(), None)?
-            .build_tokio()?;
+            .build_threaded()?;
 
     // Once started, the client will recurrently maintain a connection to the endpoint until
     // stop() is invoked
@@ -217,8 +240,6 @@ the authorizer resource and so it is
 straightforward to determine if you need to encode them or not.  `authorizer_signature` should
 always be URI encoded.
 
-TODO: automatically encode `authorizer_signature` if it needs it.
-
 # MQTT Client Configuration
 
 The above examples skip all client configuration in favor of defaults.  There are many configuration
@@ -226,25 +247,12 @@ details that may be of interest depending on your use case.  These options are c
 structures in the `gneiss-mqtt` crate, via the `with_client_options` and `with_connect_options`
 methods on the [`AwsClientBuilder`](https://docs.rs/gneiss-mqtt-aws/latest/gneiss_mqtt-aws/struct.AwsClientBuilder.html).
 Further details can be found in the relevant sections of the `gneiss-mqtt` docs:
-* [`Mqtt5ClientOptions`](https://docs.rs/gneiss-mqtt/latest/gneiss_mqtt/config/struct.Mqtt5ClientOptionsBuilder.html)
+* [`MqttClientOptions`](https://docs.rs/gneiss-mqtt/latest/gneiss_mqtt/config/struct.MqttClientOptionsBuilder.html)
 * [`ConnectOptions`](https://docs.rs/gneiss-mqtt/latest/gneiss_mqtt/config/struct.ConnectOptionsBuilder.html)
-
-# Additional Notes
-
-See the [`gneiss-mqtt`](https://docs.rs/gneiss-mqtt/latest/gneiss_mqtt/) documentation for client
-usage details and guidance.
-
-The intention is that this crate will eventually be as agnostic as possible of underlying
-implementation details (async runtimes, TLS/transport implementations, etc...)
-but at present it has hard dependencies on tokio, rustls, and some
-associated helper libraries.  These will get feature-flag-gated before GA, allowing you
-to pare the implementation down to your exact connection needs.  In Rust's current state,
-there is a fundamental tension between trying to be transport/runtime agnostic and trying
-to provide an easy-to-use interface for getting successful clients set up for the many
-different combinations expected by users.
 
  */
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(feature = "strict", deny(warnings))]
 #![warn(missing_docs)]
 
@@ -269,6 +277,7 @@ use std::time::{Duration, SystemTime};
 /// over websockets using a Sigv4-signed websocket handshake for authentication
 #[derive(Clone, Debug)]
 #[cfg(feature = "tokio-websockets")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tokio-websockets")))]
 pub struct WebsocketSigv4Options {
     signing_region: String,
     credentials_provider: std::sync::Arc<dyn ProvideCredentials>
@@ -277,6 +286,7 @@ pub struct WebsocketSigv4Options {
 /// A builder type that configures all relevant AWS signing options for connecting over websockets
 /// using Sigv4 request signing.
 #[cfg(feature = "tokio-websockets")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tokio-websockets")))]
 pub struct WebsocketSigv4OptionsBuilder {
     options: WebsocketSigv4Options
 }
@@ -284,11 +294,11 @@ pub struct WebsocketSigv4OptionsBuilder {
 #[cfg(feature = "tokio-websockets")]
 impl WebsocketSigv4OptionsBuilder {
 
-    /// Creates a new builder
+    /// Creates a new builder.
     ///
     /// AWS credentials will be sourced from the default credentials provider chain as
-    /// implemented by the AWS SDK for Rust.  Construction of this provider chain is asynchronous,
-    /// hence this factory function is also asynchronous.
+    /// implemented by the [AWS SDK for Rust](https://aws.amazon.com/sdk-for-rust/).  Construction
+    /// of this provider chain is asynchronous, hence this factory function is also asynchronous.
     ///
     /// `signing_region` - the AWS region to sign the websocket handshake with.
     pub async fn new(signing_region: &str) -> Self {
@@ -306,7 +316,7 @@ impl WebsocketSigv4OptionsBuilder {
         }
     }
 
-    /// Creates a new builder
+    /// Creates a new builder.
     ///
     /// `credentials_provider` - credentials provider to
     /// source the AWS credentials needed to sign the websocket handshake upgrade request.
@@ -331,7 +341,7 @@ const CUSTOM_AUTH_AUTHORIZER_QUERY_PARAM_NAME: &str = "x-amz-customauthorizer-na
 const CUSTOM_AUTH_SIGNATURE_QUERY_PARAM_NAME: &str = "x-amz-customauthorizer-signature";
 
 ///  A struct that holds all relevant details needed to perform custom authentication with
-/// AWS IoT Core.  Use an appropriate `new_*()` function to create.
+/// AWS IoT Core.
 pub struct AwsCustomAuthOptions {
     pub(crate) username: String,
     pub(crate) password: Option<Vec<u8>>
@@ -403,7 +413,10 @@ impl AwsCustomAuthOptionsBuilder {
         }
     }
 
-    /// specifies additional data to pass to the authorizer's Lambda function via the `protocolData.mqtt.username` field.
+    /// Sets additional data to pass to the authorizer's Lambda function via the `protocolData.mqtt.username` field.
+    ///
+    /// `username` - text data to pass to the authorizer's Lambda via the `protocolData.mqtt.username` field.
+    ///
     /// It is strongly advised to either URI encode this value or make sure it does not contain characters that
     /// need to be URI-encoded.
     pub fn with_username(&mut self, username: &str) -> &mut Self {
@@ -411,7 +424,9 @@ impl AwsCustomAuthOptionsBuilder {
         self
     }
 
-    /// specifies additional data to pass to the authorizer's Lambda function via the `protocolData.mqtt.password` field.
+    /// Sets additional data to pass to the authorizer's Lambda function via the `protocolData.mqtt.password` field.
+    ///
+    /// `password` - binary data to pass to the authorizer's Lambda function via the `protocolData.mqtt.password` field
     pub fn with_password(&mut self, password: &[u8]) -> &mut Self {
         self.password = Some(password.to_vec());
         self
@@ -442,8 +457,7 @@ impl AwsCustomAuthOptionsBuilder {
         params
     }
 
-    /// Builds a new set of custom auth options from the builder's configuration.  Does not consume the builder in
-    /// the process.
+    /// Builds a new set of custom auth options from the builder's configuration.
     pub fn build(&self) -> AwsCustomAuthOptions {
         let mut final_username : String = "".to_string();
 
@@ -517,14 +531,14 @@ const CUSTOM_AUTH_ALPN_PROTOCOL : &str = "mqtt";
 
 impl AwsClientBuilder {
 
-    /// Creates a new builder that will construct an MQTT5 client that connects to AWS IoT Core
+    /// Creates a new builder that will construct an MQTT client that connects to AWS IoT Core
     /// using mutual TLS where the certificate and private key are read from the filesystem.
     ///
     /// `certificate_path` - path to a PEM-encoded file of the X509 certificate to use in mTLS
     ///
     /// `private_key_path` - path to a PEM-encoded file of the private key associated with the X509 certificate in `certificate_path`
     ///
-    /// `root_ca_path` - path to a root CA to use in the TLS context of the connection.  Generally
+    /// `root_ca_path` - path to a root CA to use in the TLS context of the connection.  Usually
     /// not needed unless a custom domain is involved.
     pub fn new_direct_with_mtls_from_fs(endpoint: &str, certificate_path: &str, private_key_path: &str, root_ca_path: Option<&str>) -> GneissResult<Self> {
         let mut tls_options_builder = TlsOptions::builder_with_mtls_from_path(certificate_path, private_key_path)?;
@@ -552,14 +566,14 @@ impl AwsClientBuilder {
         Ok(builder)
     }
 
-    /// Creates a new builder that will construct an MQTT5 client that connects to AWS IoT Core
+    /// Creates a new builder that will construct an MQTT client that connects to AWS IoT Core
     /// using mutual TLS where the certificate and private key are read from memory.
     ///
-    /// `certificate_bytes` - raw PEM-encoded data of the X509 certificate to use in mTLS
+    /// `certificate_bytes` - PEM-encoded bytes of the X509 certificate to use in mTLS
     ///
-    /// `private_key_bytes` - raw PEM-encoded data of the private key associated with the X509 certificate in `certificate_bytes`
+    /// `private_key_bytes` - PEM-encoded bytes of the private key associated with the X509 certificate in `certificate_bytes`
     ///
-    /// `root_ca_bytes` - root CA PEM data to use in the TLS context of the connection.  Generally
+    /// `root_ca_bytes` - root CA PEM data to use in the TLS context of the connection.  Usually
     /// not needed unless a custom domain is involved.
     pub fn new_direct_with_mtls_from_memory(endpoint: &str, certificate_bytes: &[u8], private_key_bytes: &[u8], root_ca_bytes: Option<&[u8]>) -> GneissResult<Self> {
         let mut tls_options_builder = TlsOptions::builder_with_mtls_from_memory(certificate_bytes, private_key_bytes);
@@ -587,12 +601,12 @@ impl AwsClientBuilder {
         Ok(builder)
     }
 
-    /// Creates a new builder that will construct an MQTT5 client that connects to AWS IoT Core
+    /// Creates a new builder that will construct an MQTT client that connects to AWS IoT Core
     /// using custom authentication.
     ///
     /// `custom_auth_options` - custom authentication options to use while connecting
     ///
-    /// `root_ca_path` - path to a root CA to use in the TLS context of the connection.  Generally
+    /// `root_ca_path` - path to a root CA to use in the TLS context of the connection.  Usually
     /// not needed unless a custom domain is involved.
     pub fn new_direct_with_custom_auth(endpoint: &str, custom_auth_options: AwsCustomAuthOptions, root_ca_path: Option<&str>) -> GneissResult<Self> {
         let mut tls_options_builder = TlsOptions::builder();
@@ -625,9 +639,10 @@ impl AwsClientBuilder {
     ///
     /// `sigv4_options` - sigv4 signing options to use while connecting
     ///
-    /// `root_ca_path` - path to a root CA to use in the TLS context of the connection.  Generally
+    /// `root_ca_path` - path to a root CA to use in the TLS context of the connection.  Usually
     /// not needed unless a custom domain is involved.
     #[cfg(feature = "tokio-websockets")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "tokio-websockets")))]
     pub fn new_websockets_with_sigv4(endpoint: &str, sigv4_options: WebsocketSigv4Options, root_ca_path: Option<&str>) -> GneissResult<Self> {
         let mut tls_options_builder = TlsOptions::builder();
         if let Some(root_ca) = root_ca_path {
@@ -653,71 +668,61 @@ impl AwsClientBuilder {
         Ok(builder)
     }
 
-    /// Registers a set of configuration options relevant to the MQTT Connect packet with the
-    /// builder.  These options will be used every time the client attempts to connect to
-    /// the broker.
+    /// Sets configuration options that control the MQTT Connect packet sent by the client on
+    /// every connection attempt.
+    ///
+    /// `connect_options` - CONNECT packet configuration options
     pub fn with_connect_options(mut self, connect_options: ConnectOptions) -> Self {
         self.connect_options = Some(connect_options);
         self
     }
 
-    /// Registers a set of client configuration options with the builder.
+    /// Sets behavioral configuration options for the client.
+    ///
+    /// `client_options` - behavioral configuration options
     pub fn with_client_options(mut self, client_options: MqttClientOptions) -> Self {
         self.client_options = Some(client_options);
         self
     }
 
-    /// Overrides the default TLS implementation to use when building clients.  Only useful if multiple
-    /// TLS implementations are enabled, which you should try to avoid at all costs.
+    /// Overrides the default TLS implementation (rustls) used by the client.
+    ///
+    /// `tls_impl` - what TLS implementation to use when establishing connections
+    ///
+    /// Only useful if multiple TLS implementations are enabled.
     pub fn with_default_tls_implementation(mut self, tls_impl: TlsImplementation) -> Self {
         self.tls_impl = tls_impl;
         self
     }
 
-    #[cfg(not(any(feature = "tokio-rustls", feature = "tokio-native-tls", feature = "threaded-rustls", feature = "threaded-native-tls")))]
-    fn build_tls_options(&self) -> GneissResult<TlsOptions> {
-        compile_error!("gneiss-mqtt-aws must be built with a TLS feature (rustls, native-tls) enabled");
-        Err(GneissError::new_tls_error("Connecting to AWS IoT Core requires a TLS implementation feature to be configured"))
-    }
-
-    #[cfg(all(any(feature = "tokio-rustls", feature = "threaded-rustls"), any(feature = "tokio-native-tls", feature = "threaded-native-tls")))]
-    fn build_tls_options(&self) -> GneissResult<TlsOptions> {
-        match self.tls_impl {
-            TlsImplementation::Nativetls => {
-                self.tls_options_builder.build_native_tls()
-            }
-            _ => {
-                self.tls_options_builder.build_rustls()
-            }
-        }
-    }
-
-    #[cfg(all(any(feature = "tokio-rustls", feature = "threaded-rustls"), not(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))))]
-    fn build_tls_options(&self) -> GneissResult<TlsOptions> {
-        self.tls_options_builder.build_rustls()
-    }
-
-    #[cfg(all(not(any(feature = "tokio-rustls", feature = "threaded-rustls")), any(feature = "tokio-native-tls", feature = "threaded-native-tls")))]
-    fn build_tls_options(&self) -> GneissResult<TlsOptions> {
-        self.tls_options_builder.build_native_tls()
-    }
-
-    /// Configures tokio-related options that created clients should use.
+    /// Sets tokio-related configuration options for the client.
+    ///
+    /// `tokio_options` - client Tokio options (primarily what runtime instance to use)
+    ///
+    /// Only relevant to tokio-based clients.  If left unspecified, created clients will use the
+    /// tokio runtime that was current at time of creation.
     #[cfg(feature = "tokio")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "tokio-websockets", feature = "tokio-rustls", feature = "tokio-native-tls"))))]
     pub fn with_tokio_options(mut self, tokio_options: TokioOptions) -> Self {
         self.tokio_options = Some(tokio_options);
         self
     }
 
-    /// Configures thread-related options that created clients should use.
+    /// Sets thread-related configuration options for the client.
+    ///
+    /// `threaded_options` - threaded client configuration options
+    ///
+    /// Only relevant to thread-based clients.
     #[cfg(feature = "threaded")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "threaded-rustls", feature = "threaded-native-tls"))))]
     pub fn with_threaded_options(mut self, threaded_options: ThreadedOptions) -> Self {
         self.threaded_options = Some(threaded_options);
         self
     }
 
     #[cfg(feature = "tokio")]
-    /// Creates a new tokio-based MQTT5 client from all of the configuration options registered with the
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "tokio-websockets", feature = "tokio-rustls", feature = "tokio-native-tls"))))]
+    /// Creates a new tokio-based MQTT client from the configuration options registered with the
     /// builder.
     pub fn build_tokio(&self) -> GneissResult<AsyncClientHandle> {
         let user_connect_options =
@@ -768,7 +773,8 @@ impl AwsClientBuilder {
     }
 
     #[cfg(feature = "threaded")]
-    /// Creates a new thread-based MQTT5 client from all of the configuration options registered with the
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "threaded-rustls", feature = "threaded-native-tls"))))]
+    /// Creates a new thread-based MQTT client from the configuration options registered with the
     /// builder.
     pub fn build_threaded(&self) -> GneissResult<SyncClientHandle> {
         let user_connect_options =
@@ -821,6 +827,34 @@ impl AwsClientBuilder {
         }
 
         final_connect_options_builder.build()
+    }
+
+    #[cfg(not(any(feature = "tokio-rustls", feature = "tokio-native-tls", feature = "threaded-rustls", feature = "threaded-native-tls")))]
+    fn build_tls_options(&self) -> GneissResult<TlsOptions> {
+        compile_error!("gneiss-mqtt-aws must be built with a TLS feature (rustls, native-tls) enabled");
+        Err(GneissError::new_tls_error("Connecting to AWS IoT Core requires a TLS implementation feature to be configured"))
+    }
+
+    #[cfg(all(any(feature = "tokio-rustls", feature = "threaded-rustls"), any(feature = "tokio-native-tls", feature = "threaded-native-tls")))]
+    fn build_tls_options(&self) -> GneissResult<TlsOptions> {
+        match self.tls_impl {
+            TlsImplementation::Nativetls => {
+                self.tls_options_builder.build_native_tls()
+            }
+            _ => {
+                self.tls_options_builder.build_rustls()
+            }
+        }
+    }
+
+    #[cfg(all(any(feature = "tokio-rustls", feature = "threaded-rustls"), not(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))))]
+    fn build_tls_options(&self) -> GneissResult<TlsOptions> {
+        self.tls_options_builder.build_rustls()
+    }
+
+    #[cfg(all(not(any(feature = "tokio-rustls", feature = "threaded-rustls")), any(feature = "tokio-native-tls", feature = "threaded-native-tls")))]
+    fn build_tls_options(&self) -> GneissResult<TlsOptions> {
+        self.tls_options_builder.build_native_tls()
     }
 }
 
