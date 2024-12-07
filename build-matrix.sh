@@ -39,6 +39,14 @@ do
    cargo build --package=$i
 done
 
+echo "Building gneiss-mqtt examples..."
+declare -a gneiss_mqtt_examples=("connect-plaintext-tokio" "connect-plaintext-threaded")
+for i in "${gneiss_mqtt_examples[@]}"
+do
+   echo "Building $i"
+   cargo build --package=$i
+done
+
 echo "Building gneiss-mqtt-aws examples..."
 declare -a gneiss_mqtt_aws_examples=("aws-custom-auth-signed-threaded" "aws-custom-auth-signed-tokio" "aws-custom-auth-unsigned-threaded" "aws-custom-auth-unsigned-tokio" "aws-mtls-threaded" "aws-mtls-tokio" "aws-websockets-tokio")
 for i in "${gneiss_mqtt_aws_examples[@]}"

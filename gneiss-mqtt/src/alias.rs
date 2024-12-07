@@ -6,7 +6,7 @@
 /*!
 A module with types for handling topic alias resolution, both outbound and inbound.  The included
 outbound resolvers should be sufficient for most use cases, but this module also includes a trait
-that allows for custom resolution implementations to be injected into a client.
+that allows for custom topic alias resolution implementations to be injected into a client.
 */
 
 #[cfg(test)]
@@ -41,10 +41,10 @@ pub trait OutboundAliasResolver : Send {
     /// forbidden.
     fn reset_for_new_connection(&mut self, max_aliases : u16);
 
-    /// Attempts to resolve a topic alias, updating the resolver's internal state while doing
-    /// so.
+    /// Asks the resolver to perform an outbound topic alias resolution
     ///
     /// `alias` - current topic alias value in the Publish packet
+    ///
     /// `topic` - current topic value in the Publish packet
     ///
     /// Output: the resolver's topic alias resolution outcome

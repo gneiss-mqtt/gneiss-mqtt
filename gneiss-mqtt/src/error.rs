@@ -302,6 +302,7 @@ impl GneissError {
 
     /// Constructs a StdIoError variant from an existing error.  Typically this should be a
     /// std::io::Error
+    #[doc(hidden)]
     pub fn new_std_io_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         GneissError::StdIoError(
             StdIoErrorContext {
@@ -313,6 +314,7 @@ impl GneissError {
     /// Constructs a new TlsError variant from an existing error.  Typically this should be
     /// an error surfacing from a third-party TLS library or an attempt to initialize configuration
     /// for one.
+    #[doc(hidden)]
     pub fn new_tls_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         GneissError::TlsError(
             TlsErrorContext {
@@ -323,6 +325,7 @@ impl GneissError {
 
     /// Constructs a new TransportError variant from an existing error.  Typically this should be
     /// an error surfacing from a third-party transport library.
+    #[doc(hidden)]
     pub fn new_transport_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         GneissError::TransportError(
             TransportErrorContext {
@@ -342,6 +345,7 @@ impl GneissError {
 
     /// Constructs a new OtherError variant from an existing error.  Use this to wrap errors that
     /// do not fall into any appropriate existing category.
+    #[doc(hidden)]
     pub fn new_other_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         GneissError::OtherError (
             OtherErrorContext {
