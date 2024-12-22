@@ -54,10 +54,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args: CommandLineArgs = argh::from_env();
     let host_and_port = parse_endpoint(&args.endpoint)?;
-    println!("Connecting to {}:{}...\n", host_and_port.0, host_and_port.1);
 
     // Create the client
     let client = ThreadedClientBuilder::new(&host_and_port.0, host_and_port.1).build()?;
+
+    println!("Connecting to {}:{}...\n", host_and_port.0, host_and_port.1);
 
     // Before connecting, create a waiter object that completes when it receives a connection
     // success event

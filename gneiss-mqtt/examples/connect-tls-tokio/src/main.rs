@@ -5,6 +5,7 @@
 
 use argh::FromArgs;
 use gneiss_mqtt::client::{AsyncClient, ClientEvent, TokioClientBuilder};
+use gneiss_mqtt::client::config::TlsOptions;
 use gneiss_mqtt::client::waiter::{ClientEventType, TokioClientEventWaiter};
 use gneiss_mqtt::error::{GneissError, GneissResult};
 use std::str::FromStr;
@@ -12,8 +13,13 @@ use std::sync::Arc;
 
 
 #[derive(FromArgs, Debug, PartialEq)]
-/// connect-plaintext-tokio - an example connecting to an MQTT broker over TCP using a tokio-based client
+/// connect-tls-tokio - an example connecting to an MQTT broker with TLS over TCP using a tokio-based client
 struct CommandLineArgs {
+
+    /// path to the root CA to use when connecting.  If this is not set, then the default system
+    /// trust store will be used instead.
+    #[argh(option)]
+    capath: Option<String>,
 
     /// endpoint to connect to in the format "host-name:port"
     #[argh(positional)]
@@ -51,13 +57,23 @@ fn parse_endpoint(endpoint: &str) -> GneissResult<(String, u16)> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("connect-plaintext-tokio - an example connecting to an MQTT broker over TCP using a tokio-based client\n");
+    println!("connect-tls-tokio - an example connecting to an MQTT broker with TLS over TCP using a tokio-based client\n");
 
     let args: CommandLineArgs = argh::from_env();
     let host_and_port = parse_endpoint(&args.endpoint)?;
 
+    let mut tls_options_builder = TlsOptions::builder();
+    tls_options_builder.with_verify_peer(false); // Remove this line in production scenarios
+    if let Some(capath) = args.capath {
+        tls_options_builder.with_root_ca_from_path(&capath)?;
+    }
+
+    let tls_options = tls_options_builder.build_rustls()?;
+
     // Create the client
-    let client = TokioClientBuilder::new(&host_and_port.0, host_and_port.1).build()?;
+    let client = TokioClientBuilder::new(&host_and_port.0, host_and_port.1)
+        .with_tls_options(tls_options)
+        .build()?;
 
     println!("Connecting to {}:{}...\n", host_and_port.0, host_and_port.1);
 

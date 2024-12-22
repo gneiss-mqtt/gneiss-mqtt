@@ -18,7 +18,7 @@ echo "Building with all features"
 cargo build --all-features
 
 echo "Building examples..."
-declare -a gneiss_mqtt_examples=("connect-plaintext-tokio" "connect-plaintext-threaded")
+declare -a gneiss_mqtt_examples=("connect-plaintext-tokio" "connect-plaintext-threaded" "connect-tls-tokio" "connect-tls-threaded")
 for i in "${gneiss_mqtt_examples[@]}"
 do
    echo "Building $i"

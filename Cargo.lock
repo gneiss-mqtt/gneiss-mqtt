@@ -620,6 +620,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "connect-tls-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+]
+
+[[package]]
+name = "connect-tls-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "tokio",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
