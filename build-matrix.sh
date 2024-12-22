@@ -40,7 +40,7 @@ do
 done
 
 echo "Building gneiss-mqtt examples..."
-declare -a gneiss_mqtt_examples=("connect-plaintext-tokio" "connect-plaintext-threaded" "connect-tls-tokio" "connect-tls-threaded" "connect-websockets-tokio" "connect-websockets-threaded")
+declare -a gneiss_mqtt_examples=("connect-plaintext-tokio" "connect-plaintext-threaded" "connect-proxy-tokio" "connect-proxy-threaded" "connect-tls-tokio" "connect-tls-threaded" "connect-websockets-tokio" "connect-websockets-threaded")
 for i in "${gneiss_mqtt_examples[@]}"
 do
    echo "Building $i"

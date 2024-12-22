@@ -4,17 +4,21 @@
  */
 
 use argh::FromArgs;
-use gneiss_mqtt::client::{SyncClient, ClientEvent, ThreadedClientBuilder};
-use gneiss_mqtt::client::config::SyncWebsocketOptions;
-use gneiss_mqtt::client::waiter::{ClientEventType, ThreadedClientEventWaiter};
+use gneiss_mqtt::client::{AsyncClient, ClientEvent, TokioClientBuilder};
+use gneiss_mqtt::client::config::HttpProxyOptions;
+use gneiss_mqtt::client::waiter::{ClientEventType, TokioClientEventWaiter};
 use gneiss_mqtt::error::{GneissError, GneissResult};
 use std::str::FromStr;
 use std::sync::Arc;
 
 
 #[derive(FromArgs, Debug, PartialEq)]
-/// connect-websockets-threaded - an example connecting to an MQTT broker with websockets over TCP using a thread-based client
+/// connect-proxy-tokio - an example connecting to an MQTT broker through an HTTP proxy using a tokio-based client
 struct CommandLineArgs {
+
+    /// proxy endpoint to connect through in the format "host-name:port"
+    #[argh(positional)]
+    proxy_endpoint: String,
 
     /// endpoint to connect to in the format "host-name:port"
     #[argh(positional)]
@@ -41,7 +45,7 @@ fn parse_endpoint(endpoint: &str) -> GneissResult<(String, u16)> {
     let parts = endpoint.split(':').collect::<Vec<_>>();
 
     if parts.len() != 2 {
-        return Err(GneissError::new_other_error("Invalid endpoint. Endpoint must be in the format 'host:port'"));
+        return Err(GneissError::new_other_error("Invalid endpoint.  Endpoint must be in the format 'host:port'"));
     }
 
     let host = parts[0].to_string();
@@ -50,24 +54,26 @@ fn parse_endpoint(endpoint: &str) -> GneissResult<(String, u16)> {
     Ok((host, port))
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("connect-websockets-threaded - an example connecting to an MQTT broker with websockets over TCP using a thread-based client\n");
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("connect-websockets-tokio - an example connecting to an MQTT broker with websockets over TCP using a tokio-based client\n");
 
     let args: CommandLineArgs = argh::from_env();
     let host_and_port = parse_endpoint(&args.endpoint)?;
+    let proxy_host_and_port = parse_endpoint(&args.proxy_endpoint)?;
 
-    let ws_options = SyncWebsocketOptions::builder().build();
+    let http_proxy_options = HttpProxyOptions::builder(&proxy_host_and_port.0, proxy_host_and_port.1).build();
 
     // Create the client
-    let client = ThreadedClientBuilder::new(&host_and_port.0, host_and_port.1)
-        .with_websocket_options(ws_options)
+    let client = TokioClientBuilder::new(&host_and_port.0, host_and_port.1)
+        .with_http_proxy_options(http_proxy_options)
         .build()?;
 
-    println!("Connecting to {}:{}...\n", host_and_port.0, host_and_port.1);
+    println!("Connecting to {}:{} through an HTTP proxy at {}:{}...\n", host_and_port.0, host_and_port.1, proxy_host_and_port.0, proxy_host_and_port.1);
 
     // Before connecting, create a waiter object that completes when it receives a connection
     // success event
-    let connection_success_waiter = ThreadedClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
+    let connection_success_waiter = TokioClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionSuccess);
 
     // Start the client.  Install a simple event handler function that prints out reactions
     // to a few different events.
@@ -75,7 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // We discourage the use of waiters in real applications, but in a minimal example, it keeps
     // things simple.
-    connection_success_waiter.wait()?;
+    connection_success_waiter.wait().await?;
 
     client.stop(None)?;
 

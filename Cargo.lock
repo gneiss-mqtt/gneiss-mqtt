@@ -620,6 +620,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "connect-proxy-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+]
+
+[[package]]
+name = "connect-proxy-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "tokio",
+]
+
+[[package]]
 name = "connect-tls-threaded"
 version = "0.0.0"
 dependencies = [

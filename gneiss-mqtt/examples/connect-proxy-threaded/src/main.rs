@@ -5,7 +5,7 @@
 
 use argh::FromArgs;
 use gneiss_mqtt::client::{SyncClient, ClientEvent, ThreadedClientBuilder};
-use gneiss_mqtt::client::config::SyncWebsocketOptions;
+use gneiss_mqtt::client::config::HttpProxyOptions;
 use gneiss_mqtt::client::waiter::{ClientEventType, ThreadedClientEventWaiter};
 use gneiss_mqtt::error::{GneissError, GneissResult};
 use std::str::FromStr;
@@ -13,8 +13,12 @@ use std::sync::Arc;
 
 
 #[derive(FromArgs, Debug, PartialEq)]
-/// connect-websockets-threaded - an example connecting to an MQTT broker with websockets over TCP using a thread-based client
+/// connect-proxy-threaded - an example connecting to an MQTT broker through an HTTP proxy using a thread-based client
 struct CommandLineArgs {
+
+    /// proxy endpoint to connect through in the format "host-name:port"
+    #[argh(positional)]
+    proxy_endpoint: String,
 
     /// endpoint to connect to in the format "host-name:port"
     #[argh(positional)]
@@ -51,19 +55,20 @@ fn parse_endpoint(endpoint: &str) -> GneissResult<(String, u16)> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("connect-websockets-threaded - an example connecting to an MQTT broker with websockets over TCP using a thread-based client\n");
+    println!("connect-proxy-threaded - an example connecting to an MQTT broker through an HTTP proxy using a thread-based client\n");
 
     let args: CommandLineArgs = argh::from_env();
     let host_and_port = parse_endpoint(&args.endpoint)?;
+    let proxy_host_and_port = parse_endpoint(&args.proxy_endpoint)?;
 
-    let ws_options = SyncWebsocketOptions::builder().build();
+    let http_proxy_options = HttpProxyOptions::builder(&proxy_host_and_port.0, proxy_host_and_port.1).build();
 
     // Create the client
     let client = ThreadedClientBuilder::new(&host_and_port.0, host_and_port.1)
-        .with_websocket_options(ws_options)
+        .with_http_proxy_options(http_proxy_options)
         .build()?;
 
-    println!("Connecting to {}:{}...\n", host_and_port.0, host_and_port.1);
+    println!("Connecting to {}:{} through an HTTP proxy at {}:{}...\n", host_and_port.0, host_and_port.1, proxy_host_and_port.0, proxy_host_and_port.1);
 
     // Before connecting, create a waiter object that completes when it receives a connection
     // success event
