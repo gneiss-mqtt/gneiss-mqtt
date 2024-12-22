@@ -637,6 +637,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "connect-websockets-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+]
+
+[[package]]
+name = "connect-websockets-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "tokio",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

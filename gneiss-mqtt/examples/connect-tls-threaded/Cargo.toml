@@ -13,5 +13,5 @@ resolver = "2"
 
 [dependencies]
 argh = { version = "0.1" }
-gneiss-mqtt = { path = "../../../gneiss-mqtt", features = [ "threaded", "threaded-rustls" ] }
+gneiss-mqtt = { path = "../../../gneiss-mqtt", features = [ "threaded-rustls" ] }
 
