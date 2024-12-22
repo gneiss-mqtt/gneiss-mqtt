@@ -21,15 +21,16 @@ struct CommandLineArgs {
 }
 
 fn client_event_handler(event: Arc<ClientEvent>) {
-    match *event {
+    match &*event {
         ClientEvent::ConnectionAttempt(_) => {
             println!("Attempting to connect!");
         }
         ClientEvent::ConnectionSuccess(_) => {
             println!("Connection attempt successful!");
         }
-        ClientEvent::ConnectionFailure(_) => {
+        ClientEvent::ConnectionFailure(failure_event) => {
             println!("Connection attempt failed! noooooooooooooooo");
+            println!("  Error: {}", failure_event.error);
         }
         _ => {}
     }
@@ -39,7 +40,7 @@ fn parse_endpoint(endpoint: &str) -> GneissResult<(String, u16)> {
     let parts = endpoint.split(':').collect::<Vec<_>>();
 
     if parts.len() != 2 {
-        return Err(GneissError::new_other_error("Invalid endpoint endpoint must be in the format 'host:port'"));
+        return Err(GneissError::new_other_error("Invalid endpoint.  Endpoint must be in the format 'host:port'"));
     }
 
     let host = parts[0].to_string();
