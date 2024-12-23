@@ -17,6 +17,8 @@ members = [
 	"gneiss-mqtt/examples/connect-tls-tokio",
 	"gneiss-mqtt/examples/connect-websockets-threaded",
 	"gneiss-mqtt/examples/connect-websockets-tokio",
+	"gneiss-mqtt/examples/pubsub-threaded",
+	"gneiss-mqtt/examples/pubsub-tokio",
 	"gneiss-mqtt-aws",
 	"gneiss-mqtt-aws/examples/aws-custom-auth-signed-threaded",
 	"gneiss-mqtt-aws/examples/aws-custom-auth-signed-tokio",

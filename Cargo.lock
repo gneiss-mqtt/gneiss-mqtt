@@ -1725,6 +1725,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pubsub-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+]
+
+[[package]]
+name = "pubsub-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "tokio",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"

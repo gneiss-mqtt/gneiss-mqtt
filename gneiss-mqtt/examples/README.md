@@ -11,3 +11,8 @@
 * [Connect through an HTTP proxy](./connect-proxy-threaded/README.md) - Shows how to connect to a broker through an HTTP proxy.
 * [Connect over TLS](./connect-tls-threaded/README.md) - Shows how to connect to a broker using TLS over TCP.
 * [Connect with websockets](./connect-websockets-threaded/README.md) - Shows how to connect to a broker using websockets over TCP.
+## MQTT operations
+### Tokio client examples
+* [Pubsub](./pubsub-tokio/README.md) - Demonstrates how to use MQTT operations
+### Threaded client examples
+* [Pubsub](./pubsub-threaded/README.md) - Demonstrates how to use MQTT operations
