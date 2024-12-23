@@ -55,7 +55,9 @@ impl PublishOptionsBuilder {
         }
     }
 
-    /// Sets the ack timeout for a Publish operation.  The ack timeout only applies
+    /// Sets the ack timeout for a Publish operation.
+    ///
+    /// The ack timeout only applies
     /// to the time interval between when the operation's packet is written to the socket and when
     /// the corresponding ACK packet is received from the broker.  Has no effect on QoS0 publishes.
     pub fn with_ack_timeout(mut self, timeout: Duration) -> Self {
@@ -70,6 +72,7 @@ impl PublishOptionsBuilder {
 }
 
 /// Wraps the two different ways a Qos2 publish might complete successfully via protocol definition.
+///
 /// Success is defined as "received a final Ack packet that signals the outcome of the operation."
 #[derive(Debug, Eq, PartialEq)]
 pub enum Qos2Response {
@@ -99,16 +102,19 @@ impl Display for Qos2Response {
 #[derive(Debug, Eq, PartialEq)]
 pub enum PublishResponse {
 
-    /// Indicates that a QoS0 Publish operation was successfully written to the wire.  This does
-    /// not mean the Publish actually reached the broker.
+    /// Indicates that a QoS0 Publish operation was successfully written to the wire.
+    ///
+    /// This does not mean the Publish actually reached the broker.
     Qos0,
 
-    /// Indicates that a QoS1 Publish operation was completed via Puback receipt.  Check the reason
-    /// code in the Puback for protocol-level success/failure.
+    /// Indicates that a QoS1 Publish operation was completed via Puback receipt.
+    ///
+    /// Check the reason code in the Puback for protocol-level success/failure.
     Qos1(PubackPacket),
 
-    /// Indicates that a QoS2 Publish operation was completed via Ack packet receipt.  Check the
-    /// reason code in the packet for protocol-level success/failure.
+    /// Indicates that a QoS2 Publish operation was completed via Ack packet receipt.
+    ///
+    /// Check the reason code in the packet for protocol-level success/failure.
     Qos2(Qos2Response),
 }
 
@@ -160,7 +166,9 @@ impl SubscribeOptionsBuilder {
         }
     }
 
-    /// Sets the ack timeout for a Subscribe operation.  The ack timeout only applies
+    /// Sets the ack timeout for a Subscribe operation.
+    ///
+    /// The ack timeout only applies
     /// to the time interval between when the operation's packet is written to the socket and when
     /// the corresponding Suback packet is received from the broker.
     pub fn with_ack_timeout(mut self, timeout: Duration) -> Self {
@@ -174,8 +182,9 @@ impl SubscribeOptionsBuilder {
     }
 }
 
-/// Result type for the final outcome of a Subscribe operation.  Check the reason
-/// code vector on the Suback packet for individual success/failure indicators.
+/// Result type for the final outcome of a Subscribe operation.
+///
+/// Check the reason code vector on the Suback packet for individual success/failure indicators.
 pub type SubscribeResult = GneissResult<SubackPacket>;
 
 /// Additional client options applicable to an MQTT Unsubscribe operation
@@ -207,7 +216,9 @@ impl UnsubscribeOptionsBuilder {
         }
     }
 
-    /// Sets the ack timeout for a Unsubscribe operation.  The ack timeout only applies
+    /// Sets the ack timeout for a Unsubscribe operation.
+    ///
+    /// The ack timeout only applies
     /// to the time interval between when the operation's packet is written to the socket and when
     /// the corresponding Unsuback packet is received from the broker.
     pub fn with_ack_timeout(mut self, timeout: Duration) -> Self {
@@ -221,8 +232,9 @@ impl UnsubscribeOptionsBuilder {
     }
 }
 
-/// Result type for the final outcome of an Unsubscribe operation.  Check the reason
-/// code vector on the Unsuback packet for individual success/failure indicators.
+/// Result type for the final outcome of an Unsubscribe operation.
+///
+/// Check the reason code vector on the Unsuback packet for individual success/failure indicators.
 pub type UnsubscribeResult = GneissResult<UnsubackPacket>;
 
 /// Additional client options applicable to client Stop operation
@@ -361,8 +373,9 @@ impl Display for ConnectionSuccessEvent {
     }
 }
 
-/// An event emitted by the client every time a connection attempt does not succeed.  The reason
-/// for failure may be transport-related, protocol-related, or client-configuration-related.
+/// An event emitted by the client every time a connection attempt does not succeed.
+///
+/// The reason for failure may be transport-related, protocol-related, or client-configuration-related.
 #[derive(Debug)]
 pub struct ConnectionFailureEvent {
 
@@ -420,6 +433,7 @@ impl Display for StoppedEvent {
 }
 
 /// An event emitted by the client whenever it receives a Publish packet from the broker.
+///
 /// This structure may expand in the future (pre-1.0.0) to support MQTT bridging.
 #[derive(Debug)]
 pub struct PublishReceivedEvent {
@@ -483,8 +497,9 @@ pub type ClientEventListenerCallback = dyn Fn(Arc<ClientEvent>) + Send + Sync;
 /// Basic client event listener type
 pub type ClientEventListener = Arc<ClientEventListenerCallback>;
 
-/// Opaque structure that represents the identity of a client event listener.  Returned by
-/// adding a listener and used to remove that same listener if needed.
+/// Opaque structure that represents the identity of a client event listener.
+///
+/// Returned by adding a listener and used to remove that same listener if needed.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ListenerHandle {
     pub(crate) id: u64

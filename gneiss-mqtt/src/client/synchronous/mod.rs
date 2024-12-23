@@ -15,7 +15,7 @@ use crate::error::GneissResult;
 use crate::mqtt::*;
 use super::*;
 
-/// Helper type to wait on MQTT operation results when using a synchronous client
+/// Helper type to wait on MQTT operation results when using a non-async client
 pub struct SyncResultReceiver<T> {
     result_lock: Arc<Mutex<Option<T>>>,
     result_signal: Arc<Condvar>
@@ -98,16 +98,19 @@ pub(crate) fn new_sync_result_pair<T>() -> (SyncResultReceiver<T>, SyncResultSen
     (SyncResultReceiver::new(lock.clone(), signal.clone()), SyncResultSender::new(lock.clone(), signal.clone()))
 }
 
-/// Return type of a Publish operation for a synchronous client.  Invoke recv() on this value to
-/// wait for the operation's result.
+/// Return type of a Publish operation for a synchronous client.
+///
+/// Invoke recv() on this value to wait for the operation's result.
 pub type SyncPublishResult = SyncResultReceiver<PublishResult>;
 
-/// Return type of a Subscribe operation for a synchronous client.  Invoke recv() on this value to
-/// wait for the operation's result.
+/// Return type of a Subscribe operation for a synchronous client.
+///
+/// Invoke recv() on this value to wait for the operation's result.
 pub type SyncSubscribeResult = SyncResultReceiver<SubscribeResult>;
 
-/// Return type of a Unsubscribe operation for a synchronous client.  Invoke recv() on this value to
-/// wait for the operation's result.
+/// Return type of a Unsubscribe operation for a synchronous client.
+///
+/// Invoke recv() on this value to wait for the operation's result.
 pub type SyncUnsubscribeResult = SyncResultReceiver<UnsubscribeResult>;
 
 /// Result callback for a Publish operation on a synchronous client.
@@ -119,7 +122,7 @@ pub type SyncSubscribeResultCallback = Box<dyn Fn(SubscribeResult) + Send + Sync
 /// Result callback for an Unsubscribe operation on a synchronous client.
 pub type SyncUnsubscribeResultCallback = Box<dyn Fn(UnsubscribeResult) + Send + Sync>;
 
-/// An async network client that functions as a thin wrapper over the MQTT5 protocol.
+/// Interface for a non-async network client that functions as a thin wrapper over the MQTT protocol.
 ///
 /// A client is always in one of two states:
 /// * Stopped - the client is not connected and will perform no work
@@ -139,9 +142,9 @@ pub type SyncUnsubscribeResultCallback = Box<dyn Fn(UnsubscribeResult) + Send + 
 /// that point, the operation's packet is assigned a packet id (if appropriate) and encoded and
 /// written to the socket.
 ///
-/// Direct client construction is messy due to the different possibilities for TLS, async runtime,
-/// etc...  We encourage you to use the various client builders in this crate, or in other crates,
-/// to simplify this process.
+/// Direct client construction is messy due to the different possibilities for TLS, proxy,
+/// etc...  We encourage you to use a client builder like [ThreadedClientBuilder] to
+/// simplify this process.
 pub trait SyncClient {
 
     /// Signals the client that it should attempt to recurrently maintain a connection to
@@ -196,7 +199,7 @@ pub trait SyncClient {
     fn remove_event_listener(&self, listener: ListenerHandle) -> GneissResult<()>;
 }
 
-/// A non-async network client that functions as a thin wrapper over the MQTT5 protocol.
+/// A non-async network client that functions as a thin wrapper over the MQTT protocol.
 ///
 /// A client is always in one of two states:
 /// * Stopped - the client is not connected and will perform no work
@@ -216,9 +219,9 @@ pub trait SyncClient {
 /// that point, the operation's packet is assigned a packet id (if appropriate) and encoded and
 /// written to the socket.
 ///
-/// Direct client construction is messy due to the different possibilities for TLS, async runtime,
-/// etc...  We encourage you to use the various client builders in this crate, or in other crates,
-/// to simplify this process.
+/// Direct client construction is messy due to the different possibilities for TLS, proxy,
+/// etc...  We encourage you to use a client builder like [ThreadedClientBuilder] to
+/// simplify this process.
 //pub type SyncClientHandle = Arc<dyn SyncClient + Send + Sync>;
 #[derive(Clone)]
 pub struct SyncClientHandle {

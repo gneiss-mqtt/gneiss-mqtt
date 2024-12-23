@@ -26,7 +26,7 @@ pub(crate) mod suback;
 pub(crate) mod subscribe;
 pub(crate) mod unsuback;
 pub(crate) mod unsubscribe;
-pub mod utils;
+pub(crate) mod utils;
 
 /// MQTT message delivery quality of service.
 ///
@@ -659,12 +659,22 @@ pub enum AuthenticateReasonCode {
 /// [MQTT5 spec](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901013).
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct UserProperty {
+    pub(crate) name: String,
+    pub(crate) value: String,
+}
 
-    /// User property name
-    pub name: String,
+impl UserProperty {
 
-    /// User property value
-    pub value: String,
+    /// Creates a new user property
+    pub fn new(name: String, value: String) -> Self {
+        Self {name, value}
+    }
+
+    /// Returns the user property name
+    pub fn name(&self) -> &str { &self.name }
+
+    /// Returns the user property value
+    pub fn value(&self) -> &str { &self.value }
 }
 
 /// Specifies a single subscription within a Subscribe operation

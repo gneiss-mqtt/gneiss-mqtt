@@ -61,7 +61,9 @@ pub fn client_event_matches(event: &Arc<ClientEvent>, event_type: ClientEventTyp
     }
 }
 
-/// Filter function type used to create complex waiters.  Only events that pass the filter check will be
+/// Filter function type used to create complex waiters.
+///
+/// Only events that pass the filter check will be
 /// passed on to the user at the conclusion of the wait() call.
 pub type ClientEventPredicate = dyn Fn(&Arc<ClientEvent>) -> bool + Send + Sync;
 
