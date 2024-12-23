@@ -1,0 +1,17 @@
+[package]
+name = "connect-websockets-tokio"
+license = "Apache-2.0"
+version = "0.0.0"
+edition = "2021"
+keywords = ["mqtt", "mqtt5", "iot", "tls"]
+categories = [ "asynchronous", "network-programming", "web-programming::websocket" ]
+description = "Tokio-based example that connects to an MQTT broker with websockets over TCP"
+homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+readme = "README.md"
+resolver = "2"
+
+[dependencies]
+argh = { version = "0.1" }
+gneiss-mqtt = { path = "../../../gneiss-mqtt", features = [ "tokio-websockets" ] }
+tokio = { version = "1", features = ["full"] }

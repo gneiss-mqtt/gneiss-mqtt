@@ -45,15 +45,16 @@ struct CommandLineArgs {
 }
 
 fn client_event_handler(event: Arc<ClientEvent>) {
-    match *event {
+    match &*event {
         ClientEvent::ConnectionAttempt(_) => {
             println!("Attempting to connect!");
         }
         ClientEvent::ConnectionSuccess(_) => {
             println!("Connection attempt successful!");
         }
-        ClientEvent::ConnectionFailure(_) => {
+        ClientEvent::ConnectionFailure(failure_event) => {
             println!("Connection attempt failed! noooooooooooooooo");
+            println!("  Error: {}", failure_event.error);
         }
         _ => {}
     }

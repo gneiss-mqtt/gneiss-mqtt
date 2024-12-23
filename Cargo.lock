@@ -603,6 +603,74 @@ dependencies = [
 ]
 
 [[package]]
+name = "connect-plaintext-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+]
+
+[[package]]
+name = "connect-plaintext-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "tokio",
+]
+
+[[package]]
+name = "connect-proxy-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+]
+
+[[package]]
+name = "connect-proxy-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "tokio",
+]
+
+[[package]]
+name = "connect-tls-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+]
+
+[[package]]
+name = "connect-tls-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "tokio",
+]
+
+[[package]]
+name = "connect-websockets-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+]
+
+[[package]]
+name = "connect-websockets-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "tokio",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1654,6 +1722,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37d3544b3f2748c54e147655edb5025752e2303145b5aefb3c3ea2c78b973bb0"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "pubsub-threaded"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+]
+
+[[package]]
+name = "pubsub-tokio"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "gneiss-mqtt",
+ "tokio",
 ]
 
 [[package]]

@@ -1,0 +1,17 @@
+[package]
+name = "connect-plaintext-threaded"
+license = "Apache-2.0"
+version = "0.0.0"
+edition = "2021"
+keywords = ["mqtt", "mqtt5", "iot"]
+categories = [ "asynchronous", "network-programming" ]
+description = "Thread-based example that connects to an MQTT broker directly over TCP"
+homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+readme = "README.md"
+resolver = "2"
+
+[dependencies]
+argh = { version = "0.1" }
+gneiss-mqtt = { path = "../../../gneiss-mqtt", features = [ "threaded" ] }
+

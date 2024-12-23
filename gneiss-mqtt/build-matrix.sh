@@ -17,3 +17,10 @@ done
 echo "Building with all features"
 cargo build --all-features
 
+echo "Building examples..."
+declare -a gneiss_mqtt_examples=("connect-plaintext-tokio" "connect-plaintext-threaded" "connect-proxy-tokio" "connect-proxy-threaded" "connect-tls-tokio" "connect-tls-threaded" "connect-websockets-tokio" "connect-websockets-threaded" "pubsub-threaded" "pubsub-tokio")
+for i in "${gneiss_mqtt_examples[@]}"
+do
+   echo "Building $i"
+   cargo build --package=$i
+done
