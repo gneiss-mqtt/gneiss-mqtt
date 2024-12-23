@@ -8,17 +8,17 @@ Feedback is always welcome.
 * **[gneiss-mqtt](https://crates.io/crates/gneiss-mqtt)** - Async and thread-based MQTT clients
 * **[gneiss-mqtt-aws](https://crates.io/crates/gneiss-mqtt-aws)** - Builder-and-glue crate to connect gneiss MQTT clients to AWS IoT Core
 
-### Roadmap
+### Tentative Roadmap
 * 0.4.0 Release 
 * * Background thread client for no-async support
-* * Examples
+* * Examples and documentation improvement
 * 0.5.0 Release
 * * Client features - throttled resubmit on reconnect, max retries on delivery
 * * MQTT311 support
 * 0.6.0 Release
 * * MQTT5 authentication exchange support
 * 0.7.0
-* * Intern/reimplement unwanted/glue/wrapper dependencies
+* * Intern/reimplement/reevaluate unwanted/glue/wrapper dependencies
 * * Performance measurements and tuning
 * 1.0.0 Release 
 * * CI/CD
