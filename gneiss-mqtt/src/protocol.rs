@@ -1513,7 +1513,7 @@ impl ProtocolState {
             }
 
             if connack.reason_code != ConnectReasonCode::Success {
-                error!("[{} ms] handle_connack - connection rejected with reason code {}", self.elapsed_time_ms, connect_reason_code_to_str(connack.reason_code));
+                error!("[{} ms] handle_connack - connection rejected with reason code {}", self.elapsed_time_ms, connack.reason_code.to_string());
                 context.packet_events.push_back(PacketEvent::Connack(connack));
                 return Err(GneissError::new_connection_establishment_failure("broker rejected connection attempt with failing connack"));
             }

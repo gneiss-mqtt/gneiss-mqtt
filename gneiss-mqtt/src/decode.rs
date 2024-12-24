@@ -59,7 +59,7 @@ macro_rules! define_ack_packet_decode_properties_function {
 pub(crate) use define_ack_packet_decode_properties_function;
 
 macro_rules! define_ack_packet_decode_function {
-    ($function_name: ident, $mqtt_packet_type:ident, $packet_type: ident, $packet_type_as_string: expr, $first_byte: expr, $reason_code_converter_function_name: ident, $decode_properties_function_name: ident) => {
+    ($function_name: ident, $mqtt_packet_type:ident, $packet_type: ident, $packet_type_as_string: expr, $first_byte: expr, $reason_code_type: ident, $decode_properties_function_name: ident) => {
         pub(crate) fn $function_name(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
             if first_byte != $first_byte {
                 error!("{}Packet Decode - invalid first byte", $packet_type_as_string);
@@ -76,7 +76,7 @@ macro_rules! define_ack_packet_decode_function {
                     return Ok(box_packet);
                 }
 
-                mutable_body = decode_u8_as_enum(mutable_body, &mut packet.reason_code, $reason_code_converter_function_name)?;
+                mutable_body = decode_u8_as_enum(mutable_body, &mut packet.reason_code, $reason_code_type::try_from)?;
                 if mutable_body.len() == 0 {
                     return Ok(box_packet);
                 }

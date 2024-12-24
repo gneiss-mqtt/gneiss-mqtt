@@ -4,11 +4,43 @@
  */
 
 /*!
-This crate provides clients for communicating with a message broker using the MQTT5 protocol.
+This crate provides clients for communicating with a message broker using the MQTT protocol.
 
-MQTT is a publish/subscribe protocol commonly used in IoT use cases.  MQTT5 is the latest
-version of the protocol.  The previous version, MQTT311, has also seen widespread adoption
-and will eventually be supported in an upcoming release.
+MQTT is a publish/subscribe protocol commonly chosen in IoT use cases.  MQTT5 is the latest
+version of the protocol and is currently the only version supported.  The previous
+version, MQTT311, has also seen widespread adoption
+and will be supported in an upcoming release.
+
+# Overview
+
+Depending on feature selection, the crate can provide either a client based on the [`tokio`](https://crates.io/crates/tokio)
+runtime or a client that runs in a background thread.  The interfaces to these two clients
+are similar but differ slightly in certain ways (primarily in how operations complete).
+Both clients are asynchronous in the sense that requests to perform MQTT operations are carried out
+asynchronously, but only the tokio-based client has an interface that uses Rust's async keyword.
+
+### Features
+
+The crate supports a variety of connection methods, including:
+* **TLS** - provided by either *[`rustls`](https://crates.io/crates/rustls)* or *[`native-tls`](https://crates.io/crates/native-tls)*
+* **Websockets** - provided by *[`tungstenite`](https://crates.io/crates/tungstenite)*
+* **HTTP proxies** - bespoke implementation
+
+It is common to see crates provide transport-agnostic clients -- which is clean and minimal -- but at
+the cost of forcing the user to construct the transport connection themselves, which can be daunting.
+This crate has been designed with the goal of providing a solution, not a piece of a solution.
+While this crate does support bring-your-own-transport, it also provides optional features that
+greatly simplify the setup required to use common transport level options.
+
+The crate supports the following features:
+* **tokio** - enables the tokio-based async client
+* **tokio-rustls** - enables TLS (backed by the rustls crate) support within the tokio-based async client
+* **tokio-native-tls** - enables TLS (backed by the native-tls crate) support within the tokio-based async client
+* **tokio-websockets** - enables websockets support within the tokio-based async client
+* **threaded** - enables the thread-based client
+* **threaded-rustls** - enables TLS (backed by the rustls crate) support within the thread-based client
+* **threaded-native-tls** - enables TLS (backed by the native-tls crate) support within the thread-based client
+* **threaded-websockets** - enables websockets support within the thread-based client
 
 # Usage
 
@@ -16,18 +48,16 @@ To use this crate, you'll first need to add it to your project's Cargo.toml:
 
 ```toml
 [dependencies]
-gneiss-mqtt = "0.2"
+gneiss-mqtt = { version = "<version>", features = [ ... ] }
 ```
 
-(Temporary) If your project does not include [`tokio`](https://crates.io/crates/tokio), you will need to add it too:
+If using the tokio client and your project does not yet include [`tokio`](https://crates.io/crates/tokio),
+you will need to add it too:
 
 ```toml
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 ```
-
-Future releases will support other async runtimes as well as a client that runs in a background
-thread and does not need an async runtime.  For now, [`tokio`](https://crates.io/crates/tokio) is required.
 
 This crate contains all the building blocks necessary to connect to most MQTT brokers, but
 the configuration to do so can be confusing and delicate.  For complex cases, we recommend
@@ -41,10 +71,14 @@ Currently, these crates include:
 supports all connection methods allowed by the AWS MQTT broker implementation,
 [AWS IoT Core](https://docs.aws.amazon.com/iot/latest/developerguide/iot-gs.html).
 
+# Examples
+
+In addition to the in-docs examples, there are a variety of standalone examples that can be found
+in the [project repository](https://github.com/gneiss-mqtt/gneiss-mqtt/tree/main/gneiss-mqtt/examples).
 */
 
 #![cfg_attr(feature = "tokio", doc = r##"
-# Example: Connect to a local Mosquitto server
+## Example: Connect to a local Mosquitto server with the tokio client
 
 Assuming a default Mosquitto installation, you can connect locally by plaintext on port 1883:
 
@@ -70,14 +104,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```"##)]
 
 /*!
-# Example: Subscribe to a topic
+## Example: Subscribe to a topic with an async client
 
 In order to receive messages, you must first subscribe to the topics you want to receive messages for.  Subscribing
 is straightforward: configure a Subscribe packet and submit it to the client.  The subscribe will
-be performed whether or not the result is waited on.  (In the async case) Await is simply how the response is
-transferred back to you.
+be performed whether or not the result is waited on.
 
-A successful subscribe call returns the Suback packet that the broker responded with.  You must check the Suback
+A successful subscribe result resolves into the Suback packet that the broker responded with.  You must check the Suback
 reason code vector to verify the success/failure result for each subscription in the original subscribe.
 
 ```no_run
@@ -85,40 +118,101 @@ use gneiss_mqtt::error::GneissResult;
 use gneiss_mqtt::client::{AsyncClient, AsyncClientHandle, SubscribeResult};
 use gneiss_mqtt::mqtt::{QualityOfService, SubscribePacket, Subscription};
 
-async fn subscribe_to_topic(client: AsyncClientHandle) {
+async fn subscribe_to_topic(client: AsyncClientHandle, topic_filter: String) {
     let subscribe = SubscribePacket::builder()
-        .with_subscription(Subscription::new_simple("hello/world/+".to_string(), QualityOfService::AtLeastOnce))
+        .with_subscription_simple(topic_filter, QualityOfService::AtLeastOnce)
         .build();
 
     let subscribe_result = client.subscribe(subscribe, None).await;
-    if let Ok(suback) = subscribe_result {
-        if suback.reason_codes()[0].is_success() {
-            println!("Subscribe success!");
-            return;
+    match subscribe_result {
+        Ok(suback) => {
+            let rc = suback.reason_codes()[0];
+            if rc.is_success() {
+                println!("Subscribe success!");
+            } else {
+                println!("Subscribe failed with reason code: {}", rc.to_string());
+            }
+        }
+        Err(err) => {
+            println!("Subscribe failed with error: {}", err);
         }
     }
-
-    println!("Subscribe failed!");
 }
 ```
 
-# Example: Unsubscribe from a topic
+## Example: Unsubscribe from a topic with an async client
 
-TODO
+```no_run
+use gneiss_mqtt::error::GneissResult;
+use gneiss_mqtt::client::{AsyncClient, AsyncClientHandle, UnsubscribeResult};
+use gneiss_mqtt::mqtt::UnsubscribePacket;
 
-# Example: Publish to a topic
+async fn unsubscribe_from_topic(client: AsyncClientHandle, topic_filter: String) {
+    let unsubscribe = UnsubscribePacket::builder()
+        .with_topic_filter(topic_filter)
+        .build();
 
-TODO
+    let unsubscribe_result = client.unsubscribe(unsubscribe, None).await;
+    match unsubscribe_result {
+        Ok(unsuback) => {
+            let rc = unsuback.reason_codes()[0];
+            if rc.is_success() {
+                println!("Unsubscribe success!");
+            } else {
+                println!("Unsubscribe failed with reason code: {}", rc.to_string());
+            }
+        }
+        Err(err) => {
+            println!("Unsubscribe failed with error: {}", err);
+        }
+    }
+}
+```
+
+## Example: Publish to a topic with an async client
+
+```no_run
+use gneiss_mqtt::error::GneissResult;
+use gneiss_mqtt::client::{AsyncClient, AsyncClientHandle, PublishResponse, PublishResult};
+use gneiss_mqtt::mqtt::{PublishPacket, QualityOfService};
+
+async fn publish_to_topic(client: AsyncClientHandle, topic: String, message: String) {
+    let publish = PublishPacket::builder(topic, QualityOfService::AtLeastOnce)
+        .with_payload(message.into_bytes())
+        .build();
+
+    let publish_result = client.publish(publish, None).await;
+    match publish_result {
+        Ok(publish_response) => {
+            match publish_response {
+                PublishResponse::Qos1(puback) => {
+                    let rc = puback.reason_code();
+                    if rc.is_success() {
+                        println!("Publish success!");
+                    } else {
+                        println!("Publish failed with reason code: {}", rc.to_string());
+                    }
+                }
+                _ => { panic!("Illegal publish response to a Qos1 publish!") }
+            }
+        }
+        Err(err) => {
+            println!("Publish failed with error: {}", err);
+        }
+    }
+}
+```
 
 */
 
 #![cfg_attr(feature = "tokio", doc = r##"
-# Example: React to client events
+## Example: React to client events with an async client
+
 In addition to performing MQTT operations with the client, you can also react to events emitted by the
 client.  The client emits events when connectivity changes (successful connection, failed connection, disconnection,
 etc...) as well as when publishes are received.
 
-To handle client events, pass in a handler when starting the client.  See the ClientEvent documentation for
+To handle client events, pass in a handler when starting the client.  See the [crate::client::ClientEvent] documentation for
 more information on what data each event variant may contain.
 
 This example shows how you can capture the client in the event handler closure, letting you perform additional
@@ -180,17 +274,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /*!
 # Additional Notes
 
-The intention is that this crate will eventually be as agnostic as possible of underlying
-implementation details (async runtimes, TLS/transport implementations, etc...)
-but at present it has hard dependencies on tokio, rustls, and some
-associated helper libraries.  These will get feature-flag-gated before GA, allowing the user
-to pare the implementation down to their exact connection needs.  In Rust's current state,
-there is a fundamental tension between trying to be transport/runtime agnostic and trying
-to provide an easy-to-use interface for getting successful clients set up for the many
-different combinations expected by users.
-
-This crate's public API is expected to be very unstable until v0.5.0.  See the roadmap
+This crate's public API is expected to be very unstable until v0.4.0.  See the roadmap
 in the README for more details.
+
 */
 
 #![warn(missing_docs)]

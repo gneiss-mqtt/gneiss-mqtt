@@ -337,15 +337,19 @@ pub(crate) fn spawn_event_callback(event: Arc<ClientEvent>, callback: Arc<Client
 
 type TokioConnectionFactoryReturnType<T> = Pin<Box<dyn Future<Output = GneissResult<T>> + Send>>;
 
+type TokioConnectionFactory<T> = Box<dyn Fn() -> TokioConnectionFactoryReturnType<T> + Send + Sync>;
+
 /// Tokio-specific client configuration
 pub struct TokioConnectionFactoryWrapper<T> where T : AsyncRead + AsyncWrite + Send + Sync {
 
     /// Factory function for creating the final connection object based on all the various
-    /// configuration options and features.  It might be a TcpStream, it might be a TlsStream,
+    /// configuration options and features.
+    ///
+    /// It might be a TcpStream, it might be a TlsStream,
     /// it might be a WebsocketStream, it might be some nested combination.
     ///
     /// Ultimately, the type must implement AsyncRead and AsyncWrite.
-    pub connection_factory: Box<dyn Fn() -> TokioConnectionFactoryReturnType<T> + Send + Sync>,
+    pub connection_factory: TokioConnectionFactory<T>,
 }
 
 struct TokioClient {
@@ -384,8 +388,7 @@ macro_rules! submit_tokio_operation {
 }
 
 impl AsyncClient for TokioClient {
-    /// Signals the client that it should attempt to recurrently maintain a connection to
-    /// the broker endpoint it has been configured with.
+
     fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> GneissResult<()> {
         info!("tokio client start invoked");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Start(default_listener)) {
@@ -395,8 +398,6 @@ impl AsyncClient for TokioClient {
         Ok(())
     }
 
-    /// Signals the client that it should close any current connection it has and enter the
-    /// Stopped state, where it does nothing.
     fn stop(&self, options: Option<StopOptions>) -> GneissResult<()> {
         info!("tokio client stop invoked {} a disconnect packet", if options.as_ref().is_some_and(|opts| { opts.disconnect.is_some()}) { "with" } else { "without" });
         let options = options.unwrap_or_default();
@@ -420,10 +421,6 @@ impl AsyncClient for TokioClient {
         Ok(())
     }
 
-    /// Signals the client that it should clean up all internal resources (connection, channels,
-    /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.  Useful to ensure
-    /// a full resource wipe.  If just `stop()` is used then the client will continue to track
-    /// MQTT session state internally.
     fn close(&self) -> GneissResult<()> {
         info!("tokio client close invoked; no further operations allowed");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Shutdown()) {
@@ -433,8 +430,6 @@ impl AsyncClient for TokioClient {
         Ok(())
     }
 
-    /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
-    /// the broker when it reaches the head of the queue and the client is connected.
     fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> AsyncPublishResult {
         debug!("tokio client - publish operation submitted");
         let boxed_packet = Box::new(MqttPacket::Publish(packet));
@@ -445,8 +440,6 @@ impl AsyncClient for TokioClient {
         submit_tokio_operation!(self, Publish, PublishOptionsInternal, options, boxed_packet)
     }
 
-    /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
-    /// the broker when it reaches the head of the queue and the client is connected.
     fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> AsyncSubscribeResult {
         debug!("tokio client - subscribe operation submitted");
         let boxed_packet = Box::new(MqttPacket::Subscribe(packet));
@@ -457,8 +450,6 @@ impl AsyncClient for TokioClient {
         submit_tokio_operation!(self, Subscribe, SubscribeOptionsInternal, options, boxed_packet)
     }
 
-    /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
-    /// the broker when it reaches the head of the queue and the client is connected.
     fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> AsyncUnsubscribeResult {
         debug!("tokio client - unsubscribe operation submitted");
         let boxed_packet = Box::new(MqttPacket::Unsubscribe(packet));
@@ -469,8 +460,6 @@ impl AsyncClient for TokioClient {
         submit_tokio_operation!(self, Unsubscribe, UnsubscribeOptionsInternal, options, boxed_packet)
     }
 
-    /// Adds an additional listener to the events emitted by this client.  This is useful when
-    /// multiple higher-level constructs are sharing the same MQTT client.
     fn add_event_listener(&self, listener: ClientEventListener) -> GneissResult<ListenerHandle> {
         debug!("tokio client - add listener operation submitted");
         let mut current_id = self.listener_id_allocator.lock().unwrap();
@@ -486,7 +475,6 @@ impl AsyncClient for TokioClient {
         })
     }
 
-    /// Removes a listener from this client's set of event listeners.
     fn remove_event_listener(&self, listener: ListenerHandle) -> GneissResult<()> {
         debug!("tokio client - remove listener operation submitted");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::RemoveListener(listener.id)) {
@@ -510,7 +498,9 @@ pub(crate) fn create_runtime_states<T>(connection_factory_wrapper: TokioConnecti
 }
 
 
-/// Creates a new async MQTT5 client that will use the tokio async runtime
+/// Creates a new async MQTT5 client that will use the tokio async runtime.
+///
+/// Only use this function directly if [TokioClientBuilder] does not meet your needs.
 pub fn new_tokio_client<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, tokio_options: TokioOptions, connection_factory_wrapper: TokioConnectionFactoryWrapper<T>) -> AsyncClientHandle
 where T: AsyncRead + AsyncWrite + Send + Sync + 'static {
     let (operation_sender, internal_state) = create_runtime_states(connection_factory_wrapper);

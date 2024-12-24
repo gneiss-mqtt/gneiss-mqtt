@@ -14,25 +14,31 @@ use std::future::Future;
 use std::pin::Pin;
 use super::*;
 
-/// Return type of a Publish operation for the asynchronous client.  Await on this value to
+/// Return type of a Publish operation for the asynchronous client.
+///
+/// Await on this value to
 /// receive the operation's result, but note that the operation will complete independently of
 /// the use of `.await` (you don't need to await for the operation to be performed, you only need
 /// to await to get the final result of performing it).
 pub type AsyncPublishResult = Pin<Box<dyn Future<Output = PublishResult> + Send>>;
 
-/// Return type of a Subscribe operation for the asynchronous client.  Await on this value to
+/// Return type of a Subscribe operation for the asynchronous client.
+///
+/// Await on this value to
 /// receive the operation's result, but note that the operation will complete independently of
 /// the use of `.await` (you don't need to await for the operation to be performed, you only need
 /// to await to get the final result of performing it).
 pub type AsyncSubscribeResult = Pin<Box<dyn Future<Output = SubscribeResult> + Send>>;
 
-/// Return type of an Unsubscribe operation for the asynchronous client.  Await on this value to
+/// Return type of an Unsubscribe operation for the asynchronous client.
+///
+/// Await on this value to
 /// receive the operation's result, but note that the operation will complete independently of
 /// the use of `.await` (you don't need to await for the operation to be performed, you only need
 /// to await to get the final result of performing it).
 pub type AsyncUnsubscribeResult = Pin<Box<dyn Future<Output = UnsubscribeResult> + Send>>;
 
-/// Interface for An async network client that functions as a thin wrapper over the MQTT5 protocol.
+/// Interface for an async network client that functions as a thin wrapper over the MQTT protocol.
 ///
 /// A client is always in one of two states:
 /// * Stopped - the client is not connected and will perform no work
@@ -53,8 +59,8 @@ pub type AsyncUnsubscribeResult = Pin<Box<dyn Future<Output = UnsubscribeResult>
 /// written to the socket.
 ///
 /// Direct client construction is messy due to the different possibilities for TLS, async runtime,
-/// etc...  We encourage you to use the various client builders in this crate, or in other crates,
-/// to simplify this process.
+/// etc...  We encourage you to use a client builder like [TokioClientBuilder] to
+/// simplify this process.
 pub trait AsyncClient {
 
     /// Signals the client that it should attempt to recurrently maintain a connection to
@@ -66,24 +72,34 @@ pub trait AsyncClient {
     fn stop(&self, options: Option<StopOptions>) -> GneissResult<()>;
 
     /// Signals the client that it should clean up all internal resources (connection, channels,
-    /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.  Useful to ensure
+    /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.
+    ///
+    /// Useful to ensure
     /// a full resource wipe.  If just `stop()` is used then the client will continue to track
     /// MQTT session state internally.
     fn close(&self) -> GneissResult<()>;
 
-    /// Submits a Publish operation to the client's operation queue.  The publish will be sent to
+    /// Submits a Publish operation to the client's operation queue.
+    ///
+    /// The publish will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
     fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> AsyncPublishResult;
 
-    /// Submits a Subscribe operation to the client's operation queue.  The subscribe will be sent to
+    /// Submits a Subscribe operation to the client's operation queue.
+    ///
+    /// The subscribe will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
     fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> AsyncSubscribeResult;
 
-    /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe will be sent to
+    /// Submits an Unsubscribe operation to the client's operation queue.
+    ///
+    /// The unsubscribe will be sent to
     /// the broker when it reaches the head of the queue and the client is connected.
     fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> AsyncUnsubscribeResult;
 
-    /// Adds an additional listener to the events emitted by this client.  This is useful when
+    /// Adds an additional listener to the events emitted by this client.
+    ///
+    /// This is useful when
     /// multiple higher-level constructs are sharing the same MQTT client.
     fn add_event_listener(&self, listener: ClientEventListener) -> GneissResult<ListenerHandle>;
 
@@ -91,7 +107,7 @@ pub trait AsyncClient {
     fn remove_event_listener(&self, listener: ListenerHandle) -> GneissResult<()>;
 }
 
-/// An async network client that functions as a thin wrapper over the MQTT5 protocol.
+/// An async network client that functions as a thin wrapper over the MQTT protocol.
 ///
 /// A client is always in one of two states:
 /// * Stopped - the client is not connected and will perform no work
@@ -112,8 +128,8 @@ pub trait AsyncClient {
 /// written to the socket.
 ///
 /// Direct client construction is messy due to the different possibilities for TLS, async runtime,
-/// etc...  We encourage you to use the various client builders in this crate, or in other crates,
-/// to simplify this process.
+/// etc...  We encourage you to use a client builder like [TokioClientBuilder] to
+/// simplify this process.
 #[derive(Clone)]
 pub struct AsyncClientHandle {
     client: Arc<dyn AsyncClient + Send + Sync>

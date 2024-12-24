@@ -115,7 +115,7 @@ pub(crate) fn decode_auth_packet(first_byte: u8, packet_body: &[u8]) -> GneissRe
             return Ok(box_packet);
         }
 
-        mutable_body = decode_u8_as_enum(mutable_body, &mut packet.reason_code, convert_u8_to_authenticate_reason_code)?;
+        mutable_body = decode_u8_as_enum(mutable_body, &mut packet.reason_code, AuthenticateReasonCode::try_from)?;
 
         let mut properties_length : usize = 0;
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
@@ -178,7 +178,7 @@ pub(crate) fn validate_auth_packet_inbound_internal(packet: &AuthPacket, _: &Inb
 impl fmt::Display for AuthPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "AuthPacket {{")?;
-        log_enum!(self.reason_code, f, "reason_code", authenticate_reason_code_to_str);
+        log_enum!(self.reason_code, f, "reason_code", AuthenticateReasonCode);
         log_optional_string!(self.authentication_method, f, "authentication_method", value);
         log_optional_binary_data_sensitive!(self.authentication_data, f, "authentication_data");
         log_optional_string!(self.reason_string, f, "reason_string", value);

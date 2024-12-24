@@ -66,8 +66,9 @@ impl HttpProxyOptionsBuilder {
         }
     }
 
-    /// Configures tls settings for the to-proxy connection.  This is independent of any tls
-    /// configuration to the broker.
+    /// Configures tls settings for the to-proxy connection.
+    ///
+    /// This is independent of any tls configuration to the broker.
     pub fn with_tls_options(mut self, tls_options: TlsOptions) -> Self {
         self.options.tls_options = Some(tls_options);
         self
@@ -126,8 +127,9 @@ impl SyncWebsocketOptionsBuilder {
         }
     }
 
-    /// Configure an async transformation function that operates on the websocket handshake.  Useful
-    /// for brokers that require some kind of signing algorithm to accept the upgrade request.
+    /// Configure a transformation function that operates on the websocket handshake.
+    ///
+    /// Useful for brokers that require some kind of signing algorithm to accept the upgrade request.
     pub fn with_handshake_transform(&mut self, transform: SyncWebsocketHandshakeTransform) -> &mut Self {
         self.options.handshake_transform = std::sync::Arc::new(Some(transform));
         self
@@ -186,8 +188,9 @@ impl AsyncWebsocketOptionsBuilder {
         }
     }
 
-    /// Configure an async transformation function that operates on the websocket handshake.  Useful
-    /// for brokers that require some kind of signing algorithm to accept the upgrade request.
+    /// Configure an async transformation function that operates on the websocket handshake.
+    ///
+    /// Useful for brokers that require some kind of signing algorithm to accept the upgrade request.
     pub fn with_handshake_transform(&mut self, transform: AsyncWebsocketHandshakeTransform) -> &mut Self {
         self.options.handshake_transform = Arc::new(Some(transform));
         self
@@ -217,7 +220,7 @@ pub(crate) enum TlsData {
     NativeTls(std::sync::Arc<native_tls::TlsConnectorBuilder>)
 }
 
-/// Opaque struct containing TLS configuration data, assuming TLS has been enabled as a feature
+/// TLS configuration options, assuming TLS has been enabled as a feature
 #[derive(Clone)]
 pub struct TlsOptions {
     pub(crate) options: TlsData
@@ -225,8 +228,10 @@ pub struct TlsOptions {
 
 impl TlsOptions {
 
-    /// Creates a new builder object with default options.  Defaults may be TLS-feature specific.
-    /// Presently, this means standard TLS using 1.2 or higher and the system trust store.
+    /// Creates a new builder object with default options.
+    ///
+    /// Defaults may be specific to the TLS implementation.  Presently, this means standard TLS using 1.2 or
+    /// higher and the system trust store.
     pub fn builder() -> TlsOptionsBuilder {
         TlsOptionsBuilder::new()
     }
@@ -334,15 +339,18 @@ impl TlsOptionsBuilder {
         self
     }
 
-    /// Controls whether or not SNI is used during the TLS handshake.  It is highly recommended
-    /// to set this value to false only in testing environments.
+    /// Controls whether or not SNI is used during the TLS handshake.
+    ///
+    /// It is highly recommended to set this value to false only in testing environments.
     pub fn with_verify_peer(&mut self, verify_peer: bool) -> &mut Self {
         self.verify_peer = verify_peer;
         self
     }
 
-    /// Sets an ALPN protocol to negotiate during the TLS handshake.  Should multiple protocols
-    /// become a valid use case, new APIs will be added to manipulate the set of protocols.
+    /// Sets an ALPN protocol to negotiate during the TLS handshake.
+    ///
+    /// Should multiple protocols become a valid use case, new APIs will be added to manipulate
+    /// the set of protocols.
     pub fn with_alpn(&mut self, alpn: &str) -> &mut Self {
         self.alpn = Some(alpn.to_string());
         self
@@ -464,11 +472,15 @@ fn build_certs(certificate_bytes: &[u8]) -> Vec<rustls_pki_types::CertificateDer
 pub enum RejoinSessionPolicy {
 
     /// The client will not attempt to rejoin a session until it successfully connects for the
-    /// very first time.  After that point, it will always attempt to rejoin a session.
+    /// very first time.
+    ///
+    /// After that point, it will always attempt to rejoin a session.
     #[default]
     PostSuccess,
 
-    /// The client will always attempt to rejoin a session.  Until persistence is supported, this
+    /// The client will always attempt to rejoin a session.
+    ///
+    /// Until persistence is supported, this
     /// is technically a spec-non-compliant setting because the client cannot possibly have the
     /// correct session state on its initial connection attempt.
     Always,
@@ -480,7 +492,9 @@ pub enum RejoinSessionPolicy {
 pub(crate) const DEFAULT_KEEP_ALIVE_SECONDS : u16 = 1200;
 
 /// Configuration options that will determine packet field values for the CONNECT packet sent out
-/// by the client on each connection attempt.  Almost equivalent to ConnectPacket, but there are a
+/// by the client on each connection attempt.
+///
+/// Almost equivalent to ConnectPacket, but there are a
 /// few differences that make exposing a ConnectPacket directly awkward and potentially misleading.
 ///
 /// Auth-related fields are not yet exposed because we don't support authentication exchanges yet.
@@ -524,7 +538,9 @@ impl ConnectOptions {
     }
 
     /// Creates a new builder object for ConnectOptions using an existing ConnectOptions
-    /// value as a starting point.  Useful for internally tweaking user-supplied configuration.
+    /// value as a starting point.
+    ///
+    /// Useful for internally tweaking user-supplied configuration.
     pub fn builder_from_existing(connect_options: ConnectOptions) -> ConnectOptionsBuilder {
         ConnectOptionsBuilder::new_from_existing(connect_options)
     }
@@ -568,7 +584,7 @@ impl ConnectOptions {
     pub fn client_id(&self) -> &Option<String> { &self.client_id }
 }
 
-/// A builder for connection-related options on the client.
+/// Builder type for connection-related options on the client.
 ///
 /// These options will determine packet field values for the CONNECT packet sent out
 /// by the client on each connection attempt.
@@ -607,7 +623,9 @@ impl ConnectOptionsBuilder {
     }
 
     /// Sets the maximum time interval, in seconds, that is permitted to elapse between the point at which the client
-    /// finishes transmitting one MQTT packet and the point it starts sending the next.  The client will use
+    /// finishes transmitting one MQTT packet and the point it starts sending the next.
+    ///
+    /// The client will use
     /// PINGREQ packets to maintain this property.
     ///
     /// If the responding CONNACK contains a keep alive property value, then that is the negotiated keep alive value.
@@ -629,10 +647,11 @@ impl ConnectOptionsBuilder {
         self
     }
 
-    /// Sets a unique string identifying the client to the server.  Used to restore session state between connections.
+    /// Sets a unique string identifying the client to the server.
     ///
-    /// If left empty, the broker will auto-assign a unique client id.  When reconnecting, the mqtt5 client will
-    /// always use the auto-assigned client id.
+    /// Used to restore session state between connections.
+    ///
+    /// If left empty, the broker will auto-assign a unique client id.
     ///
     /// See [MQTT5 Client Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901059)
     pub fn with_client_id(&mut self, client_id: &str) -> &mut Self {
@@ -657,7 +676,9 @@ impl ConnectOptionsBuilder {
     }
 
     /// Sets the time interval, in seconds, that the client requests the server to persist this connection's MQTT session state
-    /// for.  Has no meaning if the client has not been configured to rejoin sessions.  Must be non-zero in order to
+    /// for.
+    ///
+    /// Has no meaning if the client has not been configured to rejoin sessions.  Must be non-zero in order to
     /// successfully rejoin a session.
     ///
     /// If the responding CONNACK contains a session expiry property value, then that is the negotiated session expiry
@@ -669,7 +690,9 @@ impl ConnectOptionsBuilder {
         self
     }
 
-    /// Sets whether or not the server should send response information in the subsequent CONNACK.  This response
+    /// Sets whether or not the server should send response information in the subsequent CONNACK.
+    ///
+    /// This response
     /// information may be used to set up request-response implementations over MQTT, but doing so is outside
     /// the scope of the MQTT5 spec and client.
     ///
@@ -689,7 +712,9 @@ impl ConnectOptionsBuilder {
     }
 
     /// Sets a value that notifies the server of the maximum number of in-flight Qos 1 and 2
-    /// messages the client is willing to handle.  If omitted, then no limit is requested.
+    /// messages the client is willing to handle.
+    ///
+    /// If omitted, then no limit is requested.
     ///
     /// See [MQTT5 Receive Maximum](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901049)
     pub fn with_receive_maximum(&mut self, receive_maximum: u16) -> &mut Self {
@@ -698,7 +723,9 @@ impl ConnectOptionsBuilder {
     }
 
     /// Sets a value that controls the maximum number of topic aliases that the client will accept
-    /// for incoming publishes.  An inbound topic alias larger than
+    /// for incoming publishes.
+    ///
+    /// An inbound topic alias larger than
     /// this number is a protocol error.  If this value is not specified, the client does not
     /// support inbound topic aliasing.
     ///
@@ -708,8 +735,9 @@ impl ConnectOptionsBuilder {
         self
     }
 
-    /// A setting that notifies the server of the maximum packet size the client is willing to handle.  If
-    /// omitted, then no limit beyond the natural limits of MQTT packet size is requested.
+    /// A setting that notifies the server of the maximum packet size the client is willing to handle.
+    ///
+    /// If omitted, then no limit beyond the natural limits of MQTT packet size is requested.
     ///
     /// See [MQTT5 Maximum Packet Size](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901050)
     pub fn with_maximum_packet_size_bytes(&mut self, maximum_packet_size_bytes: u32) -> &mut Self {
@@ -718,7 +746,9 @@ impl ConnectOptionsBuilder {
     }
 
     /// Sets the time interval, in seconds, that the server should wait (for a session reconnection) before sending the
-    /// will message associated with the connection's session.  If omitted, the server will send the will when the
+    /// will message associated with the connection's session.
+    ///
+    /// If omitted, the server will send the will when the
     /// associated session is destroyed.  If the session is destroyed before a will delay interval has elapsed, then
     /// the will must be sent at the time of session destruction.
     ///
@@ -729,7 +759,9 @@ impl ConnectOptionsBuilder {
     }
 
     /// Configures a message to be published when the connection's session is destroyed by the server or when
-    /// the will delay interval has elapsed, whichever comes first.  If undefined, then nothing will be sent.
+    /// the will delay interval has elapsed, whichever comes first.
+    ///
+    /// If omitted, then no will message will be sent.
     ///
     /// See [MQTT5 Will](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901040)
     pub fn with_will(&mut self, will: PublishPacket) -> &mut Self {
@@ -782,7 +814,9 @@ pub enum OfflineQueuePolicy {
 pub enum ExponentialBackoffJitterType {
 
     /// The client will not perform any jitter to the backoff, leading to a rigid doubling of
-    /// the reconnect time period.  Not recommended for real use; useful for correctness testing.
+    /// the reconnect time period.
+    ///
+    /// Not recommended for real use; useful for correctness testing.
     None,
 
     /// The client will pick a wait duration uniformly between 0 and the current exponential
@@ -915,7 +949,9 @@ impl MqttClientOptionsBuilder {
         self
     }
 
-    /// Configures the minimum amount of time to wait between connection attempts.  Depending on
+    /// Configures the minimum amount of time to wait between connection attempts.
+    ///
+    /// Depending on
     /// jitter settings, the actual wait period may be shorter.  Defaults to one second if not
     /// specified.
     pub fn with_base_reconnect_period(&mut self, base_reconnect_period: Duration) -> &mut Self {
@@ -923,7 +959,9 @@ impl MqttClientOptionsBuilder {
         self
     }
 
-    /// Configures the maximum amount of time to wait between connection attempts.  Defaults to
+    /// Configures the maximum amount of time to wait between connection attempts.
+    ///
+    /// Defaults to
     /// two minutes if not specified.
     pub fn with_max_reconnect_period(&mut self, max_reconnect_period: Duration) -> &mut Self {
         self.options.reconnect_options.max_reconnect_period = max_reconnect_period;
@@ -931,7 +969,9 @@ impl MqttClientOptionsBuilder {
     }
 
     /// Configures the interval of time that the client must remain successfully connected before
-    /// the exponential backoff for connection attempts is reset.  Defaults to thirty seconds if
+    /// the exponential backoff for connection attempts is reset.
+    ///
+    /// Defaults to thirty seconds if
     /// not specified.
     pub fn with_reconnect_stability_reset_period(&mut self, reconnect_stability_reset_period: Duration) -> &mut Self {
         self.options.reconnect_options.reconnect_stability_reset_period = reconnect_stability_reset_period;
@@ -1065,7 +1105,6 @@ pub struct TokioOptionsBuilder {
 #[cfg(feature = "tokio")]
 impl TokioOptionsBuilder {
 
-    /// Creates a new builder object for TokioClientOptions
     pub(crate) fn new(runtime: Handle) -> Self {
         TokioOptionsBuilder {
             options: TokioOptions {
@@ -1105,7 +1144,6 @@ pub struct ThreadedOptionsBuilder {
 #[cfg(feature = "threaded")]
 impl ThreadedOptionsBuilder {
 
-    /// Creates a new builder object for ThreadedClientOptions
     pub(crate) fn new() -> Self {
         ThreadedOptionsBuilder {
             config: ThreadedOptions {
@@ -1115,7 +1153,9 @@ impl ThreadedOptionsBuilder {
     }
 
     /// Configures the time interval to sleep the thread the client runs on between io
-    /// processing events.  Only used if no events occurred on the previous iteration.  If the
+    /// processing events.
+    ///
+    /// Only used if no events occurred on the previous iteration.  If the
     /// client is handling significant work, it will not sleep, but if there's nothing
     /// happening, it will.
     ///

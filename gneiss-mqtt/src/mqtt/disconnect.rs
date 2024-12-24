@@ -119,7 +119,7 @@ pub(crate) fn decode_disconnect_packet(first_byte: u8, packet_body: &[u8]) -> Gn
             return Ok(box_packet);
         }
 
-        mutable_body = decode_u8_as_enum(mutable_body, &mut packet.reason_code, convert_u8_to_disconnect_reason_code)?;
+        mutable_body = decode_u8_as_enum(mutable_body, &mut packet.reason_code, DisconnectReasonCode::try_from)?;
         if mutable_body.is_empty() {
             return Ok(box_packet);
         }
@@ -189,7 +189,7 @@ pub(crate) fn validate_disconnect_packet_inbound_internal(packet: &DisconnectPac
 impl fmt::Display for DisconnectPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "DisconnectPacket {{")?;
-        log_enum!(self.reason_code, f, "reason_code", disconnect_reason_code_to_str);
+        log_enum!(self.reason_code, f, "reason_code", DisconnectReasonCode);
         log_optional_primitive_value!(self.session_expiry_interval_seconds, f, "session_expiry_interval_seconds", value);
         log_user_properties!(self.user_properties, f, "user_properties", value);
         log_optional_string!(self.server_reference, f, "server_reference", value);

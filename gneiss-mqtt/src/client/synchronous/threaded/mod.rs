@@ -32,11 +32,13 @@ use crate::validate::validate_packet_outbound;
 use super::*;
 
 /// Factory function for creating the final connection object based on all the various
-/// configuration options and features.  It might be a TcpStream, it might be a TlsStream,
+/// configuration options and features.
+///
+/// It might be a TcpStream, it might be a TlsStream,
 /// it might be a WebsocketStream, it might be some nested combination.
 ///
 /// Ultimately, the type must implement Read and Write.
-pub type ConnectionFactory<T> = Arc<dyn Fn() -> GneissResult<T> + Send + Sync>;
+pub type ThreadedConnectionFactory<T> = Arc<dyn Fn() -> GneissResult<T> + Send + Sync>;
 
 #[derive(Copy, Clone)]
 struct ThreadedClientOptionsInternal {
@@ -54,7 +56,7 @@ fn create_internal_options(options: &ThreadedOptions) -> ThreadedClientOptionsIn
 }
 
 pub(crate) struct ClientRuntimeState<T> where T : Read + Write + Send + Sync + 'static {
-    connection_factory: ConnectionFactory<T>,
+    connection_factory: ThreadedConnectionFactory<T>,
     threaded_config: ThreadedClientOptionsInternal,
     operation_receiver: std::sync::mpsc::Receiver<OperationOptions>,
     stream: Option<T>
@@ -465,8 +467,6 @@ struct ThreadedClient {
 
 impl SyncClient for ThreadedClient {
 
-    /// Signals the client that it should attempt to recurrently maintain a connection to
-    /// the broker endpoint it has been configured with.
     fn start(&self, default_listener: Option<Arc<ClientEventListenerCallback>>) -> GneissResult<()> {
         info!("threaded client start invoked");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Start(default_listener)) {
@@ -476,8 +476,6 @@ impl SyncClient for ThreadedClient {
         Ok(())
     }
 
-    /// Signals the client that it should close any current connection it has and enter the
-    /// Stopped state, where it does nothing.
     fn stop(&self, options: Option<StopOptions>) -> GneissResult<()> {
         info!("threaded client stop invoked {} a disconnect packet", if options.as_ref().is_some_and(|opts| { opts.disconnect.is_some()}) { "with" } else { "without" });
         let options = options.unwrap_or_default();
@@ -501,10 +499,6 @@ impl SyncClient for ThreadedClient {
         Ok(())
     }
 
-    /// Signals the client that it should clean up all internal resources (connection, channels,
-    /// runtime tasks, etc...) and enter a terminal state that cannot be escaped.  Useful to ensure
-    /// a full resource wipe.  If just `stop()` is used then the client will continue to track
-    /// MQTT session state internally.
     fn close(&self) -> GneissResult<()> {
         info!("threaded client close invoked; no further operations allowed");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Shutdown()) {
@@ -514,8 +508,6 @@ impl SyncClient for ThreadedClient {
         Ok(())
     }
 
-    /// Submits a Publish operation to the client's operation queue.  The publish packet will be sent to
-    /// the broker when it reaches the head of the queue and the client is connected.
     fn publish(&self, packet: PublishPacket, options: Option<PublishOptions>) -> SyncPublishResult {
         debug!("threaded client - publish operation submitted");
 
@@ -528,8 +520,6 @@ impl SyncClient for ThreadedClient {
         submit_threaded_operation_with_callback!(self, Publish, Publish, PublishOptionsInternal, options, packet, completion_callback)
     }
 
-    /// Submits a Subscribe operation to the client's operation queue.  The subscribe packet will be sent to
-    /// the broker when it reaches the head of the queue and the client is connected.
     fn subscribe(&self, packet: SubscribePacket, options: Option<SubscribeOptions>) -> SyncSubscribeResult {
         debug!("threaded client - subscribe operation submitted");
 
@@ -542,8 +532,6 @@ impl SyncClient for ThreadedClient {
         submit_threaded_operation_with_callback!(self, Subscribe, Subscribe, SubscribeOptionsInternal, options, packet, completion_callback)
     }
 
-    /// Submits an Unsubscribe operation to the client's operation queue.  The unsubscribe packet will be sent to
-    /// the broker when it reaches the head of the queue and the client is connected.
     fn unsubscribe(&self, packet: UnsubscribePacket, options: Option<UnsubscribeOptions>) -> SyncUnsubscribeResult {
         debug!("threaded client - unsubscribe operation submitted");
 
@@ -556,8 +544,6 @@ impl SyncClient for ThreadedClient {
         submit_threaded_operation_with_callback!(self, Unsubscribe, Unsubscribe, UnsubscribeOptionsInternal, options, packet, completion_callback)
     }
 
-    /// Adds an additional listener to the events emitted by this client.  This is useful when
-    /// multiple higher-level constructs are sharing the same MQTT client.
     fn add_event_listener(&self, listener: ClientEventListener) -> GneissResult<ListenerHandle> {
         debug!("threaded client - add listener operation submitted");
         let mut current_id = self.listener_id_allocator.lock().unwrap();
@@ -573,7 +559,6 @@ impl SyncClient for ThreadedClient {
         })
     }
 
-    /// Removes a listener from this client's set of event listeners.
     fn remove_event_listener(&self, listener: ListenerHandle) -> GneissResult<()> {
         debug!("threaded client - remove listener operation submitted");
         if let Err(send_error) = self.operation_sender.send(OperationOptions::RemoveListener(listener.id)) {
@@ -584,7 +569,7 @@ impl SyncClient for ThreadedClient {
     }
 }
 
-pub(crate) fn create_runtime_states<T>(threaded_config: ThreadedOptions, connection_factory: ConnectionFactory<T>) -> (std::sync::mpsc::Sender<OperationOptions>, ClientRuntimeState<T>) where T : Read + Write + Send + Sync + 'static {
+pub(crate) fn create_runtime_states<T>(threaded_config: ThreadedOptions, connection_factory: ThreadedConnectionFactory<T>) -> (std::sync::mpsc::Sender<OperationOptions>, ClientRuntimeState<T>) where T : Read + Write + Send + Sync + 'static {
     let (sender, receiver) = std::sync::mpsc::channel();
 
     let impl_state = ClientRuntimeState {
@@ -597,8 +582,8 @@ pub(crate) fn create_runtime_states<T>(threaded_config: ThreadedOptions, connect
     (sender, impl_state)
 }
 
-/// Creates a new sync MQTT5 client that will use background threads for the client and connection attempts
-pub fn new_threaded_client<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, threaded_config: ThreadedOptions, connection_factory: ConnectionFactory<T>) -> SyncClientHandle
+/// Creates a new sync MQTT5 client that will use background threads for the client and connection attempts.
+pub fn new_threaded_client<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, threaded_config: ThreadedOptions, connection_factory: ThreadedConnectionFactory<T>) -> SyncClientHandle
 where T: Read + Write + Send + Sync + 'static {
     let (operation_sender, internal_state) = create_runtime_states(threaded_config, connection_factory);
 

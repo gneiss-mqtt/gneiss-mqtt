@@ -142,7 +142,7 @@ fn decode_connack_properties(property_bytes: &[u8], packet : &mut ConnackPacket)
         match property_key {
             PROPERTY_KEY_SESSION_EXPIRY_INTERVAL => { mutable_property_bytes = decode_optional_u32(mutable_property_bytes, &mut packet.session_expiry_interval)?; }
             PROPERTY_KEY_RECEIVE_MAXIMUM => { mutable_property_bytes = decode_optional_u16(mutable_property_bytes, &mut packet.receive_maximum)?; }
-            PROPERTY_KEY_MAXIMUM_QOS => { mutable_property_bytes = decode_optional_u8_as_enum(mutable_property_bytes, &mut packet.maximum_qos, convert_u8_to_quality_of_service)?; }
+            PROPERTY_KEY_MAXIMUM_QOS => { mutable_property_bytes = decode_optional_u8_as_enum(mutable_property_bytes, &mut packet.maximum_qos, QualityOfService::try_from)?; }
             PROPERTY_KEY_RETAIN_AVAILABLE => { mutable_property_bytes = decode_optional_u8_as_bool(mutable_property_bytes, &mut packet.retain_available)?; }
             PROPERTY_KEY_MAXIMUM_PACKET_SIZE => { mutable_property_bytes = decode_optional_u32(mutable_property_bytes, &mut packet.maximum_packet_size)?; }
             PROPERTY_KEY_ASSIGNED_CLIENT_IDENTIFIER => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.assigned_client_identifier)?; }
@@ -193,7 +193,7 @@ pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
             return Err(GneissError::new_decoding_failure("invalid flags for connack packet"));
         }
 
-        mutable_body = decode_u8_as_enum(mutable_body, &mut packet.reason_code, convert_u8_to_connect_reason_code)?;
+        mutable_body = decode_u8_as_enum(mutable_body, &mut packet.reason_code, ConnectReasonCode::try_from)?;
 
         let mut properties_length: usize = 0;
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
@@ -235,10 +235,10 @@ impl fmt::Display for ConnackPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ConnackPacket {{")?;
         log_primitive_value!(self.session_present, f, "session_present");
-        log_enum!(self.reason_code, f, "reason_code", connect_reason_code_to_str);
+        log_enum!(self.reason_code, f, "reason_code", ConnectReasonCode);
         log_optional_primitive_value!(self.session_expiry_interval, f, "session_expiry_interval", value);
         log_optional_primitive_value!(self.receive_maximum, f, "receive_maximum", value);
-        log_optional_enum!(self.maximum_qos, f, "maximum_qos", value, quality_of_service_to_str);
+        log_optional_enum!(self.maximum_qos, f, "maximum_qos", value, QualityOfService);
         log_optional_primitive_value!(self.retain_available, f, "retain_available", value);
         log_optional_primitive_value!(self.maximum_packet_size, f, "maximum_packet_size", value);
         log_optional_string!(self.assigned_client_identifier, f, "assigned_client_identifier", value);
