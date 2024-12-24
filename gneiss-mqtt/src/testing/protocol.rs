@@ -1416,8 +1416,8 @@ fn connected_state_invalid_ack_packet_id() {
     for (packet, validation_error_packet_type) in packets {
         let result = do_connected_state_invalid_ack_packet_id_test(packet);
         assert!(result.is_err());
-        assert_matches!(result, Err(GneissError::PacketValidation(_)));
-        if let Err(GneissError::PacketValidation(packet_validation_context)) = result {
+        assert_matches!(result, Err(GneissError::PacketValidationFailure(_)));
+        if let Err(GneissError::PacketValidationFailure(packet_validation_context)) = result {
             assert_eq!(validation_error_packet_type, packet_validation_context.packet_type);
         }
     }
@@ -3412,13 +3412,13 @@ fn rejoin_session_test_build_clean_start_sequence(rejoin_policy : RejoinSessionP
 
     assert_eq!(4, fixture.to_broker_packet_stream.len());
 
-    return fixture.to_broker_packet_stream.iter().map(|packet| {
+    fixture.to_broker_packet_stream.iter().map(|packet| {
         if let MqttPacket::Connect(connect) = &**packet {
             connect.clean_start
         } else {
             panic!("Expected connect packet");
         }
-    }).collect();
+    }).collect()
 }
 
 #[test]

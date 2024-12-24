@@ -1048,7 +1048,7 @@ pub(crate) fn compute_endpoints(endpoint: String, port: u16, http_proxy_options:
 pub(crate) fn build_connect_request(http_connect_endpoint: &Endpoint) -> Vec<u8> {
     let request_as_string = format!("CONNECT {}:{} HTTP/1.1\r\nHost: {}:{}\r\nConnection: keep-alive\r\n\r\n", http_connect_endpoint.endpoint, http_connect_endpoint.port, http_connect_endpoint.endpoint, http_connect_endpoint.port);
 
-    return request_as_string.as_bytes().to_vec();
+    request_as_string.as_bytes().to_vec()
 }
 
 #[cfg(any(feature="tokio-websockets", feature="threaded-websockets"))]
