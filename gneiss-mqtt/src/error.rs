@@ -408,59 +408,59 @@ impl Error for GneissError {
 impl fmt::Display for GneissError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            GneissError::Unimplemented(_) => {
-                write!(f, "attempt to invoke stubbed functionality that has not been completed")
+            GneissError::Unimplemented(context) => {
+                write!(f, "Attempt to invoke functionality that has not been implemented: {}", context.source)
             }
-            GneissError::OperationChannelFailure(_) => {
-                write!(f, "failure encountered while sending/receiving on an MQTT operation-related channel")
+            GneissError::OperationChannelFailure(context) => {
+                write!(f, "Failure encountered while sending/receiving on an MQTT operation-related channel: {}", context.source)
             }
-            GneissError::DecodingFailure(_) => {
-                write!(f, "failure encountered while decoding an incoming MQTT packet")
+            GneissError::DecodingFailure(context) => {
+                write!(f, "Failure encountered while decoding an incoming MQTT packet: {}", context.source)
             }
-            GneissError::EncodingFailure(_) => {
-                write!(f, "failure encountered while encoding an outbound MQTT packet")
+            GneissError::EncodingFailure(context) => {
+                write!(f, "Failure encountered while encoding an outbound MQTT packet: {}", context.source)
             }
-            GneissError::ProtocolError(_) => {
-                write!(f, "broker behavior disallowed by the mqtt spec")
+            GneissError::ProtocolError(context) => {
+                write!(f, "Encountered broker behavior disallowed by the mqtt spec: {}", context.source)
             }
-            GneissError::InvalidInboundTopicAlias(_) => {
-                write!(f, "topic alias value on incoming publish is not valid")
+            GneissError::InvalidInboundTopicAlias(context) => {
+                write!(f, "Invalid topic alias value on incoming publish: {}", context.source)
             }
-            GneissError::InternalStateError(_) => {
-                write!(f, "client reached an invalid internal state; almost certainly a client bug")
+            GneissError::InternalStateError(context) => {
+                write!(f, "Client reached an invalid internal state: {}", context.source)
             }
-            GneissError::ConnectionClosed(_) => {
-                write!(f, "client connection was closed; source contains further details")
+            GneissError::ConnectionClosed(context) => {
+                write!(f, "Client connection was closed: {}", context.source)
             }
             GneissError::OfflineQueuePolicyFailed(_) => {
-                write!(f, "operation failed due to the offline queue policy and the fact that the client is currently offline")
+                write!(f, "Operation failed due to the offline queue policy")
             }
             GneissError::AckTimeout(_) => {
-                write!(f, "the operation's timeout triggered prior to receiving an ack from the broker")
+                write!(f, "Operation timeout triggered prior to receiving an ack from the broker")
             }
             GneissError::ClientClosed(_) => {
-                write!(f, "the operation was incomplete prior to the client being closed")
+                write!(f, "Operation was incomplete prior to the client being closed")
             }
             GneissError::UserInitiatedDisconnect(_) => {
-                write!(f, "connection was shut down by user action")
+                write!(f, "Connection was shut down by user action")
             }
-            GneissError::ConnectionEstablishmentFailure(_) => {
-                write!(f, "failed to establish an MQTT connection to the broker")
+            GneissError::ConnectionEstablishmentFailure(context) => {
+                write!(f, "Failed to establish an MQTT connection to the broker: {}", context.source)
             }
-            GneissError::StdIoError(_) => {
-                write!(f, "generic error wrapper for std::io::Error when no more specialized error is appropriate; source contains further details")
+            GneissError::StdIoError(context) => {
+                write!(f, "std::io::Error: {}", context.source)
             }
-            GneissError::TlsError(_) => {
-                write!(f, "generic error when setting up a tls context")
+            GneissError::TlsError(context) => {
+                write!(f, "TLS error: {}", context.source)
             }
-            GneissError::TransportError(_) => {
-                write!(f, "transport error; source contains further details")
+            GneissError::TransportError(context) => {
+                write!(f, "Transport error: {}", context.source)
             }
             GneissError::PacketValidationFailure(context) => {
-                write!(f, "{} contains a property that violates the mqtt spec", context.packet_type)
+                write!(f, "{} failed validation: {}", context.packet_type, context.source)
             }
-            GneissError::OtherError(_) => {
-                write!(f, "fallback error type; source contains further details")
+            GneissError::OtherError(context) => {
+                write!(f, "Other error: {}", context.source)
             }
         }
     }
