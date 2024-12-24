@@ -555,6 +555,7 @@ fn make_direct_client_no_tls(endpoint: String, port: u16, client_options: MqttCl
     }
 }
 
+#[cfg(feature = "tokio-rustls")]
 type TokioRustlsStream<T> = tokio_rustls::client::TlsStream<T>;
 
 #[cfg(feature = "tokio-rustls")]
@@ -615,6 +616,7 @@ fn make_direct_client_rustls(endpoint: String, port: u16, tls_options: Option<Tl
     }
 }
 
+#[cfg(feature = "tokio-native-tls")]
 type TokioNativetlsStream<T> = tokio_native_tls::TlsStream<T>;
 
 #[cfg(feature = "tokio-native-tls")]
@@ -690,6 +692,7 @@ fn make_websocket_client_tokio(tls_impl: TlsConfiguration, endpoint: String, por
     }
 }
 
+#[cfg(feature="tokio-websockets")]
 type TokioWsStream<T> = WsByteStream<WebSocketStream<T>, Message, tungstenite::Error, WsMessageHandler>;
 
 #[cfg(feature="tokio-websockets")]
