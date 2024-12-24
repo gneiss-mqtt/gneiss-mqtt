@@ -123,7 +123,7 @@ name = "aws-custom-auth-signed-threaded"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "gneiss-mqtt-aws",
 ]
 
@@ -132,7 +132,7 @@ name = "aws-custom-auth-signed-tokio"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "gneiss-mqtt-aws",
  "tokio",
 ]
@@ -142,7 +142,7 @@ name = "aws-custom-auth-unsigned-threaded"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "gneiss-mqtt-aws",
 ]
 
@@ -151,7 +151,7 @@ name = "aws-custom-auth-unsigned-tokio"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "gneiss-mqtt-aws",
  "tokio",
 ]
@@ -187,7 +187,7 @@ name = "aws-mtls-threaded"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "gneiss-mqtt-aws",
 ]
 
@@ -196,7 +196,7 @@ name = "aws-mtls-tokio"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "gneiss-mqtt-aws",
  "tokio",
 ]
@@ -461,7 +461,7 @@ name = "aws-websockets-tokio"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "gneiss-mqtt-aws",
  "tokio",
 ]
@@ -608,7 +608,7 @@ name = "connect-plaintext-threaded"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
 ]
 
 [[package]]
@@ -616,7 +616,7 @@ name = "connect-plaintext-tokio"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "tokio",
 ]
 
@@ -625,7 +625,7 @@ name = "connect-proxy-threaded"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
 ]
 
 [[package]]
@@ -633,7 +633,7 @@ name = "connect-proxy-tokio"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "tokio",
 ]
 
@@ -642,7 +642,7 @@ name = "connect-tls-threaded"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
 ]
 
 [[package]]
@@ -650,7 +650,7 @@ name = "connect-tls-tokio"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "tokio",
 ]
 
@@ -659,7 +659,7 @@ name = "connect-websockets-threaded"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
 ]
 
 [[package]]
@@ -667,7 +667,7 @@ name = "connect-websockets-tokio"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "tokio",
 ]
 
@@ -762,7 +762,7 @@ dependencies = [
  "argh",
  "elasti-gneiss-core",
  "elasti-gneiss-core-sync",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "gneiss-mqtt-aws",
  "simplelog",
  "url",
@@ -775,7 +775,7 @@ dependencies = [
  "argh",
  "elasti-gneiss-core",
  "elasti-gneiss-core-async",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "gneiss-mqtt-aws",
  "simplelog",
  "tokio",
@@ -787,7 +787,7 @@ name = "elasti-gneiss-core"
 version = "0.1.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
 ]
 
 [[package]]
@@ -796,7 +796,7 @@ version = "0.1.0"
 dependencies = [
  "argh",
  "elasti-gneiss-core",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "tokio",
 ]
 
@@ -806,7 +806,7 @@ version = "0.1.0"
 dependencies = [
  "argh",
  "elasti-gneiss-core",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
 ]
 
 [[package]]
@@ -816,7 +816,7 @@ dependencies = [
  "argh",
  "elasti-gneiss-core",
  "elasti-gneiss-core-sync",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "simplelog",
  "url",
 ]
@@ -828,7 +828,7 @@ dependencies = [
  "argh",
  "elasti-gneiss-core",
  "elasti-gneiss-core-async",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "simplelog",
  "tokio",
  "url",
@@ -1022,10 +1022,36 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "gneiss-mqtt"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "assert_matches",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
+ "http 0.2.12",
+ "httparse",
+ "log",
+ "lru",
+ "native-tls",
+ "rand",
+ "rustls 0.23.20",
+ "rustls-native-certs 0.7.3",
+ "rustls-pemfile 2.2.0",
+ "rustls-pki-types",
+ "stream-ws",
+ "tokio",
+ "tokio-native-tls",
+ "tokio-rustls 0.26.1",
+ "tokio-tungstenite",
+ "tungstenite",
+ "uuid",
+]
+
+[[package]]
+name = "gneiss-mqtt"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20064cc887c979764a78f133457345ab6f1262f92441cc1ef5e101dd232201f4"
+dependencies = [
+ "assert_matches",
  "http 0.2.12",
  "httparse",
  "log",
@@ -1047,13 +1073,13 @@ dependencies = [
 
 [[package]]
 name = "gneiss-mqtt-aws"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "aws-config",
  "aws-credential-types",
  "aws-sigv4",
  "aws-smithy-runtime-api",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gneiss-mqtt-aws",
  "http 0.2.12",
  "tokio",
@@ -1730,7 +1756,7 @@ name = "pubsub-threaded"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
 ]
 
 [[package]]
@@ -1738,7 +1764,7 @@ name = "pubsub-tokio"
 version = "0.0.0"
 dependencies = [
  "argh",
- "gneiss-mqtt",
+ "gneiss-mqtt 0.4.0",
  "tokio",
 ]
 
