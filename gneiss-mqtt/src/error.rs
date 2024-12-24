@@ -45,7 +45,7 @@ pub struct ProtocolErrorContext {
 
 /// Additional details about an InboundTopicAliasNotValid error variant
 #[derive(Debug)]
-pub struct InboundTopicAliasNotValidContext {
+pub struct InvalidInboundTopicAliasContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
@@ -107,7 +107,7 @@ pub struct TransportErrorContext {
 
 /// Additional details about a PacketValidation error variant
 #[derive(Debug)]
-pub struct PacketValidationContext {
+pub struct PacketValidationFailureContext {
 
     /// type of packet that failed validation
     pub packet_type: PacketType,
@@ -147,7 +147,7 @@ pub enum GneissError {
     ProtocolError(ProtocolErrorContext),
 
     /// Error emitted when an inbound publish arrives with an unknown topic alias.
-    InboundTopicAliasNotValid(InboundTopicAliasNotValidContext),
+    InvalidInboundTopicAlias(InvalidInboundTopicAliasContext),
 
     /// Error emitted by the client when something happens that should never happen.  Always indicates
     /// a bug in the client.
@@ -158,7 +158,7 @@ pub enum GneissError {
     /// disconnect) under certain conditions.
     ConnectionClosed(ConnectionClosedContext),
 
-    /// Error applied to MQTT operaations that are failed because the client is offline and the
+    /// Error applied to MQTT operations that are failed because the client is offline and the
     /// configured offline policy rejects the operation.
     OfflineQueuePolicyFailed(OfflineQueuePolicyFailedContext),
 
@@ -190,7 +190,7 @@ pub enum GneissError {
 
     /// Error emitted when an Auth packet is submitted or received that violates the MQTT
     /// specification.
-    PacketValidation(PacketValidationContext),
+    PacketValidationFailure(PacketValidationFailureContext),
 
     /// Error to be used when no other error variant is appropriate.  Generally used by
     /// auxiliary crates whose error category doesn't match anything but that want to restrict
@@ -241,8 +241,8 @@ impl GneissError {
     }
 
     pub(crate) fn new_inbound_topic_alias_not_valid(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        GneissError::InboundTopicAliasNotValid(
-            InboundTopicAliasNotValidContext{
+        GneissError::InvalidInboundTopicAlias(
+            InvalidInboundTopicAliasContext {
                 source : source.into()
             }
         )
@@ -335,8 +335,8 @@ impl GneissError {
     }
 
     pub(crate) fn new_packet_validation(packet_type: PacketType, source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        GneissError::PacketValidation(
-            PacketValidationContext {
+        GneissError::PacketValidationFailure(
+            PacketValidationFailureContext {
                 packet_type,
                 source : source.into()
             }
@@ -373,7 +373,7 @@ impl Error for GneissError {
             GneissError::ProtocolError(context) => {
                 Some(context.source.as_ref())
             }
-            GneissError::InboundTopicAliasNotValid(context) => {
+            GneissError::InvalidInboundTopicAlias(context) => {
                 Some(context.source.as_ref())
             }
             GneissError::ConnectionEstablishmentFailure(context) => {
@@ -394,7 +394,7 @@ impl Error for GneissError {
             GneissError::TransportError(context) => {
                 Some(context.source.as_ref())
             }
-            GneissError::PacketValidation(context) => {
+            GneissError::PacketValidationFailure(context) => {
                 Some(context.source.as_ref())
             }
             GneissError::OtherError(context) => {
@@ -423,7 +423,7 @@ impl fmt::Display for GneissError {
             GneissError::ProtocolError(_) => {
                 write!(f, "broker behavior disallowed by the mqtt spec")
             }
-            GneissError::InboundTopicAliasNotValid(_) => {
+            GneissError::InvalidInboundTopicAlias(_) => {
                 write!(f, "topic alias value on incoming publish is not valid")
             }
             GneissError::InternalStateError(_) => {
@@ -456,7 +456,7 @@ impl fmt::Display for GneissError {
             GneissError::TransportError(_) => {
                 write!(f, "transport error; source contains further details")
             }
-            GneissError::PacketValidation(context) => {
+            GneissError::PacketValidationFailure(context) => {
                 write!(f, "{} contains a property that violates the mqtt spec", context.packet_type)
             }
             GneissError::OtherError(_) => {

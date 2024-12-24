@@ -385,8 +385,8 @@ pub(crate) mod testing {
 
         let validate_result = validate_packet_outbound_internal(packet, &outbound_context2);
         assert!(validate_result.is_err());
-        assert_matches!(validate_result, Err(GneissError::PacketValidation(_)));
-        if let Err(GneissError::PacketValidation(packet_validation_context)) = validate_result {
+        assert_matches!(validate_result, Err(GneissError::PacketValidationFailure(_)));
+        if let Err(GneissError::PacketValidationFailure(packet_validation_context)) = validate_result {
             assert_eq!(expected_packet_type, packet_validation_context.packet_type);
         }
     }
@@ -394,7 +394,7 @@ pub(crate) mod testing {
     macro_rules! verify_validation_failure {
         ($validation_expr: expr, $packet_type: expr) => {
             let validation_result = $validation_expr;
-            if let Err(GneissError::PacketValidation(packet_validation_context)) = validation_result {
+            if let Err(GneissError::PacketValidationFailure(packet_validation_context)) = validation_result {
                 assert_eq!(packet_validation_context.packet_type, $packet_type)
             } else {
                 panic!("expected validation error")

@@ -509,11 +509,11 @@ mod tests {
 
         let mut topic1 = "topic1".to_string();
 
-        assert_matches!(resolver.resolve_topic_alias(&Some(0), &mut topic1), Err(GneissError::InboundTopicAliasNotValid(_)));
-        assert_matches!(resolver.resolve_topic_alias(&Some(11), &mut topic1), Err(GneissError::InboundTopicAliasNotValid(_)));
+        assert_matches!(resolver.resolve_topic_alias(&Some(0), &mut topic1), Err(GneissError::InvalidInboundTopicAlias(_)));
+        assert_matches!(resolver.resolve_topic_alias(&Some(11), &mut topic1), Err(GneissError::InvalidInboundTopicAlias(_)));
 
         let mut empty_topic = "".to_string();
-        assert_matches!(resolver.resolve_topic_alias(&Some(2), &mut empty_topic), Err(GneissError::InboundTopicAliasNotValid(_)));
+        assert_matches!(resolver.resolve_topic_alias(&Some(2), &mut empty_topic), Err(GneissError::InvalidInboundTopicAlias(_)));
     }
 
     #[test]
@@ -530,7 +530,7 @@ mod tests {
 
         resolver.reset_for_new_connection();
         empty_topic = "".to_string();
-        assert_matches!(resolver.resolve_topic_alias(&Some(1), &mut empty_topic), Err(GneissError::InboundTopicAliasNotValid(_)));
+        assert_matches!(resolver.resolve_topic_alias(&Some(1), &mut empty_topic), Err(GneissError::InvalidInboundTopicAlias(_)));
     }
 }
 

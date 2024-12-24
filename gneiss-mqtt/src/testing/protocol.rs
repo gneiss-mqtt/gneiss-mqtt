@@ -1416,8 +1416,8 @@ fn connected_state_invalid_ack_packet_id() {
     for (packet, validation_error_packet_type) in packets {
         let result = do_connected_state_invalid_ack_packet_id_test(packet);
         assert!(result.is_err());
-        assert_matches!(result, Err(GneissError::PacketValidation(_)));
-        if let Err(GneissError::PacketValidation(packet_validation_context)) = result {
+        assert_matches!(result, Err(GneissError::PacketValidationFailure(_)));
+        if let Err(GneissError::PacketValidationFailure(packet_validation_context)) = result {
             assert_eq!(validation_error_packet_type, packet_validation_context.packet_type);
         }
     }
