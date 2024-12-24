@@ -651,8 +651,7 @@ impl ConnectOptionsBuilder {
     ///
     /// Used to restore session state between connections.
     ///
-    /// If left empty, the broker will auto-assign a unique client id.  When reconnecting, the mqtt5 client will
-    /// always use the auto-assigned client id.
+    /// If left empty, the broker will auto-assign a unique client id.
     ///
     /// See [MQTT5 Client Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901059)
     pub fn with_client_id(&mut self, client_id: &str) -> &mut Self {

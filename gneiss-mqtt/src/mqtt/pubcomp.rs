@@ -23,13 +23,13 @@ define_ack_packet_user_property_accessor!(get_pubcomp_packet_user_property, Pubc
 define_ack_packet_encoding_impl!(write_pubcomp_encoding_steps, PubcompPacket, PubcompReasonCode, PUBCOMP_FIRST_BYTE, compute_pubcomp_packet_length_properties, get_pubcomp_packet_reason_string, get_pubcomp_packet_user_property);
 
 define_ack_packet_decode_properties_function!(decode_pubcomp_properties, PubcompPacket, "Pubcomp");
-define_ack_packet_decode_function!(decode_pubcomp_packet, Pubcomp, PubcompPacket, "Pubcomp", PUBCOMP_FIRST_BYTE, convert_u8_to_pubcomp_reason_code, decode_pubcomp_properties);
+define_ack_packet_decode_function!(decode_pubcomp_packet, Pubcomp, PubcompPacket, "Pubcomp", PUBCOMP_FIRST_BYTE, PubcompReasonCode, decode_pubcomp_properties);
 
 validate_ack_outbound!(validate_pubcomp_packet_outbound, PubcompPacket, PacketType::Pubcomp, "Pubcomp");
 validate_ack_outbound_internal!(validate_pubcomp_packet_outbound_internal, PubcompPacket, PacketType::Pubcomp, compute_pubcomp_packet_length_properties, "Puback");
 validate_ack_inbound_internal!(validate_pubcomp_packet_inbound_internal, PubcompPacket, PacketType::Pubcomp, "Pubcomp");
 
-define_ack_packet_display_trait!(PubcompPacket, "PubcompPacket", pubcomp_reason_code_to_str);
+define_ack_packet_display_trait!(PubcompPacket, "PubcompPacket", PubcompReasonCode);
 
 #[cfg(test)]
 mod tests {

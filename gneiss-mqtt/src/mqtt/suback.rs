@@ -119,7 +119,7 @@ pub(crate) fn decode_suback_packet(first_byte: u8, packet_body: &[u8]) -> Gneiss
         packet.reason_codes.reserve(reason_code_count);
 
         for payload_byte in payload_bytes.iter().take(reason_code_count) {
-            packet.reason_codes.push(convert_u8_to_suback_reason_code(*payload_byte)?);
+            packet.reason_codes.push(SubackReasonCode::try_from(*payload_byte)?);
         }
 
         return Ok(box_packet);
@@ -138,7 +138,7 @@ impl fmt::Display for SubackPacket {
         log_user_properties!(self.user_properties, f, "user_properties", value);
         write!(f, " reason_codes: [")?;
         for (i, rc) in self.reason_codes.iter().enumerate() {
-            write!(f, " {}: {}", i, suback_reason_code_to_str(*rc))?;
+            write!(f, " {}: {}", i, rc)?;
         }
         write!(f, " ]")?;
         write!(f, " }}")

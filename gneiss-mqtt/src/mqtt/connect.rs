@@ -291,7 +291,7 @@ fn decode_will_properties(property_bytes: &[u8], will: &mut PublishPacket, conne
 
         match property_key {
             PROPERTY_KEY_WILL_DELAY_INTERVAL => { mutable_property_bytes = decode_optional_u32(mutable_property_bytes, &mut connect.will_delay_interval_seconds)?; }
-            PROPERTY_KEY_PAYLOAD_FORMAT_INDICATOR => { mutable_property_bytes = decode_optional_u8_as_enum(mutable_property_bytes, &mut will.payload_format, convert_u8_to_payload_format_indicator)?; }
+            PROPERTY_KEY_PAYLOAD_FORMAT_INDICATOR => { mutable_property_bytes = decode_optional_u8_as_enum(mutable_property_bytes, &mut will.payload_format, PayloadFormatIndicator::try_from)?; }
             PROPERTY_KEY_MESSAGE_EXPIRY_INTERVAL => { mutable_property_bytes = decode_optional_u32(mutable_property_bytes, &mut will.message_expiry_interval_seconds)?; }
             PROPERTY_KEY_CONTENT_TYPE => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut will.content_type)?; }
             PROPERTY_KEY_RESPONSE_TOPIC => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut will.response_topic)?; }
@@ -349,7 +349,7 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
         packet.clean_start = (connect_flags & CONNECT_PACKET_CLEAN_START_FLAG_MASK) != 0;
         let has_will = (connect_flags & CONNECT_PACKET_HAS_WILL_FLAG_MASK) != 0;
         let will_retain = (connect_flags & CONNECT_PACKET_WILL_RETAIN_FLAG_MASK) != 0;
-        let will_qos = convert_u8_to_quality_of_service((connect_flags >> CONNECT_PACKET_WILL_QOS_FLAG_SHIFT) & QOS_MASK)?;
+        let will_qos = QualityOfService::try_from((connect_flags >> CONNECT_PACKET_WILL_QOS_FLAG_SHIFT) & QOS_MASK)?;
 
         if !has_will {
             /* indirectly check bits of connect flags vs. spec */
@@ -479,10 +479,10 @@ impl fmt::Display for ConnectPacket {
         if let Some(will) = &self.will {
             write!(f, "will: {{")?;
             log_string!(will.topic, f, "topic");
-            log_enum!(will.qos, f, "qos", quality_of_service_to_str);
+            log_enum!(will.qos, f, "qos", QualityOfService);
             log_primitive_value!(will.retain, f, "retain");
             log_optional_binary_data!(will.payload, f, "payload", value);
-            log_optional_enum!(will.payload_format, f, "payload_format", value, payload_format_indicator_to_str);
+            log_optional_enum!(will.payload_format, f, "payload_format", value, PayloadFormatIndicator);
             log_optional_string!(will.content_type, f, "content_type", value);
             log_optional_string!(will.response_topic, f, "response_topic", value);
             log_optional_binary_data!(will.correlation_data, f, "correlation_data", value);

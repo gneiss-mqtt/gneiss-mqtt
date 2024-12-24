@@ -34,7 +34,7 @@ async fn simple_reconnect_test(builder : TokioClientBuilder, event_count: usize,
 
 #[test]
 fn client_reconnect_with_backoff() {
-    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let runtime = ::tokio::runtime::Runtime::new().unwrap();
     let (builder, server) = build_mock_client_server_tokio(build_reconnect_test_options());
 
     do_builder_test(runtime.handle().clone(), Box::new(|builder| {
@@ -81,7 +81,7 @@ async fn reconnect_backoff_reset_test(builder : TokioClientBuilder, first_event_
 
 #[test]
 fn client_reconnect_with_backoff_and_backoff_reset() {
-    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let runtime = ::tokio::runtime::Runtime::new().unwrap();
     let handle = runtime.handle().clone();
     let (builder, server) = build_mock_client_server_tokio(build_reconnect_reset_test_options());
 
@@ -97,7 +97,7 @@ fn client_reconnect_with_backoff_and_backoff_reset() {
 
 #[test]
 fn client_reconnect_with_backoff_and_no_backoff_reset() {
-    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let runtime = ::tokio::runtime::Runtime::new().unwrap();
     let handle = runtime.handle().clone();
     let (builder, server) = build_mock_client_server_tokio(build_reconnect_reset_test_options());
 

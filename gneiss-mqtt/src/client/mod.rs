@@ -15,7 +15,6 @@ pub mod waiter;
 use crate::client::config::*;
 use crate::error::{GneissError, GneissResult};
 use crate::mqtt::*;
-use crate::mqtt::utils::*;
 use crate::protocol::*;
 
 use log::*;
@@ -327,7 +326,7 @@ pub struct NegotiatedSettings {
 impl Display for NegotiatedSettings {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "NegotiatedSettings {{")?;
-        write!(f, " maximum_qos:{}", quality_of_service_to_str(self.maximum_qos))?;
+        write!(f, " maximum_qos:{}", self.maximum_qos)?;
         write!(f, " session_expiry_interval:{}", self.session_expiry_interval)?;
         write!(f, " receive_maximum_from_server:{}", self.receive_maximum_from_server)?;
         write!(f, " maximum_packet_size_to_server:{}", self.maximum_packet_size_to_server)?;
@@ -1032,7 +1031,6 @@ impl MqttClientImpl {
 
 // Re-exports to mask internal module structure
 
-#[cfg(feature = "tokio")]
 pub use crate::client::asynchronous::{AsyncClient, AsyncClientHandle, AsyncPublishResult, AsyncSubscribeResult, AsyncUnsubscribeResult};
 
 #[cfg(feature = "tokio")]
@@ -1041,7 +1039,6 @@ pub use crate::client::asynchronous::tokio::{new_tokio_client, TokioConnectionFa
 #[cfg(feature = "tokio")]
 pub use crate::client::asynchronous::tokio::builder::TokioClientBuilder;
 
-#[cfg(feature = "threaded")]
 pub use crate::client::synchronous::{SyncClient, SyncClientHandle, SyncPublishResult, SyncPublishResultCallback, SyncResultReceiver, SyncSubscribeResult, SyncSubscribeResultCallback, SyncUnsubscribeResult, SyncUnsubscribeResultCallback};
 
 #[cfg(feature = "threaded")]

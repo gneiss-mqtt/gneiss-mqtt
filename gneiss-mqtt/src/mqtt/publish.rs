@@ -182,7 +182,7 @@ fn decode_publish_properties(property_bytes: &[u8], packet : &mut PublishPacket)
         mutable_property_bytes = &mutable_property_bytes[1..];
 
         match property_key {
-            PROPERTY_KEY_PAYLOAD_FORMAT_INDICATOR => { mutable_property_bytes = decode_optional_u8_as_enum(mutable_property_bytes, &mut packet.payload_format, convert_u8_to_payload_format_indicator)?; }
+            PROPERTY_KEY_PAYLOAD_FORMAT_INDICATOR => { mutable_property_bytes = decode_optional_u8_as_enum(mutable_property_bytes, &mut packet.payload_format, PayloadFormatIndicator::try_from)?; }
             PROPERTY_KEY_MESSAGE_EXPIRY_INTERVAL => { mutable_property_bytes = decode_optional_u32(mutable_property_bytes, &mut packet.message_expiry_interval_seconds)?; }
             PROPERTY_KEY_TOPIC_ALIAS => { mutable_property_bytes = decode_optional_u16(mutable_property_bytes, &mut packet.topic_alias)?; }
             PROPERTY_KEY_RESPONSE_TOPIC => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.response_topic)?; }
@@ -222,7 +222,7 @@ pub(crate) fn decode_publish_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
             packet.retain = true;
         }
 
-        packet.qos = convert_u8_to_quality_of_service((first_byte >> 1) & QOS_MASK)?;
+        packet.qos = QualityOfService::try_from((first_byte >> 1) & QOS_MASK)?;
 
         let mut mutable_body = packet_body;
         let mut properties_length : usize = 0;
@@ -361,11 +361,11 @@ impl fmt::Display for PublishPacket {
         write!(f, "PublishPacket {{")?;
         log_primitive_value!(self.packet_id, f, "packet_id");
         log_string!(self.topic, f, "topic");
-        log_enum!(self.qos, f, "qos", quality_of_service_to_str);
+        log_enum!(self.qos, f, "qos", QualityOfService);
         log_primitive_value!(self.duplicate, f, "duplicate");
         log_primitive_value!(self.retain, f, "retain");
         log_optional_binary_data!(self.payload, f, "payload", value);
-        log_optional_enum!(self.payload_format, f, "payload_format", value, payload_format_indicator_to_str);
+        log_optional_enum!(self.payload_format, f, "payload_format", value, PayloadFormatIndicator);
         log_optional_primitive_value!(self.message_expiry_interval_seconds, f, "message_expiry_interval_seconds", value);
         log_optional_primitive_value!(self.topic_alias, f, "topic_alias", value);
         log_optional_string!(self.response_topic, f, "response_topic", value);

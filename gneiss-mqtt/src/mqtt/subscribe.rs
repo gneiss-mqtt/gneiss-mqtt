@@ -149,7 +149,7 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Gne
                 return Err(GneissError::new_decoding_failure("invalid subscription reserved bit flags for subscribe packet"));
             }
 
-            subscription.qos = convert_u8_to_quality_of_service(subscription_options & 0x03)?;
+            subscription.qos = QualityOfService::try_from(subscription_options & 0x03)?;
 
             if (subscription_options & SUBSCRIPTION_OPTIONS_NO_LOCAL_MASK) != 0 {
                 subscription.no_local = true;
@@ -159,7 +159,7 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Gne
                 subscription.retain_as_published = true;
             }
 
-            subscription.retain_handling_type = convert_u8_to_retain_handling_type((subscription_options >> SUBSCRIPTION_OPTIONS_RETAIN_HANDLING_SHIFT) & 0x03)?;
+            subscription.retain_handling_type = RetainHandlingType::try_from((subscription_options >> SUBSCRIPTION_OPTIONS_RETAIN_HANDLING_SHIFT) & 0x03)?;
 
             packet.subscriptions.push(subscription);
         }
@@ -220,10 +220,10 @@ impl fmt::Display for Subscription {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{")?;
         log_string!(self.topic_filter, f, "topic_filter");
-        log_enum!(self.qos, f, "qos", quality_of_service_to_str);
+        log_enum!(self.qos, f, "qos", QualityOfService);
         log_primitive_value!(self.no_local, f, "no_local");
         log_primitive_value!(self.retain_as_published, f, "retain_as_published");
-        log_enum!(self.retain_handling_type, f, "retain_handling_type", retain_handling_type_to_str);
+        log_enum!(self.retain_handling_type, f, "retain_handling_type", RetainHandlingType);
         write!(f, " }}")
     }
 }

@@ -23,13 +23,13 @@ define_ack_packet_user_property_accessor!(get_pubrec_packet_user_property, Pubre
 define_ack_packet_encoding_impl!(write_pubrec_encoding_steps, PubrecPacket, PubrecReasonCode, PUBREC_FIRST_BYTE, compute_pubrec_packet_length_properties, get_pubrec_packet_reason_string, get_pubrec_packet_user_property);
 
 define_ack_packet_decode_properties_function!(decode_pubrec_properties, PubrecPacket, "Pubrec");
-define_ack_packet_decode_function!(decode_pubrec_packet, Pubrec, PubrecPacket, "Pubrec", PUBREC_FIRST_BYTE, convert_u8_to_pubrec_reason_code, decode_pubrec_properties);
+define_ack_packet_decode_function!(decode_pubrec_packet, Pubrec, PubrecPacket, "Pubrec", PUBREC_FIRST_BYTE, PubrecReasonCode, decode_pubrec_properties);
 
 validate_ack_outbound!(validate_pubrec_packet_outbound, PubrecPacket, PacketType::Pubrec, "Pubrec");
 validate_ack_outbound_internal!(validate_pubrec_packet_outbound_internal, PubrecPacket, PacketType::Pubrec, compute_pubrec_packet_length_properties, "Pubrec");
 validate_ack_inbound_internal!(validate_pubrec_packet_inbound_internal, PubrecPacket, PacketType::Pubrec, "Pubrec");
 
-define_ack_packet_display_trait!(PubrecPacket, "PubrecPacket", pubrec_reason_code_to_str);
+define_ack_packet_display_trait!(PubrecPacket, "PubrecPacket", PubrecReasonCode);
 
 #[cfg(test)]
 mod tests {
