@@ -1034,7 +1034,7 @@ impl MqttClientImpl {
 pub use crate::client::asynchronous::{AsyncClient, AsyncClientHandle, AsyncPublishResult, AsyncSubscribeResult, AsyncUnsubscribeResult};
 
 #[cfg(feature = "tokio")]
-pub use crate::client::asynchronous::tokio::{new_tokio_client, TokioConnectionFactoryWrapper};
+pub use crate::client::asynchronous::tokio::new_tokio_client;
 
 #[cfg(feature = "tokio")]
 pub use crate::client::asynchronous::tokio::builder::TokioClientBuilder;

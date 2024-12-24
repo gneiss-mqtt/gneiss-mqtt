@@ -3412,13 +3412,13 @@ fn rejoin_session_test_build_clean_start_sequence(rejoin_policy : RejoinSessionP
 
     assert_eq!(4, fixture.to_broker_packet_stream.len());
 
-    return fixture.to_broker_packet_stream.iter().map(|packet| {
+    fixture.to_broker_packet_stream.iter().map(|packet| {
         if let MqttPacket::Connect(connect) = &**packet {
             connect.clean_start
         } else {
             panic!("Expected connect packet");
         }
-    }).collect();
+    }).collect()
 }
 
 #[test]
