@@ -28,6 +28,21 @@ pub(crate) mod unsuback;
 pub(crate) mod unsubscribe;
 pub(crate) mod utils;
 
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+pub(crate) enum ProtocolVersion {
+    #[default]
+    Mqtt5,
+
+    Mqtt311
+}
+
+pub(crate) fn convert_protocol_mode_to_protocol_version(mode: ProtocolMode) -> ProtocolVersion {
+    match mode {
+        ProtocolMode::Mqtt5 => ProtocolVersion::Mqtt5,
+        ProtocolMode::Mqtt311 => ProtocolVersion::Mqtt311,
+    }
+}
+
 /// MQTT message delivery quality of service.
 ///
 /// Enum values match [MQTT5 spec](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901234) encoding values.
@@ -321,6 +336,19 @@ impl fmt::Display for ConnectReasonCode {
             };
 
         write!(f, "{}", format_string)
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn convert_connect_reason_code_to_311_encoding(reason_code: ConnectReasonCode) -> GneissResult<u8> {
+    match reason_code {
+        ConnectReasonCode::Success => Ok(0),
+        ConnectReasonCode::UnsupportedProtocolVersion => Ok(1),
+        ConnectReasonCode::ClientIdentifierNotValid => Ok(2),
+        ConnectReasonCode::ServerUnavailable => Ok(3),
+        ConnectReasonCode::BadUsernameOrPassword => Ok(4),
+        ConnectReasonCode::NotAuthorized => Ok(5),
+        _ => Err(GneisError::new_protocol_error("Invalid ConnectReasonCode in Connack Packet for MQTT311"))
     }
 }
 
@@ -993,6 +1021,16 @@ impl fmt::Display for SubackReasonCode {
             };
 
         write!(f, "{}", reason_string)
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn convert_suback_reason_code_to_311_encoding(reason_code: SubackReasonCode) -> GneissResult<u8> {
+    match reason_code {
+        SubackReasonCode::GrantedQos0 => Ok(0),
+        SubackReasonCode::GrantedQos1 => Ok(1),
+        SubackReasonCode::GrantedQos2 => Ok(2),
+        _ => Ok(128),
     }
 }
 

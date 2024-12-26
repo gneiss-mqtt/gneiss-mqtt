@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 use std::fmt;
 
 #[rustfmt::skip]
-fn compute_publish_packet_length_properties(packet: &PublishPacket, alias_resolution: &OutboundAliasResolution) -> GneissResult<(u32, u32)> {
+fn compute_publish_packet_length_properties5(packet: &PublishPacket, alias_resolution: &OutboundAliasResolution) -> GneissResult<(u32, u32)> {
     let mut publish_property_section_length = compute_user_properties_length(&packet.user_properties);
 
     add_optional_u8_property_length!(publish_property_section_length, packet.payload_format);
@@ -128,11 +128,11 @@ fn get_publish_packet_payload(packet: &MqttPacket) -> &[u8] {
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_publish_encoding_steps(packet: &PublishPacket, context: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+pub(crate) fn write_publish_encoding_steps5(packet: &PublishPacket, context: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
 
     let resolution = &context.outbound_alias_resolution;
 
-    let (total_remaining_length, publish_property_length) = compute_publish_packet_length_properties(packet, resolution)?;
+    let (total_remaining_length, publish_property_length) = compute_publish_packet_length_properties5(packet, resolution)?;
 
     encode_integral_expression!(steps, Uint8, compute_publish_fixed_header_first_byte(packet));
     encode_integral_expression!(steps, Vli, total_remaining_length);
@@ -165,6 +165,52 @@ pub(crate) fn write_publish_encoding_steps(packet: &PublishPacket, context: &Enc
 
     encode_optional_string_property!(steps, get_publish_packet_content_type, PROPERTY_KEY_CONTENT_TYPE, &packet.content_type);
     encode_user_properties!(steps, get_publish_packet_user_property, packet.user_properties);
+
+    if packet.payload.is_some() {
+        encode_raw_bytes!(steps, get_publish_packet_payload);
+    }
+
+    Ok(())
+}
+
+fn compute_publish_packet_length_properties311(packet: &PublishPacket) -> GneissResult<u32> {
+    /*
+     * Remaining Length:
+     * Variable Header
+     *  - Topic Name
+     *  - (if not QoS 0) Packet Identifier
+     * Payload
+     */
+
+    let mut total_remaining_length = 0;
+
+    /* Topic name */
+    total_remaining_length += 2;
+    total_remaining_length += packet.topic.len();
+
+    /* Optional (qos1+) packet id */
+    if packet.qos != QualityOfService::AtMostOnce {
+        total_remaining_length += 2;
+    }
+
+    if let Some(payload) = &packet.payload {
+        total_remaining_length += payload.len();
+    }
+
+    Ok(total_remaining_length as u32)
+}
+
+pub(crate) fn write_publish_encoding_steps311(packet: &PublishPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let total_remaining_length = compute_publish_packet_length_properties311(packet)?;
+
+    encode_integral_expression!(steps, Uint8, compute_publish_fixed_header_first_byte(packet));
+    encode_integral_expression!(steps, Vli, total_remaining_length);
+
+    encode_length_prefixed_string!(steps, get_publish_packet_topic, packet.topic);
+
+    if packet.qos != QualityOfService::AtMostOnce {
+        encode_integral_expression!(steps, Uint16, packet.packet_id);
+    }
 
     if packet.payload.is_some() {
         encode_raw_bytes!(steps, get_publish_packet_payload);

@@ -17,7 +17,7 @@ use std::fmt;
 
 #[rustfmt::skip]
 #[cfg(test)]
-fn compute_connack_packet_length_properties(packet: &ConnackPacket) -> GneissResult<(u32, u32)> {
+fn compute_connack_packet_length_properties5(packet: &ConnackPacket) -> GneissResult<(u32, u32)> {
 
     let mut connack_property_section_length = compute_user_properties_length(&packet.user_properties);
 
@@ -89,8 +89,8 @@ fn get_connack_packet_user_property(packet: &MqttPacket, index: usize) -> &UserP
 
 #[rustfmt::skip]
 #[cfg(test)]
-pub(crate) fn write_connack_encoding_steps(packet: &ConnackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    let (total_remaining_length, connack_property_length) = compute_connack_packet_length_properties(packet)?;
+pub(crate) fn write_connack_encoding_steps5(packet: &ConnackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let (total_remaining_length, connack_property_length) = compute_connack_packet_length_properties5(packet)?;
 
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_CONNACK << 4);
     encode_integral_expression!(steps, Vli, total_remaining_length);
@@ -128,7 +128,23 @@ pub(crate) fn write_connack_encoding_steps(packet: &ConnackPacket, _: &EncodingC
 }
 
 #[cfg(not(test))]
-pub(crate) fn write_connack_encoding_steps(_: &ConnackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+pub(crate) fn write_connack_encoding_steps5(_: &ConnackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    Err(GneissError::new_unimplemented("Test-only functionality"))
+}
+
+#[rustfmt::skip]
+#[cfg(test)]
+pub(crate) fn write_connack_encoding_steps311(packet: &ConnackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    encode_integral_expression!(steps, Uint8, PACKET_TYPE_CONNACK << 4);
+    encode_integral_expression!(steps, Uint8, 2); // remaining length
+    encode_integral_expression!(steps, Uint8, if packet.session_present { 1 } else { 0 });
+    encode_enum_with_function!(steps, Uint8, u8, packet.reason_code, convert_connect_reason_code_to_311_encoding);
+
+    Ok(())
+}
+
+#[cfg(not(test))]
+pub(crate) fn write_connack_encoding_steps311(_: &ConnackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     Err(GneissError::new_unimplemented("Test-only functionality"))
 }
 

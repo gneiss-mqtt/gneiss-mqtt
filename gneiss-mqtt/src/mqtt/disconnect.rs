@@ -55,7 +55,7 @@ fn get_disconnect_packet_user_property(packet: &MqttPacket, index: usize) -> &Us
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_disconnect_encoding_steps(packet: &DisconnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+pub(crate) fn write_disconnect_encoding_steps5(packet: &DisconnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     let (total_remaining_length, disconnect_property_length) = compute_disconnect_packet_length_properties(packet)?;
 
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_DISCONNECT << 4);
@@ -79,6 +79,13 @@ pub(crate) fn write_disconnect_encoding_steps(packet: &DisconnectPacket, _: &Enc
     encode_optional_string_property!(steps, get_disconnect_packet_reason_string, PROPERTY_KEY_REASON_STRING, packet.reason_string);
     encode_optional_string_property!(steps, get_disconnect_packet_server_reference, PROPERTY_KEY_SERVER_REFERENCE, packet.server_reference);
     encode_user_properties!(steps, get_disconnect_packet_user_property, packet.user_properties);
+
+    Ok(())
+}
+
+pub(crate) fn write_disconnect_encoding_steps311(packet: &DisconnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    encode_integral_expression!(steps, Uint8, PACKET_TYPE_DISCONNECT << 4);
+    encode_integral_expression!(steps, Uint8, 0);
 
     Ok(())
 }

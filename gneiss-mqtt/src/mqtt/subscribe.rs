@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 use std::fmt;
 
 #[rustfmt::skip]
-fn compute_subscribe_packet_length_properties(packet: &SubscribePacket) -> GneissResult<(u32, u32)> {
+fn compute_subscribe_packet_length_properties5(packet: &SubscribePacket) -> GneissResult<(u32, u32)> {
     let mut subscribe_property_section_length = compute_user_properties_length(&packet.user_properties);
     add_optional_u32_property_length!(subscribe_property_section_length, packet.subscription_identifier);
 
@@ -49,7 +49,7 @@ fn get_subscribe_packet_topic_filter(packet: &MqttPacket, index: usize) -> &str 
     panic!("Internal encoding error: invalid subscribe topic filter state");
 }
 
-fn compute_subscription_options_byte(subscription: &Subscription) -> u8 {
+fn compute_subscription_options_byte5(subscription: &Subscription) -> u8 {
     let mut options_byte = subscription.qos as u8;
 
     if subscription.no_local {
@@ -66,8 +66,8 @@ fn compute_subscription_options_byte(subscription: &Subscription) -> u8 {
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_subscribe_encoding_steps(packet: &SubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    let (total_remaining_length, subscribe_property_length) = compute_subscribe_packet_length_properties(packet)?;
+pub(crate) fn write_subscribe_encoding_steps5(packet: &SubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let (total_remaining_length, subscribe_property_length) = compute_subscribe_packet_length_properties5(packet)?;
 
     encode_integral_expression!(steps, Uint8, SUBSCRIBE_FIRST_BYTE);
     encode_integral_expression!(steps, Vli, total_remaining_length);
@@ -80,7 +80,35 @@ pub(crate) fn write_subscribe_encoding_steps(packet: &SubscribePacket, _: &Encod
     let subscriptions = &packet.subscriptions;
     for (i, subscription) in subscriptions.iter().enumerate() {
         encode_indexed_string!(steps, get_subscribe_packet_topic_filter, subscription.topic_filter, i);
-        encode_integral_expression!(steps, Uint8, compute_subscription_options_byte(subscription));
+        encode_integral_expression!(steps, Uint8, compute_subscription_options_byte5(subscription));
+    }
+
+    Ok(())
+}
+
+fn compute_subscribe_packet_length_properties311(packet: &SubscribePacket) -> GneissResult<u32> {
+    let mut total_remaining_length : usize = 2;
+
+    total_remaining_length += packet.subscriptions.len() * 3;
+    for subscription in &packet.subscriptions {
+        total_remaining_length += subscription.topic_filter.len();
+    }
+
+    Ok(total_remaining_length as u32)
+}
+
+pub(crate) fn write_subscribe_encoding_steps311(packet: &SubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let total_remaining_length = compute_subscribe_packet_length_properties311(packet)?;
+
+    encode_integral_expression!(steps, Uint8, SUBSCRIBE_FIRST_BYTE);
+    encode_integral_expression!(steps, Vli, total_remaining_length);
+
+    encode_integral_expression!(steps, Uint16, packet.packet_id);
+
+    let subscriptions = &packet.subscriptions;
+    for (i, subscription) in subscriptions.iter().enumerate() {
+        encode_indexed_string!(steps, get_subscribe_packet_topic_filter, subscription.topic_filter, i);
+        encode_integral_expression!(steps, Uint8, subscription.qos as u8);
     }
 
     Ok(())

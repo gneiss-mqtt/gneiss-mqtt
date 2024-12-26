@@ -24,13 +24,14 @@ use crate::validate::testing::verify_validation_failure;
 
 const CONNACK_TIMEOUT_MILLIS: u64 = 10000;
 
-fn build_standard_test_config() -> ProtocolStateConfig {
+fn build_standard_test_config(protocol_mode: ProtocolMode) -> ProtocolStateConfig {
     ProtocolStateConfig {
         connect_options : ConnectOptions::builder().with_client_id("DefaultTesting").with_keep_alive_interval_seconds(None).build(),
         base_timestamp: Instant::now(),
         offline_queue_policy: OfflineQueuePolicy::PreserveAll,
         ping_timeout: Duration::from_millis(30000),
         outbound_alias_resolver: None,
+        protocol_mode,
     }
 }
 
@@ -389,11 +390,10 @@ struct ProtocolStateTestFixture {
 
     pub broker_packet_handlers: HashMap<PacketType, PacketHandler>,
 
-    test_context: BrokerTestContext
+    test_context: BrokerTestContext,
 }
 
 impl ProtocolStateTestFixture {
-
 
     pub(crate) fn new(config : ProtocolStateConfig) -> Self {
         Self {
@@ -405,7 +405,7 @@ impl ProtocolStateTestFixture {
             to_broker_packet_stream : VecDeque::new(),
             to_client_packet_stream : VecDeque::new(),
             broker_packet_handlers : create_default_packet_handlers(),
-            test_context: BrokerTestContext::default()
+            test_context: BrokerTestContext::default(),
         }
     }
 
@@ -423,7 +423,8 @@ impl ProtocolStateTestFixture {
                     outbound_alias_resolution: OutboundAliasResolution {
                         skip_topic: false,
                         alias: None,
-                    }
+                    },
+                    protocol_version: self.client_state.protocol_version,
                 };
 
                 self.broker_encoder.reset(response_packet, &encoding_context)?;

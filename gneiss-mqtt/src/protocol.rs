@@ -201,6 +201,8 @@ pub(crate) struct ProtocolStateConfig {
     pub ping_timeout: Duration,
 
     pub outbound_alias_resolver: Option<Box<dyn OutboundAliasResolver + Send>>,
+
+    pub protocol_mode: ProtocolMode,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -363,6 +365,9 @@ pub(crate) struct ProtocolState {
     // Topic aliasing support
     pub(crate) outbound_alias_resolver: RefCell<Box<dyn OutboundAliasResolver>>,
     pub(crate) inbound_alias_resolver: InboundAliasResolver
+
+    // Current MQTT version in use
+    pub protocol_version: ProtocolVersion,
 }
 
 impl Display for ProtocolState {
@@ -1267,7 +1272,8 @@ impl ProtocolState {
                 }
 
                 let encode_context = EncodingContext {
-                    outbound_alias_resolution
+                    outbound_alias_resolution,
+                    protocol_version: self.protocol_version,
                 };
 
                 debug!("[{} ms] service_queue - operation {} submitted to encoder for setup", self.elapsed_time_ms, current_operation_id);
@@ -2120,13 +2126,14 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
 
-    fn build_protocol_state_config_for_settings_test(connect_options: ConnectOptions) -> ProtocolStateConfig {
+    fn build_protocol_state_config_for_settings_test(protocol_mode: ProtocolMode, connect_options: ConnectOptions) -> ProtocolStateConfig {
         ProtocolStateConfig {
             connect_options,
             base_timestamp: Instant::now(),
             offline_queue_policy: OfflineQueuePolicy::PreserveAll,
             ping_timeout: Duration::from_millis(30000),
             outbound_alias_resolver: None,
+            protocol_mode,
         }
     }
 
@@ -2390,13 +2397,14 @@ mod tests {
         );
     }
 
-    fn build_protocol_state_for_acquire_packet_id_test() -> ProtocolState {
+    fn build_protocol_state_for_acquire_packet_id_test(protocol_mode: ProtocolMode) -> ProtocolState {
         let config = ProtocolStateConfig {
             connect_options: ConnectOptions::builder().build(),
             base_timestamp: Instant::now(),
             offline_queue_policy: OfflineQueuePolicy::PreserveNothing,
             ping_timeout: Duration::from_millis(0),
             outbound_alias_resolver: None,
+            protocol_mode,
         };
 
         ProtocolState::new(config)

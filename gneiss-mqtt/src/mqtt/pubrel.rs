@@ -20,7 +20,8 @@ define_ack_packet_reason_string_accessor!(get_pubrel_packet_reason_string, Pubre
 define_ack_packet_user_property_accessor!(get_pubrel_packet_user_property, Pubrel);
 
 #[rustfmt::skip]
-define_ack_packet_encoding_impl!(write_pubrel_encoding_steps, PubrelPacket, PubrelReasonCode, PUBREL_FIRST_BYTE, compute_pubrel_packet_length_properties, get_pubrel_packet_reason_string, get_pubrel_packet_user_property);
+define_ack_packet_encoding_impl5!(write_pubrel_encoding_steps5, PubrelPacket, PubrelReasonCode, PUBREL_FIRST_BYTE, compute_pubrel_packet_length_properties, get_pubrel_packet_reason_string, get_pubrel_packet_user_property);
+define_ack_packet_encoding_impl311!(write_pubrel_encoding_steps311, PubrelPacket, PUBREL_FIRST_BYTE);
 
 define_ack_packet_decode_properties_function!(decode_pubrel_properties, PubrelPacket, "Pubrel");
 define_ack_packet_decode_function!(decode_pubrel_packet, Pubrel, PubrelPacket, "Pubrel", PUBREL_FIRST_BYTE, PubrelReasonCode, decode_pubrel_properties);

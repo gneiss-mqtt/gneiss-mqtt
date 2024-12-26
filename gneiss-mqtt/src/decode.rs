@@ -588,7 +588,7 @@ pub(crate) mod testing {
     use crate::encode::*;
     use assert_matches::assert_matches;
 
-    pub(crate) fn do_single_encode_decode_test(packet : &MqttPacket, encode_size : usize, decode_size : usize, encode_repetitions : u32) -> bool {
+    pub(crate) fn do_single_encode_decode_test5(packet : &MqttPacket, encode_size : usize, decode_size : usize, encode_repetitions : u32) -> bool {
 
         let mut encoder = Encoder::new();
 
@@ -601,7 +601,8 @@ pub(crate) mod testing {
         /* encode 5 copies of the packet */
         for _ in 0..encode_repetitions {
             let mut encoding_context = EncodingContext {
-                ..Default::default()
+                outbound_alias_resolution: OutboundAliasResolution::default(),
+                protocol_version: ProtocolVersion::Mqtt5,
             };
 
             if let MqttPacket::Publish(publish) = &packet {
@@ -666,25 +667,28 @@ pub(crate) mod testing {
         true
     }
 
-    pub(crate) fn do_round_trip_encode_decode_test(packet : &MqttPacket) -> bool {
+    pub(crate) fn do_round_trip_encode_decode_test5(packet : &MqttPacket) -> bool {
         let encode_buffer_sizes : Vec<usize> = vec!(4, 5, 7, 11, 17, 31, 47, 71, 131);
         let decode_fragment_sizes : Vec<usize> = vec!(1, 2, 3, 5, 7, 11, 17, 31, 47, 71, 131, 1023);
 
         for encode_size in encode_buffer_sizes.iter() {
             for decode_size in decode_fragment_sizes.iter() {
-                assert!(do_single_encode_decode_test(packet, *encode_size, *decode_size, 5));
+                assert!(do_single_encode_decode_test5(packet, *encode_size, *decode_size, 5));
             }
         }
 
         true
     }
 
-    pub(crate) fn encode_packet_for_test(packet: &MqttPacket) -> Vec<u8> {
+    pub(crate) fn encode_packet_for_test5(packet: &MqttPacket) -> Vec<u8> {
         let mut encoder = Encoder::new();
 
-        let mut encoded_buffer = Vec::with_capacity( 128 * 1024);
+        let mut encoded_buffer = Vec::with_capacity(128 * 1024);
 
-        let encoding_context = EncodingContext { ..Default::default() };
+        let encoding_context = EncodingContext {
+            outbound_alias_resolution : OutboundAliasResolution::default(),
+            protocol_version : ProtocolVersion::Mqtt5,
+        };
 
         assert!(encoder.reset(packet, &encoding_context).is_ok());
 
@@ -700,7 +704,7 @@ pub(crate) mod testing {
      * with respect to decode failures like reserved bits, headers, duplicate properties, etc...
      */
     pub(crate) fn do_mutated_decode_failure_test<F>(packet: &MqttPacket, mutator: F ) where F : Fn(&[u8]) -> Vec<u8> {
-        let good_encoded_bytes = encode_packet_for_test(packet);
+        let good_encoded_bytes = encode_packet_for_test5(packet);
 
         let mut decoder = Decoder::new();
         decoder.reset_for_new_connection();
@@ -738,7 +742,7 @@ pub(crate) mod testing {
     }
 
     pub(crate) fn do_inbound_size_decode_failure_test(packet: &MqttPacket) {
-        let encoded_bytes = encode_packet_for_test(packet);
+        let encoded_bytes = encode_packet_for_test5(packet);
 
         let mut decoder = Decoder::new();
         decoder.reset_for_new_connection();

@@ -58,7 +58,7 @@ fn get_auth_packet_user_property(packet: &MqttPacket, index: usize) -> &UserProp
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_auth_encoding_steps(packet: &AuthPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+pub(crate) fn write_auth_encoding_steps5(packet: &AuthPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     let (total_remaining_length, auth_property_length) = compute_auth_packet_length_properties(packet)?;
 
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_AUTH << 4);
@@ -79,6 +79,9 @@ pub(crate) fn write_auth_encoding_steps(packet: &AuthPacket, _: &EncodingContext
     Ok(())
 }
 
+pub(crate) fn write_auth_encoding_steps311(packet: &AuthPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    Err(GneissError::new_encoding_failure("Auth packets not allowed in MQTT 311"))
+}
 
 fn decode_auth_properties(property_bytes: &[u8], packet : &mut AuthPacket) -> GneissResult<()> {
     let mut mutable_property_bytes = property_bytes;

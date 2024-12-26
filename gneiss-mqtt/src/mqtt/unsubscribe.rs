@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 use std::fmt;
 
 #[rustfmt::skip]
-fn compute_unsubscribe_packet_length_properties(packet: &UnsubscribePacket) -> GneissResult<(u32, u32)> {
+fn compute_unsubscribe_packet_length_properties5(packet: &UnsubscribePacket) -> GneissResult<(u32, u32)> {
     let unsubscribe_property_section_length = compute_user_properties_length(&packet.user_properties);
 
     let mut total_remaining_length : usize = 2 + compute_variable_length_integer_encode_size(unsubscribe_property_section_length)?;
@@ -49,8 +49,8 @@ fn get_unsubscribe_packet_topic_filter(packet: &MqttPacket, index: usize) -> &st
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_unsubscribe_encoding_steps(packet: &UnsubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    let (total_remaining_length, unsubscribe_property_length) = compute_unsubscribe_packet_length_properties(packet)?;
+pub(crate) fn write_unsubscribe_encoding_steps5(packet: &UnsubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let (total_remaining_length, unsubscribe_property_length) = compute_unsubscribe_packet_length_properties5(packet)?;
 
     encode_integral_expression!(steps, Uint8, UNSUBSCRIBE_FIRST_BYTE);
     encode_integral_expression!(steps, Vli, total_remaining_length);
@@ -58,6 +58,33 @@ pub(crate) fn write_unsubscribe_encoding_steps(packet: &UnsubscribePacket, _: &E
     encode_integral_expression!(steps, Uint16, packet.packet_id);
     encode_integral_expression!(steps, Vli, unsubscribe_property_length);
     encode_user_properties!(steps, get_unsubscribe_packet_user_property, packet.user_properties);
+
+    let topic_filters = &packet.topic_filters;
+    for (i, topic_filter) in topic_filters.iter().enumerate() {
+        encode_indexed_string!(steps, get_unsubscribe_packet_topic_filter, topic_filter, i);
+    }
+
+    Ok(())
+}
+
+fn compute_unsubscribe_packet_length_properties311(packet: &UnsubscribePacket) -> GneissResult<(u32, u32)> {
+    let mut total_remaining_length : usize = 2;
+    total_remaining_length += packet.topic_filters.len() * 2;
+
+    for filter in &packet.topic_filters {
+        total_remaining_length += filter.len();
+    }
+
+    Ok(total_remaining_length as u32)
+}
+
+pub(crate) fn write_unsubscribe_encoding_steps311(packet: &UnsubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let total_remaining_length = compute_unsubscribe_packet_length_properties311(packet)?;
+
+    encode_integral_expression!(steps, Uint8, UNSUBSCRIBE_FIRST_BYTE);
+    encode_integral_expression!(steps, Vli, total_remaining_length);
+
+    encode_integral_expression!(steps, Uint16, packet.packet_id);
 
     let topic_filters = &packet.topic_filters;
     for (i, topic_filter) in topic_filters.iter().enumerate() {

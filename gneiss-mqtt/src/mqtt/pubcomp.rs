@@ -20,7 +20,8 @@ define_ack_packet_reason_string_accessor!(get_pubcomp_packet_reason_string, Pubc
 define_ack_packet_user_property_accessor!(get_pubcomp_packet_user_property, Pubcomp);
 
 #[rustfmt::skip]
-define_ack_packet_encoding_impl!(write_pubcomp_encoding_steps, PubcompPacket, PubcompReasonCode, PUBCOMP_FIRST_BYTE, compute_pubcomp_packet_length_properties, get_pubcomp_packet_reason_string, get_pubcomp_packet_user_property);
+define_ack_packet_encoding_impl5!(write_pubcomp_encoding_steps5, PubcompPacket, PubcompReasonCode, PUBCOMP_FIRST_BYTE, compute_pubcomp_packet_length_properties, get_pubcomp_packet_reason_string, get_pubcomp_packet_user_property);
+define_ack_packet_encoding_impl311!(write_pubcomp_encoding_steps311, PubcompPacket, PUBCOMP_FIRST_BYTE);
 
 define_ack_packet_decode_properties_function!(decode_pubcomp_properties, PubcompPacket, "Pubcomp");
 define_ack_packet_decode_function!(decode_pubcomp_packet, Pubcomp, PubcompPacket, "Pubcomp", PUBCOMP_FIRST_BYTE, PubcompReasonCode, decode_pubcomp_properties);

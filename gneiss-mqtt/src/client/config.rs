@@ -856,6 +856,21 @@ impl Default for ReconnectOptions {
     }
 }
 
+/// Controls how the client selects what MQTT protocol to use
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum ProtocolMode {
+
+    /// Use MQTT 5 as the client protocol
+    #[default]
+    Mqtt5,
+
+    /// Use MQTT 311 as the client protocol
+    Mqtt311,
+
+    // Maybe some day we'll add an adaptive mode, Mqtt5Downgradable or the like
+}
+
 /// A structure that holds client-level behavioral configuration
 #[derive(Clone)]
 pub struct MqttClientOptions {
@@ -867,6 +882,8 @@ pub struct MqttClientOptions {
     pub(crate) outbound_alias_resolver_factory: Option<OutboundAliasResolverFactoryFn>,
 
     pub(crate) reconnect_options: ReconnectOptions,
+
+    pub(crate) protocol_mode: ProtocolMode,
 }
 
 impl MqttClientOptions {
@@ -975,6 +992,14 @@ impl MqttClientOptionsBuilder {
     /// not specified.
     pub fn with_reconnect_stability_reset_period(&mut self, reconnect_stability_reset_period: Duration) -> &mut Self {
         self.options.reconnect_options.reconnect_stability_reset_period = reconnect_stability_reset_period;
+        self
+    }
+
+    /// Configures how the client chooses an MQTT protocol version to communicate with.
+    ///
+    /// Defaults to MQTT5
+    pub fn with_protocol_mode(&mut self, protocol_mode: ProtocolMode) -> &mut Self {
+        self.options.protocol_mode = protocol_mode;
         self
     }
 

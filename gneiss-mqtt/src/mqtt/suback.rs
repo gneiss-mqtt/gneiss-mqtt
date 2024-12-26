@@ -16,7 +16,7 @@ use std::fmt;
 
 #[cfg(test)]
 #[rustfmt::skip]
-fn compute_suback_packet_length_properties(packet: &SubackPacket) -> GneissResult<(u32, u32)> {
+fn compute_suback_packet_length_properties5(packet: &SubackPacket) -> GneissResult<(u32, u32)> {
     let mut suback_property_section_length = compute_user_properties_length(&packet.user_properties);
     add_optional_string_property_length!(suback_property_section_length, packet.reason_string);
 
@@ -46,8 +46,8 @@ fn get_suback_packet_user_property(packet: &MqttPacket, index: usize) -> &UserPr
 
 #[rustfmt::skip]
 #[cfg(test)]
-pub(crate) fn write_suback_encoding_steps(packet: &SubackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    let (total_remaining_length, suback_property_length) = compute_suback_packet_length_properties(packet)?;
+pub(crate) fn write_suback_encoding_steps5(packet: &SubackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let (total_remaining_length, suback_property_length) = compute_suback_packet_length_properties5(packet)?;
 
     encode_integral_expression!(steps, Uint8, SUBACK_FIRST_BYTE);
     encode_integral_expression!(steps, Vli, total_remaining_length);
@@ -67,7 +67,38 @@ pub(crate) fn write_suback_encoding_steps(packet: &SubackPacket, _: &EncodingCon
 }
 
 #[cfg(not(test))]
-pub(crate) fn write_suback_encoding_steps(_: &SubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+pub(crate) fn write_suback_encoding_steps5(_: &SubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    Err(GneissError::new_unimplemented("Test-only functionality"))
+}
+
+#[cfg(test)]
+#[rustfmt::skip]
+fn compute_suback_packet_length_properties311(packet: &SubackPacket) -> GneissResult<(u32, u32)> {
+    let mut total_remaining_length : usize = 2;
+    total_remaining_length += packet.reason_codes.len();
+
+    Ok(total_remaining_length as u32)
+}
+
+#[cfg(test)]
+pub(crate) fn write_suback_encoding_steps311(packet: &SubackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let total_remaining_length = compute_suback_packet_length_properties311(packet)?;
+
+    encode_integral_expression!(steps, Uint8, SUBACK_FIRST_BYTE);
+    encode_integral_expression!(steps, Vli, total_remaining_length);
+
+    encode_integral_expression!(steps, Uint16, packet.packet_id);
+
+    let reason_codes = &packet.reason_codes;
+    for reason_code in reason_codes {
+        encode_enum_with_function!(steps, Uint8, u8, *reason_code, convert_suback_reason_code_to_311_encoding);
+    }
+
+    Ok(())
+}
+
+#[cfg(not(test))]
+pub(crate) fn write_suback_encoding_steps311(_: &SubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     Err(GneissError::new_unimplemented("Test-only functionality"))
 }
 

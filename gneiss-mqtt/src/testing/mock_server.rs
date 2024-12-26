@@ -28,16 +28,18 @@ struct MockBrokerConnection {
     encoder: Encoder,
     packet_handlers: PacketHandlerSet,
     stream: TcpStream,
+    protocol_version: ProtocolVersion,
     context: Arc<Mutex<BrokerTestContext>>
 }
 
 impl MockBrokerConnection {
-    pub fn new(stream: TcpStream, packet_handlers: PacketHandlerSet, context: Arc<Mutex<BrokerTestContext>>) -> Self {
+    pub fn new(stream: TcpStream, protocol_version: ProtocolVersion, packet_handlers: PacketHandlerSet, context: Arc<Mutex<BrokerTestContext>>) -> Self {
         MockBrokerConnection {
             decoder: Decoder::new(),
             encoder: Encoder::new(),
             packet_handlers,
             stream,
+            protocol_version,
             context
         }
     }
@@ -128,7 +130,8 @@ impl MockBrokerConnection {
                     outbound_alias_resolution: OutboundAliasResolution {
                         skip_topic: false,
                         alias: None,
-                    }
+                    },
+                    protocol_version: self.protocol_version,
                 };
 
                 self.encoder.reset(response_packet, &encoding_context)?;

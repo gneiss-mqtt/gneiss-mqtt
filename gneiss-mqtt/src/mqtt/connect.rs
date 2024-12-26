@@ -116,8 +116,13 @@ fn get_connect_packet_will_user_property(packet: &MqttPacket, index: usize) -> &
 }
 
 static MQTT5_CONNECT_PROTOCOL_BYTES: [u8; 7] = [0, 4, 77, 81, 84, 84, 5];
-fn get_connect_protocol_bytes(_: &MqttPacket) -> &'static [u8] {
+fn get_connect_protocol_bytes5(_: &MqttPacket) -> &'static [u8] {
     &MQTT5_CONNECT_PROTOCOL_BYTES
+}
+
+static MQTT311_CONNECT_PROTOCOL_BYTES: [u8; 7] = [0, 4, 77, 81, 84, 84, 4];
+fn get_connect_protocol_bytes311(_: &MqttPacket) -> &'static [u8] {
+    &MQTT311_CONNECT_PROTOCOL_BYTES
 }
 
 fn compute_connect_flags(packet: &ConnectPacket) -> u8 {
@@ -146,7 +151,7 @@ fn compute_connect_flags(packet: &ConnectPacket) -> u8 {
 }
 
 #[rustfmt::skip]
-fn compute_connect_packet_length_properties(packet: &ConnectPacket) -> GneissResult<(u32, u32, u32)> {
+fn compute_connect_packet_length_properties5(packet: &ConnectPacket) -> GneissResult<(u32, u32, u32)> {
     let mut connect_property_section_length = compute_user_properties_length(&packet.user_properties);
 
     add_optional_u32_property_length!(connect_property_section_length, packet.session_expiry_interval_seconds);
@@ -206,12 +211,12 @@ fn compute_connect_packet_length_properties(packet: &ConnectPacket) -> GneissRes
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_connect_encoding_steps(packet: &ConnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    let (total_remaining_length, connect_property_length, will_property_length) = compute_connect_packet_length_properties(packet)?;
+pub(crate) fn write_connect_encoding_steps5(packet: &ConnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let (total_remaining_length, connect_property_length, will_property_length) = compute_connect_packet_length_properties5(packet)?;
 
     encode_integral_expression!(steps, Uint8, 1u8 << 4);
     encode_integral_expression!(steps, Vli, total_remaining_length);
-    encode_raw_bytes!(steps, get_connect_protocol_bytes);
+    encode_raw_bytes!(steps, get_connect_protocol_bytes5);
     encode_integral_expression!(steps, Uint8, compute_connect_flags(packet));
     encode_integral_expression!(steps, Uint16, packet.keep_alive_interval_seconds);
 
@@ -238,6 +243,66 @@ pub(crate) fn write_connect_encoding_steps(packet: &ConnectPacket, _: &EncodingC
         encode_optional_bytes_property!(steps, get_connect_packet_will_correlation_data, PROPERTY_KEY_CORRELATION_DATA, will.correlation_data);
         encode_user_properties!(steps, get_connect_packet_will_user_property, will.user_properties);
 
+        encode_length_prefixed_string!(steps, get_connect_packet_will_topic, will.topic);
+        encode_length_prefixed_optional_bytes!(steps, get_connect_packet_will_payload, will.payload);
+    }
+
+    if packet.username.is_some() {
+        encode_length_prefixed_optional_string!(steps, get_connect_packet_username, packet.username);
+    }
+
+    if packet.password.is_some() {
+        encode_length_prefixed_optional_bytes!(steps, get_connect_packet_password, packet.password);
+    }
+
+    Ok(())
+}
+
+fn compute_connect_packet_length_properties311(packet: &ConnectPacket) -> GneissResult<u32> {
+
+    /* variable header length =
+     *    10 bytes (6 for mqtt string, 1 for protocol version, 1 for flags, 2 for keep alive)
+     *  + # bytes(variable_length_encoding(connect_property_section_length))
+     */
+    let variable_header_length = 10;
+
+    let mut payload_length : usize = 0;
+    add_optional_string_length!(payload_length, packet.client_id);
+
+    if let Some(will) = &packet.will {
+        payload_length += 2 + will.topic.len();
+        add_optional_bytes_length!(payload_length, will.payload);
+    }
+
+    if let Some(username) = &packet.username {
+        payload_length += 2 + username.len();
+    }
+
+    if let Some(password) = &packet.password {
+        payload_length += 2 + password.len();
+    }
+
+    let total_remaining_length : usize = payload_length + variable_header_length;
+
+    if total_remaining_length > MAXIMUM_VARIABLE_LENGTH_INTEGER {
+        return Err(GneissError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
+    }
+
+    Ok(total_remaining_length as u32)
+}
+
+pub(crate) fn write_connect_encoding_steps311(packet: &ConnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let total_remaining_length = compute_connect_packet_length_properties311(packet)?;
+
+    encode_integral_expression!(steps, Uint8, 1u8 << 4);
+    encode_integral_expression!(steps, Vli, total_remaining_length);
+    encode_raw_bytes!(steps, get_connect_protocol_bytes311);
+    encode_integral_expression!(steps, Uint8, compute_connect_flags(packet));
+    encode_integral_expression!(steps, Uint16, packet.keep_alive_interval_seconds);
+
+    encode_length_prefixed_optional_string!(steps, get_connect_packet_client_id, packet.client_id);
+
+    if let Some(will) = &packet.will {
         encode_length_prefixed_string!(steps, get_connect_packet_will_topic, will.topic);
         encode_length_prefixed_optional_bytes!(steps, get_connect_packet_will_payload, will.payload);
     }
