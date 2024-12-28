@@ -222,7 +222,7 @@ pub(crate) fn validate_subscribe_packet_outbound(packet: &SubscribePacket) -> Gn
 
 pub(crate) fn validate_subscribe_packet_outbound_internal(packet: &SubscribePacket, context: &OutboundValidationContext) -> GneissResult<()> {
 
-    let (total_remaining_length, _) = compute_subscribe_packet_length_properties(packet)?;
+    let (total_remaining_length, _) = compute_subscribe_packet_length_properties5(packet)?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
         error!("SubscribePacket Outbound Validation - packet length exceeds maximum packet size allowed to server");

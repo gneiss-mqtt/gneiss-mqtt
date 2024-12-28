@@ -349,7 +349,7 @@ pub(crate) fn validate_publish_packet_outbound(packet: &PublishPacket) -> Gneiss
 
 pub(crate) fn validate_publish_packet_outbound_internal(packet: &PublishPacket, context: &OutboundValidationContext) -> GneissResult<()> {
 
-    let (total_remaining_length, _) = compute_publish_packet_length_properties(packet, &context.outbound_alias_resolution.unwrap_or(OutboundAliasResolution{..Default::default() }))?;
+    let (total_remaining_length, _) = compute_publish_packet_length_properties5(packet, &context.outbound_alias_resolution.unwrap_or(OutboundAliasResolution{..Default::default() }))?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
         error!("PublishPacket Outbound Validation - packet length exceeds maximum packet size allowed to server");

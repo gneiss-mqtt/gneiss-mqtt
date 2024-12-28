@@ -349,13 +349,15 @@ macro_rules! encode_enum {
 
 pub(crate) use encode_enum;
 
+#[cfg(test)]
 macro_rules! encode_enum_with_function {
     ($target: ident, $enum_variant: ident, $int_type: ty, $value: expr, $conversion_function_name: ident) => {
         $target.push_back(EncodingStep::$enum_variant($conversion_function_name($value) as $int_type));
     };
 }
 
-pub(crate) use encode_enum;
+#[cfg(test)]
+pub(crate) use encode_enum_with_function;
 
 /*****************************************************/
 
@@ -441,7 +443,7 @@ macro_rules! define_ack_packet_encoding_impl5 {
     };
 }
 
-pub(crate) use define_ack_packet_encoding_impl;
+pub(crate) use define_ack_packet_encoding_impl5;
 
 macro_rules! define_ack_packet_encoding_impl311 {
     ($function_name: ident, $packet_type: ident, $first_byte: expr) => {
@@ -458,7 +460,7 @@ macro_rules! define_ack_packet_encoding_impl311 {
     };
 }
 
-pub(crate) use define_ack_packet_encoding_impl;
+pub(crate) use define_ack_packet_encoding_impl311;
 
 /*****************************************************/
 

@@ -9,6 +9,7 @@ Module containing a set of structured data types that model the MQTT5 specificat
 
 use std::fmt;
 use log::error;
+use crate::client::config::ProtocolMode;
 use crate::error::GneissError;
 
 pub(crate) mod auth;
@@ -28,7 +29,7 @@ pub(crate) mod unsuback;
 pub(crate) mod unsubscribe;
 pub(crate) mod utils;
 
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum ProtocolVersion {
     #[default]
     Mqtt5,

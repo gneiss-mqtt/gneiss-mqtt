@@ -83,7 +83,7 @@ pub(crate) fn write_disconnect_encoding_steps5(packet: &DisconnectPacket, _: &En
     Ok(())
 }
 
-pub(crate) fn write_disconnect_encoding_steps311(packet: &DisconnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+pub(crate) fn write_disconnect_encoding_steps311(_: &DisconnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_DISCONNECT << 4);
     encode_integral_expression!(steps, Uint8, 0);
 

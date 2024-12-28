@@ -927,6 +927,7 @@ impl MqttClientOptionsBuilder {
                 ping_timeout: Duration::from_secs(10),
                 outbound_alias_resolver_factory: None,
                 reconnect_options: ReconnectOptions::default(),
+                protocol_mode: ProtocolMode::Mqtt5,
             }
         }
     }

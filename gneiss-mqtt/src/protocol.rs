@@ -364,7 +364,7 @@ pub(crate) struct ProtocolState {
 
     // Topic aliasing support
     pub(crate) outbound_alias_resolver: RefCell<Box<dyn OutboundAliasResolver>>,
-    pub(crate) inbound_alias_resolver: InboundAliasResolver
+    pub(crate) inbound_alias_resolver: InboundAliasResolver,
 
     // Current MQTT version in use
     pub protocol_version: ProtocolVersion,
@@ -393,6 +393,7 @@ impl ProtocolState {
         let outbound_resolver = config.outbound_alias_resolver.take().unwrap_or((OutboundAliasResolverFactory::new_null_factory())());
         let inbound_resolver = InboundAliasResolver::new(config.connect_options.topic_alias_maximum.unwrap_or(0));
         let base_time = config.base_timestamp;
+        let protocol_mode = config.protocol_mode;
 
         ProtocolState {
             config,
@@ -421,7 +422,8 @@ impl ProtocolState {
             ping_timeout_timepoint: None,
             connack_timeout_timepoint: None,
             outbound_alias_resolver: RefCell::new(outbound_resolver),
-            inbound_alias_resolver: inbound_resolver
+            inbound_alias_resolver: inbound_resolver,
+            protocol_version: convert_protocol_mode_to_protocol_version(protocol_mode),
         }
     }
 

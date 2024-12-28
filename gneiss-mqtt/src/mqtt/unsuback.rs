@@ -66,6 +66,11 @@ pub(crate) fn write_unsuback_encoding_steps5(packet: &UnsubackPacket, _: &Encodi
     Ok(())
 }
 
+#[cfg(not(test))]
+pub(crate) fn write_unsuback_encoding_steps5(_: &UnsubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    Err(GneissError::new_unimplemented("Test-only functionality"))
+}
+
 #[cfg(test)]
 pub(crate) fn write_unsuback_encoding_steps311(packet: &UnsubackPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     encode_integral_expression!(steps, Uint8, UNSUBACK_FIRST_BYTE);

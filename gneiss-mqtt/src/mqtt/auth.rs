@@ -79,7 +79,7 @@ pub(crate) fn write_auth_encoding_steps5(packet: &AuthPacket, _: &EncodingContex
     Ok(())
 }
 
-pub(crate) fn write_auth_encoding_steps311(packet: &AuthPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+pub(crate) fn write_auth_encoding_steps311(_: &AuthPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     Err(GneissError::new_encoding_failure("Auth packets not allowed in MQTT 311"))
 }
 

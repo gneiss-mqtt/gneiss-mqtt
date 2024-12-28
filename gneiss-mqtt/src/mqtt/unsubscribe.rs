@@ -67,7 +67,7 @@ pub(crate) fn write_unsubscribe_encoding_steps5(packet: &UnsubscribePacket, _: &
     Ok(())
 }
 
-fn compute_unsubscribe_packet_length_properties311(packet: &UnsubscribePacket) -> GneissResult<(u32, u32)> {
+fn compute_unsubscribe_packet_length_properties311(packet: &UnsubscribePacket) -> GneissResult<u32> {
     let mut total_remaining_length : usize = 2;
     total_remaining_length += packet.topic_filters.len() * 2;
 
@@ -178,7 +178,7 @@ pub(crate) fn validate_unsubscribe_packet_outbound(packet: &UnsubscribePacket) -
 
 pub(crate) fn validate_unsubscribe_packet_outbound_internal(packet: &UnsubscribePacket, context: &OutboundValidationContext) -> GneissResult<()> {
 
-    let (total_remaining_length, _) = compute_unsubscribe_packet_length_properties(packet)?;
+    let (total_remaining_length, _) = compute_unsubscribe_packet_length_properties5(packet)?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
         error!("UnsubscribePacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
