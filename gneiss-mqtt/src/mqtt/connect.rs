@@ -42,7 +42,7 @@ fn get_connect_packet_user_property(packet: &MqttPacket, index: usize) -> &UserP
         }
     }
 
-    panic!("Internal encoding error: invalid user property state");
+    panic!("get_connect_packet_user_property - invalid user property state");
 }
 
 fn get_connect_packet_will_content_type(packet: &MqttPacket) -> &str {
@@ -54,7 +54,7 @@ fn get_connect_packet_will_content_type(packet: &MqttPacket) -> &str {
         }
     }
 
-    panic!("Encoder: will content type accessor invoked in an invalid state");
+    panic!("get_connect_packet_will_content_type - will content type accessor invoked in an invalid state");
 }
 
 fn get_connect_packet_will_response_topic(packet: &MqttPacket) -> &str {
@@ -66,7 +66,7 @@ fn get_connect_packet_will_response_topic(packet: &MqttPacket) -> &str {
         }
     }
 
-    panic!("Will response topic accessor invoked in an invalid state");
+    panic!("get_connect_packet_will_response_topic - will response topic accessor invoked in an invalid state");
 }
 
 fn get_connect_packet_will_correlation_data(packet: &MqttPacket) -> &[u8] {
@@ -78,7 +78,7 @@ fn get_connect_packet_will_correlation_data(packet: &MqttPacket) -> &[u8] {
         }
     }
 
-    panic!("Will correlation data accessor invoked in an invalid state");
+    panic!("get_connect_packet_will_correlation_data - will correlation data accessor invoked in an invalid state");
 }
 
 fn get_connect_packet_will_topic(packet: &MqttPacket) -> &str {
@@ -88,7 +88,7 @@ fn get_connect_packet_will_topic(packet: &MqttPacket) -> &str {
         }
     }
 
-    panic!("Will topic accessor invoked in an invalid state");
+    panic!("get_connect_packet_will_topic - will topic accessor invoked in an invalid state");
 }
 
 fn get_connect_packet_will_payload(packet: &MqttPacket) -> &[u8] {
@@ -100,7 +100,7 @@ fn get_connect_packet_will_payload(packet: &MqttPacket) -> &[u8] {
         }
     }
 
-    panic!("Will payload accessor invoked in an invalid state");
+    panic!("get_connect_packet_will_payload - will payload accessor invoked in an invalid state");
 }
 
 fn get_connect_packet_will_user_property(packet: &MqttPacket, index: usize) -> &UserProperty {
@@ -112,7 +112,7 @@ fn get_connect_packet_will_user_property(packet: &MqttPacket, index: usize) -> &
         }
     }
 
-    panic!("Internal encoding error: invalid user property state");
+    panic!("get_connect_packet_will_user_property - invalid user property state");
 }
 
 static MQTT5_CONNECT_PROTOCOL_BYTES: [u8; 7] = [0, 4, 77, 81, 84, 84, 5];
@@ -204,7 +204,7 @@ fn compute_connect_packet_length_properties5(packet: &ConnectPacket) -> GneissRe
     let total_remaining_length : usize = payload_length + variable_header_length;
 
     if total_remaining_length > MAXIMUM_VARIABLE_LENGTH_INTEGER {
-        return Err(GneissError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
+        return Err(GneissError::new_encoding_failure("compute_connect_packet_length_properties5 - vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
     }
 
     Ok((total_remaining_length as u32, connect_property_section_length as u32, will_property_length as u32))
@@ -285,7 +285,7 @@ fn compute_connect_packet_length_properties311(packet: &ConnectPacket) -> Gneiss
     let total_remaining_length : usize = payload_length + variable_header_length;
 
     if total_remaining_length > MAXIMUM_VARIABLE_LENGTH_INTEGER {
-        return Err(GneissError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
+        return Err(GneissError::new_encoding_failure("compute_connect_packet_length_properties311 - vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
     }
 
     Ok(total_remaining_length as u32)
@@ -337,8 +337,9 @@ fn decode_connect_properties(property_bytes: &[u8], packet : &mut ConnectPacket)
             PROPERTY_KEY_AUTHENTICATION_METHOD => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.authentication_method)?; }
             PROPERTY_KEY_AUTHENTICATION_DATA => { mutable_property_bytes = decode_optional_length_prefixed_bytes(mutable_property_bytes, &mut packet.authentication_data)?; }
             _ => {
-                error!("ConnectPacket Decode - Invalid property type ({})", property_key);
-                return Err(GneissError::new_decoding_failure("invalid property type for connect packet"));
+                let message = format!("decode_connect_properties - Invalid property type ({})", property_key);
+                error!(message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
     }
@@ -363,8 +364,9 @@ fn decode_will_properties(property_bytes: &[u8], will: &mut PublishPacket, conne
             PROPERTY_KEY_CORRELATION_DATA => { mutable_property_bytes = decode_optional_length_prefixed_bytes(mutable_property_bytes, &mut will.correlation_data)?; }
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut will.user_properties)?; }
             _ => {
-                error!("ConnectPacket Decode - Invalid will property type ({})", property_key);
-                return Err(GneissError::new_decoding_failure("invalid property type for connect packet will"));
+                let message = format!("decode_will_properties - invalid will property type ({})", property_key);
+                error!(message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
     }
@@ -376,10 +378,11 @@ fn decode_will_properties(property_bytes: &[u8], will: &mut PublishPacket, conne
 const CONNECT_HEADER_PROTOCOL_LENGTH : usize = 7;
 
 #[cfg(test)]
-pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+pub(crate) fn decode_connect_packet5(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if first_byte != (PACKET_TYPE_CONNECT << 4)  {
-        error!("ConnectPacket Decode - invalid first byte");
-        return Err(GneissError::new_decoding_failure("invalid first byte for connect packet"));
+        let message = "decode_connect_packet5 - invalid first byte";
+        error!(message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let mut box_packet = Box::new(MqttPacket::Connect(ConnectPacket { ..Default::default() }));
@@ -387,18 +390,20 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
     if let MqttPacket::Connect(packet) = box_packet.as_mut() {
         let mut mutable_body = packet_body;
         if mutable_body.len() < CONNECT_HEADER_PROTOCOL_LENGTH {
-            error!("ConnectPacket Decode - packet too short");
-            return Err(GneissError::new_decoding_failure("connect packet too short"));
+            let message = "decode_connect_packet5 - packet too short";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         let protocol_bytes = &mutable_body[..CONNECT_HEADER_PROTOCOL_LENGTH];
         mutable_body = &mutable_body[CONNECT_HEADER_PROTOCOL_LENGTH..];
 
         match protocol_bytes {
-            [0u8, 4u8, 77u8, 81u8, 84u8, 84u8, 5u8] => { }
+            MQTT5_CONNECT_PROTOCOL_BYTES => { }
             _ => {
-                error!("ConnectPacket Decode - invalid protocol");
-                return Err(GneissError::new_decoding_failure("invalid protocol field for connect packet"));
+                let message = "decode_connect_packet5 - invalid protocol";
+                error!(message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
 
@@ -407,8 +412,9 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
 
         // if the reserved bit is set, that's fatal
         if (connect_flags & 0x01) != 0 {
-            error!("ConnectPacket Decode - invalid flags");
-            return Err(GneissError::new_decoding_failure("invalid flags for connect packet"));
+            let message = "decode_connect_packet5 - connect flags reserved bit set";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         packet.clean_start = (connect_flags & CONNECT_PACKET_CLEAN_START_FLAG_MASK) != 0;
@@ -419,8 +425,9 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
         if !has_will {
             /* indirectly check bits of connect flags vs. spec */
             if will_retain || will_qos != QualityOfService::AtMostOnce {
-                error!("ConnectPacket Decode - no will but has will flags set");
-                return Err(GneissError::new_decoding_failure("invalid will flags for connect packet"));
+                let message = "decode_connect_packet5 - no will but has will flags set";
+                error!(message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
 
@@ -433,8 +440,9 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
         mutable_body = decode_vli_into_mutable(mutable_body, &mut connect_property_length)?;
 
         if mutable_body.len() < connect_property_length {
-            error!("ConnectPacket Decode - property length exceeds overall packet length");
-            return Err(GneissError::new_decoding_failure("mismatch between property length and overall packet length for connect packet"));
+            let message = "decode_connect_packet5 - property length exceeds overall packet length";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         let property_body = &mutable_body[..connect_property_length];
@@ -449,8 +457,9 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
             mutable_body = decode_vli_into_mutable(mutable_body, &mut will_property_length)?;
 
             if mutable_body.len() < will_property_length {
-                error!("ConnectPacket Decode - will property length exceeds overall packet length");
-                return Err(GneissError::new_decoding_failure("connect packet will property length exceeds overall packet length"));
+                let message = "decode_connect_packet5 - will property length exceeds overall packet length";
+                error!(message);
+                return Err(GneissError::new_decoding_failure(message));
             }
 
             let will_property_body = &mutable_body[..will_property_length];
@@ -479,45 +488,139 @@ pub(crate) fn decode_connect_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
         }
 
         if !mutable_body.is_empty() {
-            error!("ConnectPacket Decode - body length does not match expected overall packet length");
-            return Err(GneissError::new_decoding_failure("body length does not match overall packet length for connect packet"));
+            let message = "decode_connect_packet5 - body length does not match expected overall packet length";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         return Ok(box_packet);
     }
 
-    panic!("ConnectPacket Decode - Internal error");
+    panic!("decode_connect_packet5 - Internal error");
 }
 
 #[cfg(not(test))]
-pub(crate) fn decode_connect_packet(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
-    Err(GneissError::new_unimplemented("Test-only functionality"))
+pub(crate) fn decode_connect_packet5(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    Err(GneissError::new_unimplemented("decode_connect_packet5 - test-only functionality"))
+}
+
+#[cfg(test)]
+pub(crate) fn decode_connect_packet311(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    if first_byte != (PACKET_TYPE_CONNECT << 4)  {
+        let message = "decode_connect_packet311 - invalid first byte";
+        error!(message);
+        return Err(GneissError::new_decoding_failure(message));
+    }
+
+    let mut box_packet = Box::new(MqttPacket::Connect(ConnectPacket { ..Default::default() }));
+
+    if let MqttPacket::Connect(packet) = box_packet.as_mut() {
+        let mut mutable_body = packet_body;
+        if mutable_body.len() < CONNECT_HEADER_PROTOCOL_LENGTH {
+            let message = "decode_connect_packet311 - packet too short";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
+        }
+
+        let protocol_bytes = &mutable_body[..CONNECT_HEADER_PROTOCOL_LENGTH];
+        mutable_body = &mutable_body[CONNECT_HEADER_PROTOCOL_LENGTH..];
+
+        match protocol_bytes {
+            MQTT311_CONNECT_PROTOCOL_BYTES => { }
+            _ => {
+                let message = "decode_connect_packet311 - invalid protocol";
+                error!(message);
+                return Err(GneissError::new_decoding_failure(message));
+            }
+        }
+
+        let mut connect_flags : u8 = 0;
+        mutable_body = decode_u8(mutable_body, &mut connect_flags)?;
+
+        // if the reserved bit is set, that's fatal
+        if (connect_flags & 0x01) != 0 {
+            let message = "decode_connect_packet311 - connect flags reserved bit set";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
+        }
+
+        packet.clean_start = (connect_flags & CONNECT_PACKET_CLEAN_START_FLAG_MASK) != 0;
+        let has_will = (connect_flags & CONNECT_PACKET_HAS_WILL_FLAG_MASK) != 0;
+        let will_retain = (connect_flags & CONNECT_PACKET_WILL_RETAIN_FLAG_MASK) != 0;
+        let will_qos = QualityOfService::try_from((connect_flags >> CONNECT_PACKET_WILL_QOS_FLAG_SHIFT) & QOS_MASK)?;
+
+        if !has_will {
+            /* indirectly check bits of connect flags vs. spec */
+            if will_retain || will_qos != QualityOfService::AtMostOnce {
+                let message = "decode_connect_packet311 - no will but has will flags set";
+                error!(message);
+                return Err(GneissError::new_decoding_failure(message));
+            }
+        }
+
+        let has_username = (connect_flags & CONNECT_PACKET_HAS_USERNAME_FLAG_MASK) != 0;
+        let has_password = (connect_flags & CONNECT_PACKET_HAS_PASSWORD_FLAG_MASK) != 0;
+
+        mutable_body = decode_u16(mutable_body, &mut packet.keep_alive_interval_seconds)?;
+        mutable_body = decode_length_prefixed_optional_string(mutable_body, &mut packet.client_id)?;
+
+        if has_will {
+            mutable_body = decode_length_prefixed_string(mutable_body, &mut will.topic)?;
+            mutable_body = decode_length_prefixed_optional_bytes(mutable_body, &mut will.payload)?;
+
+            packet.will = Some(will);
+        }
+
+        if has_username {
+            mutable_body = decode_optional_length_prefixed_string(mutable_body, &mut packet.username)?;
+        }
+
+        if has_password {
+            mutable_body = decode_optional_length_prefixed_bytes(mutable_body, &mut packet.password)?;
+        }
+
+        if !mutable_body.is_empty() {
+            let message = "decode_connect_packet311 - body length does not match expected overall packet length";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
+        }
+
+        return Ok(box_packet);
+    }
+
+    panic!("decode_connect_packet311 - Internal error");
+}
+
+#[cfg(not(test))]
+pub(crate) fn decode_connect_packet311(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    Err(GneissError::new_unimplemented("decode_connect_packet311 - test-only functionality"))
 }
 
 pub(crate) fn validate_connect_packet_outbound(packet: &ConnectPacket) -> GneissResult<()> {
 
-    validate_optional_string_length(&packet.client_id, PacketType::Connect, "Connect", "client_id")?;
-    validate_optional_integer_non_zero!(receive_maximum, packet.receive_maximum, PacketType::Connect, "Connect", "receive_maximum");
-    validate_optional_integer_non_zero!(maximum_packet_size, packet.maximum_packet_size_bytes, PacketType::Connect, "Connect", "maximum_packet_size");
+    validate_optional_string_length(&packet.client_id, PacketType::Connect, "validate_connect_packet_outbound", "client_id")?;
+    validate_optional_integer_non_zero!(receive_maximum, packet.receive_maximum, PacketType::Connect, "validate_connect_packet_outbound", "receive_maximum");
+    validate_optional_integer_non_zero!(maximum_packet_size, packet.maximum_packet_size_bytes, PacketType::Connect, "validate_connect_packet_outbound", "maximum_packet_size");
 
     if packet.authentication_data.is_some() && packet.authentication_method.is_none() {
-        error!("ConnectPacket Validation - authentication data without authentication method");
-        return Err(GneissError::new_packet_validation(PacketType::Connect, "missing authentication method"));
+        let message = "validate_connect_packet_outbound - authentication data without authentication method";
+        error!(message);
+        return Err(GneissError::new_packet_validation(PacketType::Connect, message));
     }
 
-    validate_optional_string_length(&packet.authentication_method, PacketType::Connect, "Connect", "authentication_method")?;
-    validate_optional_binary_length(&packet.authentication_data, PacketType::Connect, "Connect", "authentication_data")?;
-    validate_optional_string_length(&packet.username, PacketType::Connect, "Connect", "username")?;
-    validate_optional_binary_length(&packet.password, PacketType::Connect, "Connect", "password")?;
-    validate_user_properties(&packet.user_properties, PacketType::Connect, "Connect")?;
+    validate_optional_string_length(&packet.authentication_method, PacketType::Connect, "validate_connect_packet_outbound", "authentication_method")?;
+    validate_optional_binary_length(&packet.authentication_data, PacketType::Connect, "validate_connect_packet_outbound", "authentication_data")?;
+    validate_optional_string_length(&packet.username, PacketType::Connect, "validate_connect_packet_outbound", "username")?;
+    validate_optional_binary_length(&packet.password, PacketType::Connect, "validate_connect_packet_outbound", "password")?;
+    validate_user_properties(&packet.user_properties, PacketType::Connect, "validate_connect_packet_outbound")?;
 
     if let Some(will) = &packet.will {
-        validate_optional_string_length(&will.content_type, PacketType::Connect, "Connect", "content_type")?;
-        validate_optional_string_length(&will.response_topic, PacketType::Connect, "Connect", "response_topic")?;
-        validate_optional_binary_length(&will.correlation_data, PacketType::Connect, "Connect", "correlation_data")?;
-        validate_user_properties(&will.user_properties, PacketType::Connect, "ConnectWill")?;
-        validate_string_length(will.topic.as_str(), PacketType::Connect, "ConnectWill", "topic")?;
-        validate_optional_binary_length(&will.payload, PacketType::Connect, "ConnectWill", "payload")?;
+        validate_optional_string_length(&will.content_type, PacketType::Connect, "(will)validate_connect_packet_outbound", "content_type")?;
+        validate_optional_string_length(&will.response_topic, PacketType::Connect, "(will)validate_connect_packet_outbound", "response_topic")?;
+        validate_optional_binary_length(&will.correlation_data, PacketType::Connect, "(will)validate_connect_packet_outbound", "correlation_data")?;
+        validate_user_properties(&will.user_properties, PacketType::Connect, "(will)validate_connect_packet_outbound")?;
+        validate_string_length(will.topic.as_str(), PacketType::Connect, "(will)validate_connect_packet_outbound", "topic")?;
+        validate_optional_binary_length(&will.payload, PacketType::Connect, "(will)validate_connect_packet_outbound", "payload")?;
     }
 
     Ok(())

@@ -118,8 +118,8 @@ enum DecoderDirective {
 
 pub(crate) struct DecodingContext<'a> {
     pub(crate) maximum_packet_size : u32,
-
-    pub(crate) decoded_packets: &'a mut VecDeque<Box<MqttPacket>>
+    pub(crate) protocol_version : ProtocolVersion,
+    pub(crate) decoded_packets : &'a mut VecDeque<Box<MqttPacket>>
 }
 
 pub(crate) struct Decoder {
@@ -132,30 +132,66 @@ pub(crate) struct Decoder {
     remaining_length : Option<usize>,
 }
 
-fn decode_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+fn decode_packet5(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     let packet_type = first_byte >> 4;
 
-    info!("Decoding a packet of type {}", packet_type_to_str(packet_type));
+    info!("Decoding an MQTT5 packet of type {}", packet_type_to_str(packet_type));
 
     match packet_type {
-        PACKET_TYPE_CONNECT => { decode_connect_packet(first_byte, packet_body) }
-        PACKET_TYPE_CONNACK => { decode_connack_packet(first_byte, packet_body) }
-        PACKET_TYPE_PUBLISH => { decode_publish_packet(first_byte, packet_body) }
-        PACKET_TYPE_PUBACK => { decode_puback_packet(first_byte, packet_body) }
-        PACKET_TYPE_PUBREC => { decode_pubrec_packet(first_byte, packet_body) }
-        PACKET_TYPE_PUBREL => { decode_pubrel_packet(first_byte, packet_body) }
-        PACKET_TYPE_PUBCOMP => { decode_pubcomp_packet(first_byte, packet_body) }
-        PACKET_TYPE_SUBSCRIBE => { decode_subscribe_packet(first_byte, packet_body) }
-        PACKET_TYPE_SUBACK => { decode_suback_packet(first_byte, packet_body) }
-        PACKET_TYPE_UNSUBSCRIBE => { decode_unsubscribe_packet(first_byte, packet_body) }
-        PACKET_TYPE_UNSUBACK => { decode_unsuback_packet(first_byte, packet_body) }
+        PACKET_TYPE_CONNECT => { decode_connect_packet5(first_byte, packet_body) }
+        PACKET_TYPE_CONNACK => { decode_connack_packet5(first_byte, packet_body) }
+        PACKET_TYPE_PUBLISH => { decode_publish_packet5(first_byte, packet_body) }
+        PACKET_TYPE_PUBACK => { decode_puback_packet5(first_byte, packet_body) }
+        PACKET_TYPE_PUBREC => { decode_pubrec_packet5(first_byte, packet_body) }
+        PACKET_TYPE_PUBREL => { decode_pubrel_packet5(first_byte, packet_body) }
+        PACKET_TYPE_PUBCOMP => { decode_pubcomp_packet5(first_byte, packet_body) }
+        PACKET_TYPE_SUBSCRIBE => { decode_subscribe_packet5(first_byte, packet_body) }
+        PACKET_TYPE_SUBACK => { decode_suback_packet5(first_byte, packet_body) }
+        PACKET_TYPE_UNSUBSCRIBE => { decode_unsubscribe_packet5(first_byte, packet_body) }
+        PACKET_TYPE_UNSUBACK => { decode_unsuback_packet5(first_byte, packet_body) }
         PACKET_TYPE_PINGREQ => { decode_pingreq_packet(first_byte, packet_body) }
         PACKET_TYPE_PINGRESP => { decode_pingresp_packet(first_byte, packet_body) }
-        PACKET_TYPE_DISCONNECT => { decode_disconnect_packet(first_byte, packet_body) }
-        PACKET_TYPE_AUTH => { decode_auth_packet(first_byte, packet_body) }
+        PACKET_TYPE_DISCONNECT => { decode_disconnect_packet5(first_byte, packet_body) }
+        PACKET_TYPE_AUTH => { decode_auth_packet5(first_byte, packet_body) }
         _ => {
             Err(GneissError::new_decoding_failure("invalid packet type value"))
         }
+    }
+}
+
+fn decode_packet311(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    let packet_type = first_byte >> 4;
+
+    info!("Decoding an MQTT311 packet of type {}", packet_type_to_str(packet_type));
+
+    match packet_type {
+        PACKET_TYPE_CONNECT => { decode_connect_packet311(first_byte, packet_body) }
+        PACKET_TYPE_CONNACK => { decode_connack_packet311(first_byte, packet_body) }
+        PACKET_TYPE_PUBLISH => { decode_publish_packet311(first_byte, packet_body) }
+        PACKET_TYPE_PUBACK => { decode_puback_packet311(first_byte, packet_body) }
+        PACKET_TYPE_PUBREC => { decode_pubrec_packet311(first_byte, packet_body) }
+        PACKET_TYPE_PUBREL => { decode_pubrel_packet311(first_byte, packet_body) }
+        PACKET_TYPE_PUBCOMP => { decode_pubcomp_packet311(first_byte, packet_body) }
+        PACKET_TYPE_SUBSCRIBE => { decode_subscribe_packet311(first_byte, packet_body) }
+        PACKET_TYPE_SUBACK => { decode_suback_packet311(first_byte, packet_body) }
+        PACKET_TYPE_UNSUBSCRIBE => { decode_unsubscribe_packet311(first_byte, packet_body) }
+        PACKET_TYPE_UNSUBACK => { decode_unsuback_packet311(first_byte, packet_body) }
+        PACKET_TYPE_PINGREQ => { decode_pingreq_packet(first_byte, packet_body) }
+        PACKET_TYPE_PINGRESP => { decode_pingresp_packet(first_byte, packet_body) }
+        PACKET_TYPE_DISCONNECT => { decode_disconnect_packet311(first_byte, packet_body) }
+        PACKET_TYPE_AUTH => {
+            Err(GneissError::new_decoding_failure("Auth packets are not allowed in MQTT 311"))
+        }
+        _ => {
+            Err(GneissError::new_decoding_failure("invalid packet type value"))
+        }
+    }
+}
+
+fn decode_packet(first_byte: u8, packet_body: &[u8], protocol_version : ProtocolVersion) -> GneissResult<Box<MqttPacket>> {
+    match protocol_version {
+        ProtocolVersion::Mqtt5 => { decode_packet5(first_byte, packet_body) }
+        ProtocolVersion::Mqtt311 => { decode_packet311(first_byte, packet_body) }
     }
 }
 
@@ -233,7 +269,7 @@ impl Decoder {
                 &bytes[..bytes_needed]
             };
 
-        match decode_packet(self.first_byte.unwrap(), packet_slice) {
+        match decode_packet(self.first_byte.unwrap(), packet_slice, context.protocol_version) {
             Ok(packet) => {
                 log_packet("Successfully decoded incoming packet: ", &packet);
                 context.decoded_packets.push_back(packet);

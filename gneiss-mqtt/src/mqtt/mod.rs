@@ -10,7 +10,7 @@ Module containing a set of structured data types that model the MQTT5 specificat
 use std::fmt;
 use log::error;
 use crate::client::config::ProtocolMode;
-use crate::error::GneissError;
+use crate::error::{GneissError, GneissResult};
 
 pub(crate) mod auth;
 pub(crate) mod connack;
@@ -349,7 +349,19 @@ pub(crate) fn convert_connect_reason_code_to_311_encoding(reason_code: ConnectRe
         ConnectReasonCode::ServerUnavailable => Ok(3),
         ConnectReasonCode::BadUsernameOrPassword => Ok(4),
         ConnectReasonCode::NotAuthorized => Ok(5),
-        _ => Err(GneisError::new_protocol_error("Invalid ConnectReasonCode in Connack Packet for MQTT311"))
+        _ => Err(GneissError::new_protocol_error("Invalid ConnectReasonCode in Connack Packet for MQTT311"))
+    }
+}
+
+pub(crate) fn convert_311_encoding_to_connect_reason_code(value: u8) -> GneissResult<ConnectReasonCode> {
+    match value {
+        0 => { Ok(ConnectReasonCode::Success) },
+        1 => { Ok(ConnectReasonCode::UnsupportedProtocolVersion) },
+        2 => { Ok(ConnectReasonCode::ClientIdentifierNotValid) },
+        3 => { Ok(ConnectReasonCode::ServerUnavailable) },
+        4 => { Ok(ConnectReasonCode::BadUsernameOrPassword) },
+        5 => { Ok(ConnectReasonCode::NotAuthorized) },
+        _ => Err(GneissError::new_protocol_error("Invalid 311 encoding of a ConnectReasonCode"))
     }
 }
 

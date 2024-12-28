@@ -84,7 +84,7 @@ fn get_connack_packet_user_property(packet: &MqttPacket, index: usize) -> &UserP
         }
     }
 
-    panic!("Internal encoding error: invalid user property state");
+    panic!("get_connack_packet_user_property - invalid user property state");
 }
 
 #[rustfmt::skip]
@@ -129,7 +129,7 @@ pub(crate) fn write_connack_encoding_steps5(packet: &ConnackPacket, _: &Encoding
 
 #[cfg(not(test))]
 pub(crate) fn write_connack_encoding_steps5(_: &ConnackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    Err(GneissError::new_unimplemented("Test-only functionality"))
+    Err(GneissError::new_unimplemented("write_connack_encoding_steps5 - test-only functionality"))
 }
 
 #[rustfmt::skip]
@@ -145,7 +145,7 @@ pub(crate) fn write_connack_encoding_steps311(packet: &ConnackPacket, _: &Encodi
 
 #[cfg(not(test))]
 pub(crate) fn write_connack_encoding_steps311(_: &ConnackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    Err(GneissError::new_unimplemented("Test-only functionality"))
+    Err(GneissError::new_unimplemented("write_connack_encoding_steps311 - test-only functionality"))
 }
 
 fn decode_connack_properties(property_bytes: &[u8], packet : &mut ConnackPacket) -> GneissResult<()> {
@@ -174,8 +174,9 @@ fn decode_connack_properties(property_bytes: &[u8], packet : &mut ConnackPacket)
             PROPERTY_KEY_AUTHENTICATION_METHOD => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.authentication_method)?; }
             PROPERTY_KEY_AUTHENTICATION_DATA => { mutable_property_bytes = decode_optional_length_prefixed_bytes(mutable_property_bytes, &mut packet.authentication_data)?; }
             _ => {
-                error!("ConnackPacket Decode - Invalid property type ({})", property_key);
-                return Err(GneissError::new_decoding_failure("invalid property type for connack packet"));
+                let message = format!("decode_connack_properties - Invalid property type ({})", property_key);
+                error!(message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
     }
@@ -183,11 +184,12 @@ fn decode_connack_properties(property_bytes: &[u8], packet : &mut ConnackPacket)
     Ok(())
 }
 
-pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+pub(crate) fn decode_connack_packet5(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
 
     if first_byte != (PACKET_TYPE_CONNACK << 4) {
-        error!("ConnackPacket Decode - invalid first byte");
-        return Err(GneissError::new_decoding_failure("invalid first byte for connack packet"));
+        let message = "decode_connack_packet5 - invalid first byte";
+        error!(message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let mut box_packet = Box::new(MqttPacket::Connack(ConnackPacket { ..Default::default() }));
@@ -195,8 +197,9 @@ pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
     if let MqttPacket::Connack(packet) = box_packet.as_mut() {
         let mut mutable_body = packet_body;
         if mutable_body.is_empty() {
-            error!("ConnackPacket Decode - packet too short");
-            return Err(GneissError::new_decoding_failure("connack packet too short"));
+            let message = "decode_connack_packet5 - packet too short";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         let flags: u8 = mutable_body[0];
@@ -205,8 +208,9 @@ pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
         if flags == 1 {
             packet.session_present = true;
         } else if flags != 0 {
-            error!("ConnackPacket Decode - invalid value for flags field");
-            return Err(GneissError::new_decoding_failure("invalid flags for connack packet"));
+            let message = "decode_connack_packet5 - reserved bits set in flags field";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         mutable_body = decode_u8_as_enum(mutable_body, &mut packet.reason_code, ConnectReasonCode::try_from)?;
@@ -214,8 +218,9 @@ pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
         let mut properties_length: usize = 0;
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length != mutable_body.len() {
-            error!("ConnackPacket Decode - property length does not match expected overall packet length");
-            return Err(GneissError::new_decoding_failure("mismatch between property length and overall packet length for connack packet"));
+            let message = "decode_connack_packet5 - property length does not match expected overall packet length";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         decode_connack_properties(mutable_body, packet)?;
@@ -223,26 +228,65 @@ pub(crate) fn decode_connack_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
         return Ok(box_packet);
     }
 
-    panic!("ConnackPacket Decode - Internal error");
+    panic!("decode_connack_packet5 - Internal error");
+}
+
+pub(crate) fn decode_connack_packet311(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+
+    if first_byte != (PACKET_TYPE_CONNACK << 4) {
+        let message = "decode_connack_packet311 - invalid first byte";
+        error!(message);
+        return Err(GneissError::new_decoding_failure(message));
+    }
+
+    let mut box_packet = Box::new(MqttPacket::Connack(ConnackPacket { ..Default::default() }));
+
+    if let MqttPacket::Connack(packet) = box_packet.as_mut() {
+        let mut mutable_body = packet_body;
+        if mutable_body.len() != 2 {
+            let message = "decode_connack_packet311 - connack packet invalid length";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
+        }
+
+        let flags: u8 = mutable_body[0];
+        mutable_body = &mutable_body[1..];
+
+        if flags == 1 {
+            packet.session_present = true;
+        } else if flags != 0 {
+            let message = "decode_connack_packet311 - reserved bits set in flags field";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
+        }
+
+        mutable_body = decode_u8_as_enum(mutable_body, &mut packet.reason_code, convert_311_encoding_to_connect_reason_code)?;
+
+        return Ok(box_packet);
+    }
+
+    panic!("decode_connack_packet311 - Internal error");
 }
 
 pub(crate) fn validate_connack_packet_inbound_internal(packet: &ConnackPacket) -> GneissResult<()> {
 
     if packet.session_present && packet.reason_code != ConnectReasonCode::Success {
-        error!("ConnackPacket Inbound Validation - session present on unsuccessful connect");
-        return Err(GneissError::new_packet_validation(PacketType::Connack, "session present set on unsuccessful connect"));
+        let message = "validate_connack_packet_inbound_internal - session present on unsuccessful connect";
+        error!(message);
+        return Err(GneissError::new_packet_validation(PacketType::Connack, message));
     }
 
-    validate_optional_integer_non_zero!(receive_maximum, packet.receive_maximum, PacketType::Connack, "Connack", "receive_maximum");
+    validate_optional_integer_non_zero!(receive_maximum, packet.receive_maximum, PacketType::Connack, "validate_connack_packet_inbound_internal", "receive_maximum");
 
     if let Some(maximum_qos) = packet.maximum_qos {
         if maximum_qos == QualityOfService::ExactlyOnce {
-            error!("ConnackPacket Inbound Validation - maximum qos should never be Qos2");
-            return Err(GneissError::new_packet_validation(PacketType::Connack, "maximum_qos may not be qos2"));
+            let message = "validate_connack_packet_inbound_internal - maximum qos should never be Qos2";
+            error!(message);
+            return Err(GneissError::new_packet_validation(PacketType::Connack, message));
         }
     }
 
-    validate_optional_integer_non_zero!(maximum_packet_size, packet.maximum_packet_size, PacketType::Connack, "Connack", "maximum_packet_size");
+    validate_optional_integer_non_zero!(maximum_packet_size, packet.maximum_packet_size, PacketType::Connack, "validate_connack_packet_inbound_internal", "maximum_packet_size");
 
     Ok(())
 }

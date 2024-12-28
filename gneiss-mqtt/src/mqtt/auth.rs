@@ -54,7 +54,7 @@ fn get_auth_packet_user_property(packet: &MqttPacket, index: usize) -> &UserProp
         }
     }
 
-    panic!("Internal encoding error: invalid user property state");
+    panic!("get_auth_packet_user_property - invalid user property state");
 }
 
 #[rustfmt::skip]
@@ -80,7 +80,7 @@ pub(crate) fn write_auth_encoding_steps5(packet: &AuthPacket, _: &EncodingContex
 }
 
 pub(crate) fn write_auth_encoding_steps311(_: &AuthPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    Err(GneissError::new_encoding_failure("Auth packets not allowed in MQTT 311"))
+    Err(GneissError::new_encoding_failure("write_auth_encoding_steps311 - auth packets not allowed in MQTT 311"))
 }
 
 fn decode_auth_properties(property_bytes: &[u8], packet : &mut AuthPacket) -> GneissResult<()> {
@@ -96,8 +96,9 @@ fn decode_auth_properties(property_bytes: &[u8], packet : &mut AuthPacket) -> Gn
             PROPERTY_KEY_REASON_STRING => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.reason_string)?; }
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
-                error!("AuthPacket Decode - Invalid property type ({})", property_key);
-                return Err(GneissError::new_decoding_failure("invalid property type for auth packet"));
+                let message = format!("decode_auth_properties - Invalid property type ({})", property_key);
+                error!(message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
     }
@@ -105,10 +106,11 @@ fn decode_auth_properties(property_bytes: &[u8], packet : &mut AuthPacket) -> Gn
     Ok(())
 }
 
-pub(crate) fn decode_auth_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+pub(crate) fn decode_auth_packet5(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if first_byte != (PACKET_TYPE_AUTH << 4) {
-        error!("AuthPacket Decode - invalid first byte");
-        return Err(GneissError::new_decoding_failure("invalid first byte for auth packet"));
+        let message = "decode_auth_packet5 - invalid first byte";
+        error!(message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let mut box_packet = Box::new(MqttPacket::Auth(AuthPacket { ..Default::default() }));
@@ -123,8 +125,9 @@ pub(crate) fn decode_auth_packet(first_byte: u8, packet_body: &[u8]) -> GneissRe
         let mut properties_length : usize = 0;
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length != mutable_body.len() {
-            error!("AuthPacket Decode - property length does not match expected overall packet length");
-            return Err(GneissError::new_decoding_failure("property length mismatches overall packet length for auth packet"));
+            let message = "decode_auth_packet5 - property length does not match expected overall packet length";
+            error!(message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         decode_auth_properties(mutable_body, packet)?;
@@ -132,22 +135,23 @@ pub(crate) fn decode_auth_packet(first_byte: u8, packet_body: &[u8]) -> GneissRe
         return Ok(box_packet);
     }
 
-    panic!("AuthPacket Decode - Internal error");
+    panic!("decode_auth_packet5 - Internal error");
 }
 
 pub(crate) fn validate_auth_packet_outbound(packet: &AuthPacket) -> GneissResult<()> {
 
     if packet.authentication_method.is_none() {
-        error!("AuthPacket Outbound Validation - authentication method must be set");
+        let message = "validate_auth_packet_outbound - authentication method must be set";
+        error!(message);
         // while optional from an encode/decode perspective, method is required from a protocol
         // perspective
-        return Err(GneissError::new_packet_validation(PacketType::Auth, "missing authentication_method field"));
+        return Err(GneissError::new_packet_validation(PacketType::Auth, message));
     }
 
-    validate_optional_string_length(&packet.authentication_method, PacketType::Auth, "Auth", "authentication_method")?;
-    validate_optional_binary_length(&packet.authentication_data, PacketType::Auth, "Auth", "authentication_data")?;
-    validate_optional_string_length(&packet.reason_string, PacketType::Auth, "Auth", "reason_string")?;
-    validate_user_properties(&packet.user_properties, PacketType::Auth, "Auth")?;
+    validate_optional_string_length(&packet.authentication_method, PacketType::Auth, "validate_auth_packet_outbound", "authentication_method")?;
+    validate_optional_binary_length(&packet.authentication_data, PacketType::Auth, "validate_auth_packet_outbound", "authentication_data")?;
+    validate_optional_string_length(&packet.reason_string, PacketType::Auth, "validate_auth_packet_outbound", "reason_string")?;
+    validate_user_properties(&packet.user_properties, PacketType::Auth, "validate_auth_packet_outbound")?;
 
     Ok(())
 }
@@ -157,8 +161,9 @@ pub(crate) fn validate_auth_packet_outbound_internal(packet: &AuthPacket, contex
     let (total_remaining_length, _) = compute_auth_packet_length_properties(packet)?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
-        error!("AuthPacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(GneissError::new_packet_validation(PacketType::Auth, "packet length exceeds maximum allowed packet size"));
+        let message = "validate_auth_packet_outbound_internal - packet length exceeds maximum packet size allowed to server";
+        error!(message);
+        return Err(GneissError::new_packet_validation(PacketType::Auth, message));
     }
 
     Ok(())
@@ -169,8 +174,9 @@ pub(crate) fn validate_auth_packet_inbound_internal(packet: &AuthPacket, _: &Inb
     if packet.authentication_method.is_none() {
         // while optional from an encode/decode perspective, method is required from a protocol
         // perspective
-        error!("AuthPacket Inbound Validation - authentication method must be set");
-        return Err(GneissError::new_packet_validation(PacketType::Auth, "missing authentication_method field"));
+        let message = "validate_auth_packet_inbound_internal - authentication method must be set";
+        error!(message);
+        return Err(GneissError::new_packet_validation(PacketType::Auth, message));
     }
 
     /* TODO: validation based on in-progress auth exchange */
