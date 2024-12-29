@@ -78,8 +78,9 @@ pub(crate) fn validate_packet_outbound(packet: &MqttPacket) -> GneissResult<()> 
         MqttPacket::Subscribe(subscribe) => { validate_subscribe_packet_outbound(subscribe) }
         MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound(unsubscribe) }
         _ => {
-            error!("validate_packet_outbound - unexpected packet type");
-            Err(GneissError::new_protocol_error("unexpected outbound packet type"))
+            let message = "validate_packet_outbound - unexpected packet type";
+            error!("{}", message);
+            Err(GneissError::new_protocol_error(message))
         }
     }
 }
@@ -100,8 +101,9 @@ pub(crate) fn validate_packet_outbound_internal(packet: &MqttPacket, context: &O
         MqttPacket::Subscribe(subscribe) => { validate_subscribe_packet_outbound_internal(subscribe, context) }
         MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound_internal(unsubscribe, context) }
         _ => {
-            error!("validate_packet_outbound_internal - unexpected packet type");
-            Err(GneissError::new_protocol_error("unexpected outbound packet type"))
+            let message = "validate_packet_outbound_internal - unexpected packet type";
+            error!("{}", message);
+            Err(GneissError::new_protocol_error(message))
         }
     }
 }
@@ -123,8 +125,9 @@ pub(crate) fn validate_packet_inbound_internal(packet: &MqttPacket, context: &In
         MqttPacket::Suback(suback) => { validate_suback_packet_inbound_internal(suback, context) }
         MqttPacket::Unsuback(unsuback) => { validate_unsuback_packet_inbound_internal(unsuback, context) }
         _ => {
-            error!("validate_packet_inbound_internal - unexpected packet type");
-            Err(GneissError::new_protocol_error("unexpected inbound packet type"))
+            let message = "validate_packet_inbound_internal - unexpected packet type";
+            error!("{}", message);
+            Err(GneissError::new_protocol_error(message))
         }
     }
 }
@@ -133,7 +136,7 @@ pub(crate) fn validate_packet_inbound_internal(packet: &MqttPacket, context: &In
 pub(crate) fn validate_string_length(value: &str, packet_type: PacketType, function_name: &str, field_name: &str) -> GneissResult<()> {
     if value.len() > MAXIMUM_STRING_PROPERTY_LENGTH {
         let message = format!("{} - {} string field too long", function_name, field_name);
-        error!(message);
+        error!("{}", message);
         return Err(GneissError::new_packet_validation(packet_type, message));
     }
 
@@ -144,7 +147,7 @@ pub(crate) fn validate_optional_string_length(optional_string: &Option<String>, 
     if let Some(value) = &optional_string {
         if value.len() > MAXIMUM_STRING_PROPERTY_LENGTH {
             let message = format!("{} - {} string field too long", function_name, field_name);
-            error!(message);
+            error!("{}", message);
             return Err(GneissError::new_packet_validation(packet_type, message));
         }
     }
@@ -156,7 +159,7 @@ pub(crate) fn validate_optional_binary_length(optional_data: &Option<Vec<u8>>, p
     if let Some(value) = &optional_data {
         if value.len() > MAXIMUM_BINARY_PROPERTY_LENGTH {
             let message = format!("{} - {} binary field too long", function_name, field_name);
-            error!(message);
+            error!("{}", message);
             return Err(GneissError::new_packet_validation(packet_type, message));
         }
     }
@@ -168,9 +171,9 @@ macro_rules! validate_optional_integer_non_zero {
     ($value_name: ident, $optional_integer_expr: expr, $packet_type: expr, $function_name: expr, $field_name: expr) => {
         if let Some($value_name) = $optional_integer_expr {
             if $value_name == 0 {
-                let message = format!("{} - {} integer field is zero", function_name, field_name);
-                error!(message);
-                return Err(GneissError::new_packet_validation(packet_type, message));
+                let message = format!("{} - {} integer field is zero", $function_name, $field_name);
+                error!("{}", message);
+                return Err(GneissError::new_packet_validation($packet_type, message));
             }
         }
     };
@@ -179,7 +182,7 @@ macro_rules! validate_optional_integer_non_zero {
 pub(crate) use validate_optional_integer_non_zero;
 
 macro_rules! validate_ack_outbound {
-    ($function_name: ident, $packet_type_name: ident, $validate_function_name: expr, $validate_function_name: expr) => {
+    ($function_name: ident, $packet_type_name: ident, $packet_type: expr, $validate_function_name: expr) => {
         pub(crate) fn $function_name(packet: &$packet_type_name) -> GneissResult<()> {
 
             validate_optional_string_length(&packet.reason_string, $packet_type, $validate_function_name, "reason_string")?;
@@ -200,13 +203,13 @@ macro_rules! validate_ack_outbound_internal {
             let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
             if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
                 let message = format!("{} - packet length exceeds allowed maximum to server", $validate_function_name);
-                error!(message);
+                error!("{}", message);
                 return Err(GneissError::new_packet_validation($packet_type, message));
             }
 
             if packet.packet_id == 0 {
-                let message = format!("{} - packet id is zero", $validate_function_name)
-                error!(message);
+                let message = format!("{} - packet id is zero", $validate_function_name);
+                error!("{}", message);
                 return Err(GneissError::new_packet_validation($packet_type, message));
             }
 
@@ -222,8 +225,8 @@ macro_rules! validate_ack_inbound_internal {
         pub(crate) fn $function_name(packet: &$packet_type_name, _: &InboundValidationContext) -> GneissResult<()> {
 
             if packet.packet_id == 0 {
-                let message = format!("{} - packet id is zero", $validate_function_name)
-                error!(message);
+                let message = format!("{} - packet id is zero", $validate_function_name);
+                error!("{}", message);
                 return Err(GneissError::new_packet_validation($packet_type, message));
             }
 

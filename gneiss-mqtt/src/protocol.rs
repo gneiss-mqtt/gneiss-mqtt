@@ -1000,6 +1000,7 @@ impl ProtocolState {
         let mut decoded_packets = VecDeque::new();
         let mut decode_context = DecodingContext {
             maximum_packet_size: self.get_maximum_incoming_packet_size(),
+            protocol_version: self.protocol_version,
             decoded_packets: &mut decoded_packets
         };
 

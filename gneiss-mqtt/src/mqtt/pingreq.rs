@@ -25,13 +25,15 @@ const PINGREQ_FIRST_BYTE : u8 = PACKET_TYPE_PINGREQ << 4;
 #[cfg(test)]
 pub(crate) fn decode_pingreq_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if !packet_body.is_empty() {
-        error!("Packet Decode - Pingreq packet with non-zero remaining length");
-        return Err(GneissError::new_decoding_failure("nonzero remaining length for pingreq packet"));
+        let message = "decode_pingreq_packet - nonzero remaining length";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     if first_byte != PINGREQ_FIRST_BYTE {
-        error!("Packet Decode - Pingreq packet with invalid first byte");
-        return Err(GneissError::new_decoding_failure("invalid first byte for pingreq packet"));
+        let message = "decode_pingreq_packet - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     Ok(Box::new(MqttPacket::Pingreq(PingreqPacket{})))
@@ -39,7 +41,7 @@ pub(crate) fn decode_pingreq_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
 
 #[cfg(not(test))]
 pub(crate) fn decode_pingreq_packet(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
-    Err(GneissError::new_unimplemented("Test-only functionality"))
+    Err(GneissError::new_unimplemented("decode_pingreq_packet - test-only functionality"))
 }
 
 impl fmt::Display for PingreqPacket {

@@ -23,12 +23,13 @@ define_ack_packet_user_property_accessor!(get_pubcomp_packet_user_property, Pubc
 define_ack_packet_encoding_impl5!(write_pubcomp_encoding_steps5, PubcompPacket, PubcompReasonCode, PUBCOMP_FIRST_BYTE, compute_pubcomp_packet_length_properties, get_pubcomp_packet_reason_string, get_pubcomp_packet_user_property);
 define_ack_packet_encoding_impl311!(write_pubcomp_encoding_steps311, PubcompPacket, PUBCOMP_FIRST_BYTE);
 
-define_ack_packet_decode_properties_function!(decode_pubcomp_properties, PubcompPacket, "Pubcomp");
-define_ack_packet_decode_function!(decode_pubcomp_packet, Pubcomp, PubcompPacket, "Pubcomp", PUBCOMP_FIRST_BYTE, PubcompReasonCode, decode_pubcomp_properties);
+define_ack_packet_decode_properties_function!(decode_pubcomp_properties, PubcompPacket, "decode_pubcomp_properties");
+define_ack_packet_decode_function5!(decode_pubcomp_packet5, Pubcomp, PubcompPacket, "decode_pubcomp_packet5", PUBCOMP_FIRST_BYTE, PubcompReasonCode, decode_pubcomp_properties);
+define_ack_packet_decode_function311!(decode_pubcomp_packet311, Pubcomp, PubcompPacket, "decode_pubcomp_packet311", PUBCOMP_FIRST_BYTE);
 
-validate_ack_outbound!(validate_pubcomp_packet_outbound, PubcompPacket, PacketType::Pubcomp, "Pubcomp");
-validate_ack_outbound_internal!(validate_pubcomp_packet_outbound_internal, PubcompPacket, PacketType::Pubcomp, compute_pubcomp_packet_length_properties, "Puback");
-validate_ack_inbound_internal!(validate_pubcomp_packet_inbound_internal, PubcompPacket, PacketType::Pubcomp, "Pubcomp");
+validate_ack_outbound!(validate_pubcomp_packet_outbound, PubcompPacket, PacketType::Pubcomp, "validate_pubcomp_packet_outbound");
+validate_ack_outbound_internal!(validate_pubcomp_packet_outbound_internal, PubcompPacket, PacketType::Pubcomp, compute_pubcomp_packet_length_properties, "validate_pubcomp_packet_outbound_internal");
+validate_ack_inbound_internal!(validate_pubcomp_packet_inbound_internal, PubcompPacket, PacketType::Pubcomp, "validate_pubcomp_packet_inbound_internal");
 
 define_ack_packet_display_trait!(PubcompPacket, "PubcompPacket", PubcompReasonCode);
 

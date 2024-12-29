@@ -33,7 +33,7 @@ use std::collections::*;
 const DECODE_BUFFER_DEFAULT_SIZE : usize = 16 * 1024;
 
 macro_rules! define_ack_packet_decode_properties_function {
-    ($function_name: ident, $packet_type: ident, $packet_type_as_string: expr) => {
+    ($function_name: ident, $packet_type: ident, $function_name_as_string: expr) => {
         fn $function_name(property_bytes: &[u8], packet : &mut $packet_type) -> GneissResult<()> {
             let mut mutable_property_bytes = property_bytes;
 
@@ -45,8 +45,9 @@ macro_rules! define_ack_packet_decode_properties_function {
                     PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
                     PROPERTY_KEY_REASON_STRING => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.reason_string)?; }
                     _ => {
-                        error!("{}Packet Decode - Invalid property type ({})", $packet_type_as_string, property_key);
-                        return Err(GneissError::new_decoding_failure("invalid ack packet property type"));
+                        let message = format!("{}P - Invalid property type ({})", $function_name_as_string, property_key);
+                        error!("{}", message);
+                        return Err(GneissError::new_decoding_failure(message));
                     }
                 }
             }
@@ -58,12 +59,13 @@ macro_rules! define_ack_packet_decode_properties_function {
 
 pub(crate) use define_ack_packet_decode_properties_function;
 
-macro_rules! define_ack_packet_decode_function {
-    ($function_name: ident, $mqtt_packet_type:ident, $packet_type: ident, $packet_type_as_string: expr, $first_byte: expr, $reason_code_type: ident, $decode_properties_function_name: ident) => {
+macro_rules! define_ack_packet_decode_function5 {
+    ($function_name: ident, $mqtt_packet_type:ident, $packet_type: ident, $function_name_as_string: expr, $first_byte: expr, $reason_code_type: ident, $decode_properties_function_name: ident) => {
         pub(crate) fn $function_name(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
             if first_byte != $first_byte {
-                error!("{}Packet Decode - invalid first byte", $packet_type_as_string);
-                return Err(GneissError::new_decoding_failure("invalid first byte for ack packet"));
+                let message = format!("{} - invalid first byte", $function_name_as_string);
+                error!("{}", message);
+                return Err(GneissError::new_decoding_failure(message));
             }
 
             let mut box_packet = Box::new(MqttPacket::$mqtt_packet_type($packet_type { ..Default::default() }));
@@ -85,8 +87,9 @@ macro_rules! define_ack_packet_decode_function {
                 let mut properties_length = 0;
                 mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
                 if properties_length != mutable_body.len() {
-                    error!("{}Packet Decode - property length does not match remaining packet length", $packet_type_as_string);
-                    return Err(GneissError::new_decoding_failure("mismatch between property length and remaining packet length for ack packet"));
+                    let message = format!("{} - property length does not match remaining packet length", $function_name_as_string);
+                    error!("{}", message);
+                    return Err(GneissError::new_decoding_failure(message));
                 }
 
                 $decode_properties_function_name(mutable_body, packet)?;
@@ -94,12 +97,41 @@ macro_rules! define_ack_packet_decode_function {
                 return Ok(box_packet)
             }
 
-            panic!("{}Packet Decode - Internal error", $packet_type_as_string);
+            panic!("{} - internal error", $function_name_as_string);
         }
     };
 }
 
-pub(crate) use define_ack_packet_decode_function;
+pub(crate) use define_ack_packet_decode_function5;
+
+macro_rules! define_ack_packet_decode_function311 {
+    ($function_name: ident, $mqtt_packet_type:ident, $packet_type: ident, $function_name_as_string: expr, $first_byte: expr) => {
+        pub(crate) fn $function_name(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+            if first_byte != $first_byte {
+                let message = format!("{} - invalid first byte", $function_name_as_string);
+                error!("{}", message);
+                return Err(GneissError::new_decoding_failure(message));
+            }
+
+            if packet_body.len() != 2 {
+                let message = format!("{} - invalid remaining length", $function_name_as_string);
+                error!("{}", message);
+                return Err(GneissError::new_decoding_failure(message));
+            }
+
+            let mut box_packet = Box::new(MqttPacket::$mqtt_packet_type($packet_type { ..Default::default() }));
+            if let MqttPacket::$mqtt_packet_type(packet) = box_packet.as_mut() {
+                decode_u16(packet_body, &mut packet.packet_id)?;
+
+                return Ok(box_packet);
+            }
+
+             panic!("{} - internal error", $function_name_as_string);
+        }
+    };
+}
+
+pub(crate) use define_ack_packet_decode_function311;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 enum DecoderState {
@@ -356,16 +388,18 @@ pub(crate) fn decode_vli(buffer: &[u8]) -> GneissResult<DecodeVliResult> {
         }
     }
 
-    error!("Packet Decode - invalid variable length integer");
-    Err(GneissError::new_decoding_failure("invalid variable length integer"))
+    let message = "decode_vli - invalid variable length integer";
+    error!("{}", message);
+    Err(GneissError::new_decoding_failure(message))
 }
 
 pub(crate) fn decode_vli_into_mutable<'a>(buffer: &'a[u8], value: &mut usize) -> GneissResult<&'a[u8]> {
     let decode_result = decode_vli(buffer)?;
     match decode_result {
         DecodeVliResult::InsufficientData => {
-            error!("Packet Decode - invalid variable length integer");
-            Err(GneissError::new_decoding_failure("invalid variable length integer"))
+            let message = "decode_vli_into_mutable - invalid variable length integer";
+            error!("{}", message);
+            Err(GneissError::new_decoding_failure(message))
         }
         DecodeVliResult::Value(vli, remaining_slice) => {
             *value = vli as usize;
@@ -376,15 +410,17 @@ pub(crate) fn decode_vli_into_mutable<'a>(buffer: &'a[u8], value: &mut usize) ->
 
 pub(crate) fn decode_length_prefixed_string<'a>(bytes: &'a[u8], value: &mut String) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
-        error!("Packet Decode - Utf-8 string value does not have a full length prefix");
-        return Err(GneissError::new_decoding_failure("utf-8 string value does not have a full length prefix"));
+        let message = "decode_length_prefixed_string - Utf-8 string value does not have a full length prefix";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let value_length : usize = u16::from_be_bytes(bytes[..2].try_into().unwrap()) as usize;
     let mutable_bytes = &bytes[2..];
     if value_length > mutable_bytes.len() {
-        error!("Packet Decode - Utf-8 string value has length larger than remaining packet bytes");
-        return Err(GneissError::new_decoding_failure("utf-8 string value has length longer than remaining packet bytes"));
+        let message = "decode_length_prefixed_string - Utf-8 string value has length larger than remaining packet bytes";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let decode_utf8_result = std::str::from_utf8(&mutable_bytes[..value_length])?;
@@ -394,20 +430,23 @@ pub(crate) fn decode_length_prefixed_string<'a>(bytes: &'a[u8], value: &mut Stri
 
 pub(crate) fn decode_optional_length_prefixed_string<'a>(bytes: &'a[u8], value: &mut Option<String>) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
-        error!("Packet Decode - Utf-8 string value does not have a full length prefix");
-        return Err(GneissError::new_decoding_failure("utf-8 string value does not have a full length prefix"));
+        let message = "decode_optional_length_prefixed_string - Utf-8 string value does not have a full length prefix";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     if value.is_some() {
-        error!("Packet Decode - Invalid duplicate optional string property");
-        return Err(GneissError::new_decoding_failure("optional string property already set earlier"));
+        let message = "decode_optional_length_prefixed_string - Invalid duplicate optional string property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let value_length : usize = u16::from_be_bytes(bytes[..2].try_into().unwrap()) as usize;
     let mutable_bytes = &bytes[2..];
     if value_length > mutable_bytes.len() {
-        error!("Packet Decode - Utf-8 string value has length larger than remaining packet bytes");
-        return Err(GneissError::new_decoding_failure("utf-8 string value has length longer than remaining packet bytes"));
+        let message = "decode_optional_length_prefixed_string - Utf-8 string value has length larger than remaining packet bytes";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let decode_utf8_result = std::str::from_utf8(&mutable_bytes[..value_length])?;
@@ -418,13 +457,15 @@ pub(crate) fn decode_optional_length_prefixed_string<'a>(bytes: &'a[u8], value: 
 #[cfg(test)]
 pub(crate) fn decode_length_prefixed_optional_string<'a>(bytes: &'a[u8], value: &mut Option<String>) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
-        error!("Packet Decode - Utf-8 string value does not have a full length prefix");
-        return Err(GneissError::new_decoding_failure("utf-8 string value does not have a full length prefix"));
+        let message = "decode_length_prefixed_optional_string - Utf-8 string value does not have a full length prefix";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     if value.is_some() {
-        error!("Packet Decode - Invalid duplicate optional string property");
-        return Err(GneissError::new_decoding_failure("optional string property already set earlier"));
+        let message = "decode_length_prefixed_optional_string - Invalid duplicate optional string property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let value_length : usize = u16::from_be_bytes(bytes[..2].try_into().unwrap()) as usize;
@@ -436,8 +477,9 @@ pub(crate) fn decode_length_prefixed_optional_string<'a>(bytes: &'a[u8], value: 
     }
 
     if value_length > mutable_bytes.len() {
-        error!("Packet Decode - Utf-8 string value has length larger than remaining packet bytes");
-        return Err(GneissError::new_decoding_failure("utf-8 string value has length longer than remaining packet bytes"));
+        let message = "decode_length_prefixed_optional_string - Utf-8 string value has length larger than remaining packet bytes";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let decode_utf8_result = std::str::from_utf8(&mutable_bytes[..value_length])?;
@@ -447,20 +489,23 @@ pub(crate) fn decode_length_prefixed_optional_string<'a>(bytes: &'a[u8], value: 
 
 pub(crate) fn decode_optional_length_prefixed_bytes<'a>(bytes: &'a[u8], value: &mut Option<Vec<u8>>) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
-        error!("Packet Decode - Binary data value does not have a full length prefix");
-        return Err(GneissError::new_decoding_failure("binary value does not have a full length prefix"));
+        let message = "decode_optional_length_prefixed_bytes - Binary data value does not have a full length prefix";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     if value.is_some() {
-        error!("Packet Decode - Invalid duplicate optional binary data property");
-        return Err(GneissError::new_decoding_failure("optional binary property already set earlier"));
+        let message = "decode_optional_length_prefixed_bytes - Invalid duplicate optional binary data property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let value_length : usize = u16::from_be_bytes(bytes[..2].try_into().unwrap()) as usize;
     let mutable_bytes = &bytes[2..];
     if value_length > mutable_bytes.len() {
-        error!("Packet Decode - Binary data value has length larger than remaining packet bytes");
-        return Err(GneissError::new_decoding_failure("binary value has length longer than remaining packet bytes"));
+        let message = "decode_optional_length_prefixed_bytes - Binary data value has length larger than remaining packet bytes";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     *value = Some(Vec::from(&mutable_bytes[..value_length]));
@@ -470,13 +515,15 @@ pub(crate) fn decode_optional_length_prefixed_bytes<'a>(bytes: &'a[u8], value: &
 #[cfg(test)]
 pub(crate) fn decode_length_prefixed_optional_bytes<'a>(bytes: &'a[u8], value: &mut Option<Vec<u8>>) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
-        error!("Packet Decode - Binary data value does not have a full length prefix");
-        return Err(GneissError::new_decoding_failure("binary value does not have a full length prefix"));
+        let message = "decode_length_prefixed_optional_bytes - Binary data value does not have a full length prefix";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     if value.is_some() {
-        error!("Packet Decode - Invalid duplicate optional binary data property");
-        return Err(GneissError::new_decoding_failure("optional binary property already set earlier"));
+        let message = "decode_length_prefixed_optional_bytes - Invalid duplicate optional binary data property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let value_length : usize = u16::from_be_bytes(bytes[..2].try_into().unwrap()) as usize;
@@ -488,8 +535,9 @@ pub(crate) fn decode_length_prefixed_optional_bytes<'a>(bytes: &'a[u8], value: &
     }
 
     if value_length > mutable_bytes.len() {
-        error!("Packet Decode - Binary data value has length larger than remaining packet bytes");
-        return Err(GneissError::new_decoding_failure("binary value has length longer than remaining packet bytes"));
+        let message = "decode_length_prefixed_optional_bytes - Binary data value has length larger than remaining packet bytes";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     *value = Some(Vec::from(&mutable_bytes[..value_length]));
@@ -515,7 +563,9 @@ pub(crate) fn decode_user_property<'a>(bytes: &'a[u8], properties: &mut Option<V
 #[cfg(test)]
 pub(crate) fn decode_u8<'a>(bytes: &'a[u8], value: &mut u8) -> GneissResult<&'a[u8]> {
     if bytes.is_empty() {
-        return Err(GneissError::new_decoding_failure("insufficient packet data for u8 property value"));
+        let message = "decode_u8 - insufficient packet data for u8 property value";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     *value = bytes[0];
@@ -525,13 +575,15 @@ pub(crate) fn decode_u8<'a>(bytes: &'a[u8], value: &mut u8) -> GneissResult<&'a[
 
 pub(crate) fn decode_optional_u8_as_bool<'a>(bytes: &'a[u8], value: &mut Option<bool>) -> GneissResult<&'a[u8]> {
     if bytes.is_empty() {
-        error!("Packet Decode - Insufficent packet bytes for boolean property");
-        return Err(GneissError::new_decoding_failure("insufficient packet data for boolean property value"));
+        let message = "decode_optional_u8_as_bool - Insufficent packet bytes for boolean property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     if value.is_some() {
-        error!("Packet Decode - Invalid duplicate optional boolean property");
-        return Err(GneissError::new_decoding_failure("optional boolean property already set earlier"));
+        let message = "decode_optional_u8_as_bool - Invalid duplicate optional boolean property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     if bytes[0] == 0 {
@@ -539,8 +591,9 @@ pub(crate) fn decode_optional_u8_as_bool<'a>(bytes: &'a[u8], value: &mut Option<
     } else if bytes[0] == 1 {
         *value = Some(true);
     } else {
-        error!("Packet Decode - Invalid byte value for boolean property");
-        return Err(GneissError::new_decoding_failure("invalid value for boolean property"));
+        let message = "decode_optional_u8_as_bool - Invalid byte value for boolean property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     Ok(&bytes[1..])
@@ -548,8 +601,9 @@ pub(crate) fn decode_optional_u8_as_bool<'a>(bytes: &'a[u8], value: &mut Option<
 
 pub(crate) fn decode_u8_as_enum<'a, T>(bytes: &'a[u8], value: &mut T, converter: fn(u8) -> GneissResult<T>) -> GneissResult<&'a[u8]> {
     if bytes.is_empty() {
-        error!("Packet Decode - Insufficent packet bytes for enum property");
-        return Err(GneissError::new_decoding_failure("insufficient packet data for enum property value"));
+        let message = "decode_u8_as_enum - Insufficent packet bytes for enum property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     *value = converter(bytes[0])?;
@@ -559,13 +613,15 @@ pub(crate) fn decode_u8_as_enum<'a, T>(bytes: &'a[u8], value: &mut T, converter:
 
 pub(crate) fn decode_optional_u8_as_enum<'a, T>(bytes: &'a[u8], value: &mut Option<T>, converter: fn(u8) -> GneissResult<T>) -> GneissResult<&'a[u8]> {
     if bytes.is_empty() {
-        error!("Packet Decode - Insufficent packet bytes for enum property");
-        return Err(GneissError::new_decoding_failure("insufficient packet data for enum property value"));
+        let message = "decode_optional_u8_as_enum - Insufficent packet bytes for enum property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     if value.is_some() {
-        error!("Packet Decode - Invalid duplicate optional enum property");
-        return Err(GneissError::new_decoding_failure("optional enum property already set earlier"));
+        let message = "decode_optional_u8_as_enum - Invalid duplicate optional enum property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     *value = Some(converter(bytes[0])?);
@@ -575,8 +631,9 @@ pub(crate) fn decode_optional_u8_as_enum<'a, T>(bytes: &'a[u8], value: &mut Opti
 
 pub(crate) fn decode_u16<'a>(bytes: &'a[u8], value: &mut u16) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
-        error!("Packet Decode - Insufficent packet bytes for u16 property");
-        return Err(GneissError::new_decoding_failure("insufficient packet data for u16 property value"));
+        let message = "decode_u16 - Insufficent packet bytes for u16 property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     *value = u16::from_be_bytes(bytes[..2].try_into().unwrap());
@@ -586,13 +643,15 @@ pub(crate) fn decode_u16<'a>(bytes: &'a[u8], value: &mut u16) -> GneissResult<&'
 
 pub(crate) fn decode_optional_u16<'a>(bytes: &'a[u8], value: &mut Option<u16>) -> GneissResult<&'a[u8]> {
     if bytes.len() < 2 {
-        error!("Packet Decode - Insufficent packet bytes for u16 property");
-        return Err(GneissError::new_decoding_failure("insufficient packet data for u16 property value"));
+        let message = "decode_optional_u16 - Insufficent packet bytes for u16 property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     if value.is_some() {
-        error!("Packet Decode - Invalid duplicate optional u16 property");
-        return Err(GneissError::new_decoding_failure("optional u16 property already set earlier"));
+        let message = "decode_optional_u16 - Invalid duplicate optional u16 property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     *value = Some(u16::from_be_bytes(bytes[..2].try_into().unwrap()));
@@ -602,13 +661,15 @@ pub(crate) fn decode_optional_u16<'a>(bytes: &'a[u8], value: &mut Option<u16>) -
 
 pub(crate) fn decode_optional_u32<'a>(bytes: &'a[u8], value: &mut Option<u32>) -> GneissResult<&'a[u8]> {
     if bytes.len() < 4 {
-        error!("Packet Decode - Insufficent packet bytes for u32 property");
-        return Err(GneissError::new_decoding_failure("insufficient packet data for u32 property value"));
+        let message = "decode_optional_u32 - Insufficent packet bytes for u32 property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     if value.is_some() {
-        error!("Packet Decode - Invalid duplicate optional u32 property");
-        return Err(GneissError::new_decoding_failure("optional u32 property already set earlier"));
+        let message = "decode_optional_u32 - Invalid duplicate optional u32 property";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     *value = Some(u32::from_be_bytes(bytes[..4].try_into().unwrap()));

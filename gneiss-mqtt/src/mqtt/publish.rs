@@ -114,7 +114,7 @@ fn get_publish_packet_user_property(packet: &MqttPacket, index: usize) -> &UserP
         }
     }
 
-    panic!("Internal encoding error: invalid user property state");
+    panic!("get_publish_packet_user_property - invalid user property state");
 }
 
 fn get_publish_packet_payload(packet: &MqttPacket) -> &[u8] {
@@ -124,7 +124,7 @@ fn get_publish_packet_payload(packet: &MqttPacket) -> &[u8] {
         }
     }
 
-    panic!("Internal encoding error: invalid publish payload state");
+    panic!("get_publish_packet_payload - invalid publish payload state");
 }
 
 #[rustfmt::skip]
@@ -246,8 +246,9 @@ fn decode_publish_properties(property_bytes: &[u8], packet : &mut PublishPacket)
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             PROPERTY_KEY_CONTENT_TYPE => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.content_type)?; }
             _ => {
-                error!("PublishPacket Decode - Invalid property type ({})", property_key);
-                return Err(GneissError::new_decoding_failure("invalid property type for publish packet"));
+                let message = format!("decode_publish_properties - invalid property type ({})", property_key);
+                error!("{}", message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
     }
@@ -255,7 +256,7 @@ fn decode_publish_properties(property_bytes: &[u8], packet : &mut PublishPacket)
     Ok(())
 }
 
-pub(crate) fn decode_publish_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+pub(crate) fn decode_publish_packet5(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
 
     let mut box_packet = Box::new(MqttPacket::Publish(PublishPacket { ..Default::default() }));
 
@@ -281,8 +282,9 @@ pub(crate) fn decode_publish_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
 
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
-            error!("PublishPacket Decode - property length exceeds overall packet length");
-            return Err(GneissError::new_decoding_failure("property length exceeds overall packet length in publish packet"));
+            let message = "decode_publish_packet5 - property length exceeds overall packet length";
+            error!("{}", message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         let properties_bytes = &mutable_body[..properties_length];
@@ -297,52 +299,91 @@ pub(crate) fn decode_publish_packet(first_byte: u8, packet_body: &[u8]) -> Gneis
         return Ok(box_packet);
     }
 
-    panic!("PublishPacket Decode - Internal error");
+    panic!("decode_publish_packet5 - internal error");
+}
+
+pub(crate) fn decode_publish_packet311(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+
+    let mut box_packet = Box::new(MqttPacket::Publish(PublishPacket { ..Default::default() }));
+
+    if let MqttPacket::Publish(packet) = box_packet.as_mut() {
+        if (first_byte & PUBLISH_PACKET_FIXED_HEADER_DUPLICATE_FLAG) != 0 {
+            packet.duplicate = true;
+        }
+
+        if (first_byte & PUBLISH_PACKET_FIXED_HEADER_RETAIN_FLAG) != 0 {
+            packet.retain = true;
+        }
+
+        packet.qos = QualityOfService::try_from((first_byte >> 1) & QOS_MASK)?;
+
+        let mut mutable_body = packet_body;
+        mutable_body = decode_length_prefixed_string(mutable_body, &mut packet.topic)?;
+
+        if packet.qos != QualityOfService::AtMostOnce {
+            mutable_body = decode_u16(mutable_body, &mut packet.packet_id)?;
+        }
+
+        if !mutable_body.is_empty() {
+            packet.payload = Some(mutable_body.to_vec());
+        }
+
+        return Ok(box_packet);
+    }
+
+    panic!("decode_publish_packet311 - internal error");
 }
 
 pub(crate) fn validate_publish_packet_outbound(packet: &PublishPacket) -> GneissResult<()> {
 
+    // This validation function gets called before packet id assignment
     if packet.packet_id != 0 {
-        error!("PublishPacket Outbound Validation - packet id may not be set");
-        return Err(GneissError::new_packet_validation(PacketType::Publish, "packet id is set"));
+        let message = "validate_publish_packet_outbound - packet id may not be set";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Publish, message));
     }
 
     if packet.duplicate {
-        error!("PublishPacket Outbound Validation - duplicate flag is set");
-        return Err(GneissError::new_packet_validation(PacketType::Publish, "duplicate flag is set"));
+        let message = "validate_publish_packet_outbound - duplicate flag is set";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Publish, message));
     }
 
-    validate_string_length(packet.topic.as_str(), PacketType::Publish, "Publish", "topic")?;
+    validate_string_length(packet.topic.as_str(), PacketType::Publish, "validate_publish_packet_outbound", "topic")?;
 
     if !is_valid_topic(&packet.topic) {
-        error!("PublishPacket Outbound Validation - invalid topic");
-        return Err(GneissError::new_packet_validation(PacketType::Publish, "invalid topic"));
+        let message = "validate_publish_packet_outbound - invalid topic";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Publish, message));
     }
 
     if let Some(alias) = packet.topic_alias {
         if alias == 0 {
-            error!("PublishPacket Outbound Validation - topic alias is zero");
-            return Err(GneissError::new_packet_validation(PacketType::Publish, "topic alias is zero"));
+            let message = "validate_publish_packet_outbound - topic alias is zero";
+            error!("{}", message);
+            return Err(GneissError::new_packet_validation(PacketType::Publish, message));
         }
     }
 
     if packet.subscription_identifiers.is_some() {
-        error!("PublishPacket Outbound Validation - subscription identifiers not allowed on client packets");
-        return Err(GneissError::new_packet_validation(PacketType::Publish, "subscription identifiers may not be set"));
+        let message = "validate_publish_packet_outbound - subscription identifiers not allowed on client packets";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Publish, message));
     }
 
     if let Some(response_topic) = &packet.response_topic {
         if !is_valid_topic(response_topic) {
-            error!("PublishPacket Outbound Validation - invalid response topic");
-            return Err(GneissError::new_packet_validation(PacketType::Publish, "invalid response topic"));
+            let message = "validate_publish_packet_outbound - invalid response topic";
+            error!("{}", message);
+            return Err(GneissError::new_packet_validation(PacketType::Publish, message));
         }
 
-        validate_string_length(response_topic.as_str(), PacketType::Publish, "Publish", "response_topic")?;
+        validate_string_length(response_topic.as_str(), PacketType::Publish, "validate_publish_packet_outbound", "response_topic")?;
     }
 
-    validate_user_properties(&packet.user_properties, PacketType::Publish, "Publish")?;
-    validate_optional_binary_length(&packet.correlation_data, PacketType::Publish, "Publish", "correlation_data")?;
-    validate_optional_string_length(&packet.content_type, PacketType::Publish, "Publish", "content_type")?;
+    validate_user_properties(&packet.user_properties, PacketType::Publish, "validate_publish_packet_outbound")?;
+    validate_optional_binary_length(&packet.correlation_data, PacketType::Publish, "validate_publish_packet_outbound", "correlation_data")?;
+    validate_optional_string_length(&packet.content_type, PacketType::Publish, "validate_publish_packet_outbound", "content_type")?;
 
     Ok(())
 }
@@ -352,32 +393,37 @@ pub(crate) fn validate_publish_packet_outbound_internal(packet: &PublishPacket, 
     let (total_remaining_length, _) = compute_publish_packet_length_properties5(packet, &context.outbound_alias_resolution.unwrap_or(OutboundAliasResolution{..Default::default() }))?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
-        error!("PublishPacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(GneissError::new_packet_validation(PacketType::Publish, "packet length exceeds maximum packet size allowed"));
+        let message = "validate_publish_packet_outbound_internal - packet length exceeds maximum packet size allowed to server";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Publish, message));
     }
 
     if packet.packet_id == 0 && packet.qos != QualityOfService::AtMostOnce {
-        error!("PublishPacket Outbound Validation - packet id must be non zero");
-        return Err(GneissError::new_packet_validation(PacketType::Publish, "packet id is zero"));
+        let message = "validate_publish_packet_outbound_internal - packet id must be non zero";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Publish, message));
     }
 
     let settings = context.negotiated_settings.unwrap();
     if packet.retain && !settings.retain_available {
-        error!("PublishPacket Outbound Validation - retained messages not allowed on this connection");
-        return Err(GneissError::new_packet_validation(PacketType::Publish, "session forbids retain"));
+        let message = "validate_publish_packet_outbound_internal - retained messages not allowed on this connection";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Publish, message));
     }
 
     match settings.maximum_qos {
         QualityOfService::AtMostOnce => {
             if packet.qos != QualityOfService::AtMostOnce {
-                error!("PublishPacket Outbound Validation - quality of service exceeds established maximum");
-                return Err(GneissError::new_packet_validation(PacketType::Publish, "qos exceeds session maximum"));
+                let message = "validate_publish_packet_outbound_internal - quality of service exceeds established maximum";
+                error!("{}", message);
+                return Err(GneissError::new_packet_validation(PacketType::Publish, message));
             }
         }
         QualityOfService::AtLeastOnce => {
             if packet.qos == QualityOfService::ExactlyOnce {
-                error!("PublishPacket Outbound Validation - quality of service exceeds established maximum");
-                return Err(GneissError::new_packet_validation(PacketType::Publish, "qos exceeds session maximum"));
+                let message = "validate_publish_packet_outbound_internal - quality of service exceeds established maximum";
+                error!("{}", message);
+                return Err(GneissError::new_packet_validation(PacketType::Publish, message));
             }
         }
         _ => {}
@@ -390,13 +436,15 @@ pub(crate) fn validate_publish_packet_inbound_internal(packet: &PublishPacket, _
 
     /* alias resolution happens after decode and before validation, so by now we should have a real topic */
     if packet.topic.is_empty() {
-        error!("PublishPacket Inbound Validation - topic could not be resolved");
-        return Err(GneissError::new_packet_validation(PacketType::Publish, "topic could not be resolved"));
+        let message = "validate_publish_packet_inbound_internal - topic could not be resolved";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Publish, message));
     }
 
     if packet.packet_id == 0 && packet.qos != QualityOfService::AtMostOnce {
-        error!("PublishPacket Inbound Validation - packet id must be non zero");
-        return Err(GneissError::new_packet_validation(PacketType::Publish, "packet id is zero"));
+        let message = "validate_publish_packet_inbound_internal - packet id must be non zero";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Publish, message));
     }
 
     Ok(())

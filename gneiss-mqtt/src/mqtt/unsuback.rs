@@ -41,7 +41,7 @@ fn get_unsuback_packet_user_property(packet: &MqttPacket, index: usize) -> &User
         }
     }
 
-    panic!("Internal encoding error: invalid user property state");
+    panic!("get_unsuback_packet_user_property - invalid user property state");
 }
 
 #[rustfmt::skip]
@@ -68,7 +68,7 @@ pub(crate) fn write_unsuback_encoding_steps5(packet: &UnsubackPacket, _: &Encodi
 
 #[cfg(not(test))]
 pub(crate) fn write_unsuback_encoding_steps5(_: &UnsubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    Err(GneissError::new_unimplemented("Test-only functionality"))
+    Err(GneissError::new_unimplemented("write_unsuback_encoding_steps5 - test-only functionality"))
 }
 
 #[cfg(test)]
@@ -82,7 +82,7 @@ pub(crate) fn write_unsuback_encoding_steps311(packet: &UnsubackPacket, _: &Enco
 
 #[cfg(not(test))]
 pub(crate) fn write_unsuback_encoding_steps311(_: &UnsubackPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    Err(GneissError::new_unimplemented("Test-only functionality"))
+    Err(GneissError::new_unimplemented("write_unsuback_encoding_steps311 - test-only functionality"))
 }
 
 fn decode_unsuback_properties(property_bytes: &[u8], packet : &mut UnsubackPacket) -> GneissResult<()> {
@@ -96,8 +96,9 @@ fn decode_unsuback_properties(property_bytes: &[u8], packet : &mut UnsubackPacke
             PROPERTY_KEY_REASON_STRING => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.reason_string)?; }
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
-                error!("UnsubackPacket Decode - Invalid property type ({})", property_key);
-                return Err(GneissError::new_decoding_failure("invalid property for unsuback packet"));
+                let message = format!("decode_unsuback_properties - invalid property type ({})", property_key);
+                error!("{}", message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
     }
@@ -105,11 +106,12 @@ fn decode_unsuback_properties(property_bytes: &[u8], packet : &mut UnsubackPacke
     Ok(())
 }
 
-pub(crate) fn decode_unsuback_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+pub(crate) fn decode_unsuback_packet5(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
 
     if first_byte != UNSUBACK_FIRST_BYTE {
-        error!("UnsubackPacket Decode - invalid first byte");
-        return Err(GneissError::new_decoding_failure("invalid first byte for unsuback packet"));
+        let message = "decode_unsuback_packet5 - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let mut box_packet = Box::new(MqttPacket::Unsuback(UnsubackPacket { ..Default::default() }));
@@ -121,8 +123,9 @@ pub(crate) fn decode_unsuback_packet(first_byte: u8, packet_body: &[u8]) -> Gnei
         let mut properties_length: usize = 0;
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
-            error!("UnsubackPacket Decode - property length exceeds overall packet length");
-            return Err(GneissError::new_decoding_failure("property length exceeds overall packet length for unsuback packet"));
+            let message = "decode_unsuback_packet5 - property length exceeds overall packet length";
+            error!("{}", message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         let properties_bytes = &mutable_body[..properties_length];
@@ -140,10 +143,33 @@ pub(crate) fn decode_unsuback_packet(first_byte: u8, packet_body: &[u8]) -> Gnei
         return Ok(box_packet);
     }
 
-    panic!("UnsubackPacket Decode - Internal error");
+    panic!("decode_unsuback_packet5 - internal error");
 }
 
-validate_ack_inbound_internal!(validate_unsuback_packet_inbound_internal, UnsubackPacket, PacketType::Unsuback, "Unsuback");
+pub(crate) fn decode_unsuback_packet311(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    if first_byte != UNSUBACK_FIRST_BYTE {
+        let message = "decode_unsuback_packet311 - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
+    }
+
+    if packet_body.len () != 2 {
+        let message = "decode_unsuback_packet311 - invalid remaining length";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
+    }
+
+    let mut box_packet = Box::new(MqttPacket::Unsuback(UnsubackPacket { ..Default::default() }));
+    if let MqttPacket::Unsuback(packet) = box_packet.as_mut() {
+        decode_u16(packet_body, &mut packet.packet_id)?;
+
+        return Ok(box_packet);
+    }
+
+    panic!("decode_unsuback_packet311 - internal error");
+}
+
+validate_ack_inbound_internal!(validate_unsuback_packet_inbound_internal, UnsubackPacket, PacketType::Unsuback, "validate_unsuback_packet_inbound_internal");
 
 impl fmt::Display for UnsubackPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

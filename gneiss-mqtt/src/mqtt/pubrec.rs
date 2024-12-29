@@ -23,12 +23,13 @@ define_ack_packet_user_property_accessor!(get_pubrec_packet_user_property, Pubre
 define_ack_packet_encoding_impl5!(write_pubrec_encoding_steps5, PubrecPacket, PubrecReasonCode, PUBREC_FIRST_BYTE, compute_pubrec_packet_length_properties, get_pubrec_packet_reason_string, get_pubrec_packet_user_property);
 define_ack_packet_encoding_impl311!(write_pubrec_encoding_steps311, PubrecPacket, PUBREC_FIRST_BYTE);
 
-define_ack_packet_decode_properties_function!(decode_pubrec_properties, PubrecPacket, "Pubrec");
-define_ack_packet_decode_function!(decode_pubrec_packet, Pubrec, PubrecPacket, "Pubrec", PUBREC_FIRST_BYTE, PubrecReasonCode, decode_pubrec_properties);
+define_ack_packet_decode_properties_function!(decode_pubrec_properties, PubrecPacket, "decode_pubrec_properties");
+define_ack_packet_decode_function5!(decode_pubrec_packet5, Pubrec, PubrecPacket, "decode_pubrec_packet5", PUBREC_FIRST_BYTE, PubrecReasonCode, decode_pubrec_properties);
+define_ack_packet_decode_function311!(decode_pubrec_packet311, Pubrec, PubrecPacket, "decode_pubrec_packet311", PUBREC_FIRST_BYTE);
 
-validate_ack_outbound!(validate_pubrec_packet_outbound, PubrecPacket, PacketType::Pubrec, "Pubrec");
-validate_ack_outbound_internal!(validate_pubrec_packet_outbound_internal, PubrecPacket, PacketType::Pubrec, compute_pubrec_packet_length_properties, "Pubrec");
-validate_ack_inbound_internal!(validate_pubrec_packet_inbound_internal, PubrecPacket, PacketType::Pubrec, "Pubrec");
+validate_ack_outbound!(validate_pubrec_packet_outbound, PubrecPacket, PacketType::Pubrec, "validate_pubrec_packet_outbound");
+validate_ack_outbound_internal!(validate_pubrec_packet_outbound_internal, PubrecPacket, PacketType::Pubrec, compute_pubrec_packet_length_properties, "validate_pubrec_packet_outbound_internal");
+validate_ack_inbound_internal!(validate_pubrec_packet_inbound_internal, PubrecPacket, PacketType::Pubrec, "validate_pubrec_packet_inbound_internal");
 
 define_ack_packet_display_trait!(PubrecPacket, "PubrecPacket", PubrecReasonCode);
 

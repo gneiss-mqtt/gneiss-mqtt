@@ -24,12 +24,13 @@ define_ack_packet_encoding_impl5!(write_puback_encoding_steps5, PubackPacket, Pu
 define_ack_packet_encoding_impl311!(write_puback_encoding_steps311, PubackPacket, PUBACK_FIRST_BYTE);
 
 
-define_ack_packet_decode_properties_function!(decode_puback_properties, PubackPacket, "Puback");
-define_ack_packet_decode_function!(decode_puback_packet, Puback, PubackPacket, "Puback", PUBACK_FIRST_BYTE, PubackReasonCode, decode_puback_properties);
+define_ack_packet_decode_properties_function!(decode_puback_properties, PubackPacket, "decode_puback_properties");
+define_ack_packet_decode_function5!(decode_puback_packet5, Puback, PubackPacket, "decode_puback_packet5", PUBACK_FIRST_BYTE, PubackReasonCode, decode_puback_properties);
+define_ack_packet_decode_function311!(decode_puback_packet311, Puback, PubackPacket, "decode_puback_packet311", PUBACK_FIRST_BYTE);
 
-validate_ack_outbound!(validate_puback_packet_outbound, PubackPacket, PacketType::Puback, "Puback");
-validate_ack_outbound_internal!(validate_puback_packet_outbound_internal, PubackPacket, PacketType::Puback, compute_puback_packet_length_properties, "Puback");
-validate_ack_inbound_internal!(validate_puback_packet_inbound_internal, PubackPacket, PacketType::Puback, "Puback");
+validate_ack_outbound!(validate_puback_packet_outbound, PubackPacket, PacketType::Puback, "validate_puback_packet_outbound");
+validate_ack_outbound_internal!(validate_puback_packet_outbound_internal, PubackPacket, PacketType::Puback, compute_puback_packet_length_properties, "validate_puback_packet_outbound_internal");
+validate_ack_inbound_internal!(validate_puback_packet_inbound_internal, PubackPacket, PacketType::Puback, "validate_puback_packet_inbound_internal");
 
 define_ack_packet_display_trait!(PubackPacket, "PubackPacket", PubackReasonCode);
 

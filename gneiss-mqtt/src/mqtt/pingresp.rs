@@ -22,20 +22,22 @@ pub(crate) fn write_pingresp_encoding_steps(_: &PingrespPacket, _: &EncodingCont
 
 #[cfg(not(test))]
 pub(crate) fn write_pingresp_encoding_steps(_: &PingrespPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    Err(GneissError::new_unimplemented("Test-only functionality"))
+    Err(GneissError::new_unimplemented("write_pingresp_encoding_steps - test-only functionality"))
 }
 
 const PINGRESP_FIRST_BYTE : u8 = PACKET_TYPE_PINGRESP << 4;
 
 pub(crate) fn decode_pingresp_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if !packet_body.is_empty() {
-        error!("Packet Decode - Pingresp packet with non-zero remaining length");
-        return Err(GneissError::new_decoding_failure("non-zero remaining length for pingresp packet"));
+        let message = "decode_pingresp_packet - non-zero remaining length";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     if first_byte != PINGRESP_FIRST_BYTE {
-        error!("Packet Decode - Pingresp packet with invalid first byte");
-        return Err(GneissError::new_decoding_failure("invalid first byte for pingresp packet"));
+        let message = "decode_pingresp_packet - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     Ok(Box::new(MqttPacket::Pingresp(PingrespPacket{})))

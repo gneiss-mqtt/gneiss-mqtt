@@ -73,8 +73,9 @@ impl TryFrom<u8> for QualityOfService {
             1 => { Ok(QualityOfService::AtLeastOnce) }
             2 => { Ok(QualityOfService::ExactlyOnce) }
             _ => {
-                error!("Packet Decode - Invalid quality of service value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid qos value"))
+                let message = format!("QualityOfService::try_from - Invalid quality of service value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -115,8 +116,9 @@ impl TryFrom<u8> for PayloadFormatIndicator {
             0 => { Ok(PayloadFormatIndicator::Bytes) }
             1 => { Ok(PayloadFormatIndicator::Utf8) }
             _ => {
-                error!("Packet Decode - Invalid payload format indicator value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid payload format indicator value"))
+                let message = format!("PayloadFormatIndicator::try_from - invalid payload format indicator value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -163,8 +165,9 @@ impl TryFrom<u8> for RetainHandlingType {
             1 => { Ok(RetainHandlingType::SendOnSubscribeIfNew) }
             2 => { Ok(RetainHandlingType::DontSend) }
             _ => {
-                error!("Packet Decode - Invalid retain handling type value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid retain handling type value"))
+                let message = format!("RetainHandlingType::try_from - Invalid retain handling type value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -301,8 +304,9 @@ impl TryFrom<u8> for ConnectReasonCode {
             157 => { Ok(ConnectReasonCode::ServerMoved) }
             159 => { Ok(ConnectReasonCode::ConnectionRateExceeded) }
             _ => {
-                error!("Packet Decode - Invalid connect reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid connect reason code value"))
+                let message = format!("ConnectReasonCode::try_from - Invalid connect reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -349,7 +353,7 @@ pub(crate) fn convert_connect_reason_code_to_311_encoding(reason_code: ConnectRe
         ConnectReasonCode::ServerUnavailable => Ok(3),
         ConnectReasonCode::BadUsernameOrPassword => Ok(4),
         ConnectReasonCode::NotAuthorized => Ok(5),
-        _ => Err(GneissError::new_protocol_error("Invalid ConnectReasonCode in Connack Packet for MQTT311"))
+        _ => Err(GneissError::new_protocol_error("convert_connect_reason_code_to_311_encoding - invalid ConnectReasonCode"))
     }
 }
 
@@ -361,7 +365,7 @@ pub(crate) fn convert_311_encoding_to_connect_reason_code(value: u8) -> GneissRe
         3 => { Ok(ConnectReasonCode::ServerUnavailable) },
         4 => { Ok(ConnectReasonCode::BadUsernameOrPassword) },
         5 => { Ok(ConnectReasonCode::NotAuthorized) },
-        _ => Err(GneissError::new_protocol_error("Invalid 311 encoding of a ConnectReasonCode"))
+        _ => Err(GneissError::new_protocol_error("convert_311_encoding_to_connect_reason_code - invalid 311 encoding of a ConnectReasonCode"))
     }
 }
 
@@ -443,8 +447,9 @@ impl TryFrom<u8> for PubackReasonCode {
             151 => { Ok(PubackReasonCode::QuotaExceeded) }
             153 => { Ok(PubackReasonCode::PayloadFormatInvalid) }
             _ => {
-                error!("Packet Decode - Invalid puback reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid puback reason code value"))
+                let message = format!("PubackReasonCode::try_from - invalid puback reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -547,8 +552,9 @@ impl TryFrom<u8> for PubrecReasonCode {
             151 => { Ok(PubrecReasonCode::QuotaExceeded) }
             153 => { Ok(PubrecReasonCode::PayloadFormatInvalid) }
             _ => {
-                error!("Packet Decode - Invalid pubrec reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid pubrec reason code value"))
+                let message = format!("Packet Decode - Invalid pubrec reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -606,8 +612,9 @@ impl TryFrom<u8> for PubrelReasonCode {
             0 => { Ok(PubrelReasonCode::Success) }
             146 => { Ok(PubrelReasonCode::PacketIdentifierNotFound) }
             _ => {
-                error!("Packet Decode - Invalid pubrel reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid pubrel reason code value"))
+                let message = format!("PubrelReasonCode::try_from - Invalid pubrel reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -660,8 +667,9 @@ impl TryFrom<u8> for PubcompReasonCode {
             0 => { Ok(PubcompReasonCode::Success) }
             146 => { Ok(PubcompReasonCode::PacketIdentifierNotFound) }
             _ => {
-                error!("Packet Decode - Invalid pubcomp reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid pubcomp reason code value"))
+                let message = format!("PubcompReasonCode::try_from - Invalid pubcomp reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -888,8 +896,9 @@ impl TryFrom<u8> for DisconnectReasonCode {
             161 => { Ok(DisconnectReasonCode::SubscriptionIdentifiersNotSupported) }
             162 => { Ok(DisconnectReasonCode::WildcardSubscriptionsNotSupported) }
             _ => {
-                error!("Packet Decode - Invalid disconnect reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid disconnect reason code value"))
+                let message = format!("DisconnectReasonCode::try_from - Invalid disconnect reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -1008,8 +1017,9 @@ impl TryFrom<u8> for SubackReasonCode {
             161 => { Ok(SubackReasonCode::SubscriptionIdentifiersNotSupported) }
             162 => { Ok(SubackReasonCode::WildcardSubscriptionsNotSupported) }
             _ => {
-                error!("Packet Decode - Invalid suback reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid suback reason code value"))
+                let message = format!("SubackReasonCode::try_from - invalid suback reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -1044,6 +1054,20 @@ pub(crate) fn convert_suback_reason_code_to_311_encoding(reason_code: SubackReas
         SubackReasonCode::GrantedQos1 => Ok(1),
         SubackReasonCode::GrantedQos2 => Ok(2),
         _ => Ok(128),
+    }
+}
+
+pub(crate) fn convert_311_encoding_to_suback_reason_code(value: u8) -> GneissResult<SubackReasonCode> {
+    match value {
+        0 => Ok(SubackReasonCode::GrantedQos0),
+        1 => Ok(SubackReasonCode::GrantedQos1),
+        2 => Ok(SubackReasonCode::GrantedQos2),
+        128 => Ok(SubackReasonCode::UnspecifiedError),
+        _ => {
+            let message = format!("convert_311_encoding_to_suback_reason_code - invalid suback reason code value ({})", value);
+            error!("{}", message);
+            Err(GneissError::new_decoding_failure(message))
+        }
     }
 }
 
@@ -1098,8 +1122,9 @@ impl TryFrom<u8> for UnsubackReasonCode {
             144 => { Ok(UnsubackReasonCode::TopicNameInvalid) }
             145 => { Ok(UnsubackReasonCode::PacketIdentifierInUse) }
             _ => {
-                error!("Packet Decode - Invalid unsuback reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid unsuback reason code value"))
+                let message = format!("UnsubackReasonCode::try_from - Invalid unsuback reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -1154,8 +1179,9 @@ impl TryFrom<u8> for AuthenticateReasonCode {
             24 => { Ok(AuthenticateReasonCode::ContinueAuthentication) }
             25 => { Ok(AuthenticateReasonCode::ReAuthenticate) }
             _ => {
-                error!("Packet Decode - Invalid authenticate reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid authenticate reason code value"))
+                let message = format!("AuthenticateReasonCode::try_from - Invalid authenticate reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }

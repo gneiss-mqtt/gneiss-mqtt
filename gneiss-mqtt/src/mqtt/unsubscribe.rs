@@ -37,7 +37,7 @@ fn get_unsubscribe_packet_user_property(packet: &MqttPacket, index: usize) -> &U
         }
     }
 
-    panic!("Internal encoding error: invalid user property state");
+    panic!("get_unsubscribe_packet_user_property - invalid user property state");
 }
 
 fn get_unsubscribe_packet_topic_filter(packet: &MqttPacket, index: usize) -> &str {
@@ -45,7 +45,7 @@ fn get_unsubscribe_packet_topic_filter(packet: &MqttPacket, index: usize) -> &st
         return &unsubscribe.topic_filters[index];
     }
 
-    panic!("Internal encoding error: invalid unsubscribe topic filter state");
+    panic!("get_unsubscribe_packet_topic_filter - invalid unsubscribe topic filter state");
 }
 
 #[rustfmt::skip]
@@ -105,8 +105,9 @@ fn decode_unsubscribe_properties(property_bytes: &[u8], packet : &mut Unsubscrib
         match property_key {
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
-                error!("UnsubscribePacket Decode - Invalid property type ({})", property_key);
-                return Err(GneissError::new_decoding_failure("invalid property type for unsubscribe packet"));
+                let message = format!("decode_unsubscribe_properties - invalid property type ({})", property_key);
+                error!("{}", message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
     }
@@ -115,11 +116,12 @@ fn decode_unsubscribe_properties(property_bytes: &[u8], packet : &mut Unsubscrib
 }
 
 #[cfg(test)]
-pub(crate) fn decode_unsubscribe_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+pub(crate) fn decode_unsubscribe_packet5(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
 
     if first_byte != UNSUBSCRIBE_FIRST_BYTE {
-        error!("UnsubscribePacket Decode - invalid first byte");
-        return Err(GneissError::new_decoding_failure("invalid first byte for unsubscribe packet"));
+        let message = "decode_unsubscribe_packet5 - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let mut box_packet = Box::new(MqttPacket::Unsubscribe(UnsubscribePacket { ..Default::default() }));
@@ -131,8 +133,9 @@ pub(crate) fn decode_unsubscribe_packet(first_byte: u8, packet_body: &[u8]) -> G
         let mut properties_length: usize = 0;
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
-            error!("UnsubscribePacket Decode - property length exceeds overall packet length");
-            return Err(GneissError::new_decoding_failure("property length exceeds overall packet length for unsubscribe packet"));
+            let message = "decode_unsubscribe_packet5 - property length exceeds overall packet length";
+            error!("{}", message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         let properties_bytes = &mutable_body[..properties_length];
@@ -150,28 +153,63 @@ pub(crate) fn decode_unsubscribe_packet(first_byte: u8, packet_body: &[u8]) -> G
         return Ok(box_packet);
     }
 
-    panic!("UnsubscribePacket Decode - Internal error");
+    panic!("decode_unsubscribe_packet5 - internal error");
 }
 
 #[cfg(not(test))]
-pub(crate) fn decode_unsubscribe_packet(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
-    Err(GneissError::new_unimplemented("Test-only functionality"))
+pub(crate) fn decode_unsubscribe_packet5(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    Err(GneissError::new_unimplemented("decode_unsubscribe_packet5 - test-only functionality"))
+}
+
+#[cfg(test)]
+pub(crate) fn decode_unsubscribe_packet311(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+
+    if first_byte != UNSUBSCRIBE_FIRST_BYTE {
+        let message = "decode_unsubscribe_packet311 - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
+    }
+
+    let mut box_packet = Box::new(MqttPacket::Unsubscribe(UnsubscribePacket { ..Default::default() }));
+
+    if let MqttPacket::Unsubscribe(packet) = box_packet.as_mut() {
+        let mut mutable_body = packet_body;
+        mutable_body = decode_u16(mutable_body, &mut packet.packet_id)?;
+
+        while !mutable_body.is_empty() {
+            let mut topic_filter = String::new();
+            mutable_body = decode_length_prefixed_string(mutable_body, &mut topic_filter)?;
+
+            packet.topic_filters.push(topic_filter);
+        }
+
+        return Ok(box_packet);
+    }
+
+    panic!("decode_unsubscribe_packet311 - internal error");
+}
+
+#[cfg(not(test))]
+pub(crate) fn decode_unsubscribe_packet311(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    Err(GneissError::new_unimplemented("decode_unsubscribe_packet311 - test-only functionality"))
 }
 
 pub(crate) fn validate_unsubscribe_packet_outbound(packet: &UnsubscribePacket) -> GneissResult<()> {
     if packet.packet_id != 0 {
-        error!("UnsubscribePacket Outbound Validation - packet id may not be set");
-        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, "packet id set"));
+        let message = "validate_unsubscribe_packet_outbound - packet id may not be set";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, message));
     }
 
     if packet.topic_filters.is_empty() {
-        error!("UnsubscribePacket Outbound Validation - empty topic filters list");
-        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, "topic filters empty"));
+        let message = "validate_unsubscribe_packet_outbound - empty topic filters list";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, message));
     }
 
     // topic filters are checked in detail in the internal validator
 
-    validate_user_properties(&packet.user_properties, PacketType::Unsubscribe, "Unsubscribe")?;
+    validate_user_properties(&packet.user_properties, PacketType::Unsubscribe, "validate_unsubscribe_packet_outbound")?;
 
     Ok(())
 }
@@ -181,19 +219,22 @@ pub(crate) fn validate_unsubscribe_packet_outbound_internal(packet: &Unsubscribe
     let (total_remaining_length, _) = compute_unsubscribe_packet_length_properties5(packet)?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
-        error!("UnsubscribePacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, "packet length exceeds maximum packet size allowed"));
+        let message = "validate_unsubscribe_packet_outbound_internal - packet length exceeds maximum packet size allowed to server";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, message));
     }
 
     if packet.packet_id == 0 {
-        error!("UnsubscribePacket Outbound Validation - packet id is zero");
-        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, "packet id is zero"));
+        let message = "validate_unsubscribe_packet_outbound_internal - packet id is zero";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, message));
     }
 
     for filter in &packet.topic_filters {
         if !is_valid_topic_filter_internal(filter, context, None) {
-            error!("UnsubscribePacket Outbound Validation - invalid topic filter");
-            return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, "invalid topic filter"));
+            let message = "validate_unsubscribe_packet_outbound_internal - invalid topic filter";
+            error!("{}", message);
+            return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, message));
         }
     }
 

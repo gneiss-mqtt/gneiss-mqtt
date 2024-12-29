@@ -51,7 +51,7 @@ fn get_disconnect_packet_user_property(packet: &MqttPacket, index: usize) -> &Us
         }
     }
 
-    panic!("Internal encoding error: invalid user property state");
+    panic!("get_disconnect_packet_user_property - invalid user property state");
 }
 
 #[rustfmt::skip]
@@ -103,8 +103,9 @@ fn decode_disconnect_properties(property_bytes: &[u8], packet : &mut DisconnectP
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             PROPERTY_KEY_SERVER_REFERENCE => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.server_reference)?; }
             _ => {
-                error!("Packet Decode - Invalid DisconnectPacket property type ({})", property_key);
-                return Err(GneissError::new_decoding_failure("invalid property type for disconnect packet"));
+                let message = format!("decode_disconnect_properties - invalid property type ({})", property_key);
+                error!("{}", message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
     }
@@ -112,10 +113,11 @@ fn decode_disconnect_properties(property_bytes: &[u8], packet : &mut DisconnectP
     Ok(())
 }
 
-pub(crate) fn decode_disconnect_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+pub(crate) fn decode_disconnect_packet5(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if first_byte != (PACKET_TYPE_DISCONNECT << 4) {
-        error!("DisconnectPacket Decode - invalid first byte");
-        return Err(GneissError::new_decoding_failure("invalid first byte for disconnect packet"));
+        let message = "decode_disconnect_packet5 - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let mut box_packet = Box::new(MqttPacket::Disconnect(DisconnectPacket { ..Default::default() }));
@@ -134,8 +136,9 @@ pub(crate) fn decode_disconnect_packet(first_byte: u8, packet_body: &[u8]) -> Gn
         let mut properties_length : usize = 0;
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length != mutable_body.len() {
-            error!("DisconnectPacket Decode - property length exceeds overall packet length");
-            return Err(GneissError::new_decoding_failure("mismatch between property length and overall packet length for disconnect packet"));
+            let message = "decode_disconnect_packet5 - property length exceeds overall packet length";
+            error!("{}", message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         decode_disconnect_properties(mutable_body, packet)?;
@@ -143,14 +146,33 @@ pub(crate) fn decode_disconnect_packet(first_byte: u8, packet_body: &[u8]) -> Gn
         return Ok(box_packet);
     }
 
-    panic!("DisconnectPacket Decode - Internal error");
+    panic!("decode_disconnect_packet - internal error");
+}
+
+pub(crate) fn decode_disconnect_packet311(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    if !packet_body.is_empty() {
+        let message = "decode_disconnect_packet311 - non-zero remaining length";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
+    }
+
+    if first_byte != (PACKET_TYPE_DISCONNECT << 4) {
+        let message = "decode_disconnect_packet311 - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
+    }
+
+    Ok(Box::new(MqttPacket::Disconnect(DisconnectPacket {
+        reason_code : DisconnectReasonCode::UnspecifiedError,
+        ..Default::default()
+    })))
 }
 
 pub(crate) fn validate_disconnect_packet_outbound(packet: &DisconnectPacket) -> GneissResult<()> {
 
-    validate_optional_string_length(&packet.reason_string, PacketType::Disconnect, "Disconnect", "reason_string")?;
-    validate_user_properties(&packet.user_properties, PacketType::Disconnect, "Disconnect")?;
-    validate_optional_string_length(&packet.server_reference, PacketType::Disconnect, "Disconnect", "server_reference")?;
+    validate_optional_string_length(&packet.reason_string, PacketType::Disconnect, "validate_disconnect_packet_outbound", "reason_string")?;
+    validate_user_properties(&packet.user_properties, PacketType::Disconnect, "validate_disconnect_packet_outbound")?;
+    validate_optional_string_length(&packet.server_reference, PacketType::Disconnect, "validate_disconnect_packet_outbound", "server_reference")?;
 
     Ok(())
 }
@@ -160,8 +182,9 @@ pub(crate) fn validate_disconnect_packet_outbound_internal(packet: &DisconnectPa
     let (total_remaining_length, _) = compute_disconnect_packet_length_properties(packet)?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
-        error!("DisconnectPacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(GneissError::new_packet_validation(PacketType::Disconnect, "packet length exceeds maximum packet size"));
+        let message = "validate_disconnect_packet_outbound_internal - packet length exceeds maximum packet size allowed to server";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Disconnect, message));
     }
 
     /*
@@ -175,8 +198,9 @@ pub(crate) fn validate_disconnect_packet_outbound_internal(packet: &DisconnectPa
     let disconnect_session_expiry_interval = packet.session_expiry_interval_seconds.unwrap_or(connect_session_expiry_interval);
 
     if connect_session_expiry_interval == 0 && disconnect_session_expiry_interval > 0 {
-        error!("DisconnectPacket Outbound Validation - session expiry interval cannot be non-zero when connect session expiry interval was zero");
-        return Err(GneissError::new_packet_validation(PacketType::Disconnect, "session_expiry_interval cannot be non-zero in this connext context"));
+        let message = "validate_disconnect_packet_outbound_internal - session expiry interval cannot be non-zero when connect session expiry interval was zero";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Disconnect, message));
     }
 
     Ok(())
@@ -186,8 +210,9 @@ pub(crate) fn validate_disconnect_packet_inbound_internal(packet: &DisconnectPac
 
     /* protocol error for the server to send us a session expiry interval property */
     if packet.session_expiry_interval_seconds.is_some() {
-        error!("DisconnectPacket Inbound Validation - session expiry interval is non zero");
-        return Err(GneissError::new_packet_validation(PacketType::Disconnect, "session_expiry_interval is non zero"));
+        let message = "validate_disconnect_packet_inbound_internal - session expiry interval is non zero";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Disconnect, message));
     }
 
     Ok(())

@@ -23,12 +23,13 @@ define_ack_packet_user_property_accessor!(get_pubrel_packet_user_property, Pubre
 define_ack_packet_encoding_impl5!(write_pubrel_encoding_steps5, PubrelPacket, PubrelReasonCode, PUBREL_FIRST_BYTE, compute_pubrel_packet_length_properties, get_pubrel_packet_reason_string, get_pubrel_packet_user_property);
 define_ack_packet_encoding_impl311!(write_pubrel_encoding_steps311, PubrelPacket, PUBREL_FIRST_BYTE);
 
-define_ack_packet_decode_properties_function!(decode_pubrel_properties, PubrelPacket, "Pubrel");
-define_ack_packet_decode_function!(decode_pubrel_packet, Pubrel, PubrelPacket, "Pubrel", PUBREL_FIRST_BYTE, PubrelReasonCode, decode_pubrel_properties);
+define_ack_packet_decode_properties_function!(decode_pubrel_properties, PubrelPacket, "decode_pubrel_properties");
+define_ack_packet_decode_function5!(decode_pubrel_packet5, Pubrel, PubrelPacket, "decode_pubrel_packet5", PUBREL_FIRST_BYTE, PubrelReasonCode, decode_pubrel_properties);
+define_ack_packet_decode_function311!(decode_pubrel_packet311, Pubrel, PubrelPacket, "decode_pubrel_packet311", PUBREL_FIRST_BYTE);
 
-validate_ack_outbound!(validate_pubrel_packet_outbound, PubrelPacket, PacketType::Pubrel, "Pubrel");
-validate_ack_outbound_internal!(validate_pubrel_packet_outbound_internal, PubrelPacket, PacketType::Pubrel, compute_pubrel_packet_length_properties, "Pubrel");
-validate_ack_inbound_internal!(validate_pubrel_packet_inbound_internal, PubrelPacket, PacketType::Pubrel, "Pubrel");
+validate_ack_outbound!(validate_pubrel_packet_outbound, PubrelPacket, PacketType::Pubrel, "validate_pubrel_packet_outbound");
+validate_ack_outbound_internal!(validate_pubrel_packet_outbound_internal, PubrelPacket, PacketType::Pubrel, compute_pubrel_packet_length_properties, "validate_pubrel_packet_outbound_internal");
+validate_ack_inbound_internal!(validate_pubrel_packet_inbound_internal, PubrelPacket, PacketType::Pubrel, "validate_pubrel_packet_inbound_internal");
 
 define_ack_packet_display_trait!(PubrelPacket, "PubrelPacket", PubrelReasonCode);
 

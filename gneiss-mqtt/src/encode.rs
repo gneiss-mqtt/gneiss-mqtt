@@ -23,6 +23,8 @@ use crate::mqtt::subscribe::*;
 use crate::mqtt::unsuback::*;
 use crate::mqtt::unsubscribe::*;
 
+use log::*;
+
 use std::collections::VecDeque;
 
 #[derive(Default)]
@@ -113,7 +115,7 @@ impl Encoder {
     ) -> GneissResult<EncodeResult> {
         let capacity = dest.capacity();
         if capacity < 4 {
-            panic!("Encoder - target buffer too small");
+            panic!("Encoder::encode - target buffer too small");
         }
 
         while !self.steps.is_empty() && dest.len() + 4 <= dest.capacity() {
@@ -122,7 +124,7 @@ impl Encoder {
         }
 
         if capacity != dest.capacity() {
-            panic!("Internal error: encoding logic resized dest buffer");
+            panic!("Encoder::encode: encoding logic resized dest buffer");
         }
 
         if self.steps.is_empty() {
@@ -562,13 +564,17 @@ pub fn compute_variable_length_integer_encode_size(value: usize) -> GneissResult
     } else if value < 1usize << 28 {
         Ok(4)
     } else {
-        Err(GneissError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"))
+        let message = "compute_variable_length_integer_encode_size - vli value exceeds the protocol maximum (2 ^ 28 - 1)";
+        error!("{}", message);
+        Err(GneissError::new_encoding_failure(message))
     }
 }
 
 fn encode_vli(value: u32, dest: &mut Vec<u8>) -> GneissResult<()> {
     if value > MAXIMUM_VARIABLE_LENGTH_INTEGER as u32 {
-        return Err(GneissError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
+        let message = "encode_vli - vli value exceeds the protocol maximum (2 ^ 28 - 1)";
+        error!("{}", message);
+        return Err(GneissError::new_encoding_failure(message));
     }
 
     let mut done = false;
