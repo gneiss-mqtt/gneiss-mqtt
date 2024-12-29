@@ -379,8 +379,8 @@ pub(crate) mod testing {
     use crate::decode::testing::*;
     use assert_matches::assert_matches;
 
-    pub(crate) fn do_outbound_size_validate_failure_test(packet: &MqttPacket, expected_packet_type: PacketType) {
-        let encoded_bytes = encode_packet_for_test5(packet);
+    pub(crate) fn do_outbound_size_validate_failure_test(packet: &MqttPacket, protocol_version: ProtocolVersion, expected_packet_type: PacketType) {
+        let encoded_bytes = encode_packet_for_test(packet, protocol_version);
 
         let mut test_validation_context = create_pinned_validation_context();
         test_validation_context.settings.maximum_qos = QualityOfService::ExactlyOnce;
@@ -464,12 +464,12 @@ pub(crate) mod testing {
     pub(crate) use test_ack_validate_failure_invalid_user_properties;
 
     macro_rules! test_ack_validate_failure_outbound_size {
-        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: expr) => {
+        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: expr, $protocol_version: expr) => {
             #[test]
             fn $function_name() {
                 let packet = $packet_factory_function();
 
-                do_outbound_size_validate_failure_test(&MqttPacket::$packet_type_name(packet), $packet_type);
+                do_outbound_size_validate_failure_test(&MqttPacket::$packet_type_name(packet), $protocol_version, $packet_type);
             }
         };
     }

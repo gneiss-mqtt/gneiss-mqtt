@@ -202,22 +202,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn auth_round_trip_encode_decode_default() {
+    fn auth_round_trip_encode_decode_default5() {
         let packet = AuthPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Auth(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Auth(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn auth_round_trip_encode_decode_required() {
+    fn auth_round_trip_encode_decode_required5() {
         let packet = AuthPacket {
             reason_code : AuthenticateReasonCode::ContinueAuthentication,
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Auth(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Auth(packet), ProtocolVersion::Mqtt5));
     }
 
     fn create_all_properties_auth_packet() -> AuthPacket {
@@ -234,24 +234,24 @@ mod tests {
     }
 
     #[test]
-    fn auth_round_trip_encode_decode_all_properties() {
+    fn auth_round_trip_encode_decode_all_properties5() {
         let packet = create_all_properties_auth_packet();
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Auth(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Auth(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn auth_decode_failure_bad_fixed_header() {
+    fn auth_decode_failure_bad_fixed_header5() {
         let packet = AuthPacket {
             reason_code : AuthenticateReasonCode::ContinueAuthentication,
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Auth(packet), 1);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Auth(packet), ProtocolVersion::Mqtt5, 1);
     }
 
     #[test]
-    fn auth_decode_failure_bad_reason_code() {
+    fn auth_decode_failure_bad_reason_code5() {
         let packet = AuthPacket {
             reason_code : AuthenticateReasonCode::ContinueAuthentication,
             ..Default::default()
@@ -266,11 +266,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Auth(packet), corrupt_reason_code);
+        do_mutated_decode_failure_test(&MqttPacket::Auth(packet), ProtocolVersion::Mqtt5, corrupt_reason_code);
     }
 
     #[test]
-    fn auth_decode_failure_duplicate_authentication_method() {
+    fn auth_decode_failure_duplicate_authentication_method5() {
         let packet = AuthPacket {
             reason_code : AuthenticateReasonCode::ContinueAuthentication,
             authentication_method : Some("A".to_string()),
@@ -295,11 +295,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Auth(packet), duplicate_authentication_method);
+        do_mutated_decode_failure_test(&MqttPacket::Auth(packet), ProtocolVersion::Mqtt5, duplicate_authentication_method);
     }
 
     #[test]
-    fn auth_decode_failure_duplicate_authentication_data() {
+    fn auth_decode_failure_duplicate_authentication_data5() {
         let packet = AuthPacket {
             reason_code : AuthenticateReasonCode::ContinueAuthentication,
             authentication_data : Some("A".as_bytes().to_vec()),
@@ -324,11 +324,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Auth(packet), duplicate_authentication_data);
+        do_mutated_decode_failure_test(&MqttPacket::Auth(packet), ProtocolVersion::Mqtt5, duplicate_authentication_data);
     }
 
     #[test]
-    fn auth_decode_failure_duplicate_reason_string() {
+    fn auth_decode_failure_duplicate_reason_string5() {
         let packet = AuthPacket {
             reason_code : AuthenticateReasonCode::ContinueAuthentication,
             reason_string : Some("Derp".to_string()),
@@ -354,24 +354,24 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Auth(packet), duplicate_reason_string);
+        do_mutated_decode_failure_test(&MqttPacket::Auth(packet), ProtocolVersion::Mqtt5, duplicate_reason_string);
     }
 
     #[test]
-    fn auth_decode_failure_packet_size() {
+    fn auth_decode_failure_packet_size5() {
         let packet = AuthPacket {
             reason_code : AuthenticateReasonCode::ContinueAuthentication,
             reason_string : Some("Derp".to_string()),
             ..Default::default()
         };
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Auth(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Auth(packet), ProtocolVersion::Mqtt5);
     }
 
     use crate::validate::testing::*;
 
     #[test]
-    fn auth_validate_success_all_properties() {
+    fn auth_validate_success_all_properties5() {
         let packet = MqttPacket::Auth(create_all_properties_auth_packet());
 
         assert!(validate_packet_outbound(&packet).is_ok());
@@ -386,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    fn auth_validate_outbound_failure_authentication_method_length() {
+    fn auth_validate_outbound_failure_authentication_method_length5() {
         let mut packet = create_all_properties_auth_packet();
         packet.authentication_method = Some("a".repeat(65537));
 
@@ -394,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn auth_validate_outbound_failure_authentication_method_missing() {
+    fn auth_validate_outbound_failure_authentication_method_missing5() {
         let mut packet = create_all_properties_auth_packet();
         packet.authentication_method = None;
 
@@ -402,7 +402,7 @@ mod tests {
     }
 
     #[test]
-    fn auth_validate_inbound_failure_authentication_method_missing() {
+    fn auth_validate_inbound_failure_authentication_method_missing5() {
         let mut packet = create_all_properties_auth_packet();
         packet.authentication_method = None;
 
@@ -412,7 +412,7 @@ mod tests {
     }
 
     #[test]
-    fn auth_validate_outbound_failure_authentication_data_length() {
+    fn auth_validate_outbound_failure_authentication_data_length5() {
         let mut packet = create_all_properties_auth_packet();
         packet.authentication_data = Some(vec![0; 128 * 1024]);
 
@@ -420,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn auth_validate_outbound_failure_reason_string_length() {
+    fn auth_validate_outbound_failure_reason_string_length5() {
         let mut packet = create_all_properties_auth_packet();
         packet.reason_string = Some("a".repeat(199000));
 
@@ -428,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn auth_validate_outbound_failure_invalid_user_properties() {
+    fn auth_validate_outbound_failure_invalid_user_properties5() {
         let mut packet = create_all_properties_auth_packet();
         packet.user_properties = Some(create_invalid_user_properties());
 
@@ -436,9 +436,9 @@ mod tests {
     }
 
     #[test]
-    fn auth_validate_failure_context_specific_outbound_size() {
+    fn auth_validate_failure_context_specific_outbound_size5() {
         let packet = create_all_properties_auth_packet();
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Auth(packet), PacketType::Auth);
+        do_outbound_size_validate_failure_test(&MqttPacket::Auth(packet), ProtocolVersion::Mqtt5, PacketType::Auth);
     }
 }

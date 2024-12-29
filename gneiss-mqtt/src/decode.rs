@@ -685,7 +685,7 @@ pub(crate) mod testing {
     use crate::encode::*;
     use assert_matches::assert_matches;
 
-    pub(crate) fn do_single_encode_decode_test5(packet : &MqttPacket, encode_size : usize, decode_size : usize, encode_repetitions : u32) -> bool {
+    pub(crate) fn do_single_encode_decode_test5(packet : &MqttPacket, protocol_version: ProtocolVersion, encode_size : usize, decode_size : usize, encode_repetitions : u32) -> bool {
 
         let mut encoder = Encoder::new();
 
@@ -699,7 +699,7 @@ pub(crate) mod testing {
         for _ in 0..encode_repetitions {
             let mut encoding_context = EncodingContext {
                 outbound_alias_resolution: OutboundAliasResolution::default(),
-                protocol_version: ProtocolVersion::Mqtt5,
+                protocol_version,
             };
 
             if let MqttPacket::Publish(publish) = &packet {
@@ -730,6 +730,7 @@ pub(crate) mod testing {
 
         let mut decoding_context = DecodingContext {
             maximum_packet_size: MAXIMUM_VARIABLE_LENGTH_INTEGER as u32,
+            protocol_version,
             decoded_packets: &mut decoded_packets
         };
 
@@ -764,27 +765,108 @@ pub(crate) mod testing {
         true
     }
 
-    pub(crate) fn do_round_trip_encode_decode_test5(packet : &MqttPacket) -> bool {
+    pub(crate) fn do_round_trip_encode_decode_test(packet : &MqttPacket, protocol_version: ProtocolVersion) -> bool {
         let encode_buffer_sizes : Vec<usize> = vec!(4, 5, 7, 11, 17, 31, 47, 71, 131);
         let decode_fragment_sizes : Vec<usize> = vec!(1, 2, 3, 5, 7, 11, 17, 31, 47, 71, 131, 1023);
 
         for encode_size in encode_buffer_sizes.iter() {
             for decode_size in decode_fragment_sizes.iter() {
-                assert!(do_single_encode_decode_test5(packet, *encode_size, *decode_size, 5));
+                assert!(do_single_encode_decode_test5(packet, protocol_version, *encode_size, *decode_size, 5));
             }
         }
 
         true
     }
 
-    pub(crate) fn encode_packet_for_test5(packet: &MqttPacket) -> Vec<u8> {
+    pub(crate) fn do_single_311_filter_encode_decode_test(packet : &MqttPacket, expected_packet : &MqttPacket, encode_size : usize, decode_size : usize, encode_repetitions : u32) -> bool {
+
+        let mut encoder = Encoder::new();
+
+        let mut full_encoded_stream = Vec::with_capacity( 128 * 1024);
+        let mut encode_buffer = Vec::with_capacity(encode_size);
+
+        /* encode 5 copies of the packet */
+        for _ in 0..encode_repetitions {
+            let mut encoding_context = EncodingContext {
+                outbound_alias_resolution: OutboundAliasResolution::default(),
+                protocol_version: ProtocolVersion::Mqtt311,
+            };
+
+            assert!(encoder.reset(packet, &encoding_context).is_ok());
+
+            let mut cumulative_result : EncodeResult = EncodeResult::Full;
+            while cumulative_result == EncodeResult::Full {
+                encode_buffer.clear();
+                let encode_result = encoder.encode(packet, &mut encode_buffer);
+                if encode_result.is_err() {
+                    break;
+                }
+
+                cumulative_result = encode_result.unwrap();
+                full_encoded_stream.extend_from_slice(encode_buffer.as_slice());
+            }
+
+            assert_eq!(cumulative_result, EncodeResult::Complete);
+        }
+
+        let mut decoder = Decoder::new();
+        decoder.reset_for_new_connection();
+
+        let mut decoded_packets : VecDeque<Box<MqttPacket>> = VecDeque::new();
+
+        let mut decoding_context = DecodingContext {
+            maximum_packet_size: MAXIMUM_VARIABLE_LENGTH_INTEGER as u32,
+            protocol_version: ProtocolVersion::Mqtt311,
+            decoded_packets: &mut decoded_packets
+        };
+
+        let mut decode_stream_slice = full_encoded_stream.as_slice();
+        while !decode_stream_slice.is_empty() {
+            let fragment_size : usize = usize::min(decode_size, decode_stream_slice.len());
+            let decode_slice = &decode_stream_slice[..fragment_size];
+            decode_stream_slice = &decode_stream_slice[fragment_size..];
+
+            let decode_result = decoder.decode_bytes(decode_slice, &mut decoding_context);
+            assert!(decode_result.is_ok());
+        }
+
+        let mut matching_packets : u32 = 0;
+
+        for mut received_packet in decoded_packets {
+            matching_packets += 1;
+            assert_eq!(*expected_packet, *received_packet);
+        }
+
+        assert_eq!(encode_repetitions, matching_packets);
+
+        true
+    }
+
+    /*
+     * a round-trip test variant where we also pass in the expected packet.  Allows us to verify
+     * that 311 encode-decode properly ignores and/or converts v5 fields as expected.
+     */
+    pub(crate) fn do_311_filter_encode_decode_test(packet : &MqttPacket, expected_packet: &MqttPacket) -> bool {
+        let encode_buffer_sizes : Vec<usize> = vec!(4, 5, 7, 11, 17, 31, 47, 71, 131);
+        let decode_fragment_sizes : Vec<usize> = vec!(1, 2, 3, 5, 7, 11, 17, 31, 47, 71, 131, 1023);
+
+        for encode_size in encode_buffer_sizes.iter() {
+            for decode_size in decode_fragment_sizes.iter() {
+                assert!(do_single_311_filter_encode_decode_test(packet, expected_packet, *encode_size, *decode_size, 5));
+            }
+        }
+
+        true
+    }
+
+    pub(crate) fn encode_packet_for_test(packet: &MqttPacket, protocol_version: ProtocolVersion) -> Vec<u8> {
         let mut encoder = Encoder::new();
 
         let mut encoded_buffer = Vec::with_capacity(128 * 1024);
 
         let encoding_context = EncodingContext {
             outbound_alias_resolution : OutboundAliasResolution::default(),
-            protocol_version : ProtocolVersion::Mqtt5,
+            protocol_version,
         };
 
         assert!(encoder.reset(packet, &encoding_context).is_ok());
@@ -800,8 +882,8 @@ pub(crate) mod testing {
      * to the encoding leads to a decode failure.  Useful to verify specification requirements
      * with respect to decode failures like reserved bits, headers, duplicate properties, etc...
      */
-    pub(crate) fn do_mutated_decode_failure_test<F>(packet: &MqttPacket, mutator: F ) where F : Fn(&[u8]) -> Vec<u8> {
-        let good_encoded_bytes = encode_packet_for_test5(packet);
+    pub(crate) fn do_mutated_decode_failure_test<F>(packet: &MqttPacket, protocol_version : ProtocolVersion, mutator: F) where F : Fn(&[u8]) -> Vec<u8> {
+        let good_encoded_bytes = encode_packet_for_test(packet, protocol_version);
 
         let mut decoder = Decoder::new();
         decoder.reset_for_new_connection();
@@ -810,6 +892,7 @@ pub(crate) mod testing {
 
         let mut decoding_context = DecodingContext {
             maximum_packet_size: MAXIMUM_VARIABLE_LENGTH_INTEGER as u32,
+            protocol_version,
             decoded_packets: &mut decoded_packets
         };
 
@@ -830,6 +913,7 @@ pub(crate) mod testing {
 
         let mut decoding_context = DecodingContext {
             maximum_packet_size: MAXIMUM_VARIABLE_LENGTH_INTEGER as u32,
+            protocol_version,
             decoded_packets: &mut decoded_packets
         };
 
@@ -838,8 +922,8 @@ pub(crate) mod testing {
         assert_eq!(0, decoded_packets.len());
     }
 
-    pub(crate) fn do_inbound_size_decode_failure_test(packet: &MqttPacket) {
-        let encoded_bytes = encode_packet_for_test5(packet);
+    pub(crate) fn do_inbound_size_decode_failure_test(packet: &MqttPacket, protocol_version : ProtocolVersion) {
+        let encoded_bytes = encode_packet_for_test(packet, protocol_version);
 
         let mut decoder = Decoder::new();
         decoder.reset_for_new_connection();
@@ -848,6 +932,7 @@ pub(crate) mod testing {
 
         let mut decoding_context = DecodingContext {
             maximum_packet_size: MAXIMUM_VARIABLE_LENGTH_INTEGER as u32,
+            protocol_version,
             decoded_packets: &mut decoded_packets
         };
 
@@ -865,6 +950,7 @@ pub(crate) mod testing {
 
         let mut decoding_context = DecodingContext {
             maximum_packet_size: (encoded_bytes.len() - 1) as u32,
+            protocol_version,
             decoded_packets: &mut decoded_packets
         };
 
@@ -873,13 +959,13 @@ pub(crate) mod testing {
         assert_eq!(0, decoded_packets.len());
     }
 
-    pub(crate) fn do_fixed_header_flag_decode_failure_test(packet: &MqttPacket, flags_mask: u8) {
+    pub(crate) fn do_fixed_header_flag_decode_failure_test(packet: &MqttPacket, protocol_version : ProtocolVersion, flags_mask: u8) {
         let reserved_mutator = | bytes: &[u8] | -> Vec<u8> {
             let mut clone = bytes.to_vec();
             clone[0] |= flags_mask;
             clone
         };
 
-        do_mutated_decode_failure_test(packet, reserved_mutator);
+        do_mutated_decode_failure_test(packet, protocol_version, reserved_mutator);
     }
 }

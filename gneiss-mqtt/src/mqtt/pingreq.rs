@@ -53,31 +53,43 @@ impl fmt::Display for PingreqPacket {
 
 #[cfg(test)]
 mod tests {
-
+    use tungstenite::Error::Protocol;
     use super::*;
     use crate::decode::testing::*;
 
     #[test]
-    fn pingreq_round_trip_encode_decode() {
+    fn pingreq_round_trip_encode_decode5() {
         let packet = PingreqPacket {};
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pingreq(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pingreq(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn pingreq_decode_failure_bad_fixed_header() {
+    fn pingreq_round_trip_encode_decode311() {
         let packet = PingreqPacket {};
-
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Pingreq(packet), 1);
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pingreq(packet), ProtocolVersion::Mqtt311));
     }
 
     #[test]
-    fn pingreq_decode_failure_bad_length() {
+    fn pingreq_decode_failure_bad_fixed_header5() {
+        let packet = PingreqPacket {};
+
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Pingreq(packet), ProtocolVersion::Mqtt5, 1);
+    }
+
+    #[test]
+    fn pingreq_decode_failure_bad_fixed_header311() {
+        let packet = PingreqPacket {};
+
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Pingreq(packet), ProtocolVersion::Mqtt311, 1);
+    }
+
+    fn do_pingreq_decode_failure_bad_length_test(protocol_version : ProtocolVersion) {
         let packet = PingreqPacket {};
 
         let extend_length = | bytes: &[u8] | -> Vec<u8> {
             let mut clone = bytes.to_vec();
 
-            // for this packet, the reason code is in byte 2
+            // increase remaining length by 2 and add some garbage bytes
             clone[1] = 2;
             clone.push(5);
             clone.push(6);
@@ -85,7 +97,16 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Pingreq(packet), extend_length);
+        do_mutated_decode_failure_test(&MqttPacket::Pingreq(packet), protocol_version, extend_length);
     }
 
+    #[test]
+    fn pingreq_decode_failure_bad_length5() {
+        do_pingreq_decode_failure_bad_length_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn pingreq_decode_failure_bad_length311() {
+        do_pingreq_decode_failure_bad_length_test(ProtocolVersion::Mqtt311);
+    }
 }

@@ -323,23 +323,43 @@ mod tests {
     use crate::decode::testing::*;
 
     #[test]
-    fn connack_round_trip_encode_decode_default() {
+    fn connack_round_trip_encode_decode_default5() {
         let packet = ConnackPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn connack_round_trip_encode_decode_required() {
+    fn connack_round_trip_encode_decode_default311() {
+        let packet = ConnackPacket {
+            ..Default::default()
+        };
+
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt311));
+    }
+
+    #[test]
+    fn connack_round_trip_encode_decode_required5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Banned,
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5));
+    }
+
+    #[test]
+    fn connack_round_trip_encode_decode_required311() {
+        let packet = ConnackPacket {
+            session_present : true,
+            reason_code : ConnectReasonCode::UnsupportedProtocolVersion,
+            ..Default::default()
+        };
+
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt311));
     }
 
     fn create_all_properties_connack_packet() -> ConnackPacket {
@@ -374,28 +394,52 @@ mod tests {
     }
 
     #[test]
-    fn connack_round_trip_encode_decode_all() {
+    fn connack_round_trip_encode_decode_all5() {
         let packet = create_all_properties_connack_packet();
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn connack_decode_failure_bad_fixed_header() {
+    fn connack_round_trip_encode_decode_all311() {
+        let mut packet = create_all_properties_connack_packet();
+        packet.reason_code = ConnectReasonCode::BadUsernameOrPassword;
+
+        let expected_packet = ConnackPacket {
+            session_present : packet.session_present,
+            reason_code : packet.reason_code,
+            ..Default::default()
+        };
+
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Connack(packet), &MqttPacket::Connack(expected_packet)));
+    }
+
+    #[test]
+    fn connack_decode_failure_bad_fixed_header5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Banned,
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Connack(packet), 5);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, 5);
     }
 
     #[test]
-    fn connack_decode_failure_bad_variable_header_flags() {
+    fn connack_decode_failure_bad_fixed_header311() {
+        let packet = ConnackPacket {
+            session_present : false,
+            reason_code : ConnectReasonCode::ServerUnavailable,
+            ..Default::default()
+        };
+
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt311, 5);
+    }
+
+    fn do_connack_decode_failure_bad_variable_header_flags_test(protocol_version: ProtocolVersion) {
         let packet = ConnackPacket {
             session_present : true,
-            reason_code : ConnectReasonCode::Banned,
+            reason_code : ConnectReasonCode::NotAuthorized,
             ..Default::default()
         };
 
@@ -408,11 +452,20 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), corrupt_variable_header_flags);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), protocol_version, corrupt_variable_header_flags);
     }
 
     #[test]
-    fn connack_decode_failure_bad_reason_code() {
+    fn connack_decode_failure_bad_variable_header_flags5() {
+        do_connack_decode_failure_bad_variable_header_flags_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn connack_decode_failure_bad_variable_header_flags311() {
+        do_connack_decode_failure_bad_variable_header_flags_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_connack_decode_failure_bad_reason_code_test(protocol_version: ProtocolVersion) {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -428,11 +481,21 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), corrupt_reason_code);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), protocol_version, corrupt_reason_code);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_session_expiry_interval() {
+    fn connack_decode_failure_bad_reason_code5() {
+        do_connack_decode_failure_bad_reason_code_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn connack_decode_failure_bad_reason_code311() {
+        do_connack_decode_failure_bad_reason_code_test(ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn connack_decode_failure_duplicate_session_expiry_interval5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -459,11 +522,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_session_expiry_interval);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_session_expiry_interval);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_receive_maximum() {
+    fn connack_decode_failure_duplicate_receive_maximum5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -488,11 +551,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_receive_maximum);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_receive_maximum);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_maximum_qos() {
+    fn connack_decode_failure_duplicate_maximum_qos5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -516,11 +579,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_maximum_qos);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_maximum_qos);
     }
 
     #[test]
-    fn connack_decode_failure_invalid_maximum_qos() {
+    fn connack_decode_failure_invalid_maximum_qos5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -536,11 +599,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), invalidate_maximum_qos);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, invalidate_maximum_qos);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_retain_available() {
+    fn connack_decode_failure_duplicate_retain_available5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -564,11 +627,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_retain_available);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_retain_available);
     }
 
     #[test]
-    fn connack_decode_failure_invalid_retain_available() {
+    fn connack_decode_failure_invalid_retain_available5() {
         let packet = ConnackPacket {
             session_present: true,
             reason_code: ConnectReasonCode::Success,
@@ -584,11 +647,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), invalidate_retain_available);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, invalidate_retain_available);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_maximum_packet_size() {
+    fn connack_decode_failure_duplicate_maximum_packet_size5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -615,11 +678,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_maximum_packet_size);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_maximum_packet_size);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_assigned_client_identifier() {
+    fn connack_decode_failure_duplicate_assigned_client_identifier5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -646,11 +709,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_assigned_client_identifier);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_assigned_client_identifier);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_topic_alias_maximum() {
+    fn connack_decode_failure_duplicate_topic_alias_maximum5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -675,11 +738,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_topic_alias_maximum);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_topic_alias_maximum);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_reason_string() {
+    fn connack_decode_failure_duplicate_reason_string5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -706,11 +769,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_reason_string);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_reason_string);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_wildcard_subscription_available() {
+    fn connack_decode_failure_duplicate_wildcard_subscription_available5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -734,11 +797,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_wildcard_subscriptions_available);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_wildcard_subscriptions_available);
     }
 
     #[test]
-    fn connack_decode_failure_invalid_wildcard_subscription_available() {
+    fn connack_decode_failure_invalid_wildcard_subscription_available5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -754,11 +817,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), invalidate_wildcard_subscriptions_available);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, invalidate_wildcard_subscriptions_available);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_subscription_identifiers_available() {
+    fn connack_decode_failure_duplicate_subscription_identifiers_available5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -782,11 +845,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_subscription_identifiers_available);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_subscription_identifiers_available);
     }
 
     #[test]
-    fn connack_decode_failure_invalid_subscription_identifiers_available() {
+    fn connack_decode_failure_invalid_subscription_identifiers_available5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -802,11 +865,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), invalidate_subscription_identifiers_available);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, invalidate_subscription_identifiers_available);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_shared_subscription_available() {
+    fn connack_decode_failure_duplicate_shared_subscription_available5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -830,11 +893,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_shared_subscriptions_available);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_shared_subscriptions_available);
     }
 
     #[test]
-    fn connack_decode_failure_invalid_shared_subscription_available() {
+    fn connack_decode_failure_invalid_shared_subscription_available5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -850,11 +913,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), invalidate_shared_subscriptions_available);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, invalidate_shared_subscriptions_available);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_server_keep_alive() {
+    fn connack_decode_failure_duplicate_server_keep_alive5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -879,11 +942,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_server_keep_alive);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_server_keep_alive);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_response_information() {
+    fn connack_decode_failure_duplicate_response_information5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -910,11 +973,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_response_information);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_response_information);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_server_reference() {
+    fn connack_decode_failure_duplicate_server_reference5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -943,11 +1006,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_server_reference);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_server_reference);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_authentication_method() {
+    fn connack_decode_failure_duplicate_authentication_method5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -976,11 +1039,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_authentication_method);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_authentication_method);
     }
 
     #[test]
-    fn connack_decode_failure_duplicate_authentication_data() {
+    fn connack_decode_failure_duplicate_authentication_data5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -1009,11 +1072,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), duplicate_authentication_data);
+        do_mutated_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, duplicate_authentication_data);
     }
 
     #[test]
-    fn connack_decode_failure_packet_size() {
+    fn connack_decode_failure_packet_size5() {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::Success,
@@ -1021,7 +1084,18 @@ mod tests {
             ..Default::default()
         };
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Connack(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn connack_decode_failure_packet_size311() {
+        let packet = ConnackPacket {
+            session_present : true,
+            reason_code : ConnectReasonCode::Success,
+            ..Default::default()
+        };
+
+        do_inbound_size_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt311);
     }
 
     use crate::validate::testing::*;

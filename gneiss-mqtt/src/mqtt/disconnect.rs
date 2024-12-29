@@ -238,32 +238,41 @@ mod tests {
     use crate::validate::testing::*;
 
     #[test]
-    fn disconnect_round_trip_encode_decode_default() {
+    fn disconnect_round_trip_encode_decode_default5() {
         let packet = DisconnectPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn disconnect_round_trip_encode_decode_normal_reason_code() {
+    fn disconnect_round_trip_encode_decode_default311() {
+        let packet = DisconnectPacket {
+            ..Default::default()
+        };
+
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt311));
+    }
+
+    #[test]
+    fn disconnect_round_trip_encode_decode_normal_reason_code5() {
         let packet = DisconnectPacket {
             reason_code : DisconnectReasonCode::NormalDisconnection,
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn disconnect_round_trip_encode_decode_abnormal_reason_code() {
+    fn disconnect_round_trip_encode_decode_abnormal_reason_code5() {
         let packet = DisconnectPacket {
             reason_code : DisconnectReasonCode::ConnectionRateExceeded,
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5));
     }
 
     fn create_disconnect_packet_all_properties() -> DisconnectPacket {
@@ -280,24 +289,43 @@ mod tests {
     }
 
     #[test]
-    fn disconnect_round_trip_encode_decode_all_properties() {
+    fn disconnect_round_trip_encode_decode_all_properties5() {
         let packet = create_disconnect_packet_all_properties();
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn disconnect_decode_failure_bad_fixed_header() {
+    fn disconnect_round_trip_encode_decode_all_properties311() {
+        let packet = create_disconnect_packet_all_properties();
+        let expected_packet = DisconnectPacket {
+            ..Default::default()
+        };
+
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Disconnect(packet), &MqttPacket::Disconnect(expected_packet)));
+    }
+
+    #[test]
+    fn disconnect_decode_failure_bad_fixed_header5() {
         let packet = DisconnectPacket {
             reason_code : DisconnectReasonCode::ConnectionRateExceeded,
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Disconnect(packet), 12);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5, 12);
     }
 
     #[test]
-    fn disconnect_decode_failure_bad_reason_code() {
+    fn disconnect_decode_failure_bad_fixed_header311() {
+        let packet = DisconnectPacket {
+            ..Default::default()
+        };
+
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt311, 12);
+    }
+
+    #[test]
+    fn disconnect_decode_failure_bad_reason_code5() {
         let packet = DisconnectPacket {
             reason_code : DisconnectReasonCode::DisconnectWithWillMessage,
             ..Default::default()
@@ -312,11 +340,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), corrupt_reason_code);
+        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5, corrupt_reason_code);
     }
 
     #[test]
-    fn disconnect_decode_failure_duplicate_reason_string() {
+    fn disconnect_decode_failure_duplicate_reason_string5() {
         let packet = create_disconnect_packet_all_properties();
 
         let duplicate_reason_string = | bytes: &[u8] | -> Vec<u8> {
@@ -338,11 +366,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), duplicate_reason_string);
+        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5, duplicate_reason_string);
     }
 
     #[test]
-    fn disconnect_decode_failure_duplicate_server_reference() {
+    fn disconnect_decode_failure_duplicate_server_reference5() {
         let packet = create_disconnect_packet_all_properties();
 
         let duplicate_server_reference = | bytes: &[u8] | -> Vec<u8> {
@@ -366,11 +394,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), duplicate_server_reference);
+        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5, duplicate_server_reference);
     }
 
     #[test]
-    fn disconnect_decode_failure_duplicate_session_expiry_interval() {
+    fn disconnect_decode_failure_duplicate_session_expiry_interval5() {
         let packet = create_disconnect_packet_all_properties();
 
         let duplicate_session_expiry_interval = | bytes: &[u8] | -> Vec<u8> {
@@ -392,14 +420,14 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), duplicate_session_expiry_interval);
+        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5, duplicate_session_expiry_interval);
     }
 
     #[test]
-    fn disconnect_decode_failure_packet_size() {
+    fn disconnect_decode_failure_packet_size5() {
         let packet = create_disconnect_packet_all_properties();
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Disconnect(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5);
     }
 
     #[test]
@@ -489,6 +517,6 @@ mod tests {
             ..Default::default()
         };
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Disconnect(packet), PacketType::Disconnect);
+        do_outbound_size_validate_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5, PacketType::Disconnect);
     }
 }
