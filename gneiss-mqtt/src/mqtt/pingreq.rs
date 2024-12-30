@@ -72,14 +72,12 @@ mod tests {
     #[test]
     fn pingreq_decode_failure_bad_fixed_header5() {
         let packet = PingreqPacket {};
-
         do_fixed_header_flag_decode_failure_test(&MqttPacket::Pingreq(packet), ProtocolVersion::Mqtt5, 1);
     }
 
     #[test]
     fn pingreq_decode_failure_bad_fixed_header311() {
         let packet = PingreqPacket {};
-
         do_fixed_header_flag_decode_failure_test(&MqttPacket::Pingreq(packet), ProtocolVersion::Mqtt311, 1);
     }
 

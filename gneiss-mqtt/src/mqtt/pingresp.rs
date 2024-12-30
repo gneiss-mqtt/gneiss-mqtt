@@ -70,14 +70,12 @@ mod tests {
     #[test]
     fn pingresp_decode_failure_bad_fixed_header5() {
         let packet = PingrespPacket {};
-
         do_fixed_header_flag_decode_failure_test(&MqttPacket::Pingresp(packet), ProtocolVersion::Mqtt5, 2);
     }
 
     #[test]
     fn pingresp_decode_failure_bad_fixed_header311() {
         let packet = PingrespPacket {};
-
         do_fixed_header_flag_decode_failure_test(&MqttPacket::Pingresp(packet), ProtocolVersion::Mqtt311, 2);
     }
 

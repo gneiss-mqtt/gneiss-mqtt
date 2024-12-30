@@ -237,22 +237,22 @@ mod tests {
     use crate::decode::testing::*;
     use crate::validate::testing::*;
 
-    #[test]
-    fn disconnect_round_trip_encode_decode_default5() {
+    fn do_disconnect_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = DisconnectPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet), protocol_version));
+    }
+
+    #[test]
+    fn disconnect_round_trip_encode_decode_default5() {
+        do_disconnect_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
     }
 
     #[test]
     fn disconnect_round_trip_encode_decode_default311() {
-        let packet = DisconnectPacket {
-            ..Default::default()
-        };
-
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt311));
+        do_disconnect_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
     }
 
     #[test]
@@ -305,23 +305,22 @@ mod tests {
         assert!(do_311_filter_encode_decode_test(&MqttPacket::Disconnect(packet), &MqttPacket::Disconnect(expected_packet)));
     }
 
-    #[test]
-    fn disconnect_decode_failure_bad_fixed_header5() {
+    fn do_disconnect_decode_failure_bad_fixed_header_test(protocol_version: ProtocolVersion) {
         let packet = DisconnectPacket {
-            reason_code : DisconnectReasonCode::ConnectionRateExceeded,
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5, 12);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Disconnect(packet), protocol_version, 12);
+    }
+
+    #[test]
+    fn disconnect_decode_failure_bad_fixed_header5() {
+        do_disconnect_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt5);
     }
 
     #[test]
     fn disconnect_decode_failure_bad_fixed_header311() {
-        let packet = DisconnectPacket {
-            ..Default::default()
-        };
-
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt311, 12);
+        do_disconnect_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt311);
     }
 
     #[test]

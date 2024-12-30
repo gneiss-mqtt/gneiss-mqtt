@@ -41,29 +41,46 @@ mod tests {
     use crate::decode::testing::*;
     use crate::validate::testing::*;
 
-    #[test]
-    fn puback_round_trip_encode_decode_default() {
+    fn do_puback_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = PubackPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Puback(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Puback(packet), protocol_version));
     }
 
     #[test]
-    fn puback_round_trip_encode_decode_success_no_props() {
+    fn puback_round_trip_encode_decode_default5() {
+        do_puback_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn puback_round_trip_encode_decode_default311() {
+        do_puback_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_puback_round_trip_encode_decode_success_rc_no_props_test(protocol_version: ProtocolVersion) {
 
         let packet = PubackPacket {
             packet_id: 123,
-            reason_code: PubackReasonCode::Success,
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Puback(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Puback(packet), protocol_version));
     }
 
     #[test]
-    fn puback_round_trip_encode_decode_failure_no_props() {
+    fn puback_round_trip_encode_decode_success_rc_no_props5() {
+        do_puback_round_trip_encode_decode_success_rc_no_props_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn puback_round_trip_encode_decode_success_rc_no_props311() {
+        do_puback_round_trip_encode_decode_success_rc_no_props_test(ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn puback_round_trip_encode_decode_bad_rc_no_props5() {
 
         let packet = PubackPacket {
             packet_id: 16384,
@@ -71,11 +88,11 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Puback(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Puback(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn puback_round_trip_encode_decode_success_with_props() {
+    fn puback_round_trip_encode_decode_success_rc_with_props5() {
 
         let packet = PubackPacket {
             packet_id: 1025,
@@ -88,7 +105,7 @@ mod tests {
             ))
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Puback(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Puback(packet), ProtocolVersion::Mqtt5));
     }
 
     fn create_puback_with_all_properties() -> PubackPacket {
@@ -104,19 +121,42 @@ mod tests {
     }
 
     #[test]
-    fn puback_round_trip_encode_decode_failure_with_props() {
+    fn puback_round_trip_encode_decode_with_props5() {
         let packet = create_puback_with_all_properties();
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Puback(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Puback(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn puback_decode_failure_bad_fixed_header() {
+    fn puback_round_trip_encode_decode_with_props311() {
         let packet = create_puback_with_all_properties();
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Puback(packet), 7);
+        let expected_packet = PubackPacket {
+            packet_id : packet.packet_id,
+            ..Default::default()
+        };
+
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Puback(packet), &MqttPacket::Puback(expected_packet)));
+    }
+
+    fn do_puback_decode_failure_bad_fixed_header_test(protocol_version: ProtocolVersion) {
+        let packet = PubackPacket {
+            packet_id : 123,
+            ..Default::default()
+        };
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Puback(packet), protocol_version, 7);
     }
 
     #[test]
-    fn puback_decode_failure_bad_reason_code() {
+    fn puback_decode_failure_bad_fixed_header5() {
+        do_puback_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn puback_decode_failure_bad_fixed_header311() {
+        do_puback_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn puback_decode_failure_bad_rc5() {
         let packet = create_puback_with_all_properties();
 
         let corrupt_reason_code = | bytes: &[u8] | -> Vec<u8> {
@@ -128,11 +168,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Puback(packet), corrupt_reason_code);
+        do_mutated_decode_failure_test(&MqttPacket::Puback(packet), ProtocolVersion::Mqtt5, corrupt_reason_code);
     }
 
     #[test]
-    fn puback_decode_failure_duplicate_reason_string() {
+    fn puback_decode_failure_duplicate_reason_string5() {
         let packet = create_puback_with_all_properties();
 
         let duplicate_reason_string = | bytes: &[u8] | -> Vec<u8> {
@@ -154,19 +194,20 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Puback(packet), duplicate_reason_string);
+        do_mutated_decode_failure_test(&MqttPacket::Puback(packet), ProtocolVersion::Mqtt5, duplicate_reason_string);
     }
 
     #[test]
-    fn puback_decode_failure_packet_size() {
+    fn puback_decode_failure_packet_size5() {
         let packet = create_puback_with_all_properties();
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Puback(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Puback(packet), ProtocolVersion::Mqtt5);
     }
 
     test_ack_validate_success!(puback_validate_success, Puback, create_puback_with_all_properties);
     test_ack_validate_failure_reason_string_length!(puback_validate_failure_reason_string_length, Puback, create_puback_with_all_properties, PacketType::Puback);
     test_ack_validate_failure_invalid_user_properties!(puback_validate_failure_invalid_user_properties, Puback, create_puback_with_all_properties, PacketType::Puback);
-    test_ack_validate_failure_outbound_size!(puback_validate_failure_outbound_size, Puback, create_puback_with_all_properties, PacketType::Puback);
+    test_ack_validate_failure_outbound_size!(puback_validate_failure_outbound_size5, Puback, create_puback_with_all_properties, PacketType::Puback, ProtocolVersion::Mqtt5);
+    test_ack_validate_failure_outbound_size!(puback_validate_failure_outbound_size311, Puback, create_puback_with_all_properties, PacketType::Puback, ProtocolVersion::Mqtt311);
     test_ack_validate_failure_packet_id_zero!(puback_validate_failure_packet_id_zero, Puback, create_puback_with_all_properties, PacketType::Puback);
 }

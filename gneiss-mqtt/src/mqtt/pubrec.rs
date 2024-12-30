@@ -38,30 +38,48 @@ mod tests {
 
     use super::*;
     use crate::decode::testing::*;
+    use crate::error::ProtocolErrorContext;
 
-    #[test]
-    fn pubrec_round_trip_encode_decode_default() {
+    fn do_pubrec_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = PubrecPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubrec(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubrec(packet), protocol_version));
     }
 
     #[test]
-    fn pubrec_round_trip_encode_decode_success_no_props() {
+    fn pubrec_round_trip_encode_decode_default5() {
+        do_pubrec_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn pubrec_round_trip_encode_decode_default311() {
+        do_pubrec_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_pubrec_round_trip_encode_decode_success_rc_no_props_test(protocol_version: ProtocolVersion) {
 
         let packet = PubrecPacket {
             packet_id: 1234,
-            reason_code: PubrecReasonCode::Success,
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubrec(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubrec(packet), protocol_version));
     }
 
     #[test]
-    fn pubrec_round_trip_encode_decode_failure_no_props() {
+    fn pubrec_round_trip_encode_decode_success_rc_no_props5() {
+        do_pubrec_round_trip_encode_decode_success_rc_no_props_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn pubrec_round_trip_encode_decode_success_rc_no_props311() {
+        do_pubrec_round_trip_encode_decode_success_rc_no_props_test(ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn pubrec_round_trip_encode_decode_failure_rc_no_props5() {
 
         let packet = PubrecPacket {
             packet_id: 8191,
@@ -69,11 +87,11 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubrec(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubrec(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn pubrec_round_trip_encode_decode_success_with_props() {
+    fn pubrec_round_trip_encode_decode_success_rc_with_props5() {
 
         let packet = PubrecPacket {
             packet_id: 10253,
@@ -86,7 +104,7 @@ mod tests {
             ))
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubrec(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubrec(packet), ProtocolVersion::Mqtt5));
     }
 
     fn create_pubrec_with_all_properties() -> PubrecPacket {
@@ -102,22 +120,37 @@ mod tests {
     }
 
     #[test]
-    fn pubrec_round_trip_encode_decode_failure_with_props() {
-
+    fn pubrec_round_trip_encode_decode_failure_with_props5() {
         let packet = create_pubrec_with_all_properties();
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubrec(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubrec(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn pubrec_decode_failure_bad_fixed_header() {
+    fn pubrec_round_trip_encode_decode_failure_with_props311() {
         let packet = create_pubrec_with_all_properties();
+        let expected_packet = PubrecPacket {
+            packet_id : packet.packet_id,
+            ..Default::default()
+        };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Pubrec(packet), 12);
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Pubrec(packet), &MqttPacket::Pubrec(expected_packet)));
     }
 
     #[test]
-    fn pubrec_decode_failure_bad_reason_code() {
+    fn pubrec_decode_failure_bad_fixed_header5() {
+        let packet = create_pubrec_with_all_properties();
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Pubrec(packet), ProtocolVersion::Mqtt5, 12);
+    }
+
+    #[test]
+    fn pubrec_decode_failure_bad_fixed_header311() {
+        let packet = create_pubrec_with_all_properties();
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Pubrec(packet), ProtocolVersion::Mqtt311, 12);
+    }
+
+    #[test]
+    fn pubrec_decode_failure_bad_reason_code5() {
         let packet = create_pubrec_with_all_properties();
 
         let corrupt_reason_code = | bytes: &[u8] | -> Vec<u8> {
@@ -129,11 +162,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Pubrec(packet), corrupt_reason_code);
+        do_mutated_decode_failure_test(&MqttPacket::Pubrec(packet), ProtocolVersion::Mqtt5, corrupt_reason_code);
     }
 
     #[test]
-    fn pubrec_decode_failure_duplicate_reason_string() {
+    fn pubrec_decode_failure_duplicate_reason_string5() {
         let packet = create_pubrec_with_all_properties();
 
         let duplicate_reason_string = | bytes: &[u8] | -> Vec<u8> {
@@ -155,14 +188,14 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Pubrec(packet), duplicate_reason_string);
+        do_mutated_decode_failure_test(&MqttPacket::Pubrec(packet), ProtocolVersion::Mqtt5, duplicate_reason_string);
     }
 
     #[test]
     fn pubrec_decode_failure_packet_size() {
         let packet = create_pubrec_with_all_properties();
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Pubrec(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Pubrec(packet), ProtocolVersion::Mqtt5);
     }
 
     use crate::validate::testing::*;
@@ -170,6 +203,7 @@ mod tests {
     test_ack_validate_success!(pubrec_validate_success, Pubrec, create_pubrec_with_all_properties);
     test_ack_validate_failure_reason_string_length!(pubrec_validate_failure_reason_string_length, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);
     test_ack_validate_failure_invalid_user_properties!(pubrec_validate_failure_invalid_user_properties, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);
-    test_ack_validate_failure_outbound_size!(pubrec_validate_failure_outbound_size, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);
+    test_ack_validate_failure_outbound_size!(pubrec_validate_failure_outbound_size5, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec, ProtocolVersion::Mqtt5);
+    test_ack_validate_failure_outbound_size!(pubrec_validate_failure_outbound_size311, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec, ProtocolVersion::Mqtt311);
     test_ack_validate_failure_packet_id_zero!(pubrec_validate_failure_packet_id_zero, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);
 }

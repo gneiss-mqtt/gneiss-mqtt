@@ -334,24 +334,42 @@ mod tests {
     use crate::decode::testing::*;
     use crate::validate::testing::*;
 
-    #[test]
-    fn subscribe_round_trip_encode_decode_default() {
+    fn do_subscribe_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = SubscribePacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Subscribe(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Subscribe(packet), protocol_version));
     }
 
     #[test]
-    fn subscribe_round_trip_encode_decode_basic() {
+    fn subscribe_round_trip_encode_decode_default5() {
+        do_subscribe_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn subscribe_round_trip_encode_decode_default311() {
+        do_subscribe_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_subscribe_round_trip_encode_decode_basic_test(protocol_version: ProtocolVersion) {
         let packet = SubscribePacket {
             packet_id : 123,
             subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Subscribe(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Subscribe(packet), protocol_version));
+    }
+
+    #[test]
+    fn subscribe_round_trip_encode_decode_basic5() {
+        do_subscribe_round_trip_encode_decode_basic_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn subscribe_round_trip_encode_decode_basic311() {
+        do_subscribe_round_trip_encode_decode_basic_test(ProtocolVersion::Mqtt311);
     }
 
     fn create_subscribe_all_properties() -> SubscribePacket {
@@ -381,64 +399,57 @@ mod tests {
     }
 
     #[test]
-    fn subscribe_round_trip_encode_decode_all_properties() {
+    fn subscribe_round_trip_encode_decode_all_properties5() {
         let packet = create_subscribe_all_properties();
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Subscribe(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Subscribe(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn subscribe_decode_failure_bad_fixed_header() {
+    fn subscribe_round_trip_encode_decode_all_properties311() {
+        let packet = create_subscribe_all_properties();
+        let expected_packet = SubscribePacket {
+            packet_id: packet.packet_id,
+            subscriptions: vec![
+                Subscription {
+                    topic_filter: "a/b/c/d/e".to_string(),
+                    qos: QualityOfService::ExactlyOnce,
+                    ..Default::default()
+                },
+                Subscription {
+                    topic_filter: "the/best/+/filter/*".to_string(),
+                    qos: QualityOfService::AtMostOnce,
+                    ..Default::default()
+                }
+            ],
+            ..Default::default()
+        };
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Subscribe(packet), &MqttPacket::Subscribe(expected_packet)));
+    }
+
+    fn do_subscribe_decode_failure_bad_fixed_header_test(protocol_version: ProtocolVersion) {
         let packet = SubscribePacket {
             packet_id : 123,
             subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Subscribe(packet), 7);
-    }
-
-    const SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX : usize = 18;
-
-    #[test]
-    fn subscribe_decode_failure_subscription_qos3() {
-        let packet = SubscribePacket {
-            packet_id : 123,
-            subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
-            ..Default::default()
-        };
-
-        let invalidate_subscription_qos = | bytes: &[u8] | -> Vec<u8> {
-            let mut clone = bytes.to_vec();
-
-            clone[SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX] |= 0x03;
-
-            clone
-        };
-
-        do_mutated_decode_failure_test(&MqttPacket::Subscribe(packet), invalidate_subscription_qos);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Subscribe(packet), protocol_version, 7);
     }
 
     #[test]
-    fn subscribe_decode_failure_subscription_retain_handling3() {
-        let packet = SubscribePacket {
-            packet_id : 123,
-            subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
-            ..Default::default()
-        };
-
-        let invalidate_subscription_qos = | bytes: &[u8] | -> Vec<u8> {
-            let mut clone = bytes.to_vec();
-
-            clone[SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX] |= 0x03 << 4;
-
-            clone
-        };
-
-        do_mutated_decode_failure_test(&MqttPacket::Subscribe(packet), invalidate_subscription_qos);
+    fn subscribe_decode_failure_bad_fixed_header5() {
+        do_subscribe_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt5);
     }
 
     #[test]
-    fn subscribe_decode_failure_subscription_reserved_bits() {
+    fn subscribe_decode_failure_bad_fixed_header311() {
+        do_subscribe_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt311);
+    }
+
+    const SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX5 : usize = 18;
+    const SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX311 : usize = 17; // off by 1 since we don't have a zero-length properties field
+
+    fn do_subscribe_decode_failure_subscription_qos3_test(protocol_version: ProtocolVersion, index: usize) {
         let packet = SubscribePacket {
             packet_id : 123,
             subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
@@ -448,23 +459,87 @@ mod tests {
         let invalidate_subscription_qos = | bytes: &[u8] | -> Vec<u8> {
             let mut clone = bytes.to_vec();
 
-            clone[SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX] |= 192;
+            clone[index] |= 0x03;
 
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Subscribe(packet), invalidate_subscription_qos);
+        do_mutated_decode_failure_test(&MqttPacket::Subscribe(packet), protocol_version, invalidate_subscription_qos);
     }
 
     #[test]
-    fn subscribe_decode_failure_inbound_packet_size() {
+    fn subscribe_decode_failure_subscription_qos3_5() {
+        do_subscribe_decode_failure_subscription_qos3_test(ProtocolVersion::Mqtt5, SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX5);
+    }
+
+    #[test]
+    fn subscribe_decode_failure_subscription_qos3_311() {
+        do_subscribe_decode_failure_subscription_qos3_test(ProtocolVersion::Mqtt311, SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX311);
+    }
+
+    #[test]
+    fn subscribe_decode_failure_subscription_retain_handling3_5() {
+        let packet = SubscribePacket {
+            packet_id : 123,
+            subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
+            ..Default::default()
+        };
+
+        let invalidate_subscription_qos = | bytes: &[u8] | -> Vec<u8> {
+            let mut clone = bytes.to_vec();
+
+            clone[SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX5] |= 0x03 << 4;
+
+            clone
+        };
+
+        do_mutated_decode_failure_test(&MqttPacket::Subscribe(packet), ProtocolVersion::Mqtt5, invalidate_subscription_qos);
+    }
+
+    fn do_subscribe_decode_failure_subscription_reserved_bits_test(protocol_version: ProtocolVersion, index: usize) {
+        let packet = SubscribePacket {
+            packet_id : 123,
+            subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
+            ..Default::default()
+        };
+
+        let invalidate_subscription_qos = | bytes: &[u8] | -> Vec<u8> {
+            let mut clone = bytes.to_vec();
+
+            clone[index] |= 192;
+
+            clone
+        };
+
+        do_mutated_decode_failure_test(&MqttPacket::Subscribe(packet), protocol_version, invalidate_subscription_qos);
+    }
+
+    #[test]
+    fn subscribe_decode_failure_subscription_reserved_bits5() {
+        do_subscribe_decode_failure_subscription_reserved_bits_test(ProtocolVersion::Mqtt5, SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX5);
+    }
+
+    #[test]
+    fn subscribe_decode_failure_subscription_reserved_bits311() {
+        do_subscribe_decode_failure_subscription_reserved_bits_test(ProtocolVersion::Mqtt311, SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX311);
+    }
+
+    #[test]
+    fn subscribe_decode_failure_inbound_packet_size5() {
         let packet = create_subscribe_all_properties();
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Subscribe(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Subscribe(packet), ProtocolVersion::Mqtt5);
     }
 
     #[test]
-    fn unsubscribe_validate_success() {
+    fn subscribe_decode_failure_inbound_packet_size311() {
+        let packet = create_subscribe_all_properties();
+
+        do_inbound_size_decode_failure_test(&MqttPacket::Subscribe(packet), ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn subscribe_validate_success() {
         let mut packet = create_subscribe_all_properties();
         packet.packet_id = 0;
 
@@ -508,10 +583,17 @@ mod tests {
     }
 
     #[test]
-    fn subscribe_validate_failure_outbound_size() {
+    fn subscribe_validate_failure_outbound_size5() {
         let packet = create_subscribe_all_properties();
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Subscribe(packet), PacketType::Subscribe);
+        do_outbound_size_validate_failure_test(&MqttPacket::Subscribe(packet), ProtocolVersion::Mqtt5, PacketType::Subscribe);
+    }
+
+    #[test]
+    fn subscribe_validate_failure_outbound_size311() {
+        let packet = create_subscribe_all_properties();
+
+        do_outbound_size_validate_failure_test(&MqttPacket::Subscribe(packet), ProtocolVersion::Mqtt311, PacketType::Subscribe);
     }
 
     #[test]

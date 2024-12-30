@@ -261,24 +261,42 @@ mod tests {
     use crate::decode::testing::*;
     use crate::validate::testing::*;
 
-    #[test]
-    fn unsubscribe_round_trip_encode_decode_default() {
+    fn do_unsubscribe_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = UnsubscribePacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsubscribe(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsubscribe(packet), protocol_version));
     }
 
     #[test]
-    fn unsubscribe_round_trip_encode_decode_basic() {
+    fn unsubscribe_round_trip_encode_decode_default5() {
+        do_unsubscribe_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn unsubscribe_round_trip_encode_decode_default311() {
+        do_unsubscribe_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_unsubscribe_round_trip_encode_decode_basic_test(protocol_version: ProtocolVersion) {
         let packet = UnsubscribePacket {
             packet_id : 123,
             topic_filters : vec![ "hello/world".to_string() ],
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsubscribe(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsubscribe(packet), protocol_version));
+    }
+
+    #[test]
+    fn unsubscribe_round_trip_encode_decode_basic5() {
+        do_unsubscribe_round_trip_encode_decode_basic_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn unsubscribe_round_trip_encode_decode_basic311() {
+        do_unsubscribe_round_trip_encode_decode_basic_test(ProtocolVersion::Mqtt311);
     }
 
     fn create_unsubscribe_all_properties() -> UnsubscribePacket {
@@ -296,27 +314,53 @@ mod tests {
     }
 
     #[test]
-    fn unsubscribe_round_trip_encode_decode_all_properties() {
+    fn unsubscribe_round_trip_encode_decode_all_properties5() {
         let packet = create_unsubscribe_all_properties();
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsubscribe(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsubscribe(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn unsubscribe_decode_failure_bad_fixed_header() {
+    fn unsubscribe_round_trip_encode_decode_all_properties311() {
+        let packet = create_unsubscribe_all_properties();
+        let mut expected_packet = create_unsubscribe_all_properties();
+        expected_packet.user_properties = None;
+
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Unsubscribe(packet), &MqttPacket::Unsubscribe(expected_packet)));
+    }
+
+    fn do_unsubscribe_decode_failure_bad_fixed_header_test(protocol_version: ProtocolVersion) {
         let packet = UnsubscribePacket {
             packet_id : 123,
             topic_filters : vec![ "hello/world".to_string() ],
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Unsubscribe(packet), 14);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Unsubscribe(packet), protocol_version, 14);
     }
 
     #[test]
-    fn unsubscribe_decode_failure_inbound_packet_size() {
+    fn unsubscribe_decode_failure_bad_fixed_header5() {
+        do_unsubscribe_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn unsubscribe_decode_failure_bad_fixed_header311() {
+        do_unsubscribe_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn unsubscribe_decode_failure_inbound_packet_size5() {
         let packet = create_unsubscribe_all_properties();
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Unsubscribe(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Unsubscribe(packet), ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn unsubscribe_decode_failure_inbound_packet_size311() {
+        let mut packet = create_unsubscribe_all_properties();
+        packet.user_properties = None;
+
+        do_inbound_size_decode_failure_test(&MqttPacket::Unsubscribe(packet), ProtocolVersion::Mqtt311);
     }
 
     #[test]
@@ -364,10 +408,17 @@ mod tests {
     }
 
     #[test]
-    fn unsubscribe_validate_failure_outbound_size() {
+    fn unsubscribe_validate_failure_outbound_size5() {
         let packet = create_unsubscribe_all_properties();
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Unsubscribe(packet), PacketType::Unsubscribe);
+        do_outbound_size_validate_failure_test(&MqttPacket::Unsubscribe(packet), ProtocolVersion::Mqtt5, PacketType::Unsubscribe);
+    }
+
+    #[test]
+    fn unsubscribe_validate_failure_outbound_size311() {
+        let packet = create_unsubscribe_all_properties();
+
+        do_outbound_size_validate_failure_test(&MqttPacket::Unsubscribe(packet), ProtocolVersion::Mqtt311, PacketType::Unsubscribe);
     }
 
     #[test]

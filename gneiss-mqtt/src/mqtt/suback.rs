@@ -211,28 +211,46 @@ mod tests {
     use super::*;
     use crate::decode::testing::*;
 
-    #[test]
-    fn suback_round_trip_encode_decode_default() {
+    fn do_suback_round_trip_encode_decode_default(protocol_version: ProtocolVersion) {
         let packet = SubackPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Suback(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Suback(packet), protocol_version));
     }
 
     #[test]
-    fn suback_round_trip_encode_decode_required() {
+    fn suback_round_trip_encode_decode_default5() {
+        do_suback_round_trip_encode_decode_default(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn suback_round_trip_encode_decode_default311() {
+        do_suback_round_trip_encode_decode_default(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_suback_round_trip_encode_decode_required_test(protocol_version: ProtocolVersion) {
         let packet = SubackPacket {
             packet_id : 1023,
             reason_codes : vec![
                 SubackReasonCode::GrantedQos1,
-                SubackReasonCode::QuotaExceeded,
-                SubackReasonCode::SubscriptionIdentifiersNotSupported,
+                SubackReasonCode::GrantedQos2,
+                SubackReasonCode::UnspecifiedError,
             ],
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Suback(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Suback(packet), protocol_version));
+    }
+
+    #[test]
+    fn suback_round_trip_encode_decode_required5() {
+        do_suback_round_trip_encode_decode_required_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn suback_round_trip_encode_decode_required311() {
+        do_suback_round_trip_encode_decode_required_test(ProtocolVersion::Mqtt311);
     }
 
     fn create_suback_all_properties() -> SubackPacket {
@@ -252,13 +270,27 @@ mod tests {
     }
 
     #[test]
-    fn suback_round_trip_encode_decode_all() {
+    fn suback_round_trip_encode_decode_all5() {
         let packet = create_suback_all_properties();
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Suback(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Suback(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn suback_decode_failure_bad_fixed_header() {
+    fn suback_round_trip_encode_decode_all311() {
+        let packet = create_suback_all_properties();
+        let expected_packet = SubackPacket {
+            packet_id : packet.packet_id,
+            reason_codes : vec![
+                SubackReasonCode::GrantedQos2,
+                SubackReasonCode::UnspecifiedError,
+                SubackReasonCode::UnspecifiedError
+            ],
+            ..Default::default()
+        };
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Suback(packet), &MqttPacket::Suback(expected_packet)));
+    }
+
+    fn do_suback_decode_failure_bad_fixed_header_test(protocol_version: ProtocolVersion) {
         let packet = SubackPacket {
             packet_id : 1023,
             reason_codes : vec![
@@ -269,11 +301,20 @@ mod tests {
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Suback(packet), 15);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Suback(packet), protocol_version, 15);
     }
 
     #[test]
-    fn suback_decode_failure_reason_code_invalid() {
+    fn suback_decode_failure_bad_fixed_header5() {
+        do_suback_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn suback_decode_failure_bad_fixed_header311() {
+        do_suback_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_suback_decode_failure_reason_code_invalid_test(protocol_version: ProtocolVersion) {
         let packet = SubackPacket {
             packet_id : 1023,
             reason_codes : vec![
@@ -291,14 +332,24 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Suback(packet), corrupt_reason_code);
+        do_mutated_decode_failure_test(&MqttPacket::Suback(packet), protocol_version, corrupt_reason_code);
+    }
+
+    #[test]
+    fn suback_decode_failure_reason_code_invalid5() {
+        do_suback_decode_failure_reason_code_invalid_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn suback_decode_failure_reason_code_invalid311() {
+        do_suback_decode_failure_reason_code_invalid_test(ProtocolVersion::Mqtt311);
     }
 
     const SUBACK_PACKET_TEST_PROPERTY_LENGTH_INDEX : usize = 4;
     const SUBACK_PACKET_TEST_PAYLOAD_INDEX : usize = 12;
 
     #[test]
-    fn suback_decode_failure_duplicate_reason_string() {
+    fn suback_decode_failure_duplicate_reason_string5() {
 
         let packet = SubackPacket {
             packet_id : 1023,
@@ -323,14 +374,21 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Suback(packet), duplicate_reason_string);
+        do_mutated_decode_failure_test(&MqttPacket::Suback(packet), ProtocolVersion::Mqtt5, duplicate_reason_string);
     }
 
     #[test]
-    fn suback_decode_failure_inbound_packet_size() {
+    fn suback_decode_failure_inbound_packet_size5() {
         let packet = create_suback_all_properties();
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Suback(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Suback(packet), ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn suback_decode_failure_inbound_packet_size311() {
+        let packet = create_suback_all_properties();
+
+        do_inbound_size_decode_failure_test(&MqttPacket::Suback(packet), ProtocolVersion::Mqtt311);
     }
 
     use crate::validate::testing::*;

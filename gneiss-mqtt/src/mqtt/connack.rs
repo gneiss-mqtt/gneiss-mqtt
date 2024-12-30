@@ -322,44 +322,42 @@ mod tests {
     use super::*;
     use crate::decode::testing::*;
 
-    #[test]
-    fn connack_round_trip_encode_decode_default5() {
+    fn do_connack_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = ConnackPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet), protocol_version));
+    }
+
+    #[test]
+    fn connack_round_trip_encode_decode_default5() {
+        do_connack_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
     }
 
     #[test]
     fn connack_round_trip_encode_decode_default311() {
-        let packet = ConnackPacket {
-            ..Default::default()
-        };
-
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt311));
+        do_connack_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
     }
 
-    #[test]
-    fn connack_round_trip_encode_decode_required5() {
-        let packet = ConnackPacket {
-            session_present : true,
-            reason_code : ConnectReasonCode::Banned,
-            ..Default::default()
-        };
-
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5));
-    }
-
-    #[test]
-    fn connack_round_trip_encode_decode_required311() {
+    fn do_connack_round_trip_encode_decode_required_test(protocol_version: ProtocolVersion) {
         let packet = ConnackPacket {
             session_present : true,
             reason_code : ConnectReasonCode::UnsupportedProtocolVersion,
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt311));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connack(packet), protocol_version));
+    }
+
+    #[test]
+    fn connack_round_trip_encode_decode_required5() {
+        do_connack_round_trip_encode_decode_required_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn connack_round_trip_encode_decode_required311() {
+        do_connack_round_trip_encode_decode_required_test(ProtocolVersion::Mqtt311);
     }
 
     fn create_all_properties_connack_packet() -> ConnackPacket {
@@ -414,26 +412,24 @@ mod tests {
         assert!(do_311_filter_encode_decode_test(&MqttPacket::Connack(packet), &MqttPacket::Connack(expected_packet)));
     }
 
-    #[test]
-    fn connack_decode_failure_bad_fixed_header5() {
-        let packet = ConnackPacket {
-            session_present : true,
-            reason_code : ConnectReasonCode::Banned,
-            ..Default::default()
-        };
-
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt5, 5);
-    }
-
-    #[test]
-    fn connack_decode_failure_bad_fixed_header311() {
+    fn do_connack_decode_failure_bad_fixed_header_test(protocol_version: ProtocolVersion) {
         let packet = ConnackPacket {
             session_present : false,
             reason_code : ConnectReasonCode::ServerUnavailable,
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Connack(packet), ProtocolVersion::Mqtt311, 5);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Connack(packet), protocol_version, 5);
+    }
+
+    #[test]
+    fn connack_decode_failure_bad_fixed_header5() {
+        do_connack_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn connack_decode_failure_bad_fixed_header311() {
+        do_connack_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt311);
     }
 
     fn do_connack_decode_failure_bad_variable_header_flags_test(protocol_version: ProtocolVersion) {

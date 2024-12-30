@@ -675,46 +675,43 @@ mod tests {
     use crate::decode::testing::*;
     use crate::validate::testing::*;
 
-    #[test]
-    fn connect_round_trip_encode_decode_default5() {
+    fn do_connect_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = ConnectPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), protocol_version));
+    }
+
+    #[test]
+    fn connect_round_trip_encode_decode_default5() {
+        do_connect_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
     }
 
     #[test]
     fn connect_round_trip_encode_decode_default311() {
+        do_connect_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_connect_round_trip_encode_decode_basic_test(protocol_version: ProtocolVersion) {
         let packet = ConnectPacket {
+            keep_alive_interval_seconds : 1200,
+            clean_start : true,
+            client_id : Some("MyClient".to_string()),
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt311));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), protocol_version));
     }
 
     #[test]
     fn connect_round_trip_encode_decode_basic5() {
-        let packet = ConnectPacket {
-            keep_alive_interval_seconds : 1200,
-            clean_start : true,
-            client_id : Some("MyClient".to_string()),
-            ..Default::default()
-        };
-
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5));
+        do_connect_round_trip_encode_decode_basic_test(ProtocolVersion::Mqtt5);
     }
 
     #[test]
     fn connect_round_trip_encode_decode_basic311() {
-        let packet = ConnectPacket {
-            keep_alive_interval_seconds : 1200,
-            clean_start : true,
-            client_id : Some("MyClient".to_string()),
-            ..Default::default()
-        };
-
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt311));
+        do_connect_round_trip_encode_decode_basic_test(ProtocolVersion::Mqtt311);
     }
 
     #[test]
@@ -741,44 +738,42 @@ mod tests {
         assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5));
     }
 
-    #[test]
-    fn connect_round_trip_encode_decode_username_only5() {
+    fn do_connect_round_trip_encode_decode_username_only_test(protocol_version: ProtocolVersion) {
         let packet = ConnectPacket {
             username : Some("SpaceUnicorn".to_string()),
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), protocol_version));
+    }
+
+    #[test]
+    fn connect_round_trip_encode_decode_username_only5() {
+        do_connect_round_trip_encode_decode_username_only_test(ProtocolVersion::Mqtt5);
     }
 
     #[test]
     fn connect_round_trip_encode_decode_username_only311() {
+        do_connect_round_trip_encode_decode_username_only_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_connect_round_trip_encode_decode_password_only_test(protocol_version: ProtocolVersion) {
         let packet = ConnectPacket {
-            username : Some("SpaceUnicorn".to_string()),
+            password : Some("Marshmallow Lasers".as_bytes().to_vec()),
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt311));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), protocol_version));
     }
 
     #[test]
     fn connect_round_trip_encode_decode_password_only5() {
-        let packet = ConnectPacket {
-            password : Some("Marshmallow Lasers".as_bytes().to_vec()),
-            ..Default::default()
-        };
-
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5));
+        do_connect_round_trip_encode_decode_password_only_test(ProtocolVersion::Mqtt5);
     }
 
     #[test]
     fn connect_round_trip_encode_decode_password_only311() {
-        let packet = ConnectPacket {
-            password : Some("Marshmallow Lasers".as_bytes().to_vec()),
-            ..Default::default()
-        };
-
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt311));
+        do_connect_round_trip_encode_decode_password_only_test(ProtocolVersion::Mqtt311);
     }
 
     #[test]
@@ -807,8 +802,7 @@ mod tests {
         assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5));
     }
 
-    #[test]
-    fn connect_round_trip_encode_decode_default_will5() {
+    fn do_connect_round_trip_encode_decode_default_will_test(protocol_version: ProtocolVersion) {
         let packet = ConnectPacket {
             will : Some(PublishPacket {
                 ..Default::default()
@@ -816,49 +810,41 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), protocol_version));
+    }
+
+    #[test]
+    fn connect_round_trip_encode_decode_default_will5() {
+        do_connect_round_trip_encode_decode_default_will_test(ProtocolVersion::Mqtt5);
     }
 
     #[test]
     fn connect_round_trip_encode_decode_default_will311() {
+        do_connect_round_trip_encode_decode_default_will_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_connect_round_trip_encode_decode_simple_will_test(protocol_version: ProtocolVersion) {
         let packet = ConnectPacket {
             will : Some(PublishPacket {
+                topic : "in/rememberance".to_string(),
+                qos: QualityOfService::ExactlyOnce,
+                payload: Some("I'llbealright".as_bytes().to_vec()),
                 ..Default::default()
             }),
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt311));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), protocol_version));
     }
 
     #[test]
     fn connect_round_trip_encode_decode_simple_will5() {
-        let packet = ConnectPacket {
-            will : Some(PublishPacket {
-                topic : "in/rememberance".to_string(),
-                qos: QualityOfService::ExactlyOnce,
-                payload: Some("I'llbealright".as_bytes().to_vec()),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5));
+        do_connect_round_trip_encode_decode_simple_will_test(ProtocolVersion::Mqtt5);
     }
 
     #[test]
     fn connect_round_trip_encode_decode_simple_will311() {
-        let packet = ConnectPacket {
-            will : Some(PublishPacket {
-                topic : "in/rememberance".to_string(),
-                qos: QualityOfService::ExactlyOnce,
-                payload: Some("I'llbealright".as_bytes().to_vec()),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt311));
+        do_connect_round_trip_encode_decode_simple_will_test(ProtocolVersion::Mqtt311);
     }
 
     #[test]
@@ -883,7 +869,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt311));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5));
     }
 
     fn create_connect_packet_all_properties() -> ConnectPacket {
@@ -964,8 +950,7 @@ mod tests {
         assert!(do_311_filter_encode_decode_test(&MqttPacket::Connect(packet), &MqttPacket::Connect(expected_packet)));
     }
 
-    #[test]
-    fn connect_decode_failure_bad_fixed_header5() {
+    fn do_connect_decode_failure_bad_fixed_header_test(protocol_version: ProtocolVersion) {
         let packet = ConnectPacket {
             will : Some(PublishPacket {
                 topic : "in/rememberance".to_string(),
@@ -976,160 +961,120 @@ mod tests {
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5, 6);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Connect(packet), protocol_version, 6);
+    }
+
+    #[test]
+    fn connect_decode_failure_bad_fixed_header5() {
+        do_connect_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt5);
     }
 
     #[test]
     fn connect_decode_failure_bad_fixed_header311() {
-        let packet = ConnectPacket {
-            will : Some(PublishPacket {
-                topic : "in/rememberance".to_string(),
-                qos: QualityOfService::ExactlyOnce,
-                payload: Some("I'llbealright".as_bytes().to_vec()),
-                ..Default::default()
-            }),
-            ..Default::default()
+        do_connect_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_connect_decode_failure_bad_protocol_name_test(protocol_version: ProtocolVersion, index: usize) {
+        let packet = create_connect_packet_all_properties();
+
+        let lets_do_http = | bytes: &[u8] | -> Vec<u8> {
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
+            let mut clone = bytes.to_vec();
+
+            clone[index] = 72;
+            clone[index + 1] = 84;
+            clone[index + 2] = 84;
+            clone[index + 3] = 80;
+
+            clone
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt311, 6);
+        do_mutated_decode_failure_test(&MqttPacket::Connect(packet), protocol_version, lets_do_http);
     }
 
     #[test]
     fn connect_decode_failure_bad_protocol_name5() {
-        let packet = create_connect_packet_all_properties();
-
-        let lets_do_http = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
-            let mut clone = bytes.to_vec();
-
-            clone[5] = 72;
-            clone[6] = 84;
-            clone[7] = 84;
-            clone[8] = 80;
-
-            clone
-        };
-
-        do_mutated_decode_failure_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5, lets_do_http);
+        do_connect_decode_failure_bad_protocol_name_test(ProtocolVersion::Mqtt5, 5);
     }
 
     #[test]
     fn connect_decode_failure_bad_protocol_name311() {
+        do_connect_decode_failure_bad_protocol_name_test(ProtocolVersion::Mqtt311, 4);
+    }
+
+    fn do_connect_decode_failure_bad_protocol_version_test(protocol_version: ProtocolVersion, index: usize) {
         let packet = create_connect_packet_all_properties();
 
-        let lets_do_http = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH311); // it's critical this packet stays stable
+        let lets_do_mqtt3 = | bytes: &[u8] | -> Vec<u8> {
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
-            // in 311, the encoding does not take up more than 127 bytes, so the indices shift back 1
-            clone[4] = 72;
-            clone[5] = 84;
-            clone[6] = 84;
-            clone[7] = 80;
+            clone[index] = 3;
 
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt311, lets_do_http);
+        do_mutated_decode_failure_test(&MqttPacket::Connect(packet), protocol_version, lets_do_mqtt3);
     }
 
     #[test]
     fn connect_decode_failure_bad_protocol_version5() {
-        let packet = create_connect_packet_all_properties();
-
-        let lets_do_mqtt3 = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
-            let mut clone = bytes.to_vec();
-
-            clone[9] = 3;
-
-            clone
-        };
-
-        do_mutated_decode_failure_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5, lets_do_mqtt3);
+        do_connect_decode_failure_bad_protocol_version_test(ProtocolVersion::Mqtt5, 9);
     }
 
     #[test]
     fn connect_decode_failure_bad_protocol_version311() {
+        do_connect_decode_failure_bad_protocol_version_test(ProtocolVersion::Mqtt311, 8);
+    }
+
+    fn do_connect_decode_failure_bad_reserved_flags_test(protocol_version: ProtocolVersion, index: usize) {
         let packet = create_connect_packet_all_properties();
 
-        let lets_do_mqtt3 = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH311); // it's critical this packet stays stable
+        let set_reserved = | bytes: &[u8] | -> Vec<u8> {
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
-            // in 311, the encoding does not take up more than 127 bytes, so the indices shift back 1
-            clone[8] = 3;
+            clone[index] |= 0x01; // set the reserved bit of the connect flags
 
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt311, lets_do_mqtt3);
+        do_mutated_decode_failure_test(&MqttPacket::Connect(packet), protocol_version, set_reserved);
     }
 
     #[test]
     fn connect_decode_failure_bad_reserved_flags5() {
-        let packet = create_connect_packet_all_properties();
-
-        let set_reserved = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
-            let mut clone = bytes.to_vec();
-
-            clone[10] |= 0x01; // set the reserved bit of the connect flags
-
-            clone
-        };
-
-        do_mutated_decode_failure_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5, set_reserved);
+        do_connect_decode_failure_bad_reserved_flags_test(ProtocolVersion::Mqtt5, 10);
     }
 
     #[test]
     fn connect_decode_failure_bad_reserved_flags311() {
-        let packet = create_connect_packet_all_properties();
-
-        let set_reserved = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH311); // it's critical this packet stays stable
-            let mut clone = bytes.to_vec();
-
-            // in 311, the encoding does not take up more than 127 bytes, so the indices shift back 1
-            clone[9] |= 0x01; // set the reserved bit of the connect flags
-
-            clone
-        };
-
-        do_mutated_decode_failure_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt311, set_reserved);
+        do_connect_decode_failure_bad_reserved_flags_test(ProtocolVersion::Mqtt311, 9);
     }
 
-    #[test]
-    fn connect_decode_failure_bad_will_qos5() {
+    fn do_connect_decode_failure_bad_will_qos_test(protocol_version: ProtocolVersion, index: usize) {
         let packet = create_connect_packet_all_properties();
 
         let corrupt_will_qos = | bytes: &[u8] | -> Vec<u8> {
             assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
-            clone[10] |= 0x18; // will qos "3"
+            clone[index] |= 0x18; // will qos "3"
 
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt5, corrupt_will_qos);
+        do_mutated_decode_failure_test(&MqttPacket::Connect(packet), protocol_version, corrupt_will_qos);
+    }
+
+    #[test]
+    fn connect_decode_failure_bad_will_qos5() {
+        do_connect_decode_failure_bad_will_qos_test(ProtocolVersion::Mqtt5, 10);
     }
 
     #[test]
     fn connect_decode_failure_bad_will_qos311() {
-        let packet = create_connect_packet_all_properties();
-
-        let corrupt_will_qos = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH311); // it's critical this packet stays stable
-            let mut clone = bytes.to_vec();
-
-            // in 311, the encoding does not take up more than 127 bytes, so the indices shift back 1
-            clone[9] |= 0x18; // will qos "3"
-
-            clone
-        };
-
-        do_mutated_decode_failure_test(&MqttPacket::Connect(packet), ProtocolVersion::Mqtt311, corrupt_will_qos);
+        do_connect_decode_failure_bad_will_qos_test(ProtocolVersion::Mqtt311, 9);
     }
 
     #[test]

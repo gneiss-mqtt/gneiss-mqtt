@@ -486,18 +486,25 @@ mod tests {
     use crate::decode::testing::*;
     use crate::validate::testing::*;
 
-    #[test]
-    fn publish_round_trip_encode_decode_default() {
+    fn do_publish_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = PublishPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Publish(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Publish(packet), protocol_version));
     }
 
     #[test]
-    fn publish_round_trip_encode_decode_basic() {
+    fn publish_round_trip_encode_decode_default5() {
+        do_publish_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
+    }
 
+    #[test]
+    fn publish_round_trip_encode_decode_default311() {
+        do_publish_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_publish_round_trip_encode_decode_basic_test(protocol_version: ProtocolVersion) {
         let packet = PublishPacket {
             topic: "hello/world".to_string(),
             qos: QualityOfService::AtLeastOnce,
@@ -505,7 +512,17 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Publish(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Publish(packet), Pprotocol_version));
+    }
+
+    #[test]
+    fn publish_round_trip_encode_decode_basic5() {
+        do_publish_round_trip_encode_decode_basic_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn publish_round_trip_encode_decode_basic311() {
+        do_publish_round_trip_encode_decode_basic_test(ProtocolVersion::Mqtt311);
     }
 
     fn create_publish_with_all_fields() -> PublishPacket {
@@ -539,55 +556,74 @@ mod tests {
     }
 
     #[test]
-    fn publish_round_trip_encode_decode_all_fields() {
+    fn publish_round_trip_encode_decode_all_fields5() {
         let packet = create_publish_with_all_fields();
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Publish(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Publish(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn publish_round_trip_encode_decode_all_fields_2byte_payload() {
-        let mut publish = create_publish_with_all_fields();
-        publish.payload = Some(vec![0; 257]);
+    fn publish_round_trip_encode_decode_all_fields311() {
+        let packet = create_publish_with_all_fields();
+        let expected_packet = PublishPacket {
+            packet_id : packet.packet_id,
+            topic: packet.topic.clone(),
+            qos: packet.qos,
+            payload: packet.payload.clone(),
+            ..Default::default()
+        };
+
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Publish(packet), &MqttPacket::Publish(expected_packet)));
+    }
+
+    fn do_publish_round_trip_encode_decode_all_fields_payload_test(protocol_version: ProtocolVersion, payload_size: usize) {
+        let mut publish = PublishPacket {
+            packet_id : 12,
+            topic: "hello/world".to_string(),
+            ..Default::default()
+        };
+        publish.payload = Some(vec![0; payload_size]);
 
         let packet = &MqttPacket::Publish(publish);
 
         let decode_fragment_sizes : Vec<usize> = vec!(1, 2, 3, 5, 7);
 
         for decode_size in decode_fragment_sizes.iter() {
-            assert!(do_single_encode_decode_test(&packet, 1024, *decode_size, 5));
+            assert!(do_single_encode_decode_test(&packet, protocol_version, 1024, *decode_size, 5));
         }
     }
 
     #[test]
-    fn publish_round_trip_encode_decode_all_fields_3byte_payload() {
-        let mut publish = create_publish_with_all_fields();
-        publish.payload = Some(vec![0; 32768]);
-
-        let packet = &MqttPacket::Publish(publish);
-
-        let decode_fragment_sizes : Vec<usize> = vec!(1, 2, 3, 5, 7);
-
-        for decode_size in decode_fragment_sizes.iter() {
-            assert!(do_single_encode_decode_test(&packet, 1024, *decode_size, 5));
-        }
+    fn publish_round_trip_encode_decode_all_fields_2byte_payload5() {
+        do_publish_round_trip_encode_decode_all_fields_2byte_payload_test(ProtocolVersion::Mqtt5, 257);
     }
 
     #[test]
-    fn publish_round_trip_encode_decode_all_fields_4byte_payload() {
-        let mut publish = create_publish_with_all_fields();
-        publish.payload = Some(vec![0; 128 * 128 * 128]);
-
-        let packet = &MqttPacket::Publish(publish);
-
-        let decode_fragment_sizes : Vec<usize> = vec!(1, 2, 3, 5, 7);
-
-        for decode_size in decode_fragment_sizes.iter() {
-            assert!(do_single_encode_decode_test(&packet, 1024, *decode_size, 5));
-        }
+    fn publish_round_trip_encode_decode_all_fields_2byte_payload311() {
+        do_publish_round_trip_encode_decode_all_fields_2byte_payload_test(ProtocolVersion::Mqtt311, 257);
     }
 
     #[test]
-    fn publish_decode_failure_message_expiry_interval_duplicate() {
+    fn publish_round_trip_encode_decode_all_fields_3byte_payload5() {
+        do_publish_round_trip_encode_decode_all_fields_2byte_payload_test(ProtocolVersion::Mqtt5, 32768);
+    }
+
+    #[test]
+    fn publish_round_trip_encode_decode_all_fields_3byte_payload311() {
+        do_publish_round_trip_encode_decode_all_fields_2byte_payload_test(ProtocolVersion::Mqtt311, 32768);
+    }
+
+    #[test]
+    fn publish_round_trip_encode_decode_all_fields_4byte_payload5() {
+        do_publish_round_trip_encode_decode_all_fields_2byte_payload_test(ProtocolVersion::Mqtt5, 128 * 128 * 128);
+    }
+
+    #[test]
+    fn publish_round_trip_encode_decode_all_fields_4byte_payload311() {
+        do_publish_round_trip_encode_decode_all_fields_2byte_payload_test(ProtocolVersion::Mqtt311, 128 * 128 * 128);
+    }
+
+    #[test]
+    fn publish_decode_failure_message_expiry_interval_duplicate5() {
 
         let packet = PublishPacket {
             topic: "hello/world".to_string(),
@@ -616,12 +652,10 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), duplicate_message_expiry_interval);
+        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), ProtocolVersion::Mqtt5, duplicate_message_expiry_interval);
     }
 
-    #[test]
-    fn publish_decode_failure_invalid_qos() {
-
+    fn do_publish_decode_failure_invalid_qos_test(protocol_version: ProtocolVersion) {
         let packet = PublishPacket {
             topic: "hello/world".to_string(),
             qos: QualityOfService::AtLeastOnce,
@@ -636,13 +670,23 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), invalidate_qos);
+        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), protocol_version, invalidate_qos);
+    }
+
+    #[test]
+    fn publish_decode_failure_invalid_qos5() {
+        do_publish_decode_failure_invalid_qos_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn publish_decode_failure_invalid_qos311() {
+        do_publish_decode_failure_invalid_qos_test(ProtocolVersion::Mqtt311);
     }
 
     const PUBLISH_PACKET_ALL_PROPERTIES_TEST_PROPERTY_LENGTH_INDEX : usize = 17;
 
     #[test]
-    fn publish_decode_failure_invalid_payload_format_indicator() {
+    fn publish_decode_failure_invalid_payload_format_indicator5() {
 
         let packet = PublishPacket {
             topic: "hello/world".to_string(),
@@ -659,11 +703,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), invalidate_pfi);
+        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), ProtocolVersion::Mqtt5, invalidate_pfi);
     }
 
     #[test]
-    fn publish_decode_failure_duplicate_payload_format_indicator() {
+    fn publish_decode_failure_duplicate_payload_format_indicator5() {
 
         let packet = PublishPacket {
             topic: "hello/world".to_string(),
@@ -684,11 +728,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), duplicate_pfi);
+        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), ProtocolVersion::Mqtt5, duplicate_pfi);
     }
 
     #[test]
-    fn publish_decode_failure_duplicate_message_expiry_interval() {
+    fn publish_decode_failure_duplicate_message_expiry_interval5() {
 
         let packet = PublishPacket {
             topic: "hello/world".to_string(),
@@ -712,11 +756,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), duplicate_message_expiry);
+        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), ProtocolVersion::Mqtt5, duplicate_message_expiry);
     }
 
     #[test]
-    fn publish_decode_failure_duplicate_response_topic() {
+    fn publish_decode_failure_duplicate_response_topic5() {
 
         let packet = PublishPacket {
             topic: "hello/world".to_string(),
@@ -740,11 +784,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), duplicate_response_string);
+        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), ProtocolVersion::Mqtt5, duplicate_response_string);
     }
 
     #[test]
-    fn publish_decode_failure_duplicate_correlation_data() {
+    fn publish_decode_failure_duplicate_correlation_data5() {
 
         let packet = PublishPacket {
             topic: "hello/world".to_string(),
@@ -768,11 +812,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), duplicate_correlation_data);
+        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), ProtocolVersion::Mqtt5, duplicate_correlation_data);
     }
 
     #[test]
-    fn publish_decode_failure_duplicate_content_type() {
+    fn publish_decode_failure_duplicate_content_type5() {
 
         let packet = PublishPacket {
             topic: "hello/world".to_string(),
@@ -796,11 +840,10 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), duplicate_content_type);
+        do_mutated_decode_failure_test(&MqttPacket::Publish(packet), ProtocolVersion::Mqtt5, duplicate_content_type);
     }
 
-    #[test]
-    fn publish_decode_failure_inbound_packet_size() {
+    fn do_publish_decode_failure_inbound_packet_size_test(protocol_version: ProtocolVersion) {
         let packet = PublishPacket {
             topic: "hello/world".to_string(),
             qos: QualityOfService::AtLeastOnce,
@@ -808,7 +851,17 @@ mod tests {
             ..Default::default()
         };
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Publish(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Publish(packet), protocol_version);
+    }
+
+    #[test]
+    fn publish_decode_failure_inbound_packet_size5() {
+        do_publish_decode_failure_inbound_packet_size_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn publish_decode_failure_inbound_packet_size311() {
+        do_publish_decode_failure_inbound_packet_size_test(ProtocolVersion::Mqtt311);
     }
 
     #[test]
@@ -928,14 +981,22 @@ mod tests {
     }
 
     #[test]
-    fn publish_validate_failure_outbound_size() {
+    fn publish_validate_failure_outbound_size5() {
         let mut packet = create_publish_with_all_fields();
         packet.topic_alias = None;
         packet.subscription_identifiers = None;
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Publish(packet), PacketType::Publish);
+        do_outbound_size_validate_failure_test(&MqttPacket::Publish(packet), ProtocolVersion::Mqtt5, PacketType::Publish);
     }
 
+    #[test]
+    fn publish_validate_failure_outbound_size311() {
+        let mut packet = create_publish_with_all_fields();
+        packet.topic_alias = None;
+        packet.subscription_identifiers = None;
+
+        do_outbound_size_validate_failure_test(&MqttPacket::Publish(packet), ProtocolVersion::Mqtt311, PacketType::Publish);
+    }
 
     #[test]
     fn publish_validate_failure_outbound_internal_retain_unavailable() {

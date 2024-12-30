@@ -191,17 +191,26 @@ mod tests {
     use super::*;
     use crate::decode::testing::*;
 
-    #[test]
-    fn unsuback_round_trip_encode_decode_default() {
+    fn do_unsuback_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = UnsubackPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsuback(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsuback(packet), protocol_version));
     }
 
     #[test]
-    fn unsuback_round_trip_encode_decode_required() {
+    fn unsuback_round_trip_encode_decode_default5() {
+        do_unsuback_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn unsuback_round_trip_encode_decode_default311() {
+        do_unsuback_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn unsuback_round_trip_encode_decode_required5() {
         let packet = UnsubackPacket {
             packet_id : 1023,
             reason_codes : vec![
@@ -212,7 +221,17 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsuback(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsuback(packet), ProtocolVersion::Mqtt5));
+    }
+
+    #[test]
+    fn unsuback_round_trip_encode_decode_required311() {
+        let packet = UnsubackPacket {
+            packet_id : 1023,
+            ..Default::default()
+        };
+
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsuback(packet), ProtocolVersion::Mqtt311));
     }
 
     fn create_unsuback_all_properties() -> UnsubackPacket {
@@ -232,13 +251,23 @@ mod tests {
     }
 
     #[test]
-    fn unsuback_round_trip_encode_decode_all() {
+    fn unsuback_round_trip_encode_decode_all5() {
         let packet = create_unsuback_all_properties();
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsuback(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsuback(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn unsuback_decode_failure_bad_fixed_header() {
+    fn unsuback_round_trip_encode_decode_all311() {
+        let packet = create_unsuback_all_properties();
+        let expected_packet = UnsubackPacket {
+            packet_id: packet.packet_id,
+            ..Default::default()
+        };
+
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Unsuback(packet), &MqttPacket::Unsuback(expected_packet)));
+    }
+
+    fn do_unsuback_decode_failure_bad_fixed_header_test(protocol_version: ProtocolVersion) {
         let packet = UnsubackPacket {
             packet_id : 1023,
             reason_codes : vec![
@@ -249,11 +278,21 @@ mod tests {
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Unsuback(packet), 9);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Unsuback(packet), protocol_version, 9);
     }
 
     #[test]
-    fn unsuback_decode_failure_reason_code_invalid() {
+    fn unsuback_decode_failure_bad_fixed_header5() {
+        do_unsuback_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn unsuback_decode_failure_bad_fixed_header311() {
+        do_unsuback_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn unsuback_decode_failure_reason_code_invalid5() {
         let packet = SubackPacket {
             packet_id : 1023,
             reason_codes : vec![
@@ -271,14 +310,14 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Suback(packet), corrupt_reason_code);
+        do_mutated_decode_failure_test(&MqttPacket::Suback(packet), ProtocolVersion::Mqtt5, corrupt_reason_code);
     }
 
     const UNSUBACK_PACKET_TEST_PROPERTY_LENGTH_INDEX : usize = 4;
     const UNSUBACK_PACKET_TEST_PAYLOAD_INDEX : usize = 12;
 
     #[test]
-    fn unsuback_decode_failure_duplicate_reason_string() {
+    fn unsuback_decode_failure_duplicate_reason_string5() {
 
         let packet = UnsubackPacket {
             packet_id : 1023,
@@ -305,14 +344,21 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Unsuback(packet), duplicate_reason_string);
+        do_mutated_decode_failure_test(&MqttPacket::Unsuback(packet), ProtocolVersion::Mqtt5, duplicate_reason_string);
     }
 
     #[test]
-    fn unsuback_decode_failure_inbound_packet_size() {
+    fn unsuback_decode_failure_inbound_packet_size5() {
         let packet = create_unsuback_all_properties();
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Unsuback(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Unsuback(packet), ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn unsuback_decode_failure_inbound_packet_size311() {
+        let packet = create_unsuback_all_properties();
+
+        do_inbound_size_decode_failure_test(&MqttPacket::Unsuback(packet), ProtocolVersion::Mqtt311);
     }
 
     use crate::validate::testing::*;
