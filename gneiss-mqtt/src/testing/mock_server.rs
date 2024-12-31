@@ -33,7 +33,7 @@ struct MockBrokerConnection {
 }
 
 impl MockBrokerConnection {
-    pub fn new(stream: TcpStream, protocol_version: ProtocolVersion, packet_handlers: PacketHandlerSet, context: Arc<Mutex<BrokerTestContext>>) -> Self {
+    pub fn new(protocol_version: ProtocolVersion, stream: TcpStream, packet_handlers: PacketHandlerSet, context: Arc<Mutex<BrokerTestContext>>) -> Self {
         MockBrokerConnection {
             decoder: Decoder::new(),
             encoder: Encoder::new(),
@@ -59,6 +59,7 @@ impl MockBrokerConnection {
                     if bytes_read > 0 {
                         let mut decode_context = DecodingContext {
                             maximum_packet_size : MAXIMUM_VARIABLE_LENGTH_INTEGER as u32,
+                            protocol_version : self.protocol_version,
                             decoded_packets: &mut broker_packets,
                         };
 
@@ -160,7 +161,7 @@ impl MockBroker {
         *shutdown_status = true;
     }
 
-    pub fn new(handler_set_factory: PacketHandlerSetFactory) -> Self {
+    pub fn new(protocol_version: ProtocolVersion, handler_set_factory: PacketHandlerSetFactory) -> Self {
         let bind_result = TcpListener::bind("127.0.0.1:0");
         if let Ok(listener) = bind_result {
             listener.set_nonblocking(true).expect("Failed to set listener socket non-blocking");
@@ -176,7 +177,7 @@ impl MockBroker {
                     match next_stream_result {
                         Ok(stream) => {
                             let handler_set = handler_set_factory();
-                            let mut connection = MockBrokerConnection::new(stream, handler_set, test_context.clone());
+                            let mut connection = MockBrokerConnection::new(protocol_version, stream, handler_set, test_context.clone());
                             std::thread::spawn(move || {
                                 connection.run();
                             });
@@ -210,6 +211,8 @@ impl MockBroker {
 
 #[derive(Default)]
 pub(crate) struct ClientTestOptions {
+    pub(crate) protocol_version: ProtocolVersion,
+
     pub(crate) packet_handler_set_factory_fn: Option<PacketHandlerSetFactory>,
 
     #[allow(clippy::type_complexity)]
@@ -228,7 +231,7 @@ pub(crate) fn build_mock_client_server_tokio(mut config: ClientTestOptions) -> (
             Box::new(|| { create_default_packet_handlers() })
         };
 
-    let broker = MockBroker::new(handler_set_factory);
+    let broker = MockBroker::new(config.protocol_version, handler_set_factory);
 
     let mut client_options_builder = MqttClientOptionsBuilder::new();
     client_options_builder.with_connect_timeout(Duration::from_secs(3));
@@ -258,7 +261,7 @@ pub(crate) fn build_mock_client_server_threaded(mut config: ClientTestOptions) -
             Box::new(|| { create_default_packet_handlers() })
         };
 
-    let broker = MockBroker::new(handler_set_factory);
+    let broker = MockBroker::new(config.protocol_version, handler_set_factory);
 
     let mut client_options_builder = MqttClientOptionsBuilder::new();
     client_options_builder.with_connect_timeout(Duration::from_secs(3));

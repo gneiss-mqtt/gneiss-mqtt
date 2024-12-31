@@ -354,7 +354,7 @@ pub(crate) use encode_enum;
 #[cfg(test)]
 macro_rules! encode_enum_with_function {
     ($target: ident, $enum_variant: ident, $int_type: ty, $value: expr, $conversion_function_name: ident) => {
-        $target.push_back(EncodingStep::$enum_variant($conversion_function_name($value) as $int_type));
+        $target.push_back(EncodingStep::$enum_variant($conversion_function_name($value)? as $int_type));
     };
 }
 

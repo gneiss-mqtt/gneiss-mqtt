@@ -403,7 +403,7 @@ pub(crate) fn decode_connect_packet5(first_byte: u8, packet_body: &[u8]) -> Gnei
         mutable_body = &mutable_body[CONNECT_HEADER_PROTOCOL_LENGTH..];
 
         match protocol_bytes {
-            MQTT5_CONNECT_PROTOCOL_BYTES => { }
+            [0, 4, 77, 81, 84, 84, 5] => { }
             _ => {
                 let message = "decode_connect_packet5 - invalid protocol";
                 error!("{}", message);
@@ -530,7 +530,7 @@ pub(crate) fn decode_connect_packet311(first_byte: u8, packet_body: &[u8]) -> Gn
         mutable_body = &mutable_body[CONNECT_HEADER_PROTOCOL_LENGTH..];
 
         match protocol_bytes {
-            MQTT311_CONNECT_PROTOCOL_BYTES => { }
+            [0, 4, 77, 81, 84, 84, 4] => { }
             _ => {
                 let message = "decode_connect_packet311 - invalid protocol";
                 error!("{}", message);
@@ -569,6 +569,12 @@ pub(crate) fn decode_connect_packet311(first_byte: u8, packet_body: &[u8]) -> Gn
         mutable_body = decode_length_prefixed_optional_string(mutable_body, &mut packet.client_id)?;
 
         if has_will {
+            let mut will : PublishPacket = PublishPacket {
+                qos : will_qos,
+                retain : will_retain,
+                ..Default::default()
+            };
+
             mutable_body = decode_length_prefixed_string(mutable_body, &mut will.topic)?;
             mutable_body = decode_length_prefixed_optional_bytes(mutable_body, &mut will.payload)?;
 
@@ -1082,7 +1088,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_session_expiry_interval = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1108,7 +1114,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_receive_maximum = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1132,7 +1138,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_maximum_packet_size = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1158,7 +1164,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_topic_alias_maximum = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1182,7 +1188,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_request_response_information = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1205,7 +1211,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let invalidate_request_response_information = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             clone[CONNECT_PACKET_ALL_PROPERTIES_TEST_REQUEST_RESPONSE_INFORMATION_VALUE_INDEX] = 2;
@@ -1221,7 +1227,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_request_problem_information = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1244,7 +1250,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let invalidate_request_problem_information = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             clone[CONNECT_PACKET_ALL_PROPERTIES_TEST_REQUEST_PROBLEM_INFORMATION_VALUE_INDEX] = 2;
@@ -1260,7 +1266,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_authentication_method = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1286,7 +1292,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_authentication_data = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1311,7 +1317,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_will_delay_interval = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1337,7 +1343,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_will_payload_format_indicator = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1360,7 +1366,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_will_message_expiry_interval = |bytes: &[u8]| -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1386,7 +1392,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_will_content_type = |bytes: &[u8]| -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1412,7 +1418,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_will_response_topic = |bytes: &[u8]| -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1439,7 +1445,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let duplicate_will_correlation_data = |bytes: &[u8]| -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             // bump total remaining length
@@ -1466,7 +1472,7 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let invalidate_will_payload_format_indicator = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH); // it's critical this packet stays stable
+            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
             let mut clone = bytes.to_vec();
 
             clone[CONNECT_PACKET_ALL_PROPERTIES_TEST_WILL_PAYLOAD_FORMAT_INDICATOR_VALUE_INDEX] = 254;

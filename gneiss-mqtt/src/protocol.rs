@@ -2129,14 +2129,14 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
 
-    fn build_protocol_state_config_for_settings_test(protocol_mode: ProtocolMode, connect_options: ConnectOptions) -> ProtocolStateConfig {
+    fn build_protocol_state_config_for_settings_test(connect_options: ConnectOptions) -> ProtocolStateConfig {
         ProtocolStateConfig {
             connect_options,
             base_timestamp: Instant::now(),
             offline_queue_policy: OfflineQueuePolicy::PreserveAll,
             ping_timeout: Duration::from_millis(30000),
             outbound_alias_resolver: None,
-            protocol_mode,
+            protocol_mode: ProtocolMode::Mqtt5, // nothing tested in this module varies based on protocol version
         }
     }
 
@@ -2400,14 +2400,14 @@ mod tests {
         );
     }
 
-    fn build_protocol_state_for_acquire_packet_id_test(protocol_mode: ProtocolMode) -> ProtocolState {
+    fn build_protocol_state_for_acquire_packet_id_test() -> ProtocolState {
         let config = ProtocolStateConfig {
             connect_options: ConnectOptions::builder().build(),
             base_timestamp: Instant::now(),
             offline_queue_policy: OfflineQueuePolicy::PreserveNothing,
             ping_timeout: Duration::from_millis(0),
             outbound_alias_resolver: None,
-            protocol_mode,
+            protocol_mode: ProtocolMode::Mqtt5
         };
 
         ProtocolState::new(config)

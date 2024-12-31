@@ -130,7 +130,7 @@ mod tests {
     fn pubcomp_round_trip_encode_decode_failure_rc_with_props311() {
 
         let packet = create_pubcomp_with_all_properties();
-        let expected_Packet = PubcompPacket {
+        let expected_packet = PubcompPacket {
             packet_id : packet.packet_id,
             ..Default::default()
         };

@@ -38,7 +38,6 @@ mod tests {
 
     use super::*;
     use crate::decode::testing::*;
-    use crate::error::ProtocolErrorContext;
 
     fn do_pubrec_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = PubrecPacket {

@@ -685,7 +685,7 @@ pub(crate) mod testing {
     use crate::encode::*;
     use assert_matches::assert_matches;
 
-    pub(crate) fn do_single_encode_decode_test5(packet : &MqttPacket, protocol_version: ProtocolVersion, encode_size : usize, decode_size : usize, encode_repetitions : u32) -> bool {
+    pub(crate) fn do_single_encode_decode_test(packet : &MqttPacket, protocol_version: ProtocolVersion, encode_size : usize, decode_size : usize, encode_repetitions : u32) -> bool {
 
         let mut encoder = Encoder::new();
 
@@ -771,7 +771,7 @@ pub(crate) mod testing {
 
         for encode_size in encode_buffer_sizes.iter() {
             for decode_size in decode_fragment_sizes.iter() {
-                assert!(do_single_encode_decode_test5(packet, protocol_version, *encode_size, *decode_size, 5));
+                assert!(do_single_encode_decode_test(packet, protocol_version, *encode_size, *decode_size, 5));
             }
         }
 
@@ -787,7 +787,7 @@ pub(crate) mod testing {
 
         /* encode 5 copies of the packet */
         for _ in 0..encode_repetitions {
-            let mut encoding_context = EncodingContext {
+            let encoding_context = EncodingContext {
                 outbound_alias_resolution: OutboundAliasResolution::default(),
                 protocol_version: ProtocolVersion::Mqtt311,
             };
@@ -832,7 +832,7 @@ pub(crate) mod testing {
 
         let mut matching_packets : u32 = 0;
 
-        for mut received_packet in decoded_packets {
+        for received_packet in decoded_packets {
             matching_packets += 1;
             assert_eq!(*expected_packet, *received_packet);
         }

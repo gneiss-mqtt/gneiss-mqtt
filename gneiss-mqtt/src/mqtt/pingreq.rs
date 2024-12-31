@@ -53,7 +53,6 @@ impl fmt::Display for PingreqPacket {
 
 #[cfg(test)]
 mod tests {
-    use tungstenite::Error::Protocol;
     use super::*;
     use crate::decode::testing::*;
 

@@ -512,7 +512,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Publish(packet), Pprotocol_version));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Publish(packet), protocol_version));
     }
 
     #[test]
@@ -594,32 +594,32 @@ mod tests {
 
     #[test]
     fn publish_round_trip_encode_decode_all_fields_2byte_payload5() {
-        do_publish_round_trip_encode_decode_all_fields_2byte_payload_test(ProtocolVersion::Mqtt5, 257);
+        do_publish_round_trip_encode_decode_all_fields_payload_test(ProtocolVersion::Mqtt5, 257);
     }
 
     #[test]
     fn publish_round_trip_encode_decode_all_fields_2byte_payload311() {
-        do_publish_round_trip_encode_decode_all_fields_2byte_payload_test(ProtocolVersion::Mqtt311, 257);
+        do_publish_round_trip_encode_decode_all_fields_payload_test(ProtocolVersion::Mqtt311, 257);
     }
 
     #[test]
     fn publish_round_trip_encode_decode_all_fields_3byte_payload5() {
-        do_publish_round_trip_encode_decode_all_fields_2byte_payload_test(ProtocolVersion::Mqtt5, 32768);
+        do_publish_round_trip_encode_decode_all_fields_payload_test(ProtocolVersion::Mqtt5, 32768);
     }
 
     #[test]
     fn publish_round_trip_encode_decode_all_fields_3byte_payload311() {
-        do_publish_round_trip_encode_decode_all_fields_2byte_payload_test(ProtocolVersion::Mqtt311, 32768);
+        do_publish_round_trip_encode_decode_all_fields_payload_test(ProtocolVersion::Mqtt311, 32768);
     }
 
     #[test]
     fn publish_round_trip_encode_decode_all_fields_4byte_payload5() {
-        do_publish_round_trip_encode_decode_all_fields_2byte_payload_test(ProtocolVersion::Mqtt5, 128 * 128 * 128);
+        do_publish_round_trip_encode_decode_all_fields_payload_test(ProtocolVersion::Mqtt5, 128 * 128 * 128);
     }
 
     #[test]
     fn publish_round_trip_encode_decode_all_fields_4byte_payload311() {
-        do_publish_round_trip_encode_decode_all_fields_2byte_payload_test(ProtocolVersion::Mqtt311, 128 * 128 * 128);
+        do_publish_round_trip_encode_decode_all_fields_payload_test(ProtocolVersion::Mqtt311, 128 * 128 * 128);
     }
 
     #[test]

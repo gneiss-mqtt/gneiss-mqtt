@@ -22,9 +22,21 @@ use crate::mqtt::utils::mqtt_packet_to_packet_type;
 use crate::testing::mock_server::ClientTestOptions;
 use crate::validate::testing::verify_validation_failure;
 
+use test_case::test_matrix;
+
 const CONNACK_TIMEOUT_MILLIS: u64 = 10000;
 
-fn build_standard_test_config(protocol_mode: ProtocolMode) -> ProtocolStateConfig {
+fn convert_version_to_protocol_mode(protocol_version : i32) -> ProtocolMode {
+    match protocol_version {
+        311 => { ProtocolMode::Mqtt311 },
+        5 => { ProtocolMode::Mqtt5 }
+        _ => { panic!("Invalid MQTT version") }
+    }
+}
+
+fn build_standard_test_config(protocol_version : i32) -> ProtocolStateConfig {
+    let protocol_mode = convert_version_to_protocol_mode(protocol_version);
+
     ProtocolStateConfig {
         connect_options : ConnectOptions::builder().with_client_id("DefaultTesting").with_keep_alive_interval_seconds(None).build(),
         base_timestamp: Instant::now(),
@@ -125,7 +137,7 @@ fn handle_connect_with_topic_aliasing(packet: &MqttPacket, response_packets: &mu
 
 fn create_connack_rejection() -> ConnackPacket {
     ConnackPacket {
-        reason_code : ConnectReasonCode::Banned,
+        reason_code : ConnectReasonCode::ServerUnavailable,
         ..Default::default()
     }
 }
@@ -287,7 +299,7 @@ fn handle_subscribe_with_failure(packet: &MqttPacket, response_packets: &mut Vec
     if let MqttPacket::Subscribe(subscribe) = packet {
         let mut reason_codes = Vec::new();
         for _ in &subscribe.subscriptions {
-            reason_codes.push(SubackReasonCode::NotAuthorized);
+            reason_codes.push(SubackReasonCode::UnspecifiedError);
         }
 
         let response = Box::new(MqttPacket::Suback(SubackPacket{
@@ -469,6 +481,7 @@ impl ProtocolStateTestFixture {
 
         let mut decode_context = DecodingContext {
             maximum_packet_size : maximum_packet_size_to_server,
+            protocol_version: self.client_state.protocol_version,
             decoded_packets: &mut broker_packets,
         };
 
@@ -518,6 +531,7 @@ impl ProtocolStateTestFixture {
 
                 let mut decode_context = DecodingContext {
                     maximum_packet_size : maximum_packet_size_to_server,
+                    protocol_version : self.client_state.protocol_version,
                     decoded_packets: &mut broker_packets,
                 };
 
@@ -866,7 +880,6 @@ pub(crate) fn handle_publish_with_disconnect(packet: &MqttPacket, response_packe
 pub(crate) fn build_reconnect_reset_test_options() -> ClientTestOptions {
     let mut test_options = ClientTestOptions::default();
 
-
     test_options.client_options_mutator_fn = Some(Box::new(|builder| {
         builder.with_base_reconnect_period(Duration::from_millis(500));
         builder.with_max_reconnect_period(Duration::from_millis(6000));
@@ -921,9 +934,9 @@ pub(crate) fn validate_reconnect_backoff_reset_sequence(events: &[ClientEventRec
     Ok(())
 }
 
-#[test]
-fn disconnected_state_network_event_handler_fails() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn disconnected_state_network_event_handler_fails(protocol_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(protocol_version));
     assert_eq!(ProtocolStateType::Disconnected, fixture.client_state.state);
 
     assert_matches!(fixture.on_connection_closed(0).err().unwrap(), GneissError::InternalStateError(_));
@@ -937,9 +950,9 @@ fn disconnected_state_network_event_handler_fails() {
     assert!(fixture.client_packet_events.is_empty());
 }
 
-#[test]
-fn disconnected_state_next_service_time_never() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn disconnected_state_next_service_time_never(protocol_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(protocol_version));
     assert_eq!(ProtocolStateType::Disconnected, fixture.client_state.state);
 
     assert_eq!(None, fixture.get_next_service_time(0));
@@ -970,17 +983,17 @@ fn verify_service_does_nothing(fixture : &mut ProtocolStateTestFixture) {
     assert_eq!(to_client_packet_stream_length, fixture.to_client_packet_stream.len());
 }
 
-#[test]
-fn disconnected_state_service_does_nothing() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn disconnected_state_service_does_nothing(protocol_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(protocol_version));
     assert_eq!(ProtocolStateType::Disconnected, fixture.client_state.state);
 
     verify_service_does_nothing(&mut fixture);
 }
 
-#[test]
-fn halted_state_network_event_handler_fails() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn halted_state_network_event_handler_fails(protocol_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(protocol_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Halted, 0).is_ok());
 
     assert_matches!(fixture.on_connection_opened(0).err().unwrap(), GneissError::InternalStateError(_));
@@ -997,34 +1010,34 @@ fn halted_state_network_event_handler_fails() {
     assert!(fixture.client_packet_events.is_empty());
 }
 
-#[test]
-fn halted_state_next_service_time_never() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn halted_state_next_service_time_never(protocol_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(protocol_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Halted, 0).is_ok());
 
     assert_eq!(None, fixture.get_next_service_time(0));
 }
 
-#[test]
-fn halted_state_service_does_nothing() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn halted_state_service_does_nothing(protocol_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(protocol_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Halted, 0).is_ok());
 
     verify_service_does_nothing(&mut fixture);
 }
 
-#[test]
-fn halted_state_transition_out_on_connection_closed() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn halted_state_transition_out_on_connection_closed(protocol_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(protocol_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Halted, 0).is_ok());
 
     assert!(fixture.on_connection_closed(0).is_ok());
     assert_eq!(ProtocolStateType::Disconnected, fixture.client_state.state);
 }
 
-#[test]
-fn pending_connack_state_network_event_connection_opened_fails() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn pending_connack_state_network_event_connection_opened_fails(protocol_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(protocol_version));
 
     assert!(fixture.on_connection_opened(0).is_ok());
     assert_eq!(ProtocolStateType::PendingConnack, fixture.client_state.state);
@@ -1034,9 +1047,9 @@ fn pending_connack_state_network_event_connection_opened_fails() {
     assert!(fixture.client_packet_events.is_empty());
 }
 
-#[test]
-fn pending_connack_state_network_event_write_completion_fails() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn pending_connack_state_network_event_write_completion_fails(protocol_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(protocol_version));
 
     assert!(fixture.on_connection_opened(0).is_ok());
     assert_eq!(ProtocolStateType::PendingConnack, fixture.client_state.state);
@@ -1046,9 +1059,9 @@ fn pending_connack_state_network_event_write_completion_fails() {
     assert!(fixture.client_packet_events.is_empty());
 }
 
-#[test]
-fn pending_connack_state_connack_timeout() {
-    let config = build_standard_test_config();
+#[test_matrix([5, 311])]
+fn pending_connack_state_connack_timeout(protocol_version : i32) {
+    let config = build_standard_test_config(protocol_version);
     let connack_timeout_millis = CONNACK_TIMEOUT_MILLIS;
 
     let mut fixture = ProtocolStateTestFixture::new(config);
@@ -1068,9 +1081,9 @@ fn pending_connack_state_connack_timeout() {
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn pending_connack_state_failure_connack() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn pending_connack_state_failure_connack(protocol_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(protocol_version));
 
     fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_failure_connack));
 
@@ -1087,9 +1100,9 @@ fn pending_connack_state_failure_connack() {
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn pending_connack_state_connection_closed() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn pending_connack_state_connection_closed(protocol_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(protocol_version));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 0).is_ok());
 
@@ -1101,9 +1114,9 @@ fn pending_connack_state_connection_closed() {
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn pending_connack_state_incoming_garbage_data() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn pending_connack_state_incoming_garbage_data(protocol_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(protocol_version));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 0).is_ok());
 
@@ -1118,17 +1131,18 @@ fn pending_connack_state_incoming_garbage_data() {
     verify_protocol_state_empty(&fixture);
 }
 
-fn encode_packet_to_buffer(packet: MqttPacket, buffer: &mut Vec<u8>) -> GneissResult<()> {
-    encode_packet_to_buffer_with_alias_resolution(packet, buffer, OutboundAliasResolution{
+fn encode_packet_to_buffer(packet: MqttPacket, protocol_version : ProtocolVersion, buffer: &mut Vec<u8>) -> GneissResult<()> {
+    encode_packet_to_buffer_with_alias_resolution(packet, protocol_version, buffer, OutboundAliasResolution{
         skip_topic: false,
         alias: None,
     })
 }
 
-fn encode_packet_to_buffer_with_alias_resolution(packet: MqttPacket, buffer: &mut Vec<u8>, alias_resolution: OutboundAliasResolution) -> GneissResult<()> {
+fn encode_packet_to_buffer_with_alias_resolution(packet: MqttPacket, protocol_version : ProtocolVersion, buffer: &mut Vec<u8>, alias_resolution: OutboundAliasResolution) -> GneissResult<()> {
     let mut encode_buffer = Vec::with_capacity(4096);
     let encoding_context = EncodingContext {
-        outbound_alias_resolution: alias_resolution
+        outbound_alias_resolution: alias_resolution,
+        protocol_version
     };
 
     let mut encoder = Encoder::new();
@@ -1143,15 +1157,16 @@ fn encode_packet_to_buffer_with_alias_resolution(packet: MqttPacket, buffer: &mu
     Ok(())
 }
 
-fn do_pending_connack_state_non_connack_packet_test(packet: MqttPacket) {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+fn do_pending_connack_state_non_connack_packet_test(raw_version : i32, packet: MqttPacket) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 0).is_ok());
 
     let mut server_bytes = fixture.service_with_drain(0, 4096).unwrap();
     server_bytes.clear();
 
-    assert!(encode_packet_to_buffer(packet, &mut server_bytes).is_ok());
+    let protocol_version = convert_protocol_mode_to_protocol_version(convert_version_to_protocol_mode(raw_version));
+    assert!(encode_packet_to_buffer(packet, protocol_version, &mut server_bytes).is_ok());
 
     assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(GneissError::ProtocolError(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
@@ -1159,8 +1174,8 @@ fn do_pending_connack_state_non_connack_packet_test(packet: MqttPacket) {
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn pending_connack_state_unexpected_packets() {
+#[test_matrix([5, 311])]
+fn pending_connack_state_unexpected_packets(protocol_version : i32) {
     // Not a protocol error: Connack, Auth
     let packets = vec!(
         MqttPacket::Connect(ConnectPacket {
@@ -1210,30 +1225,31 @@ fn pending_connack_state_unexpected_packets() {
     );
 
     for packet in packets {
-        do_pending_connack_state_non_connack_packet_test(packet);
+        do_pending_connack_state_non_connack_packet_test(protocol_version, packet);
     }
 }
 
-#[test]
-fn pending_connack_state_connack_received_too_soon() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn pending_connack_state_connack_received_too_soon(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 0).is_ok());
 
     let mut server_bytes = Vec::new();
 
+    let protocol_version = convert_protocol_mode_to_protocol_version(convert_version_to_protocol_mode(raw_version));
     assert!(encode_packet_to_buffer(MqttPacket::Connack(ConnackPacket{
         ..Default::default()
-    }), &mut server_bytes).is_ok());
+    }), protocol_version, &mut server_bytes).is_ok());
 
     assert_matches!(fixture.on_incoming_bytes(0, server_bytes.as_slice()), Err(GneissError::ProtocolError(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert!(fixture.client_packet_events.is_empty());
 }
 
-#[test]
-fn pending_connack_state_transition_to_disconnected() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn pending_connack_state_transition_to_disconnected(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::PendingConnack, 0).is_ok());
 
@@ -1242,9 +1258,9 @@ fn pending_connack_state_transition_to_disconnected() {
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn connected_state_transition_to_success() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn connected_state_transition_to_success(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
@@ -1258,9 +1274,9 @@ fn connected_state_transition_to_success() {
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn connected_state_network_event_connection_opened_fails() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn connected_state_network_event_connection_opened_fails(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
@@ -1272,9 +1288,9 @@ fn connected_state_network_event_connection_opened_fails() {
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn connected_state_network_event_write_completion_fails() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn connected_state_network_event_write_completion_fails(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
@@ -1283,9 +1299,9 @@ fn connected_state_network_event_write_completion_fails() {
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn connected_state_transition_to_disconnected() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn connected_state_transition_to_disconnected(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
@@ -1294,9 +1310,9 @@ fn connected_state_transition_to_disconnected() {
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn connected_state_incoming_garbage_data() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn connected_state_incoming_garbage_data(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
@@ -1307,21 +1323,22 @@ fn connected_state_incoming_garbage_data() {
     verify_protocol_state_empty(&fixture);
 }
 
-fn do_connected_state_unexpected_packet_test(packet : MqttPacket) {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+fn do_connected_state_unexpected_packet_test(packet : MqttPacket, raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
+    let protocol_version = convert_protocol_mode_to_protocol_version(convert_version_to_protocol_mode(raw_version));
     let mut buffer = Vec::new();
-    assert!(encode_packet_to_buffer(packet, &mut buffer).is_ok());
+    assert!(encode_packet_to_buffer(packet, protocol_version, &mut buffer).is_ok());
 
     assert_matches!(fixture.on_incoming_bytes(0, buffer.as_slice()), Err(GneissError::ProtocolError(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn connected_state_unexpected_packets() {
+#[test_matrix([5, 311])]
+fn connected_state_unexpected_packets(raw_version : i32) {
     let packets = vec!(
         MqttPacket::Connect(ConnectPacket{
             ..Default::default()
@@ -1339,17 +1356,18 @@ fn connected_state_unexpected_packets() {
     );
 
     for packet in packets {
-        do_connected_state_unexpected_packet_test(packet);
+        do_connected_state_unexpected_packet_test(packet, raw_version);
     }
 }
 
-fn do_connected_state_invalid_ack_packet_id_test(packet : MqttPacket) -> GneissResult<()> {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+fn do_connected_state_invalid_ack_packet_id_test(packet : MqttPacket, raw_version : i32) -> GneissResult<()> {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
+    let protocol_version = convert_protocol_mode_to_protocol_version(convert_version_to_protocol_mode(raw_version));
     let mut buffer = Vec::new();
-    assert!(encode_packet_to_buffer(packet, &mut buffer).is_ok());
+    assert!(encode_packet_to_buffer(packet, protocol_version, &mut buffer).is_ok());
 
     let incoming_bytes_result = fixture.on_incoming_bytes(0, buffer.as_slice());
     assert!(incoming_bytes_result.is_err());
@@ -1360,8 +1378,8 @@ fn do_connected_state_invalid_ack_packet_id_test(packet : MqttPacket) -> GneissR
     incoming_bytes_result
 }
 
-#[test]
-fn connected_state_unknown_ack_packet_id() {
+#[test_matrix([5, 311])]
+fn connected_state_unknown_ack_packet_id(raw_version : i32) {
     let packets = vec!(
         MqttPacket::Puback(PubackPacket{
             packet_id : 5,
@@ -1386,12 +1404,12 @@ fn connected_state_unknown_ack_packet_id() {
     );
 
     for packet in packets {
-        assert_matches!(do_connected_state_invalid_ack_packet_id_test(packet), Err(GneissError::ProtocolError(_)));
+        assert_matches!(do_connected_state_invalid_ack_packet_id_test(packet, raw_version), Err(GneissError::ProtocolError(_)));
     }
 }
 
-#[test]
-fn connected_state_invalid_ack_packet_id() {
+#[test_matrix([5, 311])]
+fn connected_state_invalid_ack_packet_id(raw_version : i32) {
     let packets = vec!(
         (MqttPacket::Publish(PublishPacket{
             qos: QualityOfService::AtLeastOnce,
@@ -1415,7 +1433,7 @@ fn connected_state_invalid_ack_packet_id() {
     );
 
     for (packet, validation_error_packet_type) in packets {
-        let result = do_connected_state_invalid_ack_packet_id_test(packet);
+        let result = do_connected_state_invalid_ack_packet_id_test(packet, raw_version);
         assert!(result.is_err());
         assert_matches!(result, Err(GneissError::PacketValidationFailure(_)));
         if let Err(GneissError::PacketValidationFailure(packet_validation_context)) = result {
@@ -1424,14 +1442,14 @@ fn connected_state_invalid_ack_packet_id() {
     }
 }
 
-fn do_ping_sequence_test(connack_delay: u64, response_delay_millis: u64, request_delay_millis: u64) {
+fn do_ping_sequence_test(raw_version : i32, connack_delay: u64, response_delay_millis: u64, request_delay_millis: u64) {
     const PING_TIMEOUT_MILLIS: u32 = 10000;
     const KEEP_ALIVE_SECONDS: u16 = 20;
     const KEEP_ALIVE_MILLIS: u64 = (KEEP_ALIVE_SECONDS as u64) * 1000;
 
     assert!(response_delay_millis < PING_TIMEOUT_MILLIS as u64);
 
-    let mut config = build_standard_test_config();
+    let mut config = build_standard_test_config(raw_version);
     config.ping_timeout = Duration::from_millis(PING_TIMEOUT_MILLIS as u64);
     config.connect_options.keep_alive_interval_seconds = Some(KEEP_ALIVE_SECONDS);
 
@@ -1474,33 +1492,33 @@ fn do_ping_sequence_test(connack_delay: u64, response_delay_millis: u64, request
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn connected_state_ping_sequence_instant() {
-    do_ping_sequence_test(0, 0, 0);
+#[test_matrix([5, 311])]
+fn connected_state_ping_sequence_instant(raw_version : i32) {
+    do_ping_sequence_test(raw_version, 0, 0, 0);
 }
 
-#[test]
-fn connected_state_ping_sequence_response_delayed() {
-    do_ping_sequence_test(1,2500, 0);
+#[test_matrix([5, 311])]
+fn connected_state_ping_sequence_response_delayed(raw_version : i32) {
+    do_ping_sequence_test(raw_version, 1,2500, 0);
 }
 
-#[test]
-fn connected_state_ping_sequence_request_delayed() {
-    do_ping_sequence_test(3, 0, 1000);
+#[test_matrix([5, 311])]
+fn connected_state_ping_sequence_request_delayed(raw_version : i32) {
+    do_ping_sequence_test(raw_version, 3, 0, 1000);
 }
 
-#[test]
-fn connected_state_ping_sequence_both_delayed() {
-    do_ping_sequence_test(7, 999, 131);
+#[test_matrix([5, 311])]
+fn connected_state_ping_sequence_both_delayed(raw_version : i32) {
+    do_ping_sequence_test(raw_version, 7, 999, 131);
 }
 
 #[allow(clippy::type_complexity)]
-fn do_connected_state_ping_push_out_test(operation_function: Box<dyn Fn(&mut ProtocolStateTestFixture, u64, u64)>, transmission_time: u64, response_time: u64, expected_push_out: u64) {
+fn do_connected_state_ping_push_out_test(raw_version : i32, operation_function: Box<dyn Fn(&mut ProtocolStateTestFixture, u64, u64)>, transmission_time: u64, response_time: u64, expected_push_out: u64) {
     const PING_TIMEOUT_MILLIS: u64 = 10000;
     const KEEP_ALIVE_SECONDS: u16 = 20;
     const KEEP_ALIVE_MILLIS: u64 = (KEEP_ALIVE_SECONDS as u64) * 1000;
 
-    let mut config = build_standard_test_config();
+    let mut config = build_standard_test_config(raw_version);
     config.ping_timeout = Duration::from_millis(PING_TIMEOUT_MILLIS);
     config.connect_options.keep_alive_interval_seconds = Some(KEEP_ALIVE_SECONDS);
 
@@ -1676,36 +1694,36 @@ fn do_unsubscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_
     verify_protocol_state_empty(fixture);
 }
 
-#[test]
-fn connected_state_ping_push_out_by_subscribe_completion() {
-    do_connected_state_ping_push_out_test(Box::new(
+#[test_matrix([5, 311])]
+fn connected_state_ping_push_out_by_subscribe_completion(raw_version : i32) {
+    do_connected_state_ping_push_out_test(raw_version, Box::new(
         |transmission_time, response_time, expected_push_out| {
             do_subscribe_success(transmission_time, response_time, expected_push_out, SubackReasonCode::GrantedQos1)
         }
     ), 666, 1337, 666);
 }
 
-#[test]
-fn connected_state_ping_push_out_by_unsubscribe_completion() {
-    do_connected_state_ping_push_out_test(Box::new(
+#[test_matrix([5, 311])]
+fn connected_state_ping_push_out_by_unsubscribe_completion(raw_version : i32) {
+    do_connected_state_ping_push_out_test(raw_version, Box::new(
         |transmission_time, response_time, expected_push_out| {
             do_unsubscribe_success(transmission_time, response_time, expected_push_out, UnsubackReasonCode::Success)
         }
     ), 666, 1337, 666);
 }
 
-#[test]
-fn connected_state_ping_no_push_out_by_qos0_publish_completion() {
-    do_connected_state_ping_push_out_test(Box::new(
+#[test_matrix([5, 311])]
+fn connected_state_ping_no_push_out_by_qos0_publish_completion(raw_version : i32) {
+    do_connected_state_ping_push_out_test(raw_version, Box::new(
         |fixture, transmission_time, response_time|{
             do_publish_success(fixture, QualityOfService::AtMostOnce, transmission_time, response_time, PublishResponse::Qos0);
         }
     ), 666, 1336, 0);
 }
 
-#[test]
-fn connected_state_ping_push_out_by_qos1_publish_completion() {
-    do_connected_state_ping_push_out_test(Box::new(
+#[test_matrix([5, 311])]
+fn connected_state_ping_push_out_by_qos1_publish_completion(raw_version : i32) {
+    do_connected_state_ping_push_out_test(raw_version, Box::new(
         |fixture, transmission_time, response_time|{
             do_publish_success(fixture, QualityOfService::AtLeastOnce, transmission_time, response_time, PublishResponse::Qos1(PubackPacket{
                 reason_code: PubackReasonCode::Success,
@@ -1715,9 +1733,9 @@ fn connected_state_ping_push_out_by_qos1_publish_completion() {
     ), 333, 777, 333);
 }
 
-#[test]
-fn connected_state_ping_push_out_by_qos2_publish_completion() {
-    do_connected_state_ping_push_out_test(Box::new(
+#[test_matrix([5, 311])]
+fn connected_state_ping_push_out_by_qos2_publish_completion(raw_version : i32) {
+    do_connected_state_ping_push_out_test(raw_version, Box::new(
         |fixture, transmission_time, response_time|{
             do_publish_success(fixture, QualityOfService::ExactlyOnce, transmission_time, response_time, PublishResponse::Qos2(Qos2Response::Pubcomp(PubcompPacket{
                 reason_code: PubcompReasonCode::Success,
@@ -1727,11 +1745,11 @@ fn connected_state_ping_push_out_by_qos2_publish_completion() {
     ), 444, 888, 888);
 }
 
-fn do_connected_state_ping_pingresp_timeout(ping_timeout_millis: u64, keep_alive_seconds: u16) {
+fn do_connected_state_ping_pingresp_timeout(raw_version : i32, ping_timeout_millis: u64, keep_alive_seconds: u16) {
     const CONNACK_TIME: u64 = 11;
     let keep_alive_millis: u64 = (keep_alive_seconds as u64) * 1000;
 
-    let mut config = build_standard_test_config();
+    let mut config = build_standard_test_config(raw_version);
     config.ping_timeout = Duration::from_millis(ping_timeout_millis);
     config.connect_options.keep_alive_interval_seconds = Some(keep_alive_seconds);
 
@@ -1762,19 +1780,19 @@ fn do_connected_state_ping_pingresp_timeout(ping_timeout_millis: u64, keep_alive
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn connected_state_ping_pingresp_timeout_normal() {
-    do_connected_state_ping_pingresp_timeout(10000, 20);
+#[test_matrix([5, 311])]
+fn connected_state_ping_pingresp_timeout_normal(raw_version : i32) {
+    do_connected_state_ping_pingresp_timeout(raw_version, 10000, 20);
 }
 
-#[test]
-fn connected_state_ping_pingresp_timeout_too_long() {
-    do_connected_state_ping_pingresp_timeout(30000, 20);
+#[test_matrix([5, 311])]
+fn connected_state_ping_pingresp_timeout_too_long(raw_version : i32) {
+    do_connected_state_ping_pingresp_timeout(raw_version, 30000, 20);
 }
 
-#[test]
-fn connected_state_ping_no_pings_on_zero_keep_alive() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn connected_state_ping_no_pings_on_zero_keep_alive(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
     assert_eq!(None, fixture.get_next_service_time(0));
 
@@ -1789,33 +1807,33 @@ fn connected_state_ping_no_pings_on_zero_keep_alive() {
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn connected_state_subscribe_immediate_success() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn connected_state_subscribe_immediate_success(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     do_subscribe_success(&mut fixture, 1, 2, SubackReasonCode::GrantedQos1);
 }
 
-#[test]
-fn connected_state_unsubscribe_immediate_success() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn connected_state_unsubscribe_immediate_success(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     do_unsubscribe_success(&mut fixture, 3, 7, UnsubackReasonCode::Success);
 }
 
-#[test]
-fn connected_state_publish_qos0_immediate_success() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn connected_state_publish_qos0_immediate_success(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     do_publish_success(&mut fixture, QualityOfService::AtMostOnce, 11, 13, PublishResponse::Qos0);
 }
 
-#[test]
-fn connected_state_publish_qos1_immediate_success() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn connected_state_publish_qos1_immediate_success(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     do_publish_success(&mut fixture, QualityOfService::AtLeastOnce, 17, 23, PublishResponse::Qos1(PubackPacket{
@@ -1824,9 +1842,9 @@ fn connected_state_publish_qos1_immediate_success() {
     }));
 }
 
-#[test]
-fn connected_state_publish_qos2_immediate_success() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn connected_state_publish_qos2_immediate_success(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     do_publish_success(&mut fixture, QualityOfService::ExactlyOnce, 29, 31, PublishResponse::Qos2(Qos2Response::Pubcomp(PubcompPacket{
@@ -1837,8 +1855,8 @@ fn connected_state_publish_qos2_immediate_success() {
 
 macro_rules! define_operation_success_reconnect_while_in_user_queue_test {
         ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type: ident, $verify_function_name: ident, $queue_policy: expr) => {
-            fn $test_helper_name() {
-                let mut config = build_standard_test_config();
+            fn $test_helper_name(raw_version : i32) {
+                let mut config = build_standard_test_config(raw_version);
                 config.offline_queue_policy = $queue_policy;
 
                 let mut fixture = ProtocolStateTestFixture::new(config);
@@ -1862,7 +1880,7 @@ macro_rules! define_operation_success_reconnect_while_in_user_queue_test {
                 assert!(fixture.service_round_trip(30, 40, 4096).is_ok()); // qos 2
 
                 if let Ok(Ok(ack)) = operation_result_receiver.recv() {
-                    $verify_function_name(&ack);
+                    $verify_function_name(&ack, raw_version);
                 } else {
                     panic!("Expected ack result");
                 }
@@ -1872,7 +1890,7 @@ macro_rules! define_operation_success_reconnect_while_in_user_queue_test {
         };
     }
 
-fn verify_successful_test_suback(suback: &SubackPacket) {
+fn verify_successful_test_suback(suback: &SubackPacket, _raw_version : i32) {
     assert_eq!(1, suback.reason_codes.len());
     assert_eq!(SubackReasonCode::GrantedQos2, suback.reason_codes[0]);
 }
@@ -1899,12 +1917,16 @@ define_operation_success_reconnect_while_in_user_queue_test!(
         OfflineQueuePolicy::PreserveAcknowledged
     );
 
-#[test]
-fn connected_state_subscribe_success_reconnect_while_in_user_queue() {
-    connected_state_subscribe_success_reconnect_while_in_user_queue_helper();
+#[test_matrix([5, 311])]
+fn connected_state_subscribe_success_reconnect_while_in_user_queue(raw_version : i32) {
+    connected_state_subscribe_success_reconnect_while_in_user_queue_helper(raw_version);
 }
 
-fn verify_successful_test_unsuback(unsuback: &UnsubackPacket) {
+fn verify_successful_test_unsuback(unsuback: &UnsubackPacket, raw_version : i32) {
+    if raw_version != 5 {
+        return;
+    }
+
     assert_eq!(1, unsuback.reason_codes.len());
     assert_eq!(UnsubackReasonCode::Success, unsuback.reason_codes[0]);
 }
@@ -1927,12 +1949,12 @@ define_operation_success_reconnect_while_in_user_queue_test!(
         OfflineQueuePolicy::PreserveAcknowledged
     );
 
-#[test]
-fn connected_state_unsubscribe_success_reconnect_while_in_user_queue() {
-    connected_state_unsubscribe_success_reconnect_while_in_user_queue_helper();
+#[test_matrix([5, 311])]
+fn connected_state_unsubscribe_success_reconnect_while_in_user_queue(raw_version : i32) {
+    connected_state_unsubscribe_success_reconnect_while_in_user_queue_helper(raw_version);
 }
 
-fn verify_successful_test_qos0_publish(response: &PublishResponse) {
+fn verify_successful_test_qos0_publish(response: &PublishResponse, _raw_version : i32) {
     assert_eq!(PublishResponse::Qos0, *response);
 }
 
@@ -1953,13 +1975,17 @@ define_operation_success_reconnect_while_in_user_queue_test!(
         OfflineQueuePolicy::PreserveAll
     );
 
-#[test]
-fn connected_state_qos0_publish_success_reconnect_while_in_user_queue() {
-    connected_state_qos0_publish_success_reconnect_while_in_user_queue_helper();
+#[test_matrix([5, 311])]
+fn connected_state_qos0_publish_success_reconnect_while_in_user_queue(raw_version : i32) {
+    connected_state_qos0_publish_success_reconnect_while_in_user_queue_helper(raw_version);
 }
 
-fn verify_successful_test_qos1_publish(response: &PublishResponse) {
+fn verify_successful_test_qos1_publish(response: &PublishResponse, raw_version : i32) {
     if let PublishResponse::Qos1(puback) = &response {
+        if raw_version != 5 {
+            return;
+        }
+
         assert_eq!(PubackReasonCode::Success, puback.reason_code);
         return;
     }
@@ -1984,13 +2010,16 @@ define_operation_success_reconnect_while_in_user_queue_test!(
         OfflineQueuePolicy::PreserveAcknowledged
     );
 
-#[test]
-fn connected_state_qos1_publish_success_reconnect_while_in_user_queue() {
-    connected_state_qos1_publish_success_reconnect_while_in_user_queue_helper();
+#[test_matrix([5, 311])]
+fn connected_state_qos1_publish_success_reconnect_while_in_user_queue(raw_version : i32) {
+    connected_state_qos1_publish_success_reconnect_while_in_user_queue_helper(raw_version);
 }
 
-fn verify_successful_test_qos2_publish(response: &PublishResponse) {
+fn verify_successful_test_qos2_publish(response: &PublishResponse, raw_version : i32) {
     if let PublishResponse::Qos2(Qos2Response::Pubcomp(pubcomp)) = &response {
+        if raw_version != 5 {
+            return;
+        }
         assert_eq!(PubcompReasonCode::Success, pubcomp.reason_code);
         return;
     }
@@ -2015,15 +2044,15 @@ define_operation_success_reconnect_while_in_user_queue_test!(
         OfflineQueuePolicy::PreserveAcknowledged
     );
 
-#[test]
-fn connected_state_qos2_publish_success_reconnect_while_in_user_queue() {
-    connected_state_qos2_publish_success_reconnect_while_in_user_queue_helper();
+#[test_matrix([5, 311])]
+fn connected_state_qos2_publish_success_reconnect_while_in_user_queue(raw_version : i32) {
+    connected_state_qos2_publish_success_reconnect_while_in_user_queue_helper(raw_version);
 }
 
 macro_rules! define_operation_success_reconnect_while_current_operation_test {
         ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type: ident, $verify_function_name: ident, $queue_policy: expr) => {
-            fn $test_helper_name() {
-                let mut config = build_standard_test_config();
+            fn $test_helper_name(raw_version : i32) {
+                let mut config = build_standard_test_config(raw_version);
                 config.offline_queue_policy = $queue_policy;
 
                 let mut fixture = ProtocolStateTestFixture::new(config);
@@ -2053,7 +2082,7 @@ macro_rules! define_operation_success_reconnect_while_current_operation_test {
                 assert!(fixture.service_round_trip(30, 40, 4096).is_ok()); // qos 2
 
                 if let Ok(Ok(ack)) = operation_result_receiver.recv() {
-                    $verify_function_name(&ack);
+                    $verify_function_name(&ack, raw_version);
                 } else {
                     panic!("Expected ack result");
                 }
@@ -2072,9 +2101,9 @@ define_operation_success_reconnect_while_current_operation_test!(
         OfflineQueuePolicy::PreserveAcknowledged
     );
 
-#[test]
-fn connected_state_subscribe_success_reconnect_while_current_operation() {
-    connected_state_subscribe_success_reconnect_while_current_operation_helper();
+#[test_matrix([5, 311])]
+fn connected_state_subscribe_success_reconnect_while_current_operation(raw_version : i32) {
+    connected_state_subscribe_success_reconnect_while_current_operation_helper(raw_version);
 }
 
 define_operation_success_reconnect_while_current_operation_test!(
@@ -2086,9 +2115,9 @@ define_operation_success_reconnect_while_current_operation_test!(
         OfflineQueuePolicy::PreserveAcknowledged
     );
 
-#[test]
-fn connected_state_unsubscribe_success_reconnect_while_current_operation() {
-    connected_state_unsubscribe_success_reconnect_while_current_operation_helper();
+#[test_matrix([5, 311])]
+fn connected_state_unsubscribe_success_reconnect_while_current_operation(raw_version : i32) {
+    connected_state_unsubscribe_success_reconnect_while_current_operation_helper(raw_version);
 }
 
 define_operation_success_reconnect_while_current_operation_test!(
@@ -2100,9 +2129,9 @@ define_operation_success_reconnect_while_current_operation_test!(
         OfflineQueuePolicy::PreserveAll
     );
 
-#[test]
-fn connected_state_qos0_publish_success_reconnect_while_current_operation() {
-    connected_state_qos0_publish_success_reconnect_while_current_operation_helper();
+#[test_matrix([5, 311])]
+fn connected_state_qos0_publish_success_reconnect_while_current_operation(raw_version : i32) {
+    connected_state_qos0_publish_success_reconnect_while_current_operation_helper(raw_version);
 }
 
 define_operation_success_reconnect_while_current_operation_test!(
@@ -2114,9 +2143,9 @@ define_operation_success_reconnect_while_current_operation_test!(
         OfflineQueuePolicy::PreserveQos1PlusPublishes
     );
 
-#[test]
-fn connected_state_qos1_publish_success_reconnect_while_current_operation() {
-    connected_state_qos1_publish_success_reconnect_while_current_operation_helper();
+#[test_matrix([5, 311])]
+fn connected_state_qos1_publish_success_reconnect_while_current_operation(raw_version : i32) {
+    connected_state_qos1_publish_success_reconnect_while_current_operation_helper(raw_version);
 }
 
 define_operation_success_reconnect_while_current_operation_test!(
@@ -2128,15 +2157,15 @@ define_operation_success_reconnect_while_current_operation_test!(
         OfflineQueuePolicy::PreserveQos1PlusPublishes
     );
 
-#[test]
-fn connected_state_qos2_publish_success_reconnect_while_current_operation() {
-    connected_state_qos2_publish_success_reconnect_while_current_operation_helper();
+#[test_matrix([5, 311])]
+fn connected_state_qos2_publish_success_reconnect_while_current_operation(raw_version : i32) {
+    connected_state_qos2_publish_success_reconnect_while_current_operation_helper(raw_version);
 }
 
 macro_rules! define_operation_success_reconnect_no_session_while_pending_test {
         ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type: ident, $verify_function_name: ident, $queue_policy: expr) => {
-            fn $test_helper_name() {
-                let mut config = build_standard_test_config();
+            fn $test_helper_name(raw_version : i32) {
+                let mut config = build_standard_test_config(raw_version);
                 config.offline_queue_policy = $queue_policy;
 
                 let mut fixture = ProtocolStateTestFixture::new(config);
@@ -2171,7 +2200,7 @@ macro_rules! define_operation_success_reconnect_no_session_while_pending_test {
                 assert!(fixture.service_round_trip(30, 40, 4096).is_ok()); // qos 2
 
                 if let Ok(Ok(ack)) = operation_result_receiver.recv() {
-                    $verify_function_name(&ack);
+                    $verify_function_name(&ack, raw_version);
                 } else {
                     panic!("Expected ack result");
                 }
@@ -2190,9 +2219,9 @@ define_operation_success_reconnect_no_session_while_pending_test!(
         OfflineQueuePolicy::PreserveAcknowledged
     );
 
-#[test]
-fn connected_state_subscribe_success_reconnect_no_session_while_pending() {
-    connected_state_subscribe_success_reconnect_no_session_while_pending_helper();
+#[test_matrix([5, 311])]
+fn connected_state_subscribe_success_reconnect_no_session_while_pending(raw_version : i32) {
+    connected_state_subscribe_success_reconnect_no_session_while_pending_helper(raw_version);
 }
 
 define_operation_success_reconnect_no_session_while_pending_test!(
@@ -2204,9 +2233,9 @@ define_operation_success_reconnect_no_session_while_pending_test!(
         OfflineQueuePolicy::PreserveAcknowledged
     );
 
-#[test]
-fn connected_state_unsubscribe_success_reconnect_no_session_while_pending() {
-    connected_state_unsubscribe_success_reconnect_no_session_while_pending_helper();
+#[test_matrix([5, 311])]
+fn connected_state_unsubscribe_success_reconnect_no_session_while_pending(raw_version : i32) {
+    connected_state_unsubscribe_success_reconnect_no_session_while_pending_helper(raw_version);
 }
 
 define_operation_success_reconnect_no_session_while_pending_test!(
@@ -2218,9 +2247,9 @@ define_operation_success_reconnect_no_session_while_pending_test!(
         OfflineQueuePolicy::PreserveAll
     );
 
-#[test]
-fn connected_state_qos0_publish_success_reconnect_no_session_while_pending() {
-    connected_state_qos0_publish_success_reconnect_no_session_while_pending_helper();
+#[test_matrix([5, 311])]
+fn connected_state_qos0_publish_success_reconnect_no_session_while_pending(raw_version : i32) {
+    connected_state_qos0_publish_success_reconnect_no_session_while_pending_helper(raw_version);
 }
 
 define_operation_success_reconnect_no_session_while_pending_test!(
@@ -2232,9 +2261,9 @@ define_operation_success_reconnect_no_session_while_pending_test!(
         OfflineQueuePolicy::PreserveQos1PlusPublishes
     );
 
-#[test]
-fn connected_state_qos1_publish_success_reconnect_no_session_while_pending() {
-    connected_state_qos1_publish_success_reconnect_no_session_while_pending_helper();
+#[test_matrix([5, 311])]
+fn connected_state_qos1_publish_success_reconnect_no_session_while_pending(raw_version : i32) {
+    connected_state_qos1_publish_success_reconnect_no_session_while_pending_helper(raw_version);
 }
 
 define_operation_success_reconnect_no_session_while_pending_test!(
@@ -2246,14 +2275,14 @@ define_operation_success_reconnect_no_session_while_pending_test!(
         OfflineQueuePolicy::PreserveQos1PlusPublishes
     );
 
-#[test]
-fn connected_state_qos2_publish_success_reconnect_no_session_while_pending() {
-    connected_state_qos2_publish_success_reconnect_no_session_while_pending_helper();
+#[test_matrix([5, 311])]
+fn connected_state_qos2_publish_success_reconnect_no_session_while_pending(raw_version : i32) {
+    connected_state_qos2_publish_success_reconnect_no_session_while_pending_helper(raw_version);
 }
 
-#[test]
-fn connected_state_subscribe_success_failing_reason_code() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([5, 311])]
+fn connected_state_subscribe_success_failing_reason_code(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     fixture.broker_packet_handlers.insert(PacketType::Subscribe, Box::new(handle_subscribe_with_failure));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
@@ -2262,8 +2291,8 @@ fn connected_state_subscribe_success_failing_reason_code() {
 }
 
 #[test]
-fn connected_state_unsubscribe_success_failing_reason_code() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+fn connected_state_unsubscribe_success_failing_reason_code5() {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(5));
     fixture.broker_packet_handlers.insert(PacketType::Unsubscribe, Box::new(handle_unsubscribe_with_failure));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
@@ -2272,8 +2301,8 @@ fn connected_state_unsubscribe_success_failing_reason_code() {
 }
 
 #[test]
-fn connected_state_qos1_publish_success_failing_reason_code() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+fn connected_state_qos1_publish_success_failing_reason_code5() {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(5));
     fixture.broker_packet_handlers.insert(PacketType::Publish, Box::new(handle_publish_with_failure));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
@@ -2285,8 +2314,8 @@ fn connected_state_qos1_publish_success_failing_reason_code() {
 }
 
 #[test]
-fn connected_state_qos2_publish_success_failing_reason_code_pubrec() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+fn connected_state_qos2_publish_success_failing_reason_code_pubrec5() {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(5));
     fixture.broker_packet_handlers.insert(PacketType::Publish, Box::new(handle_publish_with_failure));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
@@ -2298,8 +2327,8 @@ fn connected_state_qos2_publish_success_failing_reason_code_pubrec() {
 }
 
 #[test]
-fn connected_state_qos2_publish_success_failing_reason_code_pubcomp() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+fn connected_state_qos2_publish_success_failing_reason_code_pubcomp5() {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(5));
     fixture.broker_packet_handlers.insert(PacketType::Pubrel, Box::new(handle_pubrel_with_failure));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
@@ -2312,8 +2341,8 @@ fn connected_state_qos2_publish_success_failing_reason_code_pubcomp() {
 
 macro_rules! define_operation_failure_validation_helper {
         ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type: ident, $expected_packet_validation_error_packet_type: expr) => {
-            fn $test_helper_name() {
-                let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+            fn $test_helper_name(raw_version : i32) {
+                let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
                 fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_tiny_maximum_packet_size));
 
                 assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
@@ -2357,8 +2386,8 @@ define_operation_failure_validation_helper!(
     );
 
 #[test]
-fn connected_state_subscribe_failure_validation() {
-    connected_state_subscribe_failure_validation_helper();
+fn connected_state_subscribe_failure_validation5() {
+    connected_state_subscribe_failure_validation_helper(5);
 }
 
 fn build_unsubscribe_failure_validation_packet() -> UnsubscribePacket {
@@ -2379,8 +2408,8 @@ define_operation_failure_validation_helper!(
     );
 
 #[test]
-fn connected_state_unsubscribe_failure_validation() {
-    connected_state_unsubscribe_failure_validation_helper();
+fn connected_state_unsubscribe_failure_validation5() {
+    connected_state_unsubscribe_failure_validation_helper(5);
 }
 
 fn build_qos0_publish_failure_validation_packet() -> PublishPacket {
@@ -2401,8 +2430,8 @@ define_operation_failure_validation_helper!(
     );
 
 #[test]
-fn connected_state_qos0_publish_failure_validation() {
-    connected_state_qos0_publish_failure_validation_helper();
+fn connected_state_qos0_publish_failure_validation5() {
+    connected_state_qos0_publish_failure_validation_helper(5);
 }
 
 fn build_qos1_publish_failure_validation_packet() -> PublishPacket {
@@ -2423,8 +2452,8 @@ define_operation_failure_validation_helper!(
     );
 
 #[test]
-fn connected_state_qos1_publish_failure_validation() {
-    connected_state_qos1_publish_failure_validation_helper();
+fn connected_state_qos1_publish_failure_validation5() {
+    connected_state_qos1_publish_failure_validation_helper(5);
 }
 
 fn build_qos2_publish_failure_validation_packet() -> PublishPacket {
@@ -2445,14 +2474,14 @@ define_operation_failure_validation_helper!(
     );
 
 #[test]
-fn connected_state_qos2_publish_failure_validation() {
-    connected_state_qos2_publish_failure_validation_helper();
+fn connected_state_qos2_publish_failure_validation5() {
+    connected_state_qos2_publish_failure_validation_helper(5);
 }
 
 macro_rules! define_operation_failure_timeout_helper {
         ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type_builder: ident, $packet_type: ident) => {
-            fn $test_helper_name() {
-                let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+            fn $test_helper_name(raw_version : i32) {
+                let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
 
                 fixture.broker_packet_handlers.insert(PacketType::$packet_type, Box::new(handle_with_nothing));
                 assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
@@ -2493,9 +2522,9 @@ define_operation_failure_timeout_helper!(
         Subscribe
     );
 
-#[test]
-fn connected_state_subscribe_failure_timeout() {
-    connected_state_subscribe_failure_timeout_helper();
+#[test_matrix([311, 5])]
+fn connected_state_subscribe_failure_timeout(raw_version : i32) {
+    connected_state_subscribe_failure_timeout_helper(raw_version);
 }
 
 define_operation_failure_timeout_helper!(
@@ -2506,9 +2535,9 @@ define_operation_failure_timeout_helper!(
         Unsubscribe
     );
 
-#[test]
-fn connected_state_unsubscribe_failure_timeout() {
-    connected_state_unsubscribe_failure_timeout_helper();
+#[test_matrix([311, 5])]
+fn connected_state_unsubscribe_failure_timeout(raw_version : i32) {
+    connected_state_unsubscribe_failure_timeout_helper(raw_version);
 }
 
 define_operation_failure_timeout_helper!(
@@ -2519,9 +2548,9 @@ define_operation_failure_timeout_helper!(
         Publish
     );
 
-#[test]
-fn connected_state_qos1_publish_failure_timeout() {
-    connected_state_qos1_publish_failure_timeout_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos1_publish_failure_timeout(raw_version : i32) {
+    connected_state_qos1_publish_failure_timeout_helper(raw_version);
 }
 
 define_operation_failure_timeout_helper!(
@@ -2532,14 +2561,14 @@ define_operation_failure_timeout_helper!(
         Publish
     );
 
-#[test]
-fn connected_state_qos2_publish_failure_timeout() {
-    connected_state_qos2_publish_failure_timeout_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos2_publish_failure_timeout(raw_version : i32) {
+    connected_state_qos2_publish_failure_timeout_helper(raw_version);
 }
 
-#[test]
-fn connected_state_qos2_publish_failure_pubrel_timeout() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([311, 5])]
+fn connected_state_qos2_publish_failure_pubrel_timeout(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
 
     fixture.broker_packet_handlers.insert(PacketType::Pubrel, Box::new(handle_with_nothing));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
@@ -2575,8 +2604,8 @@ fn connected_state_qos2_publish_failure_pubrel_timeout() {
 
 macro_rules! define_operation_failure_offline_submit_and_policy_fail_helper {
         ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type: ident, $offline_policy: ident) => {
-            fn $test_helper_name() {
-                let mut config = build_standard_test_config();
+            fn $test_helper_name(raw_version : i32) {
+                let mut config = build_standard_test_config(raw_version);
                 config.offline_queue_policy = OfflineQueuePolicy::$offline_policy;
 
                 let mut fixture = ProtocolStateTestFixture::new(config);
@@ -2605,9 +2634,9 @@ define_operation_failure_offline_submit_and_policy_fail_helper!(
         PreserveQos1PlusPublishes
     );
 
-#[test]
-fn connected_state_subscribe_failure_offline_submit_and_policy_fail() {
-    connected_state_subscribe_failure_offline_submit_and_policy_fail_helper();
+#[test_matrix([311, 5])]
+fn connected_state_subscribe_failure_offline_submit_and_policy_fail(raw_version : i32) {
+    connected_state_subscribe_failure_offline_submit_and_policy_fail_helper(raw_version);
 }
 
 define_operation_failure_offline_submit_and_policy_fail_helper!(
@@ -2618,9 +2647,9 @@ define_operation_failure_offline_submit_and_policy_fail_helper!(
         PreserveQos1PlusPublishes
     );
 
-#[test]
-fn connected_state_unsubscribe_failure_offline_submit_and_policy_fail() {
-    connected_state_unsubscribe_failure_offline_submit_and_policy_fail_helper();
+#[test_matrix([311, 5])]
+fn connected_state_unsubscribe_failure_offline_submit_and_policy_fail(raw_version : i32) {
+    connected_state_unsubscribe_failure_offline_submit_and_policy_fail_helper(raw_version);
 }
 
 define_operation_failure_offline_submit_and_policy_fail_helper!(
@@ -2631,9 +2660,9 @@ define_operation_failure_offline_submit_and_policy_fail_helper!(
         PreserveAcknowledged
     );
 
-#[test]
-fn connected_state_qos0_publish_failure_offline_submit_and_policy_fail() {
-    connected_state_qos0_publish_failure_offline_submit_and_policy_fail_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos0_publish_failure_offline_submit_and_policy_fail(raw_version : i32) {
+    connected_state_qos0_publish_failure_offline_submit_and_policy_fail_helper(raw_version);
 }
 
 define_operation_failure_offline_submit_and_policy_fail_helper!(
@@ -2644,9 +2673,9 @@ define_operation_failure_offline_submit_and_policy_fail_helper!(
         PreserveNothing
     );
 
-#[test]
-fn connected_state_qos1_publish_failure_offline_submit_and_policy_fail() {
-    connected_state_qos1_publish_failure_offline_submit_and_policy_fail_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos1_publish_failure_offline_submit_and_policy_fail(raw_version : i32) {
+    connected_state_qos1_publish_failure_offline_submit_and_policy_fail_helper(raw_version);
 }
 
 define_operation_failure_offline_submit_and_policy_fail_helper!(
@@ -2657,15 +2686,15 @@ define_operation_failure_offline_submit_and_policy_fail_helper!(
         PreserveNothing
     );
 
-#[test]
-fn connected_state_qos2_publish_failure_offline_submit_and_policy_fail() {
-    connected_state_qos2_publish_failure_offline_submit_and_policy_fail_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos2_publish_failure_offline_submit_and_policy_fail(raw_version : i32) {
+    connected_state_qos2_publish_failure_offline_submit_and_policy_fail_helper(raw_version);
 }
 
 macro_rules! define_operation_failure_disconnect_user_queue_with_failing_offline_policy_helper {
         ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type: ident, $offline_policy: ident) => {
-            fn $test_helper_name() {
-                let mut config = build_standard_test_config();
+            fn $test_helper_name(raw_version : i32) {
+                let mut config = build_standard_test_config(raw_version);
                 config.offline_queue_policy = OfflineQueuePolicy::$offline_policy;
 
                 let mut fixture = ProtocolStateTestFixture::new(config);
@@ -2701,9 +2730,9 @@ define_operation_failure_disconnect_user_queue_with_failing_offline_policy_helpe
         PreserveQos1PlusPublishes
     );
 
-#[test]
-fn connected_state_subscribe_failure_disconnect_user_queue_with_failing_offline_policy() {
-    connected_state_subscribe_failure_disconnect_user_queue_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_subscribe_failure_disconnect_user_queue_with_failing_offline_policy(raw_version : i32) {
+    connected_state_subscribe_failure_disconnect_user_queue_with_failing_offline_policy_helper(raw_version);
 }
 
 define_operation_failure_disconnect_user_queue_with_failing_offline_policy_helper!(
@@ -2714,9 +2743,9 @@ define_operation_failure_disconnect_user_queue_with_failing_offline_policy_helpe
         PreserveQos1PlusPublishes
     );
 
-#[test]
-fn connected_state_unsubscribe_failure_disconnect_user_queue_with_failing_offline_policy() {
-    connected_state_unsubscribe_failure_disconnect_user_queue_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_unsubscribe_failure_disconnect_user_queue_with_failing_offline_policy(raw_version : i32) {
+    connected_state_unsubscribe_failure_disconnect_user_queue_with_failing_offline_policy_helper(raw_version);
 }
 
 define_operation_failure_disconnect_user_queue_with_failing_offline_policy_helper!(
@@ -2727,9 +2756,9 @@ define_operation_failure_disconnect_user_queue_with_failing_offline_policy_helpe
         PreserveAcknowledged
     );
 
-#[test]
-fn connected_state_qos0_publish_failure_disconnect_user_queue_with_failing_offline_policy() {
-    connected_state_qos0_publish_failure_disconnect_user_queue_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos0_publish_failure_disconnect_user_queue_with_failing_offline_policy(raw_version : i32) {
+    connected_state_qos0_publish_failure_disconnect_user_queue_with_failing_offline_policy_helper(raw_version);
 }
 
 define_operation_failure_disconnect_user_queue_with_failing_offline_policy_helper!(
@@ -2740,9 +2769,9 @@ define_operation_failure_disconnect_user_queue_with_failing_offline_policy_helpe
         PreserveNothing
     );
 
-#[test]
-fn connected_state_qos1_publish_failure_disconnect_user_queue_with_failing_offline_policy() {
-    connected_state_qos1_publish_failure_disconnect_user_queue_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos1_publish_failure_disconnect_user_queue_with_failing_offline_policy(raw_version : i32) {
+    connected_state_qos1_publish_failure_disconnect_user_queue_with_failing_offline_policy_helper(raw_version);
 }
 
 define_operation_failure_disconnect_user_queue_with_failing_offline_policy_helper!(
@@ -2753,15 +2782,15 @@ define_operation_failure_disconnect_user_queue_with_failing_offline_policy_helpe
         PreserveNothing
     );
 
-#[test]
-fn connected_state_qos2_publish_failure_disconnect_user_queue_with_failing_offline_policy() {
-    connected_state_qos2_publish_failure_disconnect_user_queue_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos2_publish_failure_disconnect_user_queue_with_failing_offline_policy(raw_version : i32) {
+    connected_state_qos2_publish_failure_disconnect_user_queue_with_failing_offline_policy_helper(raw_version);
 }
 
 macro_rules! define_operation_failure_disconnect_current_operation_with_failing_offline_policy_helper {
         ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type: ident, $offline_policy: ident) => {
-            fn $test_helper_name() {
-                let mut config = build_standard_test_config();
+            fn $test_helper_name(raw_version : i32) {
+                let mut config = build_standard_test_config(raw_version);
                 config.offline_queue_policy = OfflineQueuePolicy::$offline_policy;
 
                 let mut fixture = ProtocolStateTestFixture::new(config);
@@ -2803,9 +2832,9 @@ define_operation_failure_disconnect_current_operation_with_failing_offline_polic
         PreserveQos1PlusPublishes
     );
 
-#[test]
-fn connected_state_subscribe_failure_disconnect_current_operation_with_failing_offline_policy() {
-    connected_state_subscribe_failure_disconnect_current_operation_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_subscribe_failure_disconnect_current_operation_with_failing_offline_policy(raw_version : i32) {
+    connected_state_subscribe_failure_disconnect_current_operation_with_failing_offline_policy_helper(raw_version);
 }
 
 define_operation_failure_disconnect_current_operation_with_failing_offline_policy_helper!(
@@ -2816,9 +2845,9 @@ define_operation_failure_disconnect_current_operation_with_failing_offline_polic
         PreserveQos1PlusPublishes
     );
 
-#[test]
-fn connected_state_unsubscribe_failure_disconnect_current_operation_with_failing_offline_policy() {
-    connected_state_unsubscribe_failure_disconnect_current_operation_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_unsubscribe_failure_disconnect_current_operation_with_failing_offline_policy(raw_version : i32) {
+    connected_state_unsubscribe_failure_disconnect_current_operation_with_failing_offline_policy_helper(raw_version);
 }
 
 define_operation_failure_disconnect_current_operation_with_failing_offline_policy_helper!(
@@ -2829,9 +2858,9 @@ define_operation_failure_disconnect_current_operation_with_failing_offline_polic
         PreserveAcknowledged
     );
 
-#[test]
-fn connected_state_qos0_publish_failure_disconnect_current_operation_with_failing_offline_policy() {
-    connected_state_qos0_publish_failure_disconnect_current_operation_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos0_publish_failure_disconnect_current_operation_with_failing_offline_policy(raw_version : i32) {
+    connected_state_qos0_publish_failure_disconnect_current_operation_with_failing_offline_policy_helper(raw_version);
 }
 
 define_operation_failure_disconnect_current_operation_with_failing_offline_policy_helper!(
@@ -2842,9 +2871,9 @@ define_operation_failure_disconnect_current_operation_with_failing_offline_polic
         PreserveNothing
     );
 
-#[test]
-fn connected_state_qos1_publish_failure_disconnect_current_operation_with_failing_offline_policy() {
-    connected_state_qos1_publish_failure_disconnect_current_operation_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos1_publish_failure_disconnect_current_operation_with_failing_offline_policy(raw_version : i32) {
+    connected_state_qos1_publish_failure_disconnect_current_operation_with_failing_offline_policy_helper(raw_version);
 }
 
 define_operation_failure_disconnect_current_operation_with_failing_offline_policy_helper!(
@@ -2855,15 +2884,15 @@ define_operation_failure_disconnect_current_operation_with_failing_offline_polic
         PreserveNothing
     );
 
-#[test]
-fn connected_state_qos2_publish_failure_disconnect_current_operation_with_failing_offline_policy() {
-    connected_state_qos2_publish_failure_disconnect_current_operation_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos2_publish_failure_disconnect_current_operation_with_failing_offline_policy(raw_version : i32) {
+    connected_state_qos2_publish_failure_disconnect_current_operation_with_failing_offline_policy_helper(raw_version);
 }
 
 macro_rules! define_operation_failure_disconnect_pending_with_failing_offline_policy_helper {
         ($test_helper_name: ident, $build_operation_function_name: ident, $operation_api: ident, $operation_options_type: ident, $offline_policy: ident) => {
-            fn $test_helper_name() {
-                let mut config = build_standard_test_config();
+            fn $test_helper_name(raw_version : i32) {
+                let mut config = build_standard_test_config(raw_version);
                 config.offline_queue_policy = OfflineQueuePolicy::$offline_policy;
 
                 let mut fixture = ProtocolStateTestFixture::new(config);
@@ -2909,9 +2938,9 @@ define_operation_failure_disconnect_pending_with_failing_offline_policy_helper!(
         PreserveQos1PlusPublishes
     );
 
-#[test]
-fn connected_state_subscribe_failure_disconnect_pending_with_failing_offline_policy() {
-    connected_state_subscribe_failure_disconnect_pending_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_subscribe_failure_disconnect_pending_with_failing_offline_policy(raw_version : i32) {
+    connected_state_subscribe_failure_disconnect_pending_with_failing_offline_policy_helper(raw_version);
 }
 
 define_operation_failure_disconnect_pending_with_failing_offline_policy_helper!(
@@ -2922,9 +2951,9 @@ define_operation_failure_disconnect_pending_with_failing_offline_policy_helper!(
         PreserveQos1PlusPublishes
     );
 
-#[test]
-fn connected_state_unsubscribe_failure_disconnect_pending_with_failing_offline_policy() {
-    connected_state_unsubscribe_failure_disconnect_pending_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_unsubscribe_failure_disconnect_pending_with_failing_offline_policy(raw_version : i32) {
+    connected_state_unsubscribe_failure_disconnect_pending_with_failing_offline_policy_helper(raw_version);
 }
 
 define_operation_failure_disconnect_pending_with_failing_offline_policy_helper!(
@@ -2935,15 +2964,15 @@ define_operation_failure_disconnect_pending_with_failing_offline_policy_helper!(
         PreserveAcknowledged
     );
 
-#[test]
-fn connected_state_qos0_publish_failure_disconnect_pending_with_failing_offline_policy() {
-    connected_state_qos0_publish_failure_disconnect_pending_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos0_publish_failure_disconnect_pending_with_failing_offline_policy(raw_version : i32) {
+    connected_state_qos0_publish_failure_disconnect_pending_with_failing_offline_policy_helper(raw_version);
 }
 
 macro_rules! define_acked_publish_failure_disconnect_pending_no_session_resumption_with_failing_offline_policy_helper {
         ($test_helper_name: ident, $build_operation_function_name: ident, $qos2_pubrel_timeout: expr) => {
-            fn $test_helper_name() {
-                let mut config = build_standard_test_config();
+            fn $test_helper_name(raw_version : i32) {
+                let mut config = build_standard_test_config(raw_version);
                 config.offline_queue_policy = OfflineQueuePolicy::PreserveNothing;
 
                 let mut fixture = ProtocolStateTestFixture::new(config);
@@ -3000,9 +3029,9 @@ define_acked_publish_failure_disconnect_pending_no_session_resumption_with_faili
         false
     );
 
-#[test]
-fn connected_state_qos1_publish_failure_disconnect_pending_no_session_resumption_with_failing_offline_policy() {
-    connected_state_qos1_publish_failure_disconnect_pending_no_session_resumption_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos1_publish_failure_disconnect_pending_no_session_resumption_with_failing_offline_policy(raw_version : i32) {
+    connected_state_qos1_publish_failure_disconnect_pending_no_session_resumption_with_failing_offline_policy_helper(raw_version);
 }
 
 define_acked_publish_failure_disconnect_pending_no_session_resumption_with_failing_offline_policy_helper!(
@@ -3011,9 +3040,9 @@ define_acked_publish_failure_disconnect_pending_no_session_resumption_with_faili
         false
     );
 
-#[test]
-fn connected_state_qos2_publish_failure_disconnect_pending_no_session_resumption_failing_offline_policy() {
-    connected_state_qos2_publish_failure_disconnect_pending_no_session_resumption_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos2_publish_failure_disconnect_pending_no_session_resumption_failing_offline_policy(raw_version : i32) {
+    connected_state_qos2_publish_failure_disconnect_pending_no_session_resumption_with_failing_offline_policy_helper(raw_version);
 }
 
 define_acked_publish_failure_disconnect_pending_no_session_resumption_with_failing_offline_policy_helper!(
@@ -3022,17 +3051,17 @@ define_acked_publish_failure_disconnect_pending_no_session_resumption_with_faili
         true
     );
 
-#[test]
-fn connected_state_qos2_publish_failure_disconnect_pubrel_pending_no_session_resumption_failing_offline_policy() {
-    connected_state_qos2_publish_failure_disconnect_pubrel_pending_no_session_resumption_with_failing_offline_policy_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos2_publish_failure_disconnect_pubrel_pending_no_session_resumption_failing_offline_policy(raw_version : i32) {
+    connected_state_qos2_publish_failure_disconnect_pubrel_pending_no_session_resumption_with_failing_offline_policy_helper(raw_version);
 }
 
 // verify duplicate set and resubmit queue
 
 macro_rules! define_acked_publish_success_disconnect_pending_with_session_resumption_helper {
         ($test_helper_name: ident, $build_operation_function_name: ident, $verify_result_function_name: ident, $qos2_pubrel_timeout: expr) => {
-            fn $test_helper_name() {
-                let mut config = build_standard_test_config();
+            fn $test_helper_name(raw_version : i32) {
+                let mut config = build_standard_test_config(raw_version);
                 config.offline_queue_policy = OfflineQueuePolicy::PreserveNothing;
                 config.connect_options.rejoin_session_policy = RejoinSessionPolicy::PostSuccess;
 
@@ -3087,7 +3116,7 @@ macro_rules! define_acked_publish_success_disconnect_pending_with_session_resump
 
                 let operation_result = result.unwrap().unwrap();
 
-                $verify_result_function_name(operation_result);
+                $verify_result_function_name(operation_result, raw_version);
 
                 let (_, first_publish_packet) = find_nth_packet_of_type(fixture.to_broker_packet_stream.iter(), PacketType::Publish, 1, None, None).unwrap();
                 let packet_id =
@@ -3129,7 +3158,7 @@ macro_rules! define_acked_publish_success_disconnect_pending_with_session_resump
         };
     }
 
-fn verify_qos1_publish_session_resumption_result(result: PublishResponse) {
+fn verify_qos1_publish_session_resumption_result(result: PublishResponse, _raw_version : i32) {
     if let PublishResponse::Qos1(puback) = result {
         assert_eq!(PubackReasonCode::Success, puback.reason_code);
     } else {
@@ -3144,12 +3173,12 @@ define_acked_publish_success_disconnect_pending_with_session_resumption_helper!(
         false
     );
 
-#[test]
-fn connected_state_qos1_publish_success_disconnect_pending_with_session_resumption() {
-    connected_state_qos1_publish_success_disconnect_pending_with_session_resumption_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos1_publish_success_disconnect_pending_with_session_resumption(raw_version : i32) {
+    connected_state_qos1_publish_success_disconnect_pending_with_session_resumption_helper(raw_version);
 }
 
-fn verify_qos2_publish_session_resumption_result(result: PublishResponse) {
+fn verify_qos2_publish_session_resumption_result(result: PublishResponse, _raw_version : i32) {
     if let PublishResponse::Qos2(Qos2Response::Pubcomp(pubcomp)) = result {
         assert_eq!(PubcompReasonCode::Success, pubcomp.reason_code);
     } else {
@@ -3164,11 +3193,10 @@ define_acked_publish_success_disconnect_pending_with_session_resumption_helper!(
         false
     );
 
-#[test]
-fn connected_state_qos2_publish_success_disconnect_pending_with_session_resumption() {
-    connected_state_qos2_publish_success_disconnect_pending_with_session_resumption_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos2_publish_success_disconnect_pending_with_session_resumption(raw_version : i32) {
+    connected_state_qos2_publish_success_disconnect_pending_with_session_resumption_helper(raw_version);
 }
-
 
 define_acked_publish_success_disconnect_pending_with_session_resumption_helper!(
         connected_state_qos2_publish_success_disconnect_pubrel_pending_with_session_resumption_helper,
@@ -3177,14 +3205,14 @@ define_acked_publish_success_disconnect_pending_with_session_resumption_helper!(
         true
     );
 
-#[test]
-fn connected_state_qos2_publish_success_disconnect_pubrel_pending_with_session_resumption() {
-    connected_state_qos2_publish_success_disconnect_pubrel_pending_with_session_resumption_helper();
+#[test_matrix([311, 5])]
+fn connected_state_qos2_publish_success_disconnect_pubrel_pending_with_session_resumption(raw_version : i32) {
+    connected_state_qos2_publish_success_disconnect_pubrel_pending_with_session_resumption_helper(raw_version);
 }
 
-#[test]
-fn connected_state_user_disconnect_success_empty_queues() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([311, 5])]
+fn connected_state_user_disconnect_success_empty_queues(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     // submit a disconnect
@@ -3208,9 +3236,9 @@ fn connected_state_user_disconnect_success_empty_queues() {
 }
 
 
-#[test]
-fn connected_state_user_disconnect_success_non_empty_queues() {
-    let mut config = build_standard_test_config();
+#[test_matrix([311, 5])]
+fn connected_state_user_disconnect_success_non_empty_queues(raw_version : i32) {
+    let mut config = build_standard_test_config(raw_version);
     config.offline_queue_policy = OfflineQueuePolicy::PreserveQos1PlusPublishes;
     config.connect_options.rejoin_session_policy = RejoinSessionPolicy::PostSuccess;
 
@@ -3339,8 +3367,8 @@ fn connected_state_user_disconnect_success_non_empty_queues() {
 
 
 #[test]
-fn connected_state_user_disconnect_failure_invalid_packet() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+fn connected_state_user_disconnect_failure_invalid_packet5() {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(5));
     fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_tiny_maximum_packet_size));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
@@ -3363,8 +3391,8 @@ fn connected_state_user_disconnect_failure_invalid_packet() {
 }
 
 #[test]
-fn connected_state_server_disconnect() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+fn connected_state_server_disconnect5() {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(5));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     let server_disconnect = DisconnectPacket {
@@ -3377,7 +3405,8 @@ fn connected_state_server_disconnect() {
         outbound_alias_resolution: OutboundAliasResolution {
             skip_topic: false,
             alias: None,
-        }
+        },
+        protocol_version : ProtocolVersion::Mqtt5
     };
 
     let packet = MqttPacket::Disconnect(server_disconnect.clone());
@@ -3399,8 +3428,8 @@ fn connected_state_server_disconnect() {
     }
 }
 
-fn rejoin_session_test_build_clean_start_sequence(rejoin_policy : RejoinSessionPolicy) -> Vec<bool> {
-    let mut config = build_standard_test_config();
+fn rejoin_session_test_build_clean_start_sequence(raw_version : i32, rejoin_policy : RejoinSessionPolicy) -> Vec<bool> {
+    let mut config = build_standard_test_config(raw_version);
     config.connect_options.rejoin_session_policy = rejoin_policy;
 
     let mut fixture = ProtocolStateTestFixture::new(config);
@@ -3422,27 +3451,27 @@ fn rejoin_session_test_build_clean_start_sequence(rejoin_policy : RejoinSessionP
     }).collect()
 }
 
-#[test]
-fn connected_state_rejoin_session_policy_always() {
-    let clean_starts = rejoin_session_test_build_clean_start_sequence(RejoinSessionPolicy::Always);
+#[test_matrix([311, 5])]
+fn connected_state_rejoin_session_policy_always(raw_version : i32) {
+    let clean_starts = rejoin_session_test_build_clean_start_sequence(raw_version, RejoinSessionPolicy::Always);
     assert_eq!(vec!(false, false, false, false), clean_starts);
 }
 
-#[test]
-fn connected_state_rejoin_session_policy_never() {
-    let clean_starts = rejoin_session_test_build_clean_start_sequence(RejoinSessionPolicy::Never);
+#[test_matrix([311, 5])]
+fn connected_state_rejoin_session_policy_never(raw_version : i32) {
+    let clean_starts = rejoin_session_test_build_clean_start_sequence(raw_version, RejoinSessionPolicy::Never);
     assert_eq!(vec!(true, true, true, true), clean_starts);
 }
 
-#[test]
-fn connected_state_rejoin_session_policy_post_success() {
-    let clean_starts = rejoin_session_test_build_clean_start_sequence(RejoinSessionPolicy::PostSuccess);
+#[test_matrix([311, 5])]
+fn connected_state_rejoin_session_policy_post_success(raw_version : i32) {
+    let clean_starts = rejoin_session_test_build_clean_start_sequence(raw_version, RejoinSessionPolicy::PostSuccess);
     assert_eq!(vec!(true, false, false, false), clean_starts);
 }
 
 #[test]
-fn connected_state_maximum_inflight_publish_limit_respected() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+fn connected_state_maximum_inflight_publish_limit_respected5() {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(5));
     fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_low_receive_maximum));
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
@@ -3550,9 +3579,9 @@ fn connected_state_maximum_inflight_publish_limit_respected() {
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn connected_state_ack_order() {
-    let mut config = build_standard_test_config();
+#[test_matrix([311, 5])]
+fn connected_state_ack_order(raw_version : i32) {
+    let mut config = build_standard_test_config(raw_version);
     config.connect_options = ConnectOptions::builder().with_topic_alias_maximum(2).build();
 
     let mut fixture = ProtocolStateTestFixture::new(config);
@@ -3615,7 +3644,8 @@ fn connected_state_ack_order() {
 
     let qos2_publish1 = incoming_packets[0].clone();
 
-    assert!(encode_packet_to_buffer_with_alias_resolution(qos2_publish1, &mut incoming_packet_buffer, lru_resolver.resolve_and_apply_topic_alias(&None, &qos2_publish1_topic)).is_ok());
+    let protocol_version = convert_protocol_mode_to_protocol_version(convert_version_to_protocol_mode(raw_version));
+    assert!(encode_packet_to_buffer_with_alias_resolution(qos2_publish1, protocol_version, &mut incoming_packet_buffer, lru_resolver.resolve_and_apply_topic_alias(&None, &qos2_publish1_topic)).is_ok());
     assert!(fixture.on_incoming_bytes(10, incoming_packet_buffer.as_slice()).is_ok());
     assert_eq!(1, fixture.client_state.high_priority_operation_queue.len());
     assert!(fixture.service_with_drain(15, 4096).is_ok());
@@ -3629,7 +3659,7 @@ fn connected_state_ack_order() {
         if let MqttPacket::Publish(publish) = packet {
             topic = publish.topic.clone();
         }
-        assert!(encode_packet_to_buffer_with_alias_resolution(packet.clone(), &mut incoming_packet_buffer, lru_resolver.resolve_and_apply_topic_alias(&None, &topic)).is_ok());
+        assert!(encode_packet_to_buffer_with_alias_resolution(packet.clone(), protocol_version, &mut incoming_packet_buffer, lru_resolver.resolve_and_apply_topic_alias(&None, &topic)).is_ok());
     });
 
     assert!(fixture.on_incoming_bytes(20, incoming_packet_buffer.as_slice()).is_ok());
@@ -3877,9 +3907,9 @@ fn initialize_multi_operation_sequence_test(fixture: &mut ProtocolStateTestFixtu
     context
 }
 
-#[test]
-fn connected_state_multi_operation_sequence_simple_success() {
-    let config = build_standard_test_config();
+#[test_matrix([311, 5])]
+fn connected_state_multi_operation_sequence_simple_success(raw_version : i32) {
+    let config = build_standard_test_config(raw_version);
     let mut fixture = ProtocolStateTestFixture::new(config);
 
     let mut context = initialize_multi_operation_sequence_test(&mut fixture);
@@ -4022,8 +4052,8 @@ fn verify_successful_reconnect_sequencing(fixture: &ProtocolStateTestFixture, su
     assert_eq!(successful_sequence_ids.len(), expected_next_sequence_id_index);
 }
 
-fn do_connected_state_multi_operation_reconnect_test(offline_queue_policy: OfflineQueuePolicy, rejoin_session: bool) {
-    let mut config = build_standard_test_config();
+fn do_connected_state_multi_operation_reconnect_test(raw_version : i32, offline_queue_policy: OfflineQueuePolicy, rejoin_session: bool) {
+    let mut config = build_standard_test_config(raw_version);
     config.connect_options.rejoin_session_policy = RejoinSessionPolicy::PostSuccess;
     config.offline_queue_policy = offline_queue_policy;
 
@@ -4072,44 +4102,44 @@ fn do_connected_state_multi_operation_reconnect_test(offline_queue_policy: Offli
     verify_successful_reconnect_sequencing(&fixture, check_sequence, second_connect_index);
 }
 
-#[test]
-fn connected_state_multi_operation_sequence_disconnect_no_session_present_offline_preserve_nothing () {
-    do_connected_state_multi_operation_reconnect_test(OfflineQueuePolicy::PreserveNothing, false);
+#[test_matrix([311, 5])]
+fn connected_state_multi_operation_sequence_disconnect_no_session_present_offline_preserve_nothing(raw_version : i32) {
+    do_connected_state_multi_operation_reconnect_test(raw_version, OfflineQueuePolicy::PreserveNothing, false);
 }
 
-#[test]
-fn connected_state_multi_operation_sequence_disconnect_session_present_offline_preserve_nothing () {
-    do_connected_state_multi_operation_reconnect_test(OfflineQueuePolicy::PreserveNothing, true);
+#[test_matrix([311, 5])]
+fn connected_state_multi_operation_sequence_disconnect_session_present_offline_preserve_nothing(raw_version : i32) {
+    do_connected_state_multi_operation_reconnect_test(raw_version, OfflineQueuePolicy::PreserveNothing, true);
 }
 
-#[test]
-fn connected_state_multi_operation_sequence_disconnect_no_session_present_offline_preserve_all () {
-    do_connected_state_multi_operation_reconnect_test(OfflineQueuePolicy::PreserveAll, false);
+#[test_matrix([311, 5])]
+fn connected_state_multi_operation_sequence_disconnect_no_session_present_offline_preserve_all(raw_version : i32) {
+    do_connected_state_multi_operation_reconnect_test(raw_version, OfflineQueuePolicy::PreserveAll, false);
 }
 
-#[test]
-fn connected_state_multi_operation_sequence_disconnect_session_present_offline_preserve_all () {
-    do_connected_state_multi_operation_reconnect_test(OfflineQueuePolicy::PreserveAll, true);
+#[test_matrix([311, 5])]
+fn connected_state_multi_operation_sequence_disconnect_session_present_offline_preserve_all(raw_version : i32) {
+    do_connected_state_multi_operation_reconnect_test(raw_version, OfflineQueuePolicy::PreserveAll, true);
 }
 
-#[test]
-fn connected_state_multi_operation_sequence_disconnect_no_session_present_offline_preserve_ack () {
-    do_connected_state_multi_operation_reconnect_test(OfflineQueuePolicy::PreserveAcknowledged, false);
+#[test_matrix([311, 5])]
+fn connected_state_multi_operation_sequence_disconnect_no_session_present_offline_preserve_ack(raw_version : i32) {
+    do_connected_state_multi_operation_reconnect_test(raw_version, OfflineQueuePolicy::PreserveAcknowledged, false);
 }
 
-#[test]
-fn connected_state_multi_operation_sequence_disconnect_session_present_offline_preserve_ack () {
-    do_connected_state_multi_operation_reconnect_test(OfflineQueuePolicy::PreserveAcknowledged, true);
+#[test_matrix([311, 5])]
+fn connected_state_multi_operation_sequence_disconnect_session_present_offline_preserve_ack(raw_version : i32) {
+    do_connected_state_multi_operation_reconnect_test(raw_version, OfflineQueuePolicy::PreserveAcknowledged, true);
 }
 
-#[test]
-fn connected_state_multi_operation_sequence_disconnect_no_session_present_offline_preserve_qos1plus () {
-    do_connected_state_multi_operation_reconnect_test(OfflineQueuePolicy::PreserveQos1PlusPublishes, false);
+#[test_matrix([311, 5])]
+fn connected_state_multi_operation_sequence_disconnect_no_session_present_offline_preserve_qos1plus(raw_version : i32) {
+    do_connected_state_multi_operation_reconnect_test(raw_version, OfflineQueuePolicy::PreserveQos1PlusPublishes, false);
 }
 
-#[test]
-fn connected_state_multi_operation_sequence_disconnect_session_present_offline_preserve_qos1plus () {
-    do_connected_state_multi_operation_reconnect_test(OfflineQueuePolicy::PreserveQos1PlusPublishes, true);
+#[test_matrix([311, 5])]
+fn connected_state_multi_operation_sequence_disconnect_session_present_offline_preserve_qos1plus(raw_version : i32) {
+    do_connected_state_multi_operation_reconnect_test(raw_version, OfflineQueuePolicy::PreserveQos1PlusPublishes, true);
 }
 
 fn scoped_qos0_publish(fixture: &mut ProtocolStateTestFixture) {
@@ -4123,9 +4153,9 @@ fn scoped_qos0_publish(fixture: &mut ProtocolStateTestFixture) {
     assert_eq!(1, fixture.client_state.user_operation_queue.len());
 }
 
-#[test]
-fn connected_state_qos0_publish_no_failure_on_dropped_receiver() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([311, 5])]
+fn connected_state_qos0_publish_no_failure_on_dropped_receiver(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     scoped_qos0_publish(&mut fixture);
@@ -4147,9 +4177,9 @@ fn scoped_qos1_publish(fixture: &mut ProtocolStateTestFixture) {
     assert_eq!(1, fixture.client_state.user_operation_queue.len());
 }
 
-#[test]
-fn connected_state_qos1_publish_no_failure_on_dropped_receiver() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([311, 5])]
+fn connected_state_qos1_publish_no_failure_on_dropped_receiver(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     scoped_qos1_publish(&mut fixture);
@@ -4171,9 +4201,9 @@ fn scoped_qos2_publish(fixture: &mut ProtocolStateTestFixture) {
     assert_eq!(1, fixture.client_state.user_operation_queue.len());
 }
 
-#[test]
-fn connected_state_qos2_publish_no_failure_on_dropped_receiver() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([311, 5])]
+fn connected_state_qos2_publish_no_failure_on_dropped_receiver(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     scoped_qos2_publish(&mut fixture);
@@ -4200,9 +4230,9 @@ fn scoped_subscribe(fixture: &mut ProtocolStateTestFixture) {
     assert_eq!(1, fixture.client_state.user_operation_queue.len());
 }
 
-#[test]
-fn connected_state_subscribe_no_failure_on_dropped_receiver() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([311, 5])]
+fn connected_state_subscribe_no_failure_on_dropped_receiver(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     scoped_subscribe(&mut fixture);
@@ -4223,9 +4253,9 @@ fn scoped_unsubscribe(fixture: &mut ProtocolStateTestFixture) {
     assert_eq!(1, fixture.client_state.user_operation_queue.len());
 }
 
-#[test]
-fn connected_state_unsubscribe_no_failure_on_dropped_receiver() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([311, 5])]
+fn connected_state_unsubscribe_no_failure_on_dropped_receiver(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     scoped_unsubscribe(&mut fixture);
@@ -4237,8 +4267,8 @@ fn connected_state_unsubscribe_no_failure_on_dropped_receiver() {
 }
 
 #[test]
-fn connected_state_outbound_topic_aliasing_used() {
-    let mut config = build_standard_test_config();
+fn connected_state_outbound_topic_aliasing_used5() {
+    let mut config = build_standard_test_config(5);
 
     let mut lru_resolver  = OutboundAliasResolverFactory::new_lru_factory(2)();
     lru_resolver.reset_for_new_connection(2);
@@ -4290,9 +4320,9 @@ fn connected_state_outbound_topic_aliasing_used() {
 
 }
 
-#[test]
-fn connected_state_reset_test() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([311, 5])]
+fn connected_state_reset_test(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     let _ = initialize_multi_operation_sequence_test(&mut fixture);
 
     fixture.reset(500);
@@ -4300,9 +4330,9 @@ fn connected_state_reset_test() {
     verify_protocol_state_empty(&fixture);
 }
 
-#[test]
-fn connected_state_disconnect_with_high_priority_pubrel() {
-    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config());
+#[test_matrix([311, 5])]
+fn connected_state_disconnect_with_high_priority_pubrel(raw_version : i32) {
+    let mut fixture = ProtocolStateTestFixture::new(build_standard_test_config(raw_version));
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
     let publish = PublishPacket {
