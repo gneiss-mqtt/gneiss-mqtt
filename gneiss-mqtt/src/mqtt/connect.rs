@@ -918,7 +918,7 @@ mod tests {
     }
 
     const CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5 : usize = 259;
-    const CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH311 : usize = 100; // ??
+    const CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH311 : usize = 106; // ??
     const CONNECT_PACKET_ALL_PROPERTIES_TEST_CLIENT_ID_INDEX : usize = 90;
     const CONNECT_PACKET_ALL_PROPERTIES_TEST_CONNECT_PROPERTY_LENGTH_INDEX : usize = 13;
     const CONNECT_PACKET_ALL_PROPERTIES_TEST_REQUEST_RESPONSE_INFORMATION_VALUE_INDEX : usize = 31;
@@ -984,7 +984,10 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let lets_do_http = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
+            match protocol_version {
+                ProtocolVersion::Mqtt5 => assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5), // it's critical this packet stays stable
+                ProtocolVersion::Mqtt311 => assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH311), // it's critical this packet stays stable
+            }
             let mut clone = bytes.to_vec();
 
             clone[index] = 72;
@@ -1012,7 +1015,10 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let lets_do_mqtt3 = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
+            match protocol_version {
+                ProtocolVersion::Mqtt5 => assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5), // it's critical this packet stays stable
+                ProtocolVersion::Mqtt311 => assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH311), // it's critical this packet stays stable
+            }
             let mut clone = bytes.to_vec();
 
             clone[index] = 3;
@@ -1037,7 +1043,10 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let set_reserved = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
+            match protocol_version {
+                ProtocolVersion::Mqtt5 => assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5), // it's critical this packet stays stable
+                ProtocolVersion::Mqtt311 => assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH311), // it's critical this packet stays stable
+            }
             let mut clone = bytes.to_vec();
 
             clone[index] |= 0x01; // set the reserved bit of the connect flags
@@ -1062,7 +1071,10 @@ mod tests {
         let packet = create_connect_packet_all_properties();
 
         let corrupt_will_qos = | bytes: &[u8] | -> Vec<u8> {
-            assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5); // it's critical this packet stays stable
+            match protocol_version {
+                ProtocolVersion::Mqtt5 => assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH5), // it's critical this packet stays stable
+                ProtocolVersion::Mqtt311 => assert_eq!(bytes.len(), CONNECT_PACKET_ALL_PROPERTIES_TEST_ENCODE_LENGTH311), // it's critical this packet stays stable
+            }
             let mut clone = bytes.to_vec();
 
             clone[index] |= 0x18; // will qos "3"

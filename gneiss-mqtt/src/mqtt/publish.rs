@@ -569,6 +569,8 @@ mod tests {
             topic: packet.topic.clone(),
             qos: packet.qos,
             payload: packet.payload.clone(),
+            duplicate: true,
+            retain: true,
             ..Default::default()
         };
 
@@ -579,6 +581,7 @@ mod tests {
         let mut publish = PublishPacket {
             packet_id : 12,
             topic: "hello/world".to_string(),
+            qos: QualityOfService::AtLeastOnce,
             ..Default::default()
         };
         publish.payload = Some(vec![0; payload_size]);

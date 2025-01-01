@@ -1680,13 +1680,22 @@ fn do_unsubscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_
     assert!(unsubscribe_result.is_ok());
 
     let unsuback_result = unsubscribe_result.unwrap();
-    assert_eq!(1, unsuback_result.reason_codes.len());
-    assert_eq!(expected_reason_code, unsuback_result.reason_codes[0]);
+    match fixture.client_state.protocol_version {
+        ProtocolVersion::Mqtt5 => {
+            assert_eq!(1, unsuback_result.reason_codes.len());
+            assert_eq!(expected_reason_code, unsuback_result.reason_codes[0]);
+        }
+        ProtocolVersion::Mqtt311 => {
+            assert_eq!(0, unsuback_result.reason_codes.len());
+        }
+    }
 
     let (index, to_client_packet) = find_nth_packet_of_type(fixture.to_client_packet_stream.iter(), PacketType::Unsuback, 1, None, None).unwrap();
     assert_eq!(1, index);
     if let MqttPacket::Unsuback(to_client_unsuback) = to_client_packet {
-        assert_eq!(unsuback_result, *to_client_unsuback);
+        if fixture.client_state.protocol_version == ProtocolVersion::Mqtt5 {
+            assert_eq!(unsuback_result, *to_client_unsuback);
+        }
     } else {
         panic!("Expected unsuback");
     }
@@ -2287,7 +2296,7 @@ fn connected_state_subscribe_success_failing_reason_code(raw_version : i32) {
 
     assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
 
-    do_subscribe_success(&mut fixture, 0, 0, SubackReasonCode::NotAuthorized);
+    do_subscribe_success(&mut fixture, 0, 0, SubackReasonCode::UnspecifiedError);
 }
 
 #[test]

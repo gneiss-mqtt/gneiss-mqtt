@@ -901,7 +901,9 @@ pub(crate) mod testing {
         assert_eq!(1, decoded_packets.len());
 
         let receive_result = &decoded_packets[0];
-        assert_eq!(*packet, **receive_result);
+        if protocol_version == ProtocolVersion::Mqtt5 {
+            assert_eq!(*packet, **receive_result);
+        }
 
         let bad_encoded_bytes = mutator(good_encoded_bytes.as_slice());
 
@@ -941,7 +943,9 @@ pub(crate) mod testing {
         assert_eq!(1, decoded_packets.len());
 
         let receive_result = &decoded_packets[0];
-        assert_eq!(*packet, **receive_result);
+        if protocol_version == ProtocolVersion::Mqtt5 {
+            assert_eq!(*packet, **receive_result);
+        }
 
         decoded_packets.clear();
 

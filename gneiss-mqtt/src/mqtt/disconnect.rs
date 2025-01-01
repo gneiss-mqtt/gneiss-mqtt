@@ -163,7 +163,7 @@ pub(crate) fn decode_disconnect_packet311(first_byte: u8, packet_body: &[u8]) ->
     }
 
     Ok(Box::new(MqttPacket::Disconnect(DisconnectPacket {
-        reason_code : DisconnectReasonCode::UnspecifiedError,
+        reason_code : DisconnectReasonCode::NormalDisconnection,
         ..Default::default()
     })))
 }

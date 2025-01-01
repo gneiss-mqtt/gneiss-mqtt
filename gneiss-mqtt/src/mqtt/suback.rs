@@ -314,7 +314,7 @@ mod tests {
         do_suback_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt311);
     }
 
-    fn do_suback_decode_failure_reason_code_invalid_test(protocol_version: ProtocolVersion) {
+    fn do_suback_decode_failure_reason_code_invalid_test(protocol_version: ProtocolVersion, index: usize) {
         let packet = SubackPacket {
             packet_id : 1023,
             reason_codes : vec![
@@ -326,8 +326,7 @@ mod tests {
         let corrupt_reason_code = | bytes: &[u8] | -> Vec<u8> {
             let mut clone = bytes.to_vec();
 
-            // for acks, the reason code is in byte 4
-            clone[5] = 196;
+            clone[index] = 196;
 
             clone
         };
@@ -337,12 +336,12 @@ mod tests {
 
     #[test]
     fn suback_decode_failure_reason_code_invalid5() {
-        do_suback_decode_failure_reason_code_invalid_test(ProtocolVersion::Mqtt5);
+        do_suback_decode_failure_reason_code_invalid_test(ProtocolVersion::Mqtt5, 5);
     }
 
     #[test]
     fn suback_decode_failure_reason_code_invalid311() {
-        do_suback_decode_failure_reason_code_invalid_test(ProtocolVersion::Mqtt311);
+        do_suback_decode_failure_reason_code_invalid_test(ProtocolVersion::Mqtt311, 4);
     }
 
     const SUBACK_PACKET_TEST_PROPERTY_LENGTH_INDEX : usize = 4;

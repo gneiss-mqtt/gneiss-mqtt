@@ -365,7 +365,7 @@ pub(crate) fn convert_311_encoding_to_connect_reason_code(value: u8) -> GneissRe
         3 => { Ok(ConnectReasonCode::ServerUnavailable) },
         4 => { Ok(ConnectReasonCode::BadUsernameOrPassword) },
         5 => { Ok(ConnectReasonCode::NotAuthorized) },
-        _ => Err(GneissError::new_protocol_error("convert_311_encoding_to_connect_reason_code - invalid 311 encoding of a ConnectReasonCode"))
+        _ => Err(GneissError::new_decoding_failure("convert_311_encoding_to_connect_reason_code - invalid 311 encoding of a ConnectReasonCode"))
     }
 }
 

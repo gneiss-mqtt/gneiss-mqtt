@@ -1984,7 +1984,13 @@ fn build_negotiated_settings(config: &ProtocolStateConfig, packet: &ConnackPacke
         } else if let Some(settings) = &existing_settings {
             settings.client_id.clone()
         } else {
-            panic!("");
+            /*
+             * Degenerate case: MQTT311 allows an empty client id and servers are allowed to
+             * auto assign a client id in response, but have no way of communicating what the client
+             * id is back to the client.
+             * We could forbid the client to do this, but then we'd be more restrictive than the spec.
+             */
+            String::new()
         };
 
     NegotiatedSettings {
