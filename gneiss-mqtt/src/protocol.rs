@@ -68,6 +68,14 @@ pub(crate) struct ClientOperation {
     // The next ping timepoint is based on the transmission time of the last broker-acknowledged
     // packet sent by the client.
     ping_extension_base_timepoint: Option<Instant>,
+
+    // 0/1 value that indicates whether or not the operation is a part of the slow start ack
+    // count within the the protocol state
+    // When slow start (PostReconnectionQueueDrainPolicy::OnAtATime) is enabled, all interrupted
+    // operations contribute to the total slow start ack count sum.  When a contributing operation
+    // completes, it subtracts from the slow start ack count.  When the slow start ack count returns
+    // to zero, the client will start processing more than one operation at a time.
+    slow_start_ack_value: u32,
 }
 
 impl ClientOperation {
@@ -1076,19 +1084,19 @@ impl ProtocolState {
 
         if mode != ProtocolQueueServiceMode::HighPriorityOnly {
             if !self.resubmit_operation_queue.is_empty() {
-                if self.does_operation_pass_receive_maximum_flow_control(*self.resubmit_operation_queue.front().unwrap()) {
-                    return Some(self.resubmit_operation_queue.pop_front().unwrap());
-                } else {
+                if !self.does_operation_pass_receive_maximum_flow_control(*self.resubmit_operation_queue.front().unwrap()) {
                     return None;
                 }
+
+                return Some(self.resubmit_operation_queue.pop_front().unwrap());
             }
 
             if !self.user_operation_queue.is_empty() {
-                if self.does_operation_pass_receive_maximum_flow_control(*self.user_operation_queue.front().unwrap()) {
-                    return Some(self.user_operation_queue.pop_front().unwrap());
-                } else {
+                if !self.does_operation_pass_receive_maximum_flow_control(*self.user_operation_queue.front().unwrap()) {
                     return None;
                 }
+
+                return Some(self.user_operation_queue.pop_front().unwrap());
             }
         }
 
@@ -1895,6 +1903,7 @@ impl ProtocolState {
             packet_id: None,
             options,
             ping_extension_base_timepoint : None,
+            slow_start_ack_value: 0,
         };
 
         self.operations.insert(id, operation);

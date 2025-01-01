@@ -887,6 +887,23 @@ impl TryFrom<u32> for ProtocolMode {
     }
 }
 
+/// Controls how the client resubmits (ack-based) operations that were interrupted by the preceding
+/// disconnection.
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum PostReconnectQueueDrainPolicy {
+
+    /// Does not apply any flow control when resubmitting interrupted operations on a new
+    /// connection.
+    #[default]
+    None,
+
+    /// Resubmits previously interrupted operations one at a time.  The next operation will not
+    /// be submitted until the previous one completes.
+    OneAtATime,
+
+}
+
 /// A structure that holds client-level behavioral configuration
 #[derive(Clone)]
 pub struct MqttClientOptions {
@@ -900,6 +917,9 @@ pub struct MqttClientOptions {
     pub(crate) reconnect_options: ReconnectOptions,
 
     pub(crate) protocol_mode: ProtocolMode,
+
+    // use an Option so that the AWS client builder can tell if this has been explicitly set or not
+    pub(crate) post_reconnect_queue_drain_policy: Option<PostReconnectQueueDrainPolicy>,
 }
 
 impl MqttClientOptions {
@@ -907,6 +927,11 @@ impl MqttClientOptions {
     /// Creates a new builder for MqttClientOptions instances.
     pub fn builder() -> MqttClientOptionsBuilder {
         MqttClientOptionsBuilder::new()
+    }
+
+    /// Creates a new builder from an existing MqttClientOptions instance
+    pub fn to_builder(self) -> MqttClientOptionsBuilder {
+        MqttClientOptionsBuilder::new_from_options(self)
     }
 }
 
@@ -944,7 +969,14 @@ impl MqttClientOptionsBuilder {
                 outbound_alias_resolver_factory: None,
                 reconnect_options: ReconnectOptions::default(),
                 protocol_mode: ProtocolMode::Mqtt5,
+                post_reconnect_queue_drain_policy: None,
             }
+        }
+    }
+
+    pub(crate) fn new_from_options(options: MqttClientOptions) -> Self {
+        MqttClientOptionsBuilder {
+            options
         }
     }
 
@@ -1017,6 +1049,15 @@ impl MqttClientOptionsBuilder {
     /// Defaults to MQTT5
     pub fn with_protocol_mode(&mut self, protocol_mode: ProtocolMode) -> &mut Self {
         self.options.protocol_mode = protocol_mode;
+        self
+    }
+
+    /// Configures how the client resubmits (ack-based) operations that were interrupted by the preceding
+    /// disconnection.
+    ///
+    /// Defaults to a policy that does not apply any throttling to resubmission
+    pub fn with_post_reconnect_queue_drain_policy(&mut self, policy: PostReconnectQueueDrainPolicy) -> &mut Self {
+        self.options.post_reconnect_queue_drain_policy = Some(policy);
         self
     }
 
