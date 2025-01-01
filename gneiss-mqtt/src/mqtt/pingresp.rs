@@ -22,20 +22,22 @@ pub(crate) fn write_pingresp_encoding_steps(_: &PingrespPacket, _: &EncodingCont
 
 #[cfg(not(test))]
 pub(crate) fn write_pingresp_encoding_steps(_: &PingrespPacket, _: &EncodingContext, _: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    Err(GneissError::new_unimplemented("Test-only functionality"))
+    Err(GneissError::new_unimplemented("write_pingresp_encoding_steps - test-only functionality"))
 }
 
 const PINGRESP_FIRST_BYTE : u8 = PACKET_TYPE_PINGRESP << 4;
 
 pub(crate) fn decode_pingresp_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if !packet_body.is_empty() {
-        error!("Packet Decode - Pingresp packet with non-zero remaining length");
-        return Err(GneissError::new_decoding_failure("non-zero remaining length for pingresp packet"));
+        let message = "decode_pingresp_packet - non-zero remaining length";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     if first_byte != PINGRESP_FIRST_BYTE {
-        error!("Packet Decode - Pingresp packet with invalid first byte");
-        return Err(GneissError::new_decoding_failure("invalid first byte for pingresp packet"));
+        let message = "decode_pingresp_packet - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     Ok(Box::new(MqttPacket::Pingresp(PingrespPacket{})))
@@ -54,26 +56,36 @@ mod tests {
     use crate::decode::testing::*;
 
     #[test]
-    fn pingresp_round_trip_encode_decode() {
+    fn pingresp_round_trip_encode_decode5() {
         let packet = PingrespPacket {};
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pingresp(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pingresp(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn pingresp_decode_failure_bad_fixed_header() {
+    fn pingresp_round_trip_encode_decode311() {
         let packet = PingrespPacket {};
-
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Pingresp(packet), 2);
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pingresp(packet), ProtocolVersion::Mqtt311));
     }
 
     #[test]
-    fn pingresp_decode_failure_bad_length() {
+    fn pingresp_decode_failure_bad_fixed_header5() {
+        let packet = PingrespPacket {};
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Pingresp(packet), ProtocolVersion::Mqtt5, 2);
+    }
+
+    #[test]
+    fn pingresp_decode_failure_bad_fixed_header311() {
+        let packet = PingrespPacket {};
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Pingresp(packet), ProtocolVersion::Mqtt311, 2);
+    }
+
+    fn do_pingresp_decode_failure_bad_length_test(protocol_version: ProtocolVersion) {
         let packet = PingrespPacket {};
 
         let extend_length = | bytes: &[u8] | -> Vec<u8> {
             let mut clone = bytes.to_vec();
 
-            // for this packet, the reason code is in byte 2
+            // extend the length and add an appropriate amount of garbage bytes
             clone[1] = 4;
             clone.push(1);
             clone.push(2);
@@ -83,6 +95,16 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Pingresp(packet), extend_length);
+        do_mutated_decode_failure_test(&MqttPacket::Pingresp(packet), protocol_version, extend_length);
+    }
+
+    #[test]
+    fn pingresp_decode_failure_bad_length5() {
+        do_pingresp_decode_failure_bad_length_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn pingresp_decode_failure_bad_length311() {
+        do_pingresp_decode_failure_bad_length_test(ProtocolVersion::Mqtt311);
     }
 }

@@ -18,7 +18,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 strict = [] # treats warnings as errors, only intended for internal checks
-testing = [ "dep:assert_matches", "dep:uuid" ] # enables environmentally-controlled integration tests and long-running tests (30+ seconds) that check reconnect, backoff, etc...
+testing = [ "dep:assert_matches", "dep:uuid", "dep:test-case" ] # enables environmentally-controlled integration tests and long-running tests (30+ seconds) that check reconnect, backoff, etc...
 tokio = ["dep:tokio"] # enables the tokio-based async client
 tokio-rustls = ["tokio", "dep:rustls", "dep:rustls-native-certs", "dep:rustls-pemfile", "dep:rustls-pki-types", "dep:tokio-rustls"]
 tokio-native-tls = ["tokio", "dep:native-tls", "dep:tokio-native-tls"]
@@ -44,6 +44,7 @@ rustls-native-certs = { version = "0.7", optional = true }
 rustls-pemfile = { version = "2", optional = true }
 rustls-pki-types = { version = "1", optional = true }
 stream-ws = { version = "0.1.1", features = ["tungstenite", "tokio"], optional = true } # this dependency is an albatross
+test-case = { version = "3", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 tokio-native-tls = { version = "0.3.1", optional = true}
 tokio-rustls = { version = "0.26", optional = true }

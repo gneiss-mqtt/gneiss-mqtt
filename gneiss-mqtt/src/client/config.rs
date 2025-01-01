@@ -631,7 +631,7 @@ impl ConnectOptionsBuilder {
     /// If the responding CONNACK contains a keep alive property value, then that is the negotiated keep alive value.
     /// Otherwise, the keep alive sent by the client is the negotiated value.
     ///
-    /// See [MQTT5 Keep Alive](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901045)
+    /// See [MQTT Keep Alive](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901045)
     ///
     /// If the final negotiated value is 0, then that means no keep alive will be used.  Such a
     /// state is not advised due to scenarios where TCP connections can be invisibly dropped by
@@ -653,7 +653,7 @@ impl ConnectOptionsBuilder {
     ///
     /// If left empty, the broker will auto-assign a unique client id.
     ///
-    /// See [MQTT5 Client Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901059)
+    /// See [MQTT Client Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901059)
     pub fn with_client_id(&mut self, client_id: &str) -> &mut Self {
         self.options.client_id = Some(client_id.to_string());
         self
@@ -661,7 +661,7 @@ impl ConnectOptionsBuilder {
 
     /// Sets a string value that the server may use for client authentication and authorization.
     ///
-    /// See [MQTT5 User Name](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901071)
+    /// See [MQTT User Name](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901071)
     pub fn with_username(&mut self, username: &str) -> &mut Self {
         self.options.username = Some(username.to_string());
         self
@@ -669,7 +669,7 @@ impl ConnectOptionsBuilder {
 
     /// Sets opaque binary data that the server may use for client authentication and authorization.
     ///
-    /// See [MQTT5 Password](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901072)
+    /// See [MQTT Password](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901072)
     pub fn with_password(&mut self, password: &[u8]) -> &mut Self {
         self.options.password = Some(password.to_vec());
         self
@@ -763,7 +763,7 @@ impl ConnectOptionsBuilder {
     ///
     /// If omitted, then no will message will be sent.
     ///
-    /// See [MQTT5 Will](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901040)
+    /// See [MQTT Will](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901040)
     pub fn with_will(&mut self, will: PublishPacket) -> &mut Self {
         self.options.will = Some(will);
         self
@@ -856,6 +856,37 @@ impl Default for ReconnectOptions {
     }
 }
 
+/// Controls how the client selects what MQTT protocol to use
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum ProtocolMode {
+
+    /// Use MQTT 5 as the client protocol
+    #[default]
+    Mqtt5,
+
+    /// Use MQTT 311 as the client protocol
+    Mqtt311,
+
+    // Maybe some day we'll add an adaptive mode, Mqtt5Downgradable or the like
+}
+
+impl TryFrom<u32> for ProtocolMode {
+    type Error = GneissError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            5 => { Ok(ProtocolMode::Mqtt5) }
+            311 => { Ok(ProtocolMode::Mqtt311) }
+            _ => {
+                let message = format!("ProtocolMode::try_from - invalid protocol mode value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_other_error(message))
+            }
+        }
+    }
+}
+
 /// A structure that holds client-level behavioral configuration
 #[derive(Clone)]
 pub struct MqttClientOptions {
@@ -867,6 +898,8 @@ pub struct MqttClientOptions {
     pub(crate) outbound_alias_resolver_factory: Option<OutboundAliasResolverFactoryFn>,
 
     pub(crate) reconnect_options: ReconnectOptions,
+
+    pub(crate) protocol_mode: ProtocolMode,
 }
 
 impl MqttClientOptions {
@@ -910,6 +943,7 @@ impl MqttClientOptionsBuilder {
                 ping_timeout: Duration::from_secs(10),
                 outbound_alias_resolver_factory: None,
                 reconnect_options: ReconnectOptions::default(),
+                protocol_mode: ProtocolMode::Mqtt5,
             }
         }
     }
@@ -975,6 +1009,14 @@ impl MqttClientOptionsBuilder {
     /// not specified.
     pub fn with_reconnect_stability_reset_period(&mut self, reconnect_stability_reset_period: Duration) -> &mut Self {
         self.options.reconnect_options.reconnect_stability_reset_period = reconnect_stability_reset_period;
+        self
+    }
+
+    /// Configures how the client chooses an MQTT protocol version to communicate with.
+    ///
+    /// Defaults to MQTT5
+    pub fn with_protocol_mode(&mut self, protocol_mode: ProtocolMode) -> &mut Self {
+        self.options.protocol_mode = protocol_mode;
         self
     }
 

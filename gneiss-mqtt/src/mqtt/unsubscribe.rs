@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 use std::fmt;
 
 #[rustfmt::skip]
-fn compute_unsubscribe_packet_length_properties(packet: &UnsubscribePacket) -> GneissResult<(u32, u32)> {
+fn compute_unsubscribe_packet_length_properties5(packet: &UnsubscribePacket) -> GneissResult<(u32, u32)> {
     let unsubscribe_property_section_length = compute_user_properties_length(&packet.user_properties);
 
     let mut total_remaining_length : usize = 2 + compute_variable_length_integer_encode_size(unsubscribe_property_section_length)?;
@@ -37,7 +37,7 @@ fn get_unsubscribe_packet_user_property(packet: &MqttPacket, index: usize) -> &U
         }
     }
 
-    panic!("Internal encoding error: invalid user property state");
+    panic!("get_unsubscribe_packet_user_property - invalid user property state");
 }
 
 fn get_unsubscribe_packet_topic_filter(packet: &MqttPacket, index: usize) -> &str {
@@ -45,12 +45,12 @@ fn get_unsubscribe_packet_topic_filter(packet: &MqttPacket, index: usize) -> &st
         return &unsubscribe.topic_filters[index];
     }
 
-    panic!("Internal encoding error: invalid unsubscribe topic filter state");
+    panic!("get_unsubscribe_packet_topic_filter - invalid unsubscribe topic filter state");
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_unsubscribe_encoding_steps(packet: &UnsubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    let (total_remaining_length, unsubscribe_property_length) = compute_unsubscribe_packet_length_properties(packet)?;
+pub(crate) fn write_unsubscribe_encoding_steps5(packet: &UnsubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let (total_remaining_length, unsubscribe_property_length) = compute_unsubscribe_packet_length_properties5(packet)?;
 
     encode_integral_expression!(steps, Uint8, UNSUBSCRIBE_FIRST_BYTE);
     encode_integral_expression!(steps, Vli, total_remaining_length);
@@ -58,6 +58,33 @@ pub(crate) fn write_unsubscribe_encoding_steps(packet: &UnsubscribePacket, _: &E
     encode_integral_expression!(steps, Uint16, packet.packet_id);
     encode_integral_expression!(steps, Vli, unsubscribe_property_length);
     encode_user_properties!(steps, get_unsubscribe_packet_user_property, packet.user_properties);
+
+    let topic_filters = &packet.topic_filters;
+    for (i, topic_filter) in topic_filters.iter().enumerate() {
+        encode_indexed_string!(steps, get_unsubscribe_packet_topic_filter, topic_filter, i);
+    }
+
+    Ok(())
+}
+
+fn compute_unsubscribe_packet_length_properties311(packet: &UnsubscribePacket) -> GneissResult<u32> {
+    let mut total_remaining_length : usize = 2;
+    total_remaining_length += packet.topic_filters.len() * 2;
+
+    for filter in &packet.topic_filters {
+        total_remaining_length += filter.len();
+    }
+
+    Ok(total_remaining_length as u32)
+}
+
+pub(crate) fn write_unsubscribe_encoding_steps311(packet: &UnsubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let total_remaining_length = compute_unsubscribe_packet_length_properties311(packet)?;
+
+    encode_integral_expression!(steps, Uint8, UNSUBSCRIBE_FIRST_BYTE);
+    encode_integral_expression!(steps, Vli, total_remaining_length);
+
+    encode_integral_expression!(steps, Uint16, packet.packet_id);
 
     let topic_filters = &packet.topic_filters;
     for (i, topic_filter) in topic_filters.iter().enumerate() {
@@ -78,8 +105,9 @@ fn decode_unsubscribe_properties(property_bytes: &[u8], packet : &mut Unsubscrib
         match property_key {
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
-                error!("UnsubscribePacket Decode - Invalid property type ({})", property_key);
-                return Err(GneissError::new_decoding_failure("invalid property type for unsubscribe packet"));
+                let message = format!("decode_unsubscribe_properties - invalid property type ({})", property_key);
+                error!("{}", message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
     }
@@ -88,11 +116,12 @@ fn decode_unsubscribe_properties(property_bytes: &[u8], packet : &mut Unsubscrib
 }
 
 #[cfg(test)]
-pub(crate) fn decode_unsubscribe_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+pub(crate) fn decode_unsubscribe_packet5(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
 
     if first_byte != UNSUBSCRIBE_FIRST_BYTE {
-        error!("UnsubscribePacket Decode - invalid first byte");
-        return Err(GneissError::new_decoding_failure("invalid first byte for unsubscribe packet"));
+        let message = "decode_unsubscribe_packet5 - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let mut box_packet = Box::new(MqttPacket::Unsubscribe(UnsubscribePacket { ..Default::default() }));
@@ -104,8 +133,9 @@ pub(crate) fn decode_unsubscribe_packet(first_byte: u8, packet_body: &[u8]) -> G
         let mut properties_length: usize = 0;
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
-            error!("UnsubscribePacket Decode - property length exceeds overall packet length");
-            return Err(GneissError::new_decoding_failure("property length exceeds overall packet length for unsubscribe packet"));
+            let message = "decode_unsubscribe_packet5 - property length exceeds overall packet length";
+            error!("{}", message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         let properties_bytes = &mutable_body[..properties_length];
@@ -123,50 +153,88 @@ pub(crate) fn decode_unsubscribe_packet(first_byte: u8, packet_body: &[u8]) -> G
         return Ok(box_packet);
     }
 
-    panic!("UnsubscribePacket Decode - Internal error");
+    panic!("decode_unsubscribe_packet5 - internal error");
 }
 
 #[cfg(not(test))]
-pub(crate) fn decode_unsubscribe_packet(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
-    Err(GneissError::new_unimplemented("Test-only functionality"))
+pub(crate) fn decode_unsubscribe_packet5(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    Err(GneissError::new_unimplemented("decode_unsubscribe_packet5 - test-only functionality"))
+}
+
+#[cfg(test)]
+pub(crate) fn decode_unsubscribe_packet311(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+
+    if first_byte != UNSUBSCRIBE_FIRST_BYTE {
+        let message = "decode_unsubscribe_packet311 - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
+    }
+
+    let mut box_packet = Box::new(MqttPacket::Unsubscribe(UnsubscribePacket { ..Default::default() }));
+
+    if let MqttPacket::Unsubscribe(packet) = box_packet.as_mut() {
+        let mut mutable_body = packet_body;
+        mutable_body = decode_u16(mutable_body, &mut packet.packet_id)?;
+
+        while !mutable_body.is_empty() {
+            let mut topic_filter = String::new();
+            mutable_body = decode_length_prefixed_string(mutable_body, &mut topic_filter)?;
+
+            packet.topic_filters.push(topic_filter);
+        }
+
+        return Ok(box_packet);
+    }
+
+    panic!("decode_unsubscribe_packet311 - internal error");
+}
+
+#[cfg(not(test))]
+pub(crate) fn decode_unsubscribe_packet311(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    Err(GneissError::new_unimplemented("decode_unsubscribe_packet311 - test-only functionality"))
 }
 
 pub(crate) fn validate_unsubscribe_packet_outbound(packet: &UnsubscribePacket) -> GneissResult<()> {
     if packet.packet_id != 0 {
-        error!("UnsubscribePacket Outbound Validation - packet id may not be set");
-        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, "packet id set"));
+        let message = "validate_unsubscribe_packet_outbound - packet id may not be set";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, message));
     }
 
     if packet.topic_filters.is_empty() {
-        error!("UnsubscribePacket Outbound Validation - empty topic filters list");
-        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, "topic filters empty"));
+        let message = "validate_unsubscribe_packet_outbound - empty topic filters list";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, message));
     }
 
     // topic filters are checked in detail in the internal validator
 
-    validate_user_properties(&packet.user_properties, PacketType::Unsubscribe, "Unsubscribe")?;
+    validate_user_properties(&packet.user_properties, PacketType::Unsubscribe, "validate_unsubscribe_packet_outbound")?;
 
     Ok(())
 }
 
 pub(crate) fn validate_unsubscribe_packet_outbound_internal(packet: &UnsubscribePacket, context: &OutboundValidationContext) -> GneissResult<()> {
 
-    let (total_remaining_length, _) = compute_unsubscribe_packet_length_properties(packet)?;
+    let (total_remaining_length, _) = compute_unsubscribe_packet_length_properties5(packet)?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
-        error!("UnsubscribePacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, "packet length exceeds maximum packet size allowed"));
+        let message = "validate_unsubscribe_packet_outbound_internal - packet length exceeds maximum packet size allowed to server";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, message));
     }
 
     if packet.packet_id == 0 {
-        error!("UnsubscribePacket Outbound Validation - packet id is zero");
-        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, "packet id is zero"));
+        let message = "validate_unsubscribe_packet_outbound_internal - packet id is zero";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, message));
     }
 
     for filter in &packet.topic_filters {
         if !is_valid_topic_filter_internal(filter, context, None) {
-            error!("UnsubscribePacket Outbound Validation - invalid topic filter");
-            return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, "invalid topic filter"));
+            let message = "validate_unsubscribe_packet_outbound_internal - invalid topic filter";
+            error!("{}", message);
+            return Err(GneissError::new_packet_validation(PacketType::Unsubscribe, message));
         }
     }
 
@@ -193,24 +261,42 @@ mod tests {
     use crate::decode::testing::*;
     use crate::validate::testing::*;
 
-    #[test]
-    fn unsubscribe_round_trip_encode_decode_default() {
+    fn do_unsubscribe_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = UnsubscribePacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsubscribe(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsubscribe(packet), protocol_version));
     }
 
     #[test]
-    fn unsubscribe_round_trip_encode_decode_basic() {
+    fn unsubscribe_round_trip_encode_decode_default5() {
+        do_unsubscribe_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn unsubscribe_round_trip_encode_decode_default311() {
+        do_unsubscribe_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_unsubscribe_round_trip_encode_decode_basic_test(protocol_version: ProtocolVersion) {
         let packet = UnsubscribePacket {
             packet_id : 123,
             topic_filters : vec![ "hello/world".to_string() ],
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsubscribe(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsubscribe(packet), protocol_version));
+    }
+
+    #[test]
+    fn unsubscribe_round_trip_encode_decode_basic5() {
+        do_unsubscribe_round_trip_encode_decode_basic_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn unsubscribe_round_trip_encode_decode_basic311() {
+        do_unsubscribe_round_trip_encode_decode_basic_test(ProtocolVersion::Mqtt311);
     }
 
     fn create_unsubscribe_all_properties() -> UnsubscribePacket {
@@ -228,27 +314,53 @@ mod tests {
     }
 
     #[test]
-    fn unsubscribe_round_trip_encode_decode_all_properties() {
+    fn unsubscribe_round_trip_encode_decode_all_properties5() {
         let packet = create_unsubscribe_all_properties();
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsubscribe(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Unsubscribe(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn unsubscribe_decode_failure_bad_fixed_header() {
+    fn unsubscribe_round_trip_encode_decode_all_properties311() {
+        let packet = create_unsubscribe_all_properties();
+        let mut expected_packet = create_unsubscribe_all_properties();
+        expected_packet.user_properties = None;
+
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Unsubscribe(packet), &MqttPacket::Unsubscribe(expected_packet)));
+    }
+
+    fn do_unsubscribe_decode_failure_bad_fixed_header_test(protocol_version: ProtocolVersion) {
         let packet = UnsubscribePacket {
             packet_id : 123,
             topic_filters : vec![ "hello/world".to_string() ],
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Unsubscribe(packet), 14);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Unsubscribe(packet), protocol_version, 14);
     }
 
     #[test]
-    fn unsubscribe_decode_failure_inbound_packet_size() {
+    fn unsubscribe_decode_failure_bad_fixed_header5() {
+        do_unsubscribe_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn unsubscribe_decode_failure_bad_fixed_header311() {
+        do_unsubscribe_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn unsubscribe_decode_failure_inbound_packet_size5() {
         let packet = create_unsubscribe_all_properties();
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Unsubscribe(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Unsubscribe(packet), ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn unsubscribe_decode_failure_inbound_packet_size311() {
+        let mut packet = create_unsubscribe_all_properties();
+        packet.user_properties = None;
+
+        do_inbound_size_decode_failure_test(&MqttPacket::Unsubscribe(packet), ProtocolVersion::Mqtt311);
     }
 
     #[test]
@@ -296,10 +408,17 @@ mod tests {
     }
 
     #[test]
-    fn unsubscribe_validate_failure_outbound_size() {
+    fn unsubscribe_validate_failure_outbound_size5() {
         let packet = create_unsubscribe_all_properties();
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Unsubscribe(packet), PacketType::Unsubscribe);
+        do_outbound_size_validate_failure_test(&MqttPacket::Unsubscribe(packet), ProtocolVersion::Mqtt5, PacketType::Unsubscribe);
+    }
+
+    #[test]
+    fn unsubscribe_validate_failure_outbound_size311() {
+        let packet = create_unsubscribe_all_properties();
+
+        do_outbound_size_validate_failure_test(&MqttPacket::Unsubscribe(packet), ProtocolVersion::Mqtt311, PacketType::Unsubscribe);
     }
 
     #[test]

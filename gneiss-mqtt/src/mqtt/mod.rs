@@ -4,12 +4,13 @@
  */
 
 /*!
-Module containing a set of structured data types that model the MQTT5 specification.
+Module containing a set of structured data types that model the MQTT specification.
  */
 
 use std::fmt;
 use log::error;
-use crate::error::GneissError;
+use crate::client::config::ProtocolMode;
+use crate::error::{GneissError, GneissResult};
 
 pub(crate) mod auth;
 pub(crate) mod connack;
@@ -28,9 +29,24 @@ pub(crate) mod unsuback;
 pub(crate) mod unsubscribe;
 pub(crate) mod utils;
 
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum ProtocolVersion {
+    #[default]
+    Mqtt5,
+
+    Mqtt311
+}
+
+pub(crate) fn convert_protocol_mode_to_protocol_version(mode: ProtocolMode) -> ProtocolVersion {
+    match mode {
+        ProtocolMode::Mqtt5 => ProtocolVersion::Mqtt5,
+        ProtocolMode::Mqtt311 => ProtocolVersion::Mqtt311,
+    }
+}
+
 /// MQTT message delivery quality of service.
 ///
-/// Enum values match [MQTT5 spec](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901234) encoding values.
+/// Enum values match [MQTT spec](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901234) encoding values.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum QualityOfService {
 
@@ -57,8 +73,9 @@ impl TryFrom<u8> for QualityOfService {
             1 => { Ok(QualityOfService::AtLeastOnce) }
             2 => { Ok(QualityOfService::ExactlyOnce) }
             _ => {
-                error!("Packet Decode - Invalid quality of service value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid qos value"))
+                let message = format!("QualityOfService::try_from - Invalid quality of service value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -99,8 +116,9 @@ impl TryFrom<u8> for PayloadFormatIndicator {
             0 => { Ok(PayloadFormatIndicator::Bytes) }
             1 => { Ok(PayloadFormatIndicator::Utf8) }
             _ => {
-                error!("Packet Decode - Invalid payload format indicator value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid payload format indicator value"))
+                let message = format!("PayloadFormatIndicator::try_from - invalid payload format indicator value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -147,8 +165,9 @@ impl TryFrom<u8> for RetainHandlingType {
             1 => { Ok(RetainHandlingType::SendOnSubscribeIfNew) }
             2 => { Ok(RetainHandlingType::DontSend) }
             _ => {
-                error!("Packet Decode - Invalid retain handling type value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid retain handling type value"))
+                let message = format!("RetainHandlingType::try_from - Invalid retain handling type value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -190,7 +209,7 @@ pub enum ConnectReasonCode {
     /// Returned when the CONNECT packet is valid but was not accepted by the server.
     ImplementationSpecificError = 131,
 
-    /// Returned when the server does not support MQTT5 protocol version specified in the connection.
+    /// Returned when the server does not support MQTT protocol version specified in the connection.
     UnsupportedProtocolVersion = 132,
 
     /// Returned when the client identifier in the CONNECT packet is a valid string but not one that
@@ -204,7 +223,7 @@ pub enum ConnectReasonCode {
     /// Returned when the client is not authorized to connect to the server.
     NotAuthorized = 135,
 
-    /// Returned when the MQTT5 server is not available.
+    /// Returned when the MQTT server is not available.
     ServerUnavailable = 136,
 
     /// Returned when the server is too busy to make a connection.
@@ -285,8 +304,9 @@ impl TryFrom<u8> for ConnectReasonCode {
             157 => { Ok(ConnectReasonCode::ServerMoved) }
             159 => { Ok(ConnectReasonCode::ConnectionRateExceeded) }
             _ => {
-                error!("Packet Decode - Invalid connect reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid connect reason code value"))
+                let message = format!("ConnectReasonCode::try_from - Invalid connect reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -321,6 +341,31 @@ impl fmt::Display for ConnectReasonCode {
             };
 
         write!(f, "{}", format_string)
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn convert_connect_reason_code_to_311_encoding(reason_code: ConnectReasonCode) -> GneissResult<u8> {
+    match reason_code {
+        ConnectReasonCode::Success => Ok(0),
+        ConnectReasonCode::UnsupportedProtocolVersion => Ok(1),
+        ConnectReasonCode::ClientIdentifierNotValid => Ok(2),
+        ConnectReasonCode::ServerUnavailable => Ok(3),
+        ConnectReasonCode::BadUsernameOrPassword => Ok(4),
+        ConnectReasonCode::NotAuthorized => Ok(5),
+        _ => Err(GneissError::new_protocol_error("convert_connect_reason_code_to_311_encoding - invalid ConnectReasonCode"))
+    }
+}
+
+pub(crate) fn convert_311_encoding_to_connect_reason_code(value: u8) -> GneissResult<ConnectReasonCode> {
+    match value {
+        0 => { Ok(ConnectReasonCode::Success) },
+        1 => { Ok(ConnectReasonCode::UnsupportedProtocolVersion) },
+        2 => { Ok(ConnectReasonCode::ClientIdentifierNotValid) },
+        3 => { Ok(ConnectReasonCode::ServerUnavailable) },
+        4 => { Ok(ConnectReasonCode::BadUsernameOrPassword) },
+        5 => { Ok(ConnectReasonCode::NotAuthorized) },
+        _ => Err(GneissError::new_decoding_failure("convert_311_encoding_to_connect_reason_code - invalid 311 encoding of a ConnectReasonCode"))
     }
 }
 
@@ -402,8 +447,9 @@ impl TryFrom<u8> for PubackReasonCode {
             151 => { Ok(PubackReasonCode::QuotaExceeded) }
             153 => { Ok(PubackReasonCode::PayloadFormatInvalid) }
             _ => {
-                error!("Packet Decode - Invalid puback reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid puback reason code value"))
+                let message = format!("PubackReasonCode::try_from - invalid puback reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -506,8 +552,9 @@ impl TryFrom<u8> for PubrecReasonCode {
             151 => { Ok(PubrecReasonCode::QuotaExceeded) }
             153 => { Ok(PubrecReasonCode::PayloadFormatInvalid) }
             _ => {
-                error!("Packet Decode - Invalid pubrec reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid pubrec reason code value"))
+                let message = format!("Packet Decode - Invalid pubrec reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -565,8 +612,9 @@ impl TryFrom<u8> for PubrelReasonCode {
             0 => { Ok(PubrelReasonCode::Success) }
             146 => { Ok(PubrelReasonCode::PacketIdentifierNotFound) }
             _ => {
-                error!("Packet Decode - Invalid pubrel reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid pubrel reason code value"))
+                let message = format!("PubrelReasonCode::try_from - Invalid pubrel reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -619,8 +667,9 @@ impl TryFrom<u8> for PubcompReasonCode {
             0 => { Ok(PubcompReasonCode::Success) }
             146 => { Ok(PubcompReasonCode::PacketIdentifierNotFound) }
             _ => {
-                error!("Packet Decode - Invalid pubcomp reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid pubcomp reason code value"))
+                let message = format!("PubcompReasonCode::try_from - Invalid pubcomp reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -847,8 +896,9 @@ impl TryFrom<u8> for DisconnectReasonCode {
             161 => { Ok(DisconnectReasonCode::SubscriptionIdentifiersNotSupported) }
             162 => { Ok(DisconnectReasonCode::WildcardSubscriptionsNotSupported) }
             _ => {
-                error!("Packet Decode - Invalid disconnect reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid disconnect reason code value"))
+                let message = format!("DisconnectReasonCode::try_from - Invalid disconnect reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -967,8 +1017,9 @@ impl TryFrom<u8> for SubackReasonCode {
             161 => { Ok(SubackReasonCode::SubscriptionIdentifiersNotSupported) }
             162 => { Ok(SubackReasonCode::WildcardSubscriptionsNotSupported) }
             _ => {
-                error!("Packet Decode - Invalid suback reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid suback reason code value"))
+                let message = format!("SubackReasonCode::try_from - invalid suback reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -993,6 +1044,30 @@ impl fmt::Display for SubackReasonCode {
             };
 
         write!(f, "{}", reason_string)
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn convert_suback_reason_code_to_311_encoding(reason_code: SubackReasonCode) -> GneissResult<u8> {
+    match reason_code {
+        SubackReasonCode::GrantedQos0 => Ok(0),
+        SubackReasonCode::GrantedQos1 => Ok(1),
+        SubackReasonCode::GrantedQos2 => Ok(2),
+        _ => Ok(128),
+    }
+}
+
+pub(crate) fn convert_311_encoding_to_suback_reason_code(value: u8) -> GneissResult<SubackReasonCode> {
+    match value {
+        0 => Ok(SubackReasonCode::GrantedQos0),
+        1 => Ok(SubackReasonCode::GrantedQos1),
+        2 => Ok(SubackReasonCode::GrantedQos2),
+        128 => Ok(SubackReasonCode::UnspecifiedError),
+        _ => {
+            let message = format!("convert_311_encoding_to_suback_reason_code - invalid suback reason code value ({})", value);
+            error!("{}", message);
+            Err(GneissError::new_decoding_failure(message))
+        }
     }
 }
 
@@ -1047,8 +1122,9 @@ impl TryFrom<u8> for UnsubackReasonCode {
             144 => { Ok(UnsubackReasonCode::TopicNameInvalid) }
             145 => { Ok(UnsubackReasonCode::PacketIdentifierInUse) }
             _ => {
-                error!("Packet Decode - Invalid unsuback reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid unsuback reason code value"))
+                let message = format!("UnsubackReasonCode::try_from - Invalid unsuback reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -1103,8 +1179,9 @@ impl TryFrom<u8> for AuthenticateReasonCode {
             24 => { Ok(AuthenticateReasonCode::ContinueAuthentication) }
             25 => { Ok(AuthenticateReasonCode::ReAuthenticate) }
             _ => {
-                error!("Packet Decode - Invalid authenticate reason code value ({})", value);
-                Err(GneissError::new_decoding_failure("invalid authenticate reason code value"))
+                let message = format!("AuthenticateReasonCode::try_from - Invalid authenticate reason code value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_decoding_failure(message))
             }
         }
     }
@@ -1152,7 +1229,7 @@ impl UserProperty {
 
 /// Specifies a single subscription within a Subscribe operation
 ///
-/// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
+/// See [MQTT Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Subscription {
     pub(crate) topic_filter: String,
@@ -1176,14 +1253,14 @@ impl Subscription {
 
     /// Returns the topic filter to subscribe to
     ///
-    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
+    /// See [MQTT Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
     pub fn topic_filter(&self) -> &str { self.topic_filter.as_str() }
 
     /// Returns the maximum QoS on which the subscriber will accept publish messages.
     ///
     /// Negotiated QoS may be different.
     ///
-    /// See [MQTT5 Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
+    /// See [MQTT Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
     pub fn qos(&self) -> QualityOfService { self.qos }
 
     /// Returns if the server should not send publishes to a client when that client was the one who sent the publish?
@@ -1286,7 +1363,7 @@ pub(crate) struct AuthPacket {
     pub(crate) user_properties: Option<Vec<UserProperty>>,
 }
 
-/// Data model of an [MQTT5 CONNACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901074) packet.
+/// Data model of an [MQTT CONNACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901074) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ConnackPacket {
     pub(crate) session_present: bool,
@@ -1314,12 +1391,12 @@ impl ConnackPacket {
 
     /// Returns true if the client rejoined an existing session on the server, false otherwise.
     ///
-    /// See [MQTT5 Session Present](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901078)
+    /// See [MQTT Session Present](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901078)
     pub fn session_present(&self) -> bool { self.session_present }
 
     /// Returns a result value that indicates either success or the reason for failure for the connection attempt.
     ///
-    /// See [MQTT5 Connect Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901079)
+    /// See [MQTT Connect Reason Code](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901079)
     pub fn reason_code(&self) -> ConnectReasonCode { self.reason_code }
 
     /// Returns the time interval, in seconds, that the server will persist this connection's MQTT session state
@@ -1426,7 +1503,7 @@ impl ConnackPacket {
     pub fn authentication_data(&self) -> Option<&[u8]> { self.authentication_data.as_deref() }
 }
 
-/// Data model of an [MQTT5 CONNECT](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901033) packet.
+/// Data model of an [MQTT CONNECT](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901033) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ConnectPacket {
     pub(crate) keep_alive_interval_seconds: u16,
@@ -1447,7 +1524,7 @@ pub(crate) struct ConnectPacket {
     pub(crate) user_properties: Option<Vec<UserProperty>>,
 }
 
-/// Data model of an [MQTT5 DISCONNECT](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901205) packet.
+/// Data model of an [MQTT DISCONNECT](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901205) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DisconnectPacket {
     pub(crate) reason_code: DisconnectReasonCode,
@@ -1553,15 +1630,15 @@ impl DisconnectPacketBuilder {
     }
 }
 
-/// Data model of an [MQTT5 PINGREQ](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901195) packet.
+/// Data model of an [MQTT PINGREQ](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901195) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct PingreqPacket {}
 
-/// Data model of an [MQTT5 PINGRESP](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901200) packet.
+/// Data model of an [MQTT PINGRESP](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901200) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct PingrespPacket {}
 
-/// Data model of an [MQTT5 PUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901121) packet
+/// Data model of an [MQTT PUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901121) packet
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PubackPacket {
     pub(crate) packet_id: u16,
@@ -1588,7 +1665,7 @@ impl PubackPacket {
     pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
 }
 
-/// Data model of an [MQTT5 PUBCOMP](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901151) packet
+/// Data model of an [MQTT PUBCOMP](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901151) packet
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PubcompPacket {
     pub(crate) packet_id: u16,
@@ -1615,7 +1692,7 @@ impl PubcompPacket {
     pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
 }
 
-/// Data model of an [MQTT5 PUBLISH](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901100) packet
+/// Data model of an [MQTT PUBLISH](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901100) packet
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PublishPacket {
     pub(crate) packet_id: u16,
@@ -1645,14 +1722,14 @@ impl PublishPacket {
     ///
     /// Received publishes - returns the topic this message was published to.
     ///
-    /// See [MQTT5 Topic Name](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901107)
+    /// See [MQTT Topic Name](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901107)
     pub fn topic(&self) -> &str { self.topic.as_str() }
 
     /// Sent publishes - returns the MQTT quality of service level this message should be delivered with.
     ///
     /// Received publishes - returns the MQTT quality of service level this message was delivered at.
     ///
-    /// See [MQTT5 QoS](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901103)
+    /// See [MQTT QoS](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901103)
     pub fn qos(&self) -> QualityOfService { self.qos }
 
     /// Returns whether this packet is a resend of a previously-submitted Publish
@@ -1662,12 +1739,12 @@ impl PublishPacket {
     ///
     /// Always set on received publishes; on sent publishes, undefined implies false.
     ///
-    /// See [MQTT5 Retain](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901104)
+    /// See [MQTT Retain](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901104)
     pub fn retain(&self) -> bool { self.retain }
 
     /// Returns the payload of the publish message.
     ///
-    /// See [MQTT5 Publish Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901119)
+    /// See [MQTT Publish Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901119)
     pub fn payload(&self) -> Option<&[u8]> { self.payload.as_deref() }
 
     /// Returns a property specifying the format of the payload data.
@@ -1734,7 +1811,7 @@ impl PublishPacketBuilder {
 
     /// Sets if this should be a retained message
     ///
-    /// See [MQTT5 Retain](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901104)
+    /// See [MQTT Retain](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901104)
     pub fn with_retain(mut self, retain: bool) -> Self {
         self.packet.retain = retain;
         self
@@ -1742,7 +1819,7 @@ impl PublishPacketBuilder {
 
     /// Sets the payload of the publish message.
     ///
-    /// See [MQTT5 Publish Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901119)
+    /// See [MQTT Publish Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901119)
     pub fn with_payload(mut self, payload: Vec<u8>) -> Self {
         self.packet.payload = Some(payload);
         self
@@ -1814,7 +1891,7 @@ impl PublishPacketBuilder {
     }
 }
 
-/// Data model of an [MQTT5 PUBREC](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901131) packet
+/// Data model of an [MQTT PUBREC](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901131) packet
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PubrecPacket {
     pub(crate) packet_id: u16,
@@ -1841,7 +1918,7 @@ impl PubrecPacket {
     pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
 }
 
-/// Data model of an [MQTT5 PUBREL](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901141) packet
+/// Data model of an [MQTT PUBREL](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901141) packet
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PubrelPacket {
     pub(crate) packet_id: u16,
@@ -1868,7 +1945,7 @@ impl PubrelPacket {
     pub fn user_properties(&self) -> Option<&[UserProperty]> { self.user_properties.as_deref() }
 }
 
-/// Data model of an [MQTT5 SUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901171) packet.
+/// Data model of an [MQTT SUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901171) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SubackPacket {
     pub(crate) packet_id: u16,
@@ -1892,11 +1969,11 @@ impl SubackPacket {
     /// Returns a list of reason codes indicating the result of each individual subscription entry in the
     /// associated SUBSCRIBE packet.
     ///
-    /// See [MQTT5 Suback Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901178)
+    /// See [MQTT Suback Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901178)
     pub fn reason_codes(&self) -> &[SubackReasonCode] { self.reason_codes.as_slice() }
 }
 
-/// Data model of an [MQTT5 SUBSCRIBE](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901161) packet.
+/// Data model of an [MQTT SUBSCRIBE](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901161) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SubscribePacket {
     pub(crate) packet_id: u16,
@@ -1927,7 +2004,7 @@ impl SubscribePacketBuilder {
 
     /// Adds a subscription to the list of subscriptions that the client wishes to listen to
     ///
-    /// See [MQTT5 Subscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901168)
+    /// See [MQTT Subscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901168)
     pub fn with_subscription(mut self, subscription: Subscription) -> Self {
         self.packet.subscriptions.push(subscription);
         self
@@ -1935,7 +2012,7 @@ impl SubscribePacketBuilder {
 
     /// Adds a subscription to the list of subscriptions that the client wishes to listen to
     ///
-    /// See [MQTT5 Subscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901168)
+    /// See [MQTT Subscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901168)
     pub fn with_subscription_simple(mut self, topic_filter: String, qos: QualityOfService) -> Self {
         self.packet.subscriptions.push(SubscriptionBuilder::new(topic_filter, qos).build());
         self
@@ -1971,7 +2048,7 @@ impl SubscribePacketBuilder {
     }
 }
 
-/// Data model of an [MQTT5 UNSUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901187) packet.
+/// Data model of an [MQTT UNSUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901187) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct UnsubackPacket {
     pub(crate) packet_id: u16,
@@ -2003,7 +2080,7 @@ impl UnsubackPacket {
     }
 }
 
-/// Data model of an [MQTT5 UNSUBSCRIBE](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901179) packet.
+/// Data model of an [MQTT UNSUBSCRIBE](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901179) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct UnsubscribePacket {
     pub(crate) packet_id: u16,
@@ -2034,7 +2111,7 @@ impl UnsubscribePacketBuilder {
 
     /// Adds a topic filter to the list of topic filters that the client wishes to unsubscribe from.
     ///
-    /// See [MQTT5 Unsubscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901185)
+    /// See [MQTT Unsubscribe Payload](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901185)
     pub fn with_topic_filter(mut self, topic_filter: String) -> Self {
         self.packet.topic_filters.push(topic_filter);
         self
@@ -2060,7 +2137,7 @@ impl UnsubscribePacketBuilder {
 }
 
 
-/// Algebraic union of all MQTT5 packet types.
+/// Algebraic union of all MQTT packet types.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "testing", derive(PartialEq, Eq))]
 pub(crate) enum MqttPacket {

@@ -45,11 +45,11 @@ pub(crate) struct InboundValidationContext<'a> {
     pub negotiated_settings : Option<&'a NegotiatedSettings>,
 }
 
-pub(crate) fn validate_user_properties(properties: &Option<Vec<UserProperty>>, packet_type: PacketType, packet_name: &str) -> GneissResult<()> {
+pub(crate) fn validate_user_properties(properties: &Option<Vec<UserProperty>>, packet_type: PacketType, function_name: &str) -> GneissResult<()> {
     if let Some(props) = properties {
         for property in props {
-            validate_string_length(property.name.as_str(), packet_type, packet_name, "UserProperty Name")?;
-            validate_string_length(property.name.as_str(), packet_type, packet_name, "UserProperty Value")?;
+            validate_string_length(property.name.as_str(), packet_type, function_name, "UserProperty Name")?;
+            validate_string_length(property.name.as_str(), packet_type, function_name, "UserProperty Value")?;
         }
     }
 
@@ -78,8 +78,9 @@ pub(crate) fn validate_packet_outbound(packet: &MqttPacket) -> GneissResult<()> 
         MqttPacket::Subscribe(subscribe) => { validate_subscribe_packet_outbound(subscribe) }
         MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound(unsubscribe) }
         _ => {
-            error!("Packet Outbound Validation - unexpected packet type");
-            Err(GneissError::new_protocol_error("unexpected outbound packet type"))
+            let message = "validate_packet_outbound - unexpected packet type";
+            error!("{}", message);
+            Err(GneissError::new_protocol_error(message))
         }
     }
 }
@@ -100,8 +101,9 @@ pub(crate) fn validate_packet_outbound_internal(packet: &MqttPacket, context: &O
         MqttPacket::Subscribe(subscribe) => { validate_subscribe_packet_outbound_internal(subscribe, context) }
         MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound_internal(unsubscribe, context) }
         _ => {
-            error!("Packet Outbound Internal Validation - unexpected packet type");
-            Err(GneissError::new_protocol_error("unexpected outbound packet type"))
+            let message = "validate_packet_outbound_internal - unexpected packet type";
+            error!("{}", message);
+            Err(GneissError::new_protocol_error(message))
         }
     }
 }
@@ -123,38 +125,42 @@ pub(crate) fn validate_packet_inbound_internal(packet: &MqttPacket, context: &In
         MqttPacket::Suback(suback) => { validate_suback_packet_inbound_internal(suback, context) }
         MqttPacket::Unsuback(unsuback) => { validate_unsuback_packet_inbound_internal(unsuback, context) }
         _ => {
-            error!("Packet Inbound Validation - unexpected packet type");
-            Err(GneissError::new_protocol_error("unexpected inbound packet type"))
+            let message = "validate_packet_inbound_internal - unexpected packet type";
+            error!("{}", message);
+            Err(GneissError::new_protocol_error(message))
         }
     }
 }
 
 
-pub(crate) fn validate_string_length(value: &str, packet_type: PacketType, packet_name: &str, field_name: &str) -> GneissResult<()> {
+pub(crate) fn validate_string_length(value: &str, packet_type: PacketType, function_name: &str, field_name: &str) -> GneissResult<()> {
     if value.len() > MAXIMUM_STRING_PROPERTY_LENGTH {
-        error!("{}Packet Validation - {} string field too long", packet_name, field_name);
-        return Err(GneissError::new_packet_validation(packet_type, field_name));
+        let message = format!("{} - {} string field too long", function_name, field_name);
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(packet_type, message));
     }
 
     Ok(())
 }
 
-pub(crate) fn validate_optional_string_length(optional_string: &Option<String>, packet_type: PacketType, packet_name: &str, field_name: &str) -> GneissResult<()> {
+pub(crate) fn validate_optional_string_length(optional_string: &Option<String>, packet_type: PacketType, function_name: &str, field_name: &str) -> GneissResult<()> {
     if let Some(value) = &optional_string {
         if value.len() > MAXIMUM_STRING_PROPERTY_LENGTH {
-            error!("{}Packet Validation - {} string field too long", packet_name, field_name);
-            return Err(GneissError::new_packet_validation(packet_type, field_name));
+            let message = format!("{} - {} string field too long", function_name, field_name);
+            error!("{}", message);
+            return Err(GneissError::new_packet_validation(packet_type, message));
         }
     }
 
     Ok(())
 }
 
-pub(crate) fn validate_optional_binary_length(optional_data: &Option<Vec<u8>>, packet_type: PacketType, packet_name: &str, field_name: &str) -> GneissResult<()> {
+pub(crate) fn validate_optional_binary_length(optional_data: &Option<Vec<u8>>, packet_type: PacketType, function_name: &str, field_name: &str) -> GneissResult<()> {
     if let Some(value) = &optional_data {
         if value.len() > MAXIMUM_BINARY_PROPERTY_LENGTH {
-            error!("{}Packet Validation - {} binary field too long", packet_name, field_name);
-            return Err(GneissError::new_packet_validation(packet_type, field_name));
+            let message = format!("{} - {} binary field too long", function_name, field_name);
+            error!("{}", message);
+            return Err(GneissError::new_packet_validation(packet_type, message));
         }
     }
 
@@ -162,11 +168,12 @@ pub(crate) fn validate_optional_binary_length(optional_data: &Option<Vec<u8>>, p
 }
 
 macro_rules! validate_optional_integer_non_zero {
-    ($value_name: ident, $optional_integer_expr: expr, $packet_type: expr, $packet_name: expr, $field_name: expr) => {
+    ($value_name: ident, $optional_integer_expr: expr, $packet_type: expr, $function_name: expr, $field_name: expr) => {
         if let Some($value_name) = $optional_integer_expr {
             if $value_name == 0 {
-                error!("{}Packet Validation - {} integer field is zero", $packet_name, $field_name);
-                return Err(GneissError::new_packet_validation($packet_type, $field_name));
+                let message = format!("{} - {} integer field is zero", $function_name, $field_name);
+                error!("{}", message);
+                return Err(GneissError::new_packet_validation($packet_type, message));
             }
         }
     };
@@ -175,11 +182,11 @@ macro_rules! validate_optional_integer_non_zero {
 pub(crate) use validate_optional_integer_non_zero;
 
 macro_rules! validate_ack_outbound {
-    ($function_name: ident, $packet_type_name: ident, $packet_type: expr, $packet_type_string: expr) => {
+    ($function_name: ident, $packet_type_name: ident, $packet_type: expr, $validate_function_name: expr) => {
         pub(crate) fn $function_name(packet: &$packet_type_name) -> GneissResult<()> {
 
-            validate_optional_string_length(&packet.reason_string, $packet_type, $packet_type_string, "reason_string")?;
-            validate_user_properties(&packet.user_properties, $packet_type, $packet_type_string)?;
+            validate_optional_string_length(&packet.reason_string, $packet_type, $validate_function_name, "reason_string")?;
+            validate_user_properties(&packet.user_properties, $packet_type, $validate_function_name)?;
 
             Ok(())
         }
@@ -189,19 +196,21 @@ macro_rules! validate_ack_outbound {
 pub(crate) use validate_ack_outbound;
 
 macro_rules! validate_ack_outbound_internal {
-    ($function_name: ident, $packet_type_name: ident, $packet_type: expr, $packet_length_function_name: ident, $packet_type_string: expr) => {
+    ($function_name: ident, $packet_type_name: ident, $packet_type: expr, $packet_length_function_name: ident, $validate_function_name: expr) => {
         pub(crate) fn $function_name(packet: &$packet_type_name, context: &OutboundValidationContext) -> GneissResult<()> {
 
             let (total_remaining_length, _) = $packet_length_function_name(packet)?;
             let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
             if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
-                error!("{}Packet Validation - packet length exceeds allowed maximum to server", $packet_type_string);
-                return Err(GneissError::new_packet_validation($packet_type, "packet length exceeds maximum allowed"));
+                let message = format!("{} - packet length exceeds allowed maximum to server", $validate_function_name);
+                error!("{}", message);
+                return Err(GneissError::new_packet_validation($packet_type, message));
             }
 
             if packet.packet_id == 0 {
-                error!("{}Packet Validation - packet id is zero", $packet_type_string);
-                return Err(GneissError::new_packet_validation($packet_type, "packet id is zero"));
+                let message = format!("{} - packet id is zero", $validate_function_name);
+                error!("{}", message);
+                return Err(GneissError::new_packet_validation($packet_type, message));
             }
 
             Ok(())
@@ -212,12 +221,13 @@ macro_rules! validate_ack_outbound_internal {
 pub(crate) use validate_ack_outbound_internal;
 
 macro_rules! validate_ack_inbound_internal {
-    ($function_name: ident, $packet_type_name: ident, $packet_type: expr, $packet_type_string: expr) => {
+    ($function_name: ident, $packet_type_name: ident, $packet_type: expr, $validate_function_name: expr) => {
         pub(crate) fn $function_name(packet: &$packet_type_name, _: &InboundValidationContext) -> GneissResult<()> {
 
             if packet.packet_id == 0 {
-                error!("{}Packet Validation - packet id is zero", $packet_type_string);
-                return Err(GneissError::new_packet_validation($packet_type, "packet id is zero"));
+                let message = format!("{} - packet id is zero", $validate_function_name);
+                error!("{}", message);
+                return Err(GneissError::new_packet_validation($packet_type, message));
             }
 
             Ok(())
@@ -369,8 +379,8 @@ pub(crate) mod testing {
     use crate::decode::testing::*;
     use assert_matches::assert_matches;
 
-    pub(crate) fn do_outbound_size_validate_failure_test(packet: &MqttPacket, expected_packet_type: PacketType) {
-        let encoded_bytes = encode_packet_for_test(packet);
+    pub(crate) fn do_outbound_size_validate_failure_test(packet: &MqttPacket, protocol_version: ProtocolVersion, expected_packet_type: PacketType) {
+        let encoded_bytes = encode_packet_for_test(packet, protocol_version);
 
         let mut test_validation_context = create_pinned_validation_context();
         test_validation_context.settings.maximum_qos = QualityOfService::ExactlyOnce;
@@ -454,12 +464,12 @@ pub(crate) mod testing {
     pub(crate) use test_ack_validate_failure_invalid_user_properties;
 
     macro_rules! test_ack_validate_failure_outbound_size {
-        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: expr) => {
+        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: expr, $protocol_version: expr) => {
             #[test]
             fn $function_name() {
                 let packet = $packet_factory_function();
 
-                do_outbound_size_validate_failure_test(&MqttPacket::$packet_type_name(packet), $packet_type);
+                do_outbound_size_validate_failure_test(&MqttPacket::$packet_type_name(packet), $protocol_version, $packet_type);
             }
         };
     }

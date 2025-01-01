@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-// Internal module that implements most of the MQTT5 spec with respect to client protocol behavior
+// Internal module that implements most of the MQTT spec with respect to client protocol behavior
 
 use crate::alias::*;
 use crate::client::*;
@@ -201,6 +201,8 @@ pub(crate) struct ProtocolStateConfig {
     pub ping_timeout: Duration,
 
     pub outbound_alias_resolver: Option<Box<dyn OutboundAliasResolver + Send>>,
+
+    pub protocol_mode: ProtocolMode,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -362,7 +364,10 @@ pub(crate) struct ProtocolState {
 
     // Topic aliasing support
     pub(crate) outbound_alias_resolver: RefCell<Box<dyn OutboundAliasResolver>>,
-    pub(crate) inbound_alias_resolver: InboundAliasResolver
+    pub(crate) inbound_alias_resolver: InboundAliasResolver,
+
+    // Current MQTT version in use
+    pub protocol_version: ProtocolVersion,
 }
 
 impl Display for ProtocolState {
@@ -388,6 +393,7 @@ impl ProtocolState {
         let outbound_resolver = config.outbound_alias_resolver.take().unwrap_or((OutboundAliasResolverFactory::new_null_factory())());
         let inbound_resolver = InboundAliasResolver::new(config.connect_options.topic_alias_maximum.unwrap_or(0));
         let base_time = config.base_timestamp;
+        let protocol_mode = config.protocol_mode;
 
         ProtocolState {
             config,
@@ -416,7 +422,8 @@ impl ProtocolState {
             ping_timeout_timepoint: None,
             connack_timeout_timepoint: None,
             outbound_alias_resolver: RefCell::new(outbound_resolver),
-            inbound_alias_resolver: inbound_resolver
+            inbound_alias_resolver: inbound_resolver,
+            protocol_version: convert_protocol_mode_to_protocol_version(protocol_mode),
         }
     }
 
@@ -993,6 +1000,7 @@ impl ProtocolState {
         let mut decoded_packets = VecDeque::new();
         let mut decode_context = DecodingContext {
             maximum_packet_size: self.get_maximum_incoming_packet_size(),
+            protocol_version: self.protocol_version,
             decoded_packets: &mut decoded_packets
         };
 
@@ -1267,7 +1275,8 @@ impl ProtocolState {
                 }
 
                 let encode_context = EncodingContext {
-                    outbound_alias_resolution
+                    outbound_alias_resolution,
+                    protocol_version: self.protocol_version,
                 };
 
                 debug!("[{} ms] service_queue - operation {} submitted to encoder for setup", self.elapsed_time_ms, current_operation_id);
@@ -1799,12 +1808,18 @@ impl ProtocolState {
             ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 // per spec, the server must always send a CONNACK before a DISCONNECT is valid
                 error!("[{} ms] handle_disconnect - invalid state to receive a DISCONNECT", self.elapsed_time_ms);
-                return Err(GneissError::new_protocol_error("invalid state receive a disconnect"));
+                return Err(GneissError::new_protocol_error("invalid state to receive a disconnect"));
             }
             _ => {}
         }
 
         if let MqttPacket::Disconnect(disconnect) = *packet {
+            if self.protocol_version == ProtocolVersion::Mqtt311 {
+                // Server-side disconnects not allowed in 311
+                error!("[{} ms] handle_disconnect - MQTT311 forbids server-side disconnects", self.elapsed_time_ms);
+                return Err(GneissError::new_protocol_error("MQTT311 forbids server-side disconnects"));
+            }
+
             context.packet_events.push_back(PacketEvent::Disconnect(disconnect));
 
             return Err(GneissError::new_connection_closed("server-side disconnect received"));
@@ -1975,7 +1990,13 @@ fn build_negotiated_settings(config: &ProtocolStateConfig, packet: &ConnackPacke
         } else if let Some(settings) = &existing_settings {
             settings.client_id.clone()
         } else {
-            panic!("");
+            /*
+             * Degenerate case: MQTT311 allows an empty client id and servers are allowed to
+             * auto assign a client id in response, but have no way of communicating what the client
+             * id is back to the client.
+             * We could forbid the client to do this, but then we'd be more restrictive than the spec.
+             */
+            String::new()
         };
 
     NegotiatedSettings {
@@ -2127,6 +2148,7 @@ mod tests {
             offline_queue_policy: OfflineQueuePolicy::PreserveAll,
             ping_timeout: Duration::from_millis(30000),
             outbound_alias_resolver: None,
+            protocol_mode: ProtocolMode::Mqtt5, // nothing tested in this module varies based on protocol version
         }
     }
 
@@ -2397,6 +2419,7 @@ mod tests {
             offline_queue_policy: OfflineQueuePolicy::PreserveNothing,
             ping_timeout: Duration::from_millis(0),
             outbound_alias_resolver: None,
+            protocol_mode: ProtocolMode::Mqtt5
         };
 
         ProtocolState::new(config)

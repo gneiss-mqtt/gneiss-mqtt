@@ -95,7 +95,7 @@ pub enum SubCommandEnum {
 }
 
 #[derive(FromArgs, Debug, PartialEq)]
-/// Elastimqtt5 - an interactive MQTT5 console
+/// Elastimqtt - an interactive MQTT console
 pub struct CommandArgs {
     #[argh(subcommand)]
     pub nested: SubCommandEnum,
@@ -168,7 +168,7 @@ pub fn client_event_callback(event: Arc<ClientEvent>) {
             println!("{}\n", &event.publish);
         }
         _ => {
-            println!("Unknon client event!");
+            println!("Unknown client event!");
         }
     }
 }

@@ -23,32 +23,58 @@ use crate::mqtt::subscribe::*;
 use crate::mqtt::unsuback::*;
 use crate::mqtt::unsubscribe::*;
 
+use log::*;
+
 use std::collections::VecDeque;
 
 #[derive(Default)]
 pub(crate) struct EncodingContext {
     pub outbound_alias_resolution: OutboundAliasResolution,
+
+    pub protocol_version: ProtocolVersion,
 }
 
-fn write_encoding_steps(mqtt_packet: &MqttPacket, context: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    log_packet("Writing encode steps for packet: ", mqtt_packet);
+fn write_encoding_steps5(mqtt_packet: &MqttPacket, context: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    log_packet("Writing MQTT5 encode steps for packet: ", mqtt_packet);
 
     match mqtt_packet {
-        MqttPacket::Connect(packet) => { write_connect_encoding_steps(packet, context, steps) }
-        MqttPacket::Connack(packet) => { write_connack_encoding_steps(packet, context, steps) }
-        MqttPacket::Publish(packet) => { write_publish_encoding_steps(packet, context, steps) }
-        MqttPacket::Puback(packet) => { write_puback_encoding_steps(packet, context, steps) }
-        MqttPacket::Pubrec(packet) => { write_pubrec_encoding_steps(packet, context, steps) }
-        MqttPacket::Pubrel(packet) => { write_pubrel_encoding_steps(packet, context, steps) }
-        MqttPacket::Pubcomp(packet) => { write_pubcomp_encoding_steps(packet, context, steps) }
-        MqttPacket::Subscribe(packet) => { write_subscribe_encoding_steps(packet, context, steps) }
-        MqttPacket::Suback(packet) => { write_suback_encoding_steps(packet, context, steps) }
-        MqttPacket::Unsubscribe(packet) => { write_unsubscribe_encoding_steps(packet, context, steps) }
-        MqttPacket::Unsuback(packet) => { write_unsuback_encoding_steps(packet, context, steps) }
+        MqttPacket::Connect(packet) => { write_connect_encoding_steps5(packet, context, steps) }
+        MqttPacket::Connack(packet) => { write_connack_encoding_steps5(packet, context, steps) }
+        MqttPacket::Publish(packet) => { write_publish_encoding_steps5(packet, context, steps) }
+        MqttPacket::Puback(packet) => { write_puback_encoding_steps5(packet, context, steps) }
+        MqttPacket::Pubrec(packet) => { write_pubrec_encoding_steps5(packet, context, steps) }
+        MqttPacket::Pubrel(packet) => { write_pubrel_encoding_steps5(packet, context, steps) }
+        MqttPacket::Pubcomp(packet) => { write_pubcomp_encoding_steps5(packet, context, steps) }
+        MqttPacket::Subscribe(packet) => { write_subscribe_encoding_steps5(packet, context, steps) }
+        MqttPacket::Suback(packet) => { write_suback_encoding_steps5(packet, context, steps) }
+        MqttPacket::Unsubscribe(packet) => { write_unsubscribe_encoding_steps5(packet, context, steps) }
+        MqttPacket::Unsuback(packet) => { write_unsuback_encoding_steps5(packet, context, steps) }
         MqttPacket::Pingreq(packet) => { write_pingreq_encoding_steps(packet, context, steps) }
         MqttPacket::Pingresp(packet) => {  write_pingresp_encoding_steps(packet, context, steps) }
-        MqttPacket::Disconnect(packet) => { write_disconnect_encoding_steps(packet, context, steps) }
-        MqttPacket::Auth(packet) => { write_auth_encoding_steps(packet, context, steps) }
+        MqttPacket::Disconnect(packet) => { write_disconnect_encoding_steps5(packet, context, steps) }
+        MqttPacket::Auth(packet) => { write_auth_encoding_steps5(packet, context, steps) }
+    }
+}
+
+fn write_encoding_steps311(mqtt_packet: &MqttPacket, context: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    log_packet("Writing MQTT311 encode steps for packet: ", mqtt_packet);
+
+    match mqtt_packet {
+        MqttPacket::Connect(packet) => { write_connect_encoding_steps311(packet, context, steps) }
+        MqttPacket::Connack(packet) => { write_connack_encoding_steps311(packet, context, steps) }
+        MqttPacket::Publish(packet) => { write_publish_encoding_steps311(packet, context, steps) }
+        MqttPacket::Puback(packet) => { write_puback_encoding_steps311(packet, context, steps) }
+        MqttPacket::Pubrec(packet) => { write_pubrec_encoding_steps311(packet, context, steps) }
+        MqttPacket::Pubrel(packet) => { write_pubrel_encoding_steps311(packet, context, steps) }
+        MqttPacket::Pubcomp(packet) => { write_pubcomp_encoding_steps311(packet, context, steps) }
+        MqttPacket::Subscribe(packet) => { write_subscribe_encoding_steps311(packet, context, steps) }
+        MqttPacket::Suback(packet) => { write_suback_encoding_steps311(packet, context, steps) }
+        MqttPacket::Unsubscribe(packet) => { write_unsubscribe_encoding_steps311(packet, context, steps) }
+        MqttPacket::Unsuback(packet) => { write_unsuback_encoding_steps311(packet, context, steps) }
+        MqttPacket::Pingreq(packet) => { write_pingreq_encoding_steps(packet, context, steps) }
+        MqttPacket::Pingresp(packet) => {  write_pingresp_encoding_steps(packet, context, steps) }
+        MqttPacket::Disconnect(packet) => { write_disconnect_encoding_steps311(packet, context, steps) }
+        MqttPacket::Auth(packet) => { write_auth_encoding_steps311(packet, context, steps) }
     }
 }
 
@@ -72,7 +98,14 @@ impl Encoder {
     pub fn reset(&mut self, packet: &MqttPacket, context: &EncodingContext) -> GneissResult<()> {
         self.steps.clear();
 
-        write_encoding_steps(packet, context, &mut self.steps)
+        match context.protocol_version {
+            ProtocolVersion::Mqtt5 => {
+                write_encoding_steps5(packet, context, &mut self.steps)
+            }
+            ProtocolVersion::Mqtt311 => {
+                write_encoding_steps311(packet, context, &mut self.steps)
+            }
+        }
     }
 
     pub fn encode(
@@ -82,7 +115,7 @@ impl Encoder {
     ) -> GneissResult<EncodeResult> {
         let capacity = dest.capacity();
         if capacity < 4 {
-            panic!("Encoder - target buffer too small");
+            panic!("Encoder::encode - target buffer too small");
         }
 
         while !self.steps.is_empty() && dest.len() + 4 <= dest.capacity() {
@@ -91,7 +124,7 @@ impl Encoder {
         }
 
         if capacity != dest.capacity() {
-            panic!("Internal error: encoding logic resized dest buffer");
+            panic!("Encoder::encode: encoding logic resized dest buffer");
         }
 
         if self.steps.is_empty() {
@@ -318,6 +351,16 @@ macro_rules! encode_enum {
 
 pub(crate) use encode_enum;
 
+#[cfg(test)]
+macro_rules! encode_enum_with_function {
+    ($target: ident, $enum_variant: ident, $int_type: ty, $value: expr, $conversion_function_name: ident) => {
+        $target.push_back(EncodingStep::$enum_variant($conversion_function_name($value)? as $int_type));
+    };
+}
+
+#[cfg(test)]
+pub(crate) use encode_enum_with_function;
+
 /*****************************************************/
 
 macro_rules! define_ack_packet_lengths_function {
@@ -368,7 +411,7 @@ macro_rules! define_ack_packet_user_property_accessor {
 
 pub(crate) use define_ack_packet_user_property_accessor;
 
-macro_rules! define_ack_packet_encoding_impl {
+macro_rules! define_ack_packet_encoding_impl5 {
     ($function_name: ident, $packet_type: ident, $reason_code_type: ident, $first_byte: expr, $length_function: ident, $reason_string_accessor: ident, $user_property_accessor: ident) => {
         pub(crate) fn $function_name(packet: &$packet_type, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
             let (total_remaining_length, property_length) = $length_function(packet)?;
@@ -402,7 +445,24 @@ macro_rules! define_ack_packet_encoding_impl {
     };
 }
 
-pub(crate) use define_ack_packet_encoding_impl;
+pub(crate) use define_ack_packet_encoding_impl5;
+
+macro_rules! define_ack_packet_encoding_impl311 {
+    ($function_name: ident, $packet_type: ident, $first_byte: expr) => {
+        pub(crate) fn $function_name(packet: &$packet_type, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+
+            encode_integral_expression!(steps, Uint8, $first_byte);
+            encode_integral_expression!(steps, Uint8, 2);
+
+            /* Variable header */
+            encode_integral_expression!(steps, Uint16, packet.packet_id);
+
+            Ok(())
+        }
+    };
+}
+
+pub(crate) use define_ack_packet_encoding_impl311;
 
 /*****************************************************/
 
@@ -504,13 +564,17 @@ pub fn compute_variable_length_integer_encode_size(value: usize) -> GneissResult
     } else if value < 1usize << 28 {
         Ok(4)
     } else {
-        Err(GneissError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"))
+        let message = "compute_variable_length_integer_encode_size - vli value exceeds the protocol maximum (2 ^ 28 - 1)";
+        error!("{}", message);
+        Err(GneissError::new_encoding_failure(message))
     }
 }
 
 fn encode_vli(value: u32, dest: &mut Vec<u8>) -> GneissResult<()> {
     if value > MAXIMUM_VARIABLE_LENGTH_INTEGER as u32 {
-        return Err(GneissError::new_encoding_failure("vli value exceeds the protocol maximum (2 ^ 28 - 1)"));
+        let message = "encode_vli - vli value exceeds the protocol maximum (2 ^ 28 - 1)";
+        error!("{}", message);
+        return Err(GneissError::new_encoding_failure(message));
     }
 
     let mut done = false;

@@ -52,3 +52,6 @@ This document is currently hand-written and non-authoritative.
 * * Non-async client interface
 * * Thread-based client implementation and tests
 * * Rustls, Native-tls, and websocket support for thread-based client
+
+## 0.5.0
+* MQTT 311 Support

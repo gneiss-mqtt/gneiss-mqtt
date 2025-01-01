@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 use std::fmt;
 
 #[rustfmt::skip]
-fn compute_subscribe_packet_length_properties(packet: &SubscribePacket) -> GneissResult<(u32, u32)> {
+fn compute_subscribe_packet_length_properties5(packet: &SubscribePacket) -> GneissResult<(u32, u32)> {
     let mut subscribe_property_section_length = compute_user_properties_length(&packet.user_properties);
     add_optional_u32_property_length!(subscribe_property_section_length, packet.subscription_identifier);
 
@@ -38,7 +38,7 @@ fn get_subscribe_packet_user_property(packet: &MqttPacket, index: usize) -> &Use
         }
     }
 
-    panic!("Internal encoding error: invalid user property state");
+    panic!("get_subscribe_packet_user_property - invalid user property state");
 }
 
 fn get_subscribe_packet_topic_filter(packet: &MqttPacket, index: usize) -> &str {
@@ -46,10 +46,10 @@ fn get_subscribe_packet_topic_filter(packet: &MqttPacket, index: usize) -> &str 
         return &subscribe.subscriptions[index].topic_filter;
     }
 
-    panic!("Internal encoding error: invalid subscribe topic filter state");
+    panic!("get_subscribe_packet_topic_filter - invalid subscribe topic filter state");
 }
 
-fn compute_subscription_options_byte(subscription: &Subscription) -> u8 {
+fn compute_subscription_options_byte5(subscription: &Subscription) -> u8 {
     let mut options_byte = subscription.qos as u8;
 
     if subscription.no_local {
@@ -66,8 +66,8 @@ fn compute_subscription_options_byte(subscription: &Subscription) -> u8 {
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_subscribe_encoding_steps(packet: &SubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
-    let (total_remaining_length, subscribe_property_length) = compute_subscribe_packet_length_properties(packet)?;
+pub(crate) fn write_subscribe_encoding_steps5(packet: &SubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let (total_remaining_length, subscribe_property_length) = compute_subscribe_packet_length_properties5(packet)?;
 
     encode_integral_expression!(steps, Uint8, SUBSCRIBE_FIRST_BYTE);
     encode_integral_expression!(steps, Vli, total_remaining_length);
@@ -80,7 +80,35 @@ pub(crate) fn write_subscribe_encoding_steps(packet: &SubscribePacket, _: &Encod
     let subscriptions = &packet.subscriptions;
     for (i, subscription) in subscriptions.iter().enumerate() {
         encode_indexed_string!(steps, get_subscribe_packet_topic_filter, subscription.topic_filter, i);
-        encode_integral_expression!(steps, Uint8, compute_subscription_options_byte(subscription));
+        encode_integral_expression!(steps, Uint8, compute_subscription_options_byte5(subscription));
+    }
+
+    Ok(())
+}
+
+fn compute_subscribe_packet_length_properties311(packet: &SubscribePacket) -> GneissResult<u32> {
+    let mut total_remaining_length : usize = 2;
+
+    total_remaining_length += packet.subscriptions.len() * 3;
+    for subscription in &packet.subscriptions {
+        total_remaining_length += subscription.topic_filter.len();
+    }
+
+    Ok(total_remaining_length as u32)
+}
+
+pub(crate) fn write_subscribe_encoding_steps311(packet: &SubscribePacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    let total_remaining_length = compute_subscribe_packet_length_properties311(packet)?;
+
+    encode_integral_expression!(steps, Uint8, SUBSCRIBE_FIRST_BYTE);
+    encode_integral_expression!(steps, Vli, total_remaining_length);
+
+    encode_integral_expression!(steps, Uint16, packet.packet_id);
+
+    let subscriptions = &packet.subscriptions;
+    for (i, subscription) in subscriptions.iter().enumerate() {
+        encode_indexed_string!(steps, get_subscribe_packet_topic_filter, subscription.topic_filter, i);
+        encode_integral_expression!(steps, Uint8, subscription.qos as u8);
     }
 
     Ok(())
@@ -98,8 +126,9 @@ fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePac
             PROPERTY_KEY_SUBSCRIPTION_IDENTIFIER => { mutable_property_bytes = decode_optional_u32(mutable_property_bytes, &mut packet.subscription_identifier)?; }
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             _ => {
-                error!("SubscribePacket Decode - Invalid property type ({})", property_key);
-                return Err(GneissError::new_decoding_failure("invalid property type for subscribe packet"));
+                let message = format!("decode_subscribe_properties - invalid property type ({})", property_key);
+                error!("{}", message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
     }
@@ -108,14 +137,17 @@ fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePac
 }
 
 #[cfg(test)]
-const SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK : u8 = 192;
+const SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK5 : u8 = 192;
+#[cfg(test)]
+const SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK311 : u8 = 252;
 
 #[cfg(test)]
-pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+pub(crate) fn decode_subscribe_packet5(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
 
     if first_byte != SUBSCRIBE_FIRST_BYTE {
-        error!("SubscribePacket Decode - invalid first byte");
-        return Err(GneissError::new_decoding_failure("invalid first byte for subscribe packet"));
+        let message = "decode_subscribe_packet5 - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let mut box_packet = Box::new(MqttPacket::Subscribe(SubscribePacket { ..Default::default() }));
@@ -126,8 +158,9 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Gne
         let mut properties_length: usize = 0;
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length > mutable_body.len() {
-            error!("SubscribePacket Decode - property length exceeds overall packet length");
-            return Err(GneissError::new_decoding_failure("property length exceeds overall packet length for subscribe packet"));
+            let message = "decode_subscribe_packet5 - property length exceeds overall packet length";
+            error!("{}", message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         let properties_bytes = &mutable_body[..properties_length];
@@ -145,8 +178,10 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Gne
             let mut subscription_options: u8 = 0;
             payload_bytes = decode_u8(payload_bytes, &mut subscription_options)?;
 
-            if (subscription_options & SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK) != 0 {
-                return Err(GneissError::new_decoding_failure("invalid subscription reserved bit flags for subscribe packet"));
+            if (subscription_options & SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK5) != 0 {
+                let message = "decode_subscribe_packet5 - invalid subscription reserved bit flags for subscribe packet";
+                error!("{}", message);
+                return Err(GneissError::new_decoding_failure(message));
             }
 
             subscription.qos = QualityOfService::try_from(subscription_options & 0x03)?;
@@ -167,49 +202,100 @@ pub(crate) fn decode_subscribe_packet(first_byte: u8, packet_body: &[u8]) -> Gne
         return Ok(box_packet);
     }
 
-    panic!("SubscribePacket Decode - Internal error");
+    panic!("decode_subscribe_packet5 - Internal error");
 }
 
 #[cfg(not(test))]
-pub(crate) fn decode_subscribe_packet(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
-    Err(GneissError::new_unimplemented("Test-only functionality"))
+pub(crate) fn decode_subscribe_packet5(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    Err(GneissError::new_unimplemented("decode_subscribe_packet5 - test-only functionality"))
+}
+
+#[cfg(test)]
+pub(crate) fn decode_subscribe_packet311(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+
+    if first_byte != SUBSCRIBE_FIRST_BYTE {
+        let message = "decode_subscribe_packet311 - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
+    }
+
+    let mut box_packet = Box::new(MqttPacket::Subscribe(SubscribePacket { ..Default::default() }));
+    if let MqttPacket::Subscribe(packet) = box_packet.as_mut() {
+        let mut mutable_body = packet_body;
+        mutable_body = decode_u16(mutable_body, &mut packet.packet_id)?;
+
+        while !mutable_body.is_empty() {
+            let mut subscription = Subscription {
+                ..Default::default()
+            };
+
+            mutable_body = decode_length_prefixed_string(mutable_body, &mut subscription.topic_filter)?;
+
+            let mut subscription_options: u8 = 0;
+            mutable_body = decode_u8(mutable_body, &mut subscription_options)?;
+
+            if (subscription_options & SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK311) != 0 {
+                let message = "decode_subscribe_packet311 - invalid subscription reserved bit flags for subscribe packet";
+                error!("{}", message);
+                return Err(GneissError::new_decoding_failure(message));
+            }
+
+            subscription.qos = QualityOfService::try_from(subscription_options & 0x03)?;
+
+            packet.subscriptions.push(subscription);
+        }
+
+        return Ok(box_packet);
+    }
+
+    panic!("decode_subscribe_packet311 - Internal error");
+}
+
+#[cfg(not(test))]
+pub(crate) fn decode_subscribe_packet311(_: u8, _: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    Err(GneissError::new_unimplemented("decode_subscribe_packet311 - test-only functionality"))
 }
 
 pub(crate) fn validate_subscribe_packet_outbound(packet: &SubscribePacket) -> GneissResult<()> {
 
     if packet.packet_id != 0 {
-        error!("SubscribePacket Outbound Validation - packet id may not be set");
-        return Err(GneissError::new_packet_validation(PacketType::Subscribe, "packet id is non-zero"));
+        let message = "validate_subscribe_packet_outbound - packet id may not be set";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Subscribe, message));
     }
 
     if packet.subscriptions.is_empty() {
-        error!("SubscribePacket Outbound Validation - empty subscription set");
-        return Err(GneissError::new_packet_validation(PacketType::Subscribe, "empty subscription set"));
+        let message = "validate_subscribe_packet_outbound - empty subscription set";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Subscribe, message));
     }
 
-    validate_user_properties(&packet.user_properties, PacketType::Subscribe, "Subscribe")?;
+    validate_user_properties(&packet.user_properties, PacketType::Subscribe, "validate_subscribe_packet_outbound")?;
 
     Ok(())
 }
 
 pub(crate) fn validate_subscribe_packet_outbound_internal(packet: &SubscribePacket, context: &OutboundValidationContext) -> GneissResult<()> {
 
-    let (total_remaining_length, _) = compute_subscribe_packet_length_properties(packet)?;
+    let (total_remaining_length, _) = compute_subscribe_packet_length_properties5(packet)?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
-        error!("SubscribePacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(GneissError::new_packet_validation(PacketType::Subscribe, "packet length exceeds maximum packet size allowed"));
+        let message = "validate_subscribe_packet_outbound_internal - packet length exceeds maximum packet size allowed to server";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Subscribe, message));
     }
 
     if packet.packet_id == 0 {
-        error!("SubscribePacket Outbound Validation - packet id is zero");
-        return Err(GneissError::new_packet_validation(PacketType::Subscribe, "packet id is zero"));
+        let message = "validate_subscribe_packet_outbound_internal - packet id is zero";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Subscribe, message));
     }
 
     for subscription in &packet.subscriptions {
         if !is_valid_topic_filter_internal(&subscription.topic_filter, context, Some(subscription.no_local)) {
-            error!("SubscribePacket Outbound Validation - invalid topic filter");
-            return Err(GneissError::new_packet_validation(PacketType::Subscribe, "invalid topic filter"));
+            let message = "validate_subscribe_packet_outbound_internal - invalid topic filter";
+            error!("{}", message);
+            return Err(GneissError::new_packet_validation(PacketType::Subscribe, message));
         }
     }
 
@@ -249,24 +335,42 @@ mod tests {
     use crate::decode::testing::*;
     use crate::validate::testing::*;
 
-    #[test]
-    fn subscribe_round_trip_encode_decode_default() {
+    fn do_subscribe_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = SubscribePacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Subscribe(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Subscribe(packet), protocol_version));
     }
 
     #[test]
-    fn subscribe_round_trip_encode_decode_basic() {
+    fn subscribe_round_trip_encode_decode_default5() {
+        do_subscribe_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn subscribe_round_trip_encode_decode_default311() {
+        do_subscribe_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_subscribe_round_trip_encode_decode_basic_test(protocol_version: ProtocolVersion) {
         let packet = SubscribePacket {
             packet_id : 123,
             subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Subscribe(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Subscribe(packet), protocol_version));
+    }
+
+    #[test]
+    fn subscribe_round_trip_encode_decode_basic5() {
+        do_subscribe_round_trip_encode_decode_basic_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn subscribe_round_trip_encode_decode_basic311() {
+        do_subscribe_round_trip_encode_decode_basic_test(ProtocolVersion::Mqtt311);
     }
 
     fn create_subscribe_all_properties() -> SubscribePacket {
@@ -296,64 +400,57 @@ mod tests {
     }
 
     #[test]
-    fn subscribe_round_trip_encode_decode_all_properties() {
+    fn subscribe_round_trip_encode_decode_all_properties5() {
         let packet = create_subscribe_all_properties();
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Subscribe(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Subscribe(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn subscribe_decode_failure_bad_fixed_header() {
+    fn subscribe_round_trip_encode_decode_all_properties311() {
+        let packet = create_subscribe_all_properties();
+        let expected_packet = SubscribePacket {
+            packet_id: packet.packet_id,
+            subscriptions: vec![
+                Subscription {
+                    topic_filter: "a/b/c/d/e".to_string(),
+                    qos: QualityOfService::ExactlyOnce,
+                    ..Default::default()
+                },
+                Subscription {
+                    topic_filter: "the/best/+/filter/*".to_string(),
+                    qos: QualityOfService::AtMostOnce,
+                    ..Default::default()
+                }
+            ],
+            ..Default::default()
+        };
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Subscribe(packet), &MqttPacket::Subscribe(expected_packet)));
+    }
+
+    fn do_subscribe_decode_failure_bad_fixed_header_test(protocol_version: ProtocolVersion) {
         let packet = SubscribePacket {
             packet_id : 123,
             subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Subscribe(packet), 7);
-    }
-
-    const SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX : usize = 18;
-
-    #[test]
-    fn subscribe_decode_failure_subscription_qos3() {
-        let packet = SubscribePacket {
-            packet_id : 123,
-            subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
-            ..Default::default()
-        };
-
-        let invalidate_subscription_qos = | bytes: &[u8] | -> Vec<u8> {
-            let mut clone = bytes.to_vec();
-
-            clone[SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX] |= 0x03;
-
-            clone
-        };
-
-        do_mutated_decode_failure_test(&MqttPacket::Subscribe(packet), invalidate_subscription_qos);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Subscribe(packet), protocol_version, 7);
     }
 
     #[test]
-    fn subscribe_decode_failure_subscription_retain_handling3() {
-        let packet = SubscribePacket {
-            packet_id : 123,
-            subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
-            ..Default::default()
-        };
-
-        let invalidate_subscription_qos = | bytes: &[u8] | -> Vec<u8> {
-            let mut clone = bytes.to_vec();
-
-            clone[SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX] |= 0x03 << 4;
-
-            clone
-        };
-
-        do_mutated_decode_failure_test(&MqttPacket::Subscribe(packet), invalidate_subscription_qos);
+    fn subscribe_decode_failure_bad_fixed_header5() {
+        do_subscribe_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt5);
     }
 
     #[test]
-    fn subscribe_decode_failure_subscription_reserved_bits() {
+    fn subscribe_decode_failure_bad_fixed_header311() {
+        do_subscribe_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt311);
+    }
+
+    const SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX5 : usize = 18;
+    const SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX311 : usize = 17; // off by 1 since we don't have a zero-length properties field
+
+    fn do_subscribe_decode_failure_subscription_qos3_test(protocol_version: ProtocolVersion, index: usize) {
         let packet = SubscribePacket {
             packet_id : 123,
             subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
@@ -363,23 +460,87 @@ mod tests {
         let invalidate_subscription_qos = | bytes: &[u8] | -> Vec<u8> {
             let mut clone = bytes.to_vec();
 
-            clone[SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX] |= 192;
+            clone[index] |= 0x03;
 
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Subscribe(packet), invalidate_subscription_qos);
+        do_mutated_decode_failure_test(&MqttPacket::Subscribe(packet), protocol_version, invalidate_subscription_qos);
     }
 
     #[test]
-    fn subscribe_decode_failure_inbound_packet_size() {
+    fn subscribe_decode_failure_subscription_qos3_5() {
+        do_subscribe_decode_failure_subscription_qos3_test(ProtocolVersion::Mqtt5, SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX5);
+    }
+
+    #[test]
+    fn subscribe_decode_failure_subscription_qos3_311() {
+        do_subscribe_decode_failure_subscription_qos3_test(ProtocolVersion::Mqtt311, SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX311);
+    }
+
+    #[test]
+    fn subscribe_decode_failure_subscription_retain_handling3_5() {
+        let packet = SubscribePacket {
+            packet_id : 123,
+            subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
+            ..Default::default()
+        };
+
+        let invalidate_subscription_qos = | bytes: &[u8] | -> Vec<u8> {
+            let mut clone = bytes.to_vec();
+
+            clone[SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX5] |= 0x03 << 4;
+
+            clone
+        };
+
+        do_mutated_decode_failure_test(&MqttPacket::Subscribe(packet), ProtocolVersion::Mqtt5, invalidate_subscription_qos);
+    }
+
+    fn do_subscribe_decode_failure_subscription_reserved_bits_test(protocol_version: ProtocolVersion, index: usize) {
+        let packet = SubscribePacket {
+            packet_id : 123,
+            subscriptions : vec![ Subscription { topic_filter: "hello/world".to_string(), qos: QualityOfService::AtLeastOnce, ..Default::default() } ],
+            ..Default::default()
+        };
+
+        let invalidate_subscription_qos = | bytes: &[u8] | -> Vec<u8> {
+            let mut clone = bytes.to_vec();
+
+            clone[index] |= 192;
+
+            clone
+        };
+
+        do_mutated_decode_failure_test(&MqttPacket::Subscribe(packet), protocol_version, invalidate_subscription_qos);
+    }
+
+    #[test]
+    fn subscribe_decode_failure_subscription_reserved_bits5() {
+        do_subscribe_decode_failure_subscription_reserved_bits_test(ProtocolVersion::Mqtt5, SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX5);
+    }
+
+    #[test]
+    fn subscribe_decode_failure_subscription_reserved_bits311() {
+        do_subscribe_decode_failure_subscription_reserved_bits_test(ProtocolVersion::Mqtt311, SUBSCRIBE_PACKET_TEST_SUBSCRIPTION_OPTIONS_INDEX311);
+    }
+
+    #[test]
+    fn subscribe_decode_failure_inbound_packet_size5() {
         let packet = create_subscribe_all_properties();
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Subscribe(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Subscribe(packet), ProtocolVersion::Mqtt5);
     }
 
     #[test]
-    fn unsubscribe_validate_success() {
+    fn subscribe_decode_failure_inbound_packet_size311() {
+        let packet = create_subscribe_all_properties();
+
+        do_inbound_size_decode_failure_test(&MqttPacket::Subscribe(packet), ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn subscribe_validate_success() {
         let mut packet = create_subscribe_all_properties();
         packet.packet_id = 0;
 
@@ -423,10 +584,17 @@ mod tests {
     }
 
     #[test]
-    fn subscribe_validate_failure_outbound_size() {
+    fn subscribe_validate_failure_outbound_size5() {
         let packet = create_subscribe_all_properties();
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Subscribe(packet), PacketType::Subscribe);
+        do_outbound_size_validate_failure_test(&MqttPacket::Subscribe(packet), ProtocolVersion::Mqtt5, PacketType::Subscribe);
+    }
+
+    #[test]
+    fn subscribe_validate_failure_outbound_size311() {
+        let packet = create_subscribe_all_properties();
+
+        do_outbound_size_validate_failure_test(&MqttPacket::Subscribe(packet), ProtocolVersion::Mqtt311, PacketType::Subscribe);
     }
 
     #[test]

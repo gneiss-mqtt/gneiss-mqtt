@@ -20,14 +20,16 @@ define_ack_packet_reason_string_accessor!(get_pubcomp_packet_reason_string, Pubc
 define_ack_packet_user_property_accessor!(get_pubcomp_packet_user_property, Pubcomp);
 
 #[rustfmt::skip]
-define_ack_packet_encoding_impl!(write_pubcomp_encoding_steps, PubcompPacket, PubcompReasonCode, PUBCOMP_FIRST_BYTE, compute_pubcomp_packet_length_properties, get_pubcomp_packet_reason_string, get_pubcomp_packet_user_property);
+define_ack_packet_encoding_impl5!(write_pubcomp_encoding_steps5, PubcompPacket, PubcompReasonCode, PUBCOMP_FIRST_BYTE, compute_pubcomp_packet_length_properties, get_pubcomp_packet_reason_string, get_pubcomp_packet_user_property);
+define_ack_packet_encoding_impl311!(write_pubcomp_encoding_steps311, PubcompPacket, PUBCOMP_FIRST_BYTE);
 
-define_ack_packet_decode_properties_function!(decode_pubcomp_properties, PubcompPacket, "Pubcomp");
-define_ack_packet_decode_function!(decode_pubcomp_packet, Pubcomp, PubcompPacket, "Pubcomp", PUBCOMP_FIRST_BYTE, PubcompReasonCode, decode_pubcomp_properties);
+define_ack_packet_decode_properties_function!(decode_pubcomp_properties, PubcompPacket, "decode_pubcomp_properties");
+define_ack_packet_decode_function5!(decode_pubcomp_packet5, Pubcomp, PubcompPacket, "decode_pubcomp_packet5", PUBCOMP_FIRST_BYTE, PubcompReasonCode, decode_pubcomp_properties);
+define_ack_packet_decode_function311!(decode_pubcomp_packet311, Pubcomp, PubcompPacket, "decode_pubcomp_packet311", PUBCOMP_FIRST_BYTE);
 
-validate_ack_outbound!(validate_pubcomp_packet_outbound, PubcompPacket, PacketType::Pubcomp, "Pubcomp");
-validate_ack_outbound_internal!(validate_pubcomp_packet_outbound_internal, PubcompPacket, PacketType::Pubcomp, compute_pubcomp_packet_length_properties, "Puback");
-validate_ack_inbound_internal!(validate_pubcomp_packet_inbound_internal, PubcompPacket, PacketType::Pubcomp, "Pubcomp");
+validate_ack_outbound!(validate_pubcomp_packet_outbound, PubcompPacket, PacketType::Pubcomp, "validate_pubcomp_packet_outbound");
+validate_ack_outbound_internal!(validate_pubcomp_packet_outbound_internal, PubcompPacket, PacketType::Pubcomp, compute_pubcomp_packet_length_properties, "validate_pubcomp_packet_outbound_internal");
+validate_ack_inbound_internal!(validate_pubcomp_packet_inbound_internal, PubcompPacket, PacketType::Pubcomp, "validate_pubcomp_packet_inbound_internal");
 
 define_ack_packet_display_trait!(PubcompPacket, "PubcompPacket", PubcompReasonCode);
 
@@ -37,29 +39,46 @@ mod tests {
     use super::*;
     use crate::decode::testing::*;
 
-    #[test]
-    fn pubcomp_round_trip_encode_decode_default() {
+    fn do_pubcomp_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = PubcompPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubcomp(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubcomp(packet), protocol_version));
     }
 
     #[test]
-    fn pubcomp_round_trip_encode_decode_success_no_props() {
+    fn pubcomp_round_trip_encode_decode_default5() {
+        do_pubcomp_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn pubcomp_round_trip_encode_decode_default311() {
+        do_pubcomp_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
+    }
+
+    fn do_pubcomp_round_trip_encode_decode_success_rc_no_props_test(protocol_version: ProtocolVersion) {
 
         let packet = PubcompPacket {
             packet_id: 132,
-            reason_code: PubcompReasonCode::Success,
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubcomp(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubcomp(packet), protocol_version));
     }
 
     #[test]
-    fn pubcomp_round_trip_encode_decode_failure_no_props() {
+    fn pubcomp_round_trip_encode_decode_success_rc_no_props5() {
+        do_pubcomp_round_trip_encode_decode_success_rc_no_props_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn pubcomp_round_trip_encode_decode_success_rc_no_props311() {
+        do_pubcomp_round_trip_encode_decode_success_rc_no_props_test(ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn pubcomp_round_trip_encode_decode_failure_rc_no_props5() {
 
         let packet = PubcompPacket {
             packet_id: 4095,
@@ -67,11 +86,11 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubcomp(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubcomp(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn pubcomp_round_trip_encode_decode_success_with_props() {
+    fn pubcomp_round_trip_encode_decode_success_rc_with_props5() {
 
         let packet = PubcompPacket {
             packet_id: 1253,
@@ -84,7 +103,7 @@ mod tests {
             ))
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubcomp(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubcomp(packet), ProtocolVersion::Mqtt5));
     }
 
     fn create_pubcomp_with_all_properties() -> PubcompPacket {
@@ -100,22 +119,42 @@ mod tests {
     }
 
     #[test]
-    fn pubcomp_round_trip_encode_decode_failure_with_props() {
+    fn pubcomp_round_trip_encode_decode_failure_rc_with_props5() {
 
         let packet = create_pubcomp_with_all_properties();
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubcomp(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Pubcomp(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn pubcomp_decode_failure_bad_fixed_header() {
+    fn pubcomp_round_trip_encode_decode_failure_rc_with_props311() {
+
+        let packet = create_pubcomp_with_all_properties();
+        let expected_packet = PubcompPacket {
+            packet_id : packet.packet_id,
+            ..Default::default()
+        };
+
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Pubcomp(packet), &MqttPacket::Pubcomp(expected_packet)));
+    }
+
+    #[test]
+    fn pubcomp_decode_failure_bad_fixed_header5() {
         let packet = create_pubcomp_with_all_properties();
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Pubcomp(packet), 10);
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Pubcomp(packet), ProtocolVersion::Mqtt5, 10);
     }
 
     #[test]
-    fn pubcomp_decode_failure_bad_reason_code() {
+    fn pubcomp_decode_failure_bad_fixed_header311() {
+        let packet = create_pubcomp_with_all_properties();
+
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Pubcomp(packet), ProtocolVersion::Mqtt311, 10);
+    }
+
+
+    #[test]
+    fn pubcomp_decode_failure_bad_reason_code5() {
         let packet = create_pubcomp_with_all_properties();
 
         let corrupt_reason_code = | bytes: &[u8] | -> Vec<u8> {
@@ -127,11 +166,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Pubcomp(packet), corrupt_reason_code);
+        do_mutated_decode_failure_test(&MqttPacket::Pubcomp(packet), ProtocolVersion::Mqtt5, corrupt_reason_code);
     }
 
     #[test]
-    fn pubcomp_decode_failure_duplicate_reason_string() {
+    fn pubcomp_decode_failure_duplicate_reason_string5() {
         let packet = create_pubcomp_with_all_properties();
 
         let duplicate_reason_string = | bytes: &[u8] | -> Vec<u8> {
@@ -153,14 +192,14 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Pubcomp(packet), duplicate_reason_string);
+        do_mutated_decode_failure_test(&MqttPacket::Pubcomp(packet), ProtocolVersion::Mqtt5, duplicate_reason_string);
     }
 
     #[test]
-    fn pubcomp_decode_failure_packet_size() {
+    fn pubcomp_decode_failure_packet_size5() {
         let packet = create_pubcomp_with_all_properties();
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Pubcomp(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Pubcomp(packet), ProtocolVersion::Mqtt5);
     }
 
     use crate::validate::testing::*;
@@ -168,6 +207,7 @@ mod tests {
     test_ack_validate_success!(pubcomp_validate_success, Pubcomp, create_pubcomp_with_all_properties);
     test_ack_validate_failure_reason_string_length!(pubcomp_validate_failure_reason_string_length, Pubcomp, create_pubcomp_with_all_properties, PacketType::Pubcomp);
     test_ack_validate_failure_invalid_user_properties!(pubcomp_validate_failure_invalid_user_properties, Pubcomp, create_pubcomp_with_all_properties, PacketType::Pubcomp);
-    test_ack_validate_failure_outbound_size!(pubcomp_validate_failure_outbound_size, Pubcomp, create_pubcomp_with_all_properties, PacketType::Pubcomp);
+    test_ack_validate_failure_outbound_size!(pubcomp_validate_failure_outbound_size5, Pubcomp, create_pubcomp_with_all_properties, PacketType::Pubcomp, ProtocolVersion::Mqtt5);
+    test_ack_validate_failure_outbound_size!(pubcomp_validate_failure_outbound_size311, Pubcomp, create_pubcomp_with_all_properties, PacketType::Pubcomp, ProtocolVersion::Mqtt311);
     test_ack_validate_failure_packet_id_zero!(pubcomp_validate_failure_packet_id_zero, Pubcomp, create_pubcomp_with_all_properties, PacketType::Pubcomp);
 }

@@ -51,11 +51,11 @@ fn get_disconnect_packet_user_property(packet: &MqttPacket, index: usize) -> &Us
         }
     }
 
-    panic!("Internal encoding error: invalid user property state");
+    panic!("get_disconnect_packet_user_property - invalid user property state");
 }
 
 #[rustfmt::skip]
-pub(crate) fn write_disconnect_encoding_steps(packet: &DisconnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+pub(crate) fn write_disconnect_encoding_steps5(packet: &DisconnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
     let (total_remaining_length, disconnect_property_length) = compute_disconnect_packet_length_properties(packet)?;
 
     encode_integral_expression!(steps, Uint8, PACKET_TYPE_DISCONNECT << 4);
@@ -83,6 +83,13 @@ pub(crate) fn write_disconnect_encoding_steps(packet: &DisconnectPacket, _: &Enc
     Ok(())
 }
 
+pub(crate) fn write_disconnect_encoding_steps311(_: &DisconnectPacket, _: &EncodingContext, steps: &mut VecDeque<EncodingStep>) -> GneissResult<()> {
+    encode_integral_expression!(steps, Uint8, PACKET_TYPE_DISCONNECT << 4);
+    encode_integral_expression!(steps, Uint8, 0);
+
+    Ok(())
+}
+
 fn decode_disconnect_properties(property_bytes: &[u8], packet : &mut DisconnectPacket) -> GneissResult<()> {
     let mut mutable_property_bytes = property_bytes;
 
@@ -96,8 +103,9 @@ fn decode_disconnect_properties(property_bytes: &[u8], packet : &mut DisconnectP
             PROPERTY_KEY_USER_PROPERTY => { mutable_property_bytes = decode_user_property(mutable_property_bytes, &mut packet.user_properties)?; }
             PROPERTY_KEY_SERVER_REFERENCE => { mutable_property_bytes = decode_optional_length_prefixed_string(mutable_property_bytes, &mut packet.server_reference)?; }
             _ => {
-                error!("Packet Decode - Invalid DisconnectPacket property type ({})", property_key);
-                return Err(GneissError::new_decoding_failure("invalid property type for disconnect packet"));
+                let message = format!("decode_disconnect_properties - invalid property type ({})", property_key);
+                error!("{}", message);
+                return Err(GneissError::new_decoding_failure(message));
             }
         }
     }
@@ -105,10 +113,11 @@ fn decode_disconnect_properties(property_bytes: &[u8], packet : &mut DisconnectP
     Ok(())
 }
 
-pub(crate) fn decode_disconnect_packet(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+pub(crate) fn decode_disconnect_packet5(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
     if first_byte != (PACKET_TYPE_DISCONNECT << 4) {
-        error!("DisconnectPacket Decode - invalid first byte");
-        return Err(GneissError::new_decoding_failure("invalid first byte for disconnect packet"));
+        let message = "decode_disconnect_packet5 - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
     }
 
     let mut box_packet = Box::new(MqttPacket::Disconnect(DisconnectPacket { ..Default::default() }));
@@ -127,8 +136,9 @@ pub(crate) fn decode_disconnect_packet(first_byte: u8, packet_body: &[u8]) -> Gn
         let mut properties_length : usize = 0;
         mutable_body = decode_vli_into_mutable(mutable_body, &mut properties_length)?;
         if properties_length != mutable_body.len() {
-            error!("DisconnectPacket Decode - property length exceeds overall packet length");
-            return Err(GneissError::new_decoding_failure("mismatch between property length and overall packet length for disconnect packet"));
+            let message = "decode_disconnect_packet5 - property length exceeds overall packet length";
+            error!("{}", message);
+            return Err(GneissError::new_decoding_failure(message));
         }
 
         decode_disconnect_properties(mutable_body, packet)?;
@@ -136,14 +146,33 @@ pub(crate) fn decode_disconnect_packet(first_byte: u8, packet_body: &[u8]) -> Gn
         return Ok(box_packet);
     }
 
-    panic!("DisconnectPacket Decode - Internal error");
+    panic!("decode_disconnect_packet - internal error");
+}
+
+pub(crate) fn decode_disconnect_packet311(first_byte: u8, packet_body: &[u8]) -> GneissResult<Box<MqttPacket>> {
+    if !packet_body.is_empty() {
+        let message = "decode_disconnect_packet311 - non-zero remaining length";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
+    }
+
+    if first_byte != (PACKET_TYPE_DISCONNECT << 4) {
+        let message = "decode_disconnect_packet311 - invalid first byte";
+        error!("{}", message);
+        return Err(GneissError::new_decoding_failure(message));
+    }
+
+    Ok(Box::new(MqttPacket::Disconnect(DisconnectPacket {
+        reason_code : DisconnectReasonCode::NormalDisconnection,
+        ..Default::default()
+    })))
 }
 
 pub(crate) fn validate_disconnect_packet_outbound(packet: &DisconnectPacket) -> GneissResult<()> {
 
-    validate_optional_string_length(&packet.reason_string, PacketType::Disconnect, "Disconnect", "reason_string")?;
-    validate_user_properties(&packet.user_properties, PacketType::Disconnect, "Disconnect")?;
-    validate_optional_string_length(&packet.server_reference, PacketType::Disconnect, "Disconnect", "server_reference")?;
+    validate_optional_string_length(&packet.reason_string, PacketType::Disconnect, "validate_disconnect_packet_outbound", "reason_string")?;
+    validate_user_properties(&packet.user_properties, PacketType::Disconnect, "validate_disconnect_packet_outbound")?;
+    validate_optional_string_length(&packet.server_reference, PacketType::Disconnect, "validate_disconnect_packet_outbound", "server_reference")?;
 
     Ok(())
 }
@@ -153,8 +182,9 @@ pub(crate) fn validate_disconnect_packet_outbound_internal(packet: &DisconnectPa
     let (total_remaining_length, _) = compute_disconnect_packet_length_properties(packet)?;
     let total_packet_length = 1 + total_remaining_length + compute_variable_length_integer_encode_size(total_remaining_length as usize)? as u32;
     if total_packet_length > context.negotiated_settings.unwrap().maximum_packet_size_to_server {
-        error!("DisconnectPacket Outbound Validation - packet length exceeds maximum packet size allowed to server");
-        return Err(GneissError::new_packet_validation(PacketType::Disconnect, "packet length exceeds maximum packet size"));
+        let message = "validate_disconnect_packet_outbound_internal - packet length exceeds maximum packet size allowed to server";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Disconnect, message));
     }
 
     /*
@@ -168,8 +198,9 @@ pub(crate) fn validate_disconnect_packet_outbound_internal(packet: &DisconnectPa
     let disconnect_session_expiry_interval = packet.session_expiry_interval_seconds.unwrap_or(connect_session_expiry_interval);
 
     if connect_session_expiry_interval == 0 && disconnect_session_expiry_interval > 0 {
-        error!("DisconnectPacket Outbound Validation - session expiry interval cannot be non-zero when connect session expiry interval was zero");
-        return Err(GneissError::new_packet_validation(PacketType::Disconnect, "session_expiry_interval cannot be non-zero in this connext context"));
+        let message = "validate_disconnect_packet_outbound_internal - session expiry interval cannot be non-zero when connect session expiry interval was zero";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Disconnect, message));
     }
 
     Ok(())
@@ -179,8 +210,9 @@ pub(crate) fn validate_disconnect_packet_inbound_internal(packet: &DisconnectPac
 
     /* protocol error for the server to send us a session expiry interval property */
     if packet.session_expiry_interval_seconds.is_some() {
-        error!("DisconnectPacket Inbound Validation - session expiry interval is non zero");
-        return Err(GneissError::new_packet_validation(PacketType::Disconnect, "session_expiry_interval is non zero"));
+        let message = "validate_disconnect_packet_inbound_internal - session expiry interval is non zero";
+        error!("{}", message);
+        return Err(GneissError::new_packet_validation(PacketType::Disconnect, message));
     }
 
     Ok(())
@@ -205,33 +237,42 @@ mod tests {
     use crate::decode::testing::*;
     use crate::validate::testing::*;
 
-    #[test]
-    fn disconnect_round_trip_encode_decode_default() {
+    fn do_disconnect_round_trip_encode_decode_default_test(protocol_version: ProtocolVersion) {
         let packet = DisconnectPacket {
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet), protocol_version));
     }
 
     #[test]
-    fn disconnect_round_trip_encode_decode_normal_reason_code() {
+    fn disconnect_round_trip_encode_decode_default5() {
+        do_disconnect_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn disconnect_round_trip_encode_decode_default311() {
+        do_disconnect_round_trip_encode_decode_default_test(ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn disconnect_round_trip_encode_decode_normal_reason_code5() {
         let packet = DisconnectPacket {
             reason_code : DisconnectReasonCode::NormalDisconnection,
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn disconnect_round_trip_encode_decode_abnormal_reason_code() {
+    fn disconnect_round_trip_encode_decode_abnormal_reason_code5() {
         let packet = DisconnectPacket {
             reason_code : DisconnectReasonCode::ConnectionRateExceeded,
             ..Default::default()
         };
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5));
     }
 
     fn create_disconnect_packet_all_properties() -> DisconnectPacket {
@@ -248,24 +289,42 @@ mod tests {
     }
 
     #[test]
-    fn disconnect_round_trip_encode_decode_all_properties() {
+    fn disconnect_round_trip_encode_decode_all_properties5() {
         let packet = create_disconnect_packet_all_properties();
 
-        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet)));
+        assert!(do_round_trip_encode_decode_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5));
     }
 
     #[test]
-    fn disconnect_decode_failure_bad_fixed_header() {
-        let packet = DisconnectPacket {
-            reason_code : DisconnectReasonCode::ConnectionRateExceeded,
+    fn disconnect_round_trip_encode_decode_all_properties311() {
+        let packet = create_disconnect_packet_all_properties();
+        let expected_packet = DisconnectPacket {
             ..Default::default()
         };
 
-        do_fixed_header_flag_decode_failure_test(&MqttPacket::Disconnect(packet), 12);
+        assert!(do_311_filter_encode_decode_test(&MqttPacket::Disconnect(packet), &MqttPacket::Disconnect(expected_packet)));
+    }
+
+    fn do_disconnect_decode_failure_bad_fixed_header_test(protocol_version: ProtocolVersion) {
+        let packet = DisconnectPacket {
+            ..Default::default()
+        };
+
+        do_fixed_header_flag_decode_failure_test(&MqttPacket::Disconnect(packet), protocol_version, 12);
     }
 
     #[test]
-    fn disconnect_decode_failure_bad_reason_code() {
+    fn disconnect_decode_failure_bad_fixed_header5() {
+        do_disconnect_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt5);
+    }
+
+    #[test]
+    fn disconnect_decode_failure_bad_fixed_header311() {
+        do_disconnect_decode_failure_bad_fixed_header_test(ProtocolVersion::Mqtt311);
+    }
+
+    #[test]
+    fn disconnect_decode_failure_bad_reason_code5() {
         let packet = DisconnectPacket {
             reason_code : DisconnectReasonCode::DisconnectWithWillMessage,
             ..Default::default()
@@ -280,11 +339,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), corrupt_reason_code);
+        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5, corrupt_reason_code);
     }
 
     #[test]
-    fn disconnect_decode_failure_duplicate_reason_string() {
+    fn disconnect_decode_failure_duplicate_reason_string5() {
         let packet = create_disconnect_packet_all_properties();
 
         let duplicate_reason_string = | bytes: &[u8] | -> Vec<u8> {
@@ -306,11 +365,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), duplicate_reason_string);
+        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5, duplicate_reason_string);
     }
 
     #[test]
-    fn disconnect_decode_failure_duplicate_server_reference() {
+    fn disconnect_decode_failure_duplicate_server_reference5() {
         let packet = create_disconnect_packet_all_properties();
 
         let duplicate_server_reference = | bytes: &[u8] | -> Vec<u8> {
@@ -334,11 +393,11 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), duplicate_server_reference);
+        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5, duplicate_server_reference);
     }
 
     #[test]
-    fn disconnect_decode_failure_duplicate_session_expiry_interval() {
+    fn disconnect_decode_failure_duplicate_session_expiry_interval5() {
         let packet = create_disconnect_packet_all_properties();
 
         let duplicate_session_expiry_interval = | bytes: &[u8] | -> Vec<u8> {
@@ -360,14 +419,14 @@ mod tests {
             clone
         };
 
-        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), duplicate_session_expiry_interval);
+        do_mutated_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5, duplicate_session_expiry_interval);
     }
 
     #[test]
-    fn disconnect_decode_failure_packet_size() {
+    fn disconnect_decode_failure_packet_size5() {
         let packet = create_disconnect_packet_all_properties();
 
-        do_inbound_size_decode_failure_test(&MqttPacket::Disconnect(packet));
+        do_inbound_size_decode_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5);
     }
 
     #[test]
@@ -457,6 +516,6 @@ mod tests {
             ..Default::default()
         };
 
-        do_outbound_size_validate_failure_test(&MqttPacket::Disconnect(packet), PacketType::Disconnect);
+        do_outbound_size_validate_failure_test(&MqttPacket::Disconnect(packet), ProtocolVersion::Mqtt5, PacketType::Disconnect);
     }
 }

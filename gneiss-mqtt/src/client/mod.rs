@@ -597,7 +597,8 @@ impl MqttClientImpl {
             base_timestamp: Instant::now(),
             offline_queue_policy: client_config.offline_queue_policy,
             ping_timeout: client_config.ping_timeout,
-            outbound_alias_resolver: client_config.outbound_alias_resolver_factory.map(|f| { f() })
+            outbound_alias_resolver: client_config.outbound_alias_resolver_factory.map(|f| { f() }),
+            protocol_mode: client_config.protocol_mode,
         };
 
         let mut client_impl = MqttClientImpl {
