@@ -582,7 +582,7 @@ pub(crate) fn create_runtime_states<T>(threaded_config: ThreadedOptions, connect
     (sender, impl_state)
 }
 
-/// Creates a new sync MQTT5 client that will use background threads for the client and connection attempts.
+/// Creates a new sync MQTT client that will use background threads for the client and connection attempts.
 pub fn new_threaded_client<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, threaded_config: ThreadedOptions, connection_factory: ThreadedConnectionFactory<T>) -> SyncClientHandle
 where T: Read + Write + Send + Sync + 'static {
     let (operation_sender, internal_state) = create_runtime_states(threaded_config, connection_factory);

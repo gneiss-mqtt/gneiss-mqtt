@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-// Internal module that implements most of the MQTT5 spec with respect to client protocol behavior
+// Internal module that implements most of the MQTT spec with respect to client protocol behavior
 
 use crate::alias::*;
 use crate::client::*;

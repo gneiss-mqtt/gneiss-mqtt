@@ -485,7 +485,7 @@ pub(crate) fn create_runtime_states<T>(connection_factory: TokioConnectionFactor
 }
 
 
-/// Creates a new async MQTT5 client that will use the tokio async runtime.
+/// Creates a new async MQTT client that will use the tokio async runtime.
 ///
 /// Only use this function directly if [TokioClientBuilder] does not meet your needs.
 pub fn new_tokio_client<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, tokio_options: TokioOptions, connection_factory: TokioConnectionFactory<T>) -> AsyncClientHandle

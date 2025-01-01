@@ -631,7 +631,7 @@ impl ConnectOptionsBuilder {
     /// If the responding CONNACK contains a keep alive property value, then that is the negotiated keep alive value.
     /// Otherwise, the keep alive sent by the client is the negotiated value.
     ///
-    /// See [MQTT5 Keep Alive](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901045)
+    /// See [MQTT Keep Alive](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901045)
     ///
     /// If the final negotiated value is 0, then that means no keep alive will be used.  Such a
     /// state is not advised due to scenarios where TCP connections can be invisibly dropped by
@@ -653,7 +653,7 @@ impl ConnectOptionsBuilder {
     ///
     /// If left empty, the broker will auto-assign a unique client id.
     ///
-    /// See [MQTT5 Client Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901059)
+    /// See [MQTT Client Identifier](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901059)
     pub fn with_client_id(&mut self, client_id: &str) -> &mut Self {
         self.options.client_id = Some(client_id.to_string());
         self
@@ -661,7 +661,7 @@ impl ConnectOptionsBuilder {
 
     /// Sets a string value that the server may use for client authentication and authorization.
     ///
-    /// See [MQTT5 User Name](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901071)
+    /// See [MQTT User Name](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901071)
     pub fn with_username(&mut self, username: &str) -> &mut Self {
         self.options.username = Some(username.to_string());
         self
@@ -669,7 +669,7 @@ impl ConnectOptionsBuilder {
 
     /// Sets opaque binary data that the server may use for client authentication and authorization.
     ///
-    /// See [MQTT5 Password](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901072)
+    /// See [MQTT Password](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901072)
     pub fn with_password(&mut self, password: &[u8]) -> &mut Self {
         self.options.password = Some(password.to_vec());
         self
@@ -763,7 +763,7 @@ impl ConnectOptionsBuilder {
     ///
     /// If omitted, then no will message will be sent.
     ///
-    /// See [MQTT5 Will](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901040)
+    /// See [MQTT Will](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901040)
     pub fn with_will(&mut self, will: PublishPacket) -> &mut Self {
         self.options.will = Some(will);
         self
