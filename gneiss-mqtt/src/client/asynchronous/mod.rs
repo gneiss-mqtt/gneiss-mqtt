@@ -40,6 +40,9 @@ pub type AsyncUnsubscribeResult = Pin<Box<dyn Future<Output = UnsubscribeResult>
 
 /// Interface for an async network client that functions as a thin wrapper over the MQTT protocol.
 ///
+/// There is no support for external implementations of this trait.  APIs may be added in the
+/// future to support new functionality.  Existing APIs will honor standard semantic versioning.
+///
 /// A client is always in one of two states:
 /// * Stopped - the client is not connected and will perform no work
 /// * Not Stopped - the client will continually attempt to maintain a connection to the configured broker.
