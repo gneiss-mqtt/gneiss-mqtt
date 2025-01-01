@@ -138,6 +138,7 @@ fn decode_subscribe_properties(property_bytes: &[u8], packet : &mut SubscribePac
 
 #[cfg(test)]
 const SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK5 : u8 = 192;
+#[cfg(test)]
 const SUBSCRIPTION_OPTIONS_RESERVED_BITS_MASK311 : u8 = 252;
 
 #[cfg(test)]

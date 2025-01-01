@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use url::Url;
 
 #[derive(FromArgs, Debug, PartialEq)]
-/// elasti-gneiss-aws-tokio - an interactive MQTT5 console
+/// elasti-gneiss-aws-tokio - an interactive MQTT console
 struct CommandLineArgs {
 
     /// path to the root CA to use when connecting.  If the endpoint URI is a TLS-enabled
@@ -65,7 +65,11 @@ struct CommandLineArgs {
 
     /// signing region for websocket connections
     #[argh(option)]
-    signing_region: Option<String>
+    signing_region: Option<String>,
+
+    /// protocol version to use.  Valid values are `5` and `311`
+    #[argh(option)]
+    version: Option<u32>,
 }
 
 async fn build_client(connect_config: ConnectOptions, client_config: MqttClientOptions, args: &CommandLineArgs) -> ElastiResult<AsyncClientHandle> {
@@ -159,14 +163,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let connect_options = ConnectOptions::builder().build();
 
+    let mut protocol_mode = ProtocolMode::Mqtt5;
+    if let Some(raw_version) = cli_args.version {
+        protocol_mode = ProtocolMode::try_from(raw_version)?;
+    }
+
     let config = MqttClientOptions::builder()
         .with_offline_queue_policy(OfflineQueuePolicy::PreserveAll)
         .with_reconnect_period_jitter(ExponentialBackoffJitterType::Uniform)
+        .with_protocol_mode(protocol_mode)
         .build();
 
     let client = build_client(connect_options, config, &cli_args).await.unwrap();
 
-    println!("elasti-gneiss-aws-tokio - an interactive MQTT5 console application\n");
+    println!("elasti-gneiss-aws-tokio - an interactive MQTT console application\n");
     println!(" `help` for command assistance\n");
 
     main_loop(client).await;

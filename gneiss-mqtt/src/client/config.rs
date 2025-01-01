@@ -871,6 +871,22 @@ pub enum ProtocolMode {
     // Maybe some day we'll add an adaptive mode, Mqtt5Downgradable or the like
 }
 
+impl TryFrom<u32> for ProtocolMode {
+    type Error = GneissError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            5 => { Ok(ProtocolMode::Mqtt5) }
+            311 => { Ok(ProtocolMode::Mqtt311) }
+            _ => {
+                let message = format!("ProtocolMode::try_from - invalid protocol mode value ({})", value);
+                error!("{}", message);
+                Err(GneissError::new_other_error(message))
+            }
+        }
+    }
+}
+
 /// A structure that holds client-level behavioral configuration
 #[derive(Clone)]
 pub struct MqttClientOptions {

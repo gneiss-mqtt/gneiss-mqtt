@@ -1808,12 +1808,18 @@ impl ProtocolState {
             ProtocolStateType::Disconnected | ProtocolStateType::PendingConnack => {
                 // per spec, the server must always send a CONNACK before a DISCONNECT is valid
                 error!("[{} ms] handle_disconnect - invalid state to receive a DISCONNECT", self.elapsed_time_ms);
-                return Err(GneissError::new_protocol_error("invalid state receive a disconnect"));
+                return Err(GneissError::new_protocol_error("invalid state to receive a disconnect"));
             }
             _ => {}
         }
 
         if let MqttPacket::Disconnect(disconnect) = *packet {
+            if self.protocol_version == ProtocolVersion::Mqtt311 {
+                // Server-side disconnects not allowed in 311
+                error!("[{} ms] handle_disconnect - MQTT311 forbids server-side disconnects", self.elapsed_time_ms);
+                return Err(GneissError::new_protocol_error("MQTT311 forbids server-side disconnects"));
+            }
+
             context.packet_events.push_back(PacketEvent::Disconnect(disconnect));
 
             return Err(GneissError::new_connection_closed("server-side disconnect received"));

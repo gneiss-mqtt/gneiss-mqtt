@@ -1072,10 +1072,10 @@ fn pending_connack_state_connack_timeout(protocol_version : i32) {
     let service_result = fixture.service_with_drain(1, 4096);
     assert!(service_result.is_ok());
 
-    assert_eq!(Some(1 + connack_timeout_millis as u64), fixture.get_next_service_time(1));
+    assert_eq!(Some(1 + connack_timeout_millis), fixture.get_next_service_time(1));
 
     // service post-timeout
-    assert_matches!(fixture.service_with_drain(1 + connack_timeout_millis as u64, 4096), Err(GneissError::ConnectionEstablishmentFailure(_)));
+    assert_matches!(fixture.service_with_drain(1 + connack_timeout_millis, 4096), Err(GneissError::ConnectionEstablishmentFailure(_)));
     assert_eq!(ProtocolStateType::Halted, fixture.client_state.state);
     assert!(fixture.client_packet_events.is_empty());
     verify_protocol_state_empty(&fixture);
@@ -1358,6 +1358,15 @@ fn connected_state_unexpected_packets(raw_version : i32) {
     for packet in packets {
         do_connected_state_unexpected_packet_test(packet, raw_version);
     }
+}
+
+#[test]
+fn connected_state_unexpected_disconnect_packet_311() {
+    let disconnect = DisconnectPacket {
+        ..Default::default()
+    };
+
+    do_connected_state_unexpected_packet_test(MqttPacket::Disconnect(disconnect), 311);
 }
 
 fn do_connected_state_invalid_ack_packet_id_test(packet : MqttPacket, raw_version : i32) -> GneissResult<()> {
@@ -3947,7 +3956,7 @@ fn connected_state_multi_operation_sequence_simple_success(raw_version : i32) {
 
     let mut expected_next_sequence_id = 1;
     for packet in fixture.to_broker_packet_stream.iter().skip(1) {
-        let sequence_id_option = packet_to_sequence_number(&**packet).unwrap();
+        let sequence_id_option = packet_to_sequence_number(packet).unwrap();
         if let Some(sequence_id) = sequence_id_option {
             assert_eq!(expected_next_sequence_id, sequence_id);
             expected_next_sequence_id += 1;

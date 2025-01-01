@@ -6,10 +6,11 @@
 /*!
 This crate provides clients for communicating with a message broker using the MQTT protocol.
 
-MQTT is a publish/subscribe protocol commonly chosen in IoT use cases.  MQTT5 is the latest
-version of the protocol and is currently the only version supported.  The previous
-version, MQTT311, has also seen widespread adoption
-and will be supported in an upcoming release.
+MQTT is a publish/subscribe protocol commonly chosen in IoT use cases.  This crate supports
+both [MQTT5](https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html) and
+[MQTT311](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html).  We strongly
+recommend using MQTT5 over 311 for the significant error handling and communication improvements.
+MQTT specification links within crate documentation are made to the MQTT5 spec.
 
 # Overview
 

@@ -1,13 +1,13 @@
 ## gneiss-mqtt
 
-Rust MQTT5 client implementation.
+Rust MQTT client implementation.
 
-This project is currently in pre-dev-preview.  You can use it, but there's a lot of friction and missing documentation/examples.
+This project is currently in pre-dev-preview.
 
 Feedback is always welcome.  Interested contributors are also welcome.
 
 ### Spec Compliance Notes
-Gneiss-mqtt supports all aspects of the MQTT5 specification with the following exceptions:
+Gneiss-mqtt supports all aspects of the MQTT311 and MQTT5 specifications with the following exceptions:
 * **Extended Utf-8 Validation** - No client-side utf-8 validation is done beyond what the Rust standard library does for strings.  The MQTT5 specification imposes additional constraints that the Rust standard library does not check.
 * **Authentication** - There is no API for MQTT5 authentication exchanges.  Auth packet encode/decode/validation is implemented, but currently, authentication is assumed to be accomplished via lower-level or custom protocol details (mTLS, websocket upgrade signing, username/password schemes, etc...).  Crates for specific authentication styles are coming soon.  Authentication exchanges are a long-term roadmap item.
 * **Client Queue Receive Maximum Blocking** - The MQTT5 spec requires clients to not block non-publish packets when the receive maximum threshold is met by the current session.  It is the opinion of the author that this is an unnecessary restriction that wants to express "don't delay acks or pings for receive maximum" but uses something coarser/clumsier because that notion is difficult to express in formal specification language.  In gneiss-mqtt, Subscribes and Unsubscribes are also blocked by the receive maximum state.  Contrary feedback is welcome here.

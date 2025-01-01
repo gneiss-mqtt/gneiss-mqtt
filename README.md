@@ -9,9 +9,6 @@ Feedback is always welcome.
 * **[gneiss-mqtt-aws](https://crates.io/crates/gneiss-mqtt-aws)** - Builder-and-glue crate to connect gneiss MQTT clients to AWS IoT Core
 
 ### Tentative Roadmap
-* 0.4.0 Release 
-* * Background thread client for no-async support
-* * Examples and documentation improvement
 * 0.5.0 Release
 * * Client features - throttled resubmit on reconnect, max retries on delivery
 * * MQTT311 support
