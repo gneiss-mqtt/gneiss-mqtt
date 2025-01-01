@@ -19,12 +19,10 @@ A suite of MQTT-related projects in Rust.
 * * Performance measurements and tuning
 * * Canaries, soak testing
 * gneiss-mqtt 1.1.0 Release
-* * Request-response service clients for AWS MQTT services: shadow, jobs, identity
-* gneiss-mqtt 1.2.0 Release
 * * Bridging support
-* gneiss-mqtt 1.3.0 Release
+* gneiss-mqtt 1.2.0 Release
 * * MQTT5 authentication exchange support
-* gneiss-mqtt 1.4.0 Release
+* gneiss-mqtt 1.3.0 Release
 * * Persistence support
 
 ## License
