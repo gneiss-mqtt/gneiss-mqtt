@@ -1,10 +1,6 @@
 ## gneiss-mqtt
 
-Rust MQTT client implementation.
-
-This project is currently in pre-dev-preview.
-
-Feedback is always welcome.  Interested contributors are also welcome.
+Tokio (async) and thread-based MQTT client implementations.
 
 ### Spec Compliance Notes
 Gneiss-mqtt supports all aspects of the MQTT311 and MQTT5 specifications with the following exceptions:
@@ -14,7 +10,7 @@ Gneiss-mqtt supports all aspects of the MQTT311 and MQTT5 specifications with th
 * **Broker Forgiveness** - The client is not 100% strict on broker behavior validation.  While many protocol violations will result in the client closing the connection, not all will.  In particular, violations that don't disrupt critical invariants or implementation configurations tend to be allowed.  For example, if the broker sends a larger packet size than what the client says was allowed, we do not disconnect.  On the other hand, if the broker sends a publish packet with an unknown alias and without a topic, then we do disconnect because we can't handle it.  We might revisit this forgiveness in the future and allow for a strict compliance mode, but it is the opinion of the author that rigid/uncompromising compliance validation leads to brittle applications.
 
 ### Roadmap
-See [Gneiss MQTT Roadmap](https://github.com/gneiss-mqtt/gneiss-mqtt/blob/main/README.md)
+See [Gneiss MQTT Roadmap](https://github.com/gneiss-mqtt/gneiss-mqtt/blob/main/README.md#roadmap)
 
 ## License
 
