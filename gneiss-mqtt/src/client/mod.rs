@@ -599,6 +599,7 @@ impl MqttClientImpl {
             ping_timeout: client_config.ping_timeout,
             outbound_alias_resolver: client_config.outbound_alias_resolver_factory.map(|f| { f() }),
             protocol_mode: client_config.protocol_mode,
+            post_reconnect_queue_drain_policy: client_config.post_reconnect_queue_drain_policy.unwrap_or_default(),
         };
 
         let mut client_impl = MqttClientImpl {

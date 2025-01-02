@@ -211,6 +211,8 @@ pub(crate) struct ProtocolStateConfig {
     pub outbound_alias_resolver: Option<Box<dyn OutboundAliasResolver + Send>>,
 
     pub protocol_mode: ProtocolMode,
+
+    pub post_reconnect_queue_drain_policy: PostReconnectQueueDrainPolicy,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -376,6 +378,10 @@ pub(crate) struct ProtocolState {
 
     // Current MQTT version in use
     pub protocol_version: ProtocolVersion,
+
+    // how many ackable packets remain to be processed one-at-a-time until the client
+    // is unthrottled, post-reconnect
+    pub(crate) slow_start_ack_count: u32,
 }
 
 impl Display for ProtocolState {
@@ -432,6 +438,7 @@ impl ProtocolState {
             outbound_alias_resolver: RefCell::new(outbound_resolver),
             inbound_alias_resolver: inbound_resolver,
             protocol_version: convert_protocol_mode_to_protocol_version(protocol_mode),
+            slow_start_ack_count: 0,
         }
     }
 
@@ -719,6 +726,47 @@ impl ProtocolState {
         Ok(())
     }
 
+    fn apply_ackable_completion(&mut self, operation: &ClientOperation) {
+        if self.state != ProtocolStateType::Connected {
+            return;
+        }
+
+        if self.config.post_reconnect_queue_drain_policy != PostReconnectQueueDrainPolicy::OneAtATime {
+            return;
+        }
+
+        if operation.slow_start_ack_value == 0 {
+            return;
+        }
+
+        if self.slow_start_ack_count >= operation.slow_start_ack_value {
+            self.slow_start_ack_count -= operation.slow_start_ack_value;
+            return;
+        }
+
+        panic!("Protocol state invariant violation - slow start operation count exceeds original slow start count");
+    }
+
+    fn should_external_operations_be_slow_start_throttled(&self) -> bool {
+        if self.state != ProtocolStateType::Connected {
+            return false;
+        }
+
+        if self.config.post_reconnect_queue_drain_policy != PostReconnectQueueDrainPolicy::OneAtATime {
+            return false;
+        }
+
+        if self.slow_start_ack_count == 0 {
+            return false;
+        }
+
+        return true;
+    }
+
+    fn has_pending_ack(&self) -> bool {
+        return self.pending_publish_operations.len() > 0 || self.pending_non_publish_operations.len() > 0;
+    }
+
     fn complete_operation_as_success(&mut self, id : u64, completion_result: Option<OperationResponse>) -> GneissResult<()> {
         let operation_option = self.operations.remove(&id);
         if operation_option.is_none() {
@@ -733,6 +781,7 @@ impl ProtocolState {
             self.pending_non_publish_operations.remove(&packet_id);
         }
 
+        self.apply_ackable_completion(&operation);
         self.apply_ping_extension_on_operation_success(&operation);
         self.apply_disconnect_completion(&operation)?;
 
@@ -762,6 +811,7 @@ impl ProtocolState {
             self.pending_non_publish_operations.remove(&packet_id);
         }
 
+        self.apply_ackable_completion(&operation);
         self.apply_disconnect_completion(&operation)?;
 
         if operation.options.is_none() {
@@ -858,6 +908,34 @@ impl ProtocolState {
         Ok(())
     }
 
+    fn apply_slow_start_initialization(&mut self) {
+        if self.config.post_reconnect_queue_drain_policy != PostReconnectQueueDrainPolicy::OneAtATime {
+            return;
+        }
+
+        // zero out everyone
+        let operations : Vec<u64> = self.operations.keys().copied().collect();
+        for id in operations {
+            let operation = self.operations.get_mut(&id).unwrap();
+            operation.slow_start_ack_value = 0;
+        }
+
+        // now mark all pending operations as part of slow start
+        // anything that completes before we reconect won't matter because we compute the
+        // slow start sum at the moment we transition into the connected state
+        let pending_non_publish_operations : Vec<u64> = self.pending_non_publish_operations.values().copied().collect();
+        for id in pending_non_publish_operations {
+            let operation = self.operations.get_mut(&id).unwrap();
+            operation.slow_start_ack_value = 1;
+        }
+
+        let pending_publish_operations : Vec<u64> = self.pending_publish_operations.values().copied().collect();
+        for id in pending_publish_operations {
+            let operation = self.operations.get_mut(&id).unwrap();
+            operation.slow_start_ack_value = 1;
+        }
+    }
+
     fn handle_network_event_connection_closed(&mut self, _: &mut NetworkEventContext) -> GneissResult<()> {
         if self.state == ProtocolStateType::Disconnected {
             error!("[{} ms] handle_network_event_connection_closed - called in invalid state", self.elapsed_time_ms);
@@ -872,6 +950,7 @@ impl ProtocolState {
         self.operation_ack_timeouts.clear();
 
         self.apply_connection_closed_to_current_operation()?;
+        self.apply_slow_start_initialization();
 
         let mut result : GneissResult<()> = Ok(());
         let mut completions : VecDeque<u64> = VecDeque::new();
@@ -1083,6 +1162,10 @@ impl ProtocolState {
         }
 
         if mode != ProtocolQueueServiceMode::HighPriorityOnly {
+            if self.should_external_operations_be_slow_start_throttled() && self.has_pending_ack() {
+                return None;
+            }
+
             if !self.resubmit_operation_queue.is_empty() {
                 if !self.does_operation_pass_receive_maximum_flow_control(*self.resubmit_operation_queue.front().unwrap()) {
                     return None;
@@ -1382,6 +1465,11 @@ impl ProtocolState {
         }
 
         if mode == ProtocolQueueServiceMode::All {
+            /* Slow start flow control */
+            if self.should_external_operations_be_slow_start_throttled() && self.has_pending_ack() {
+                return None;
+            }
+
             /* receive_maximum flow control check */
             if let Some(settings) = &self.current_settings {
                 if self.pending_publish_operations.len() >= settings.receive_maximum_from_server as usize {
@@ -1520,6 +1608,20 @@ impl ProtocolState {
         result
     }
 
+    fn initialize_slow_start(&mut self) {
+        if self.config.post_reconnect_queue_drain_policy != PostReconnectQueueDrainPolicy::OneAtATime {
+            return;
+        }
+
+        let mut slow_start_ack_count : u32 = 0;
+        for (id, _) in &self.operations {
+            let operation = self.operations.get(&id).unwrap();
+            slow_start_ack_count += operation.slow_start_ack_value;
+        }
+
+        self.slow_start_ack_count = slow_start_ack_count;
+    }
+
     fn handle_connack(&mut self, packet: Box<MqttPacket>, context: &mut NetworkEventContext) -> GneissResult<()> {
         if let MqttPacket::Connack(connack) = *packet {
             info!("[{} ms] handle_connack - processing CONNACK packet", self.elapsed_time_ms);
@@ -1557,6 +1659,7 @@ impl ProtocolState {
             }
 
             self.apply_session_present_to_connection(connack.session_present)?;
+            self.initialize_slow_start();
 
             context.packet_events.push_back(PacketEvent::Connack(connack));
 
@@ -2158,6 +2261,7 @@ mod tests {
             ping_timeout: Duration::from_millis(30000),
             outbound_alias_resolver: None,
             protocol_mode: ProtocolMode::Mqtt5, // nothing tested in this module varies based on protocol version
+            post_reconnect_queue_drain_policy: PostReconnectQueueDrainPolicy::None,
         }
     }
 
@@ -2428,7 +2532,8 @@ mod tests {
             offline_queue_policy: OfflineQueuePolicy::PreserveNothing,
             ping_timeout: Duration::from_millis(0),
             outbound_alias_resolver: None,
-            protocol_mode: ProtocolMode::Mqtt5
+            protocol_mode: ProtocolMode::Mqtt5,
+            post_reconnect_queue_drain_policy: PostReconnectQueueDrainPolicy::None,
         };
 
         ProtocolState::new(config)
