@@ -377,7 +377,7 @@ pub(crate) struct ProtocolState {
     pub(crate) inbound_alias_resolver: InboundAliasResolver,
 
     // Current MQTT version in use
-    pub protocol_version: ProtocolVersion,
+    pub(crate) protocol_version: ProtocolVersion,
 
     // how many ackable packets remain to be processed one-at-a-time until the client
     // is unthrottled, post-reconnect
@@ -727,11 +727,11 @@ impl ProtocolState {
     }
 
     fn apply_ackable_completion(&mut self, operation: &ClientOperation) {
-        if self.state != ProtocolStateType::Connected {
+        if self.config.post_reconnect_queue_drain_policy != PostReconnectQueueDrainPolicy::OneAtATime {
             return;
         }
 
-        if self.config.post_reconnect_queue_drain_policy != PostReconnectQueueDrainPolicy::OneAtATime {
+        if self.state != ProtocolStateType::Connected {
             return;
         }
 
@@ -748,11 +748,11 @@ impl ProtocolState {
     }
 
     fn should_external_operations_be_slow_start_throttled(&self) -> bool {
-        if self.state != ProtocolStateType::Connected {
+        if self.config.post_reconnect_queue_drain_policy != PostReconnectQueueDrainPolicy::OneAtATime {
             return false;
         }
 
-        if self.config.post_reconnect_queue_drain_policy != PostReconnectQueueDrainPolicy::OneAtATime {
+        if self.state != ProtocolStateType::Connected {
             return false;
         }
 
