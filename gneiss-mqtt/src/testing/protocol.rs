@@ -4519,6 +4519,7 @@ fn setup_slow_start_test_scenario(fixture: &mut ProtocolStateTestFixture) -> Slo
 enum SlowStartOperationState {
     None,
     UserQueue,
+    ResubmitQueue,
     PendingWriteCompletion,
     PendingAckPublish,
     PendingAckNonPublish,
@@ -4602,6 +4603,8 @@ fn update_operation_statuses(fixture: &ProtocolStateTestFixture, receivers: &Slo
 
         if fixture.client_state.user_operation_queue.contains(&op_id) {
             status = SlowStartOperationState::UserQueue;
+        } else if fixture.client_state.resubmit_operation_queue.contains(&op_id) {
+            status = SlowStartOperationState::ResubmitQueue;
         } else if fixture.client_state.pending_write_completion_operations.contains(&op_id) {
             status = SlowStartOperationState::PendingWriteCompletion;
         } else if pending_non_publish_ids.contains(&op_id) {
@@ -4639,7 +4642,84 @@ fn do_statuses_match(expected_statuses: &[SlowStartOperationState; 10], current_
     true
 }
 
-fn do_slow_start_test(offline_queue_policy: OfflineQueuePolicy, _: bool) -> GneissResult<()> {
+enum SlowStartOperationType {
+    Qos0Publish,
+    Qos1Publish,
+    Qos2Publish,
+    Subscribe,
+    Unsubscribe,
+}
+
+fn should_fail_after_disconnect(operation_type : SlowStartOperationType, offline_queue_policy : OfflineQueuePolicy) -> bool {
+    match operation_type {
+        SlowStartOperationType::Qos0Publish => {
+            offline_queue_policy != OfflineQueuePolicy::PreserveAll
+        }
+        SlowStartOperationType::Qos1Publish | SlowStartOperationType::Qos2Publish => {
+            false
+        }
+        SlowStartOperationType::Subscribe | SlowStartOperationType::Unsubscribe => {
+            offline_queue_policy != OfflineQueuePolicy::PreserveAll && offline_queue_policy != OfflineQueuePolicy::PreserveAcknowledged
+        }
+    }
+}
+
+fn get_expected_status_post_disconnect(offline_queue_policy: OfflineQueuePolicy) -> [SlowStartOperationState; 10] {
+    let sub_unsub_state = if should_fail_after_disconnect(SlowStartOperationType::Subscribe, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let qos0_state = if should_fail_after_disconnect(SlowStartOperationType::Qos0Publish, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let qos12_state = if should_fail_after_disconnect(SlowStartOperationType::Qos1Publish, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+
+    [
+        SlowStartOperationState::ResubmitQueue,
+        sub_unsub_state,
+        SlowStartOperationState::ResubmitQueue,
+        sub_unsub_state,
+        qos0_state,
+        qos12_state,
+        sub_unsub_state,
+        qos12_state,
+        qos0_state,
+        sub_unsub_state,
+    ]
+}
+
+fn should_fail_after_reconnect(operation_type : SlowStartOperationType, offline_queue_policy : OfflineQueuePolicy, session_present: bool) -> bool {
+    match operation_type {
+        SlowStartOperationType::Qos0Publish => {
+            offline_queue_policy != OfflineQueuePolicy::PreserveAll
+        }
+        SlowStartOperationType::Qos1Publish | SlowStartOperationType::Qos2Publish => {
+            !session_present && offline_queue_policy == OfflineQueuePolicy::PreserveNothing
+        }
+        SlowStartOperationType::Subscribe | SlowStartOperationType::Unsubscribe => {
+            offline_queue_policy != OfflineQueuePolicy::PreserveAll && offline_queue_policy != OfflineQueuePolicy::PreserveAcknowledged
+        }
+    }
+}
+
+fn get_expected_status_post_reconnect(offline_queue_policy: OfflineQueuePolicy, session_present: bool) -> [SlowStartOperationState; 10] {
+    let sub_unsub_state = if should_fail_after_reconnect(SlowStartOperationType::Subscribe, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let qos0_state = if should_fail_after_reconnect(SlowStartOperationType::Qos0Publish, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let pending_qos12_state = if should_fail_after_reconnect(SlowStartOperationType::Qos1Publish, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::ResubmitQueue };
+    let qos12_state = if should_fail_after_reconnect(SlowStartOperationType::Qos1Publish, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+
+    [
+        pending_qos12_state,
+        sub_unsub_state,
+        pending_qos12_state,
+        sub_unsub_state,
+        qos0_state,
+        qos12_state,
+        sub_unsub_state,
+        qos12_state,
+        qos0_state,
+        sub_unsub_state,
+    ]
+}
+
+
+
+fn do_slow_start_test(offline_queue_policy: OfflineQueuePolicy, session_present: bool) -> GneissResult<()> {
     let mut state_config = build_standard_test_config(311);
     state_config.post_reconnect_queue_drain_policy = PostReconnectQueueDrainPolicy::OneAtATime;
     state_config.offline_queue_policy = offline_queue_policy;
@@ -4650,12 +4730,41 @@ fn do_slow_start_test(offline_queue_policy: OfflineQueuePolicy, _: bool) -> Gnei
     fixture.broker_packet_handlers.insert(PacketType::Publish, Box::new(handle_with_nothing));
     fixture.broker_packet_handlers.insert(PacketType::Subscribe, Box::new(handle_with_nothing));
     fixture.broker_packet_handlers.insert(PacketType::Unsubscribe, Box::new(handle_with_nothing));
+    if session_present {
+        fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_session_resumption));
+    } else {
+        fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_successful_connack));
+    }
 
     let result_receivers = setup_slow_start_test_scenario(&mut fixture);
     let mut statuses = [SlowStartOperationState::None; 10];
 
     update_operation_statuses(&fixture, &result_receivers, &mut statuses);
     assert!(do_statuses_match(&EXPECTED_INITIAL_STATUSES, &statuses));
+
+    // disconnect
+    assert!(fixture.on_connection_closed(20).is_ok());
+    update_operation_statuses(&fixture, &result_receivers, &mut statuses);
+    let expected_disconnect_statuses = get_expected_status_post_disconnect(offline_queue_policy);
+    assert!(do_statuses_match(&expected_disconnect_statuses, &statuses));
+
+    for i in 2u64..12u64 {
+        let index : usize = i as usize - 2;
+        let mut expected_ack_value : u32 = 0;
+        // in-progress ackable operations that have not failed should be marked as slow start
+        if i < 6 && statuses[index] != SlowStartOperationState::CompleteFailure {
+            expected_ack_value = 1;
+        }
+
+        let operation_option = fixture.client_state.operations.get(&i);
+        if let Some(operation) = operation_option {
+            assert_eq!(expected_ack_value, operation.slow_start_ack_value);
+        }
+    }
+
+    // reconnect with session_present value
+
+    // ack, one-by-one as appropriate, verify nothing else gets done
 
     Ok(())
 }

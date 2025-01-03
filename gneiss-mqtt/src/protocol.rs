@@ -75,7 +75,7 @@ pub(crate) struct ClientOperation {
     // operations contribute to the total slow start ack count sum.  When a contributing operation
     // completes, it subtracts from the slow start ack count.  When the slow start ack count returns
     // to zero, the client will start processing more than one operation at a time.
-    slow_start_ack_value: u32,
+    pub(crate) slow_start_ack_value: u32,
 }
 
 impl ClientOperation {
@@ -1157,6 +1157,10 @@ impl ProtocolState {
     }
 
     fn dequeue_operation(&mut self, mode: ProtocolQueueServiceMode) -> Option<u64> {
+        if self.pending_write_completion {
+            return None;
+        }
+
         if !self.high_priority_operation_queue.is_empty() {
             return Some(self.high_priority_operation_queue.pop_front().unwrap());
         }
@@ -1319,9 +1323,7 @@ impl ProtocolState {
         Ok(())
     }
 
-    fn service_queue(&mut self, context: &mut ServiceContext, mode: ProtocolQueueServiceMode) -> GneissResult<()> {
-        let to_socket_length = context.to_socket.len();
-
+    fn service_queue_aux(&mut self, context: &mut ServiceContext, mode: ProtocolQueueServiceMode) -> GneissResult<()> {
         while self.state == ProtocolStateType::PendingConnack || self.state == ProtocolStateType::Connected {
             if self.current_operation.is_none() {
                 self.current_operation = self.dequeue_operation(mode);
@@ -1378,10 +1380,6 @@ impl ProtocolState {
 
 
             let encode_result = self.encoder.encode(packet, context.to_socket)?;
-            if context.to_socket.len() != to_socket_length {
-                self.pending_write_completion = true;
-            }
-
             if encode_result == EncodeResult::Complete {
                 debug!("[{} ms] service_queue - operation {} encoding complete", self.elapsed_time_ms, self.current_operation.unwrap());
                 self.on_current_operation_fully_written(context.current_time);
@@ -1392,6 +1390,18 @@ impl ProtocolState {
         }
 
         Ok(())
+    }
+
+    fn service_queue(&mut self, context: &mut ServiceContext, mode: ProtocolQueueServiceMode) -> GneissResult<()> {
+        let to_socket_length = context.to_socket.len();
+
+        let result = self.service_queue_aux(context, mode);
+
+        if context.to_socket.len() != to_socket_length {
+            self.pending_write_completion = true;
+        }
+
+        result
     }
 
     fn service_pending_connack(&mut self, context: &mut ServiceContext) -> GneissResult<()> {
