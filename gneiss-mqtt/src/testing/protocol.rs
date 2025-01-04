@@ -4717,10 +4717,103 @@ fn get_expected_status_post_reconnect(offline_queue_policy: OfflineQueuePolicy, 
     ]
 }
 
+fn check_expected_slow_start_ack_values(fixture : &ProtocolStateTestFixture, statuses : &[SlowStartOperationState; 10]) -> u32 {
+    let mut operation_sum : u32 = 0;
 
+    for i in 2u64..12u64 {
+        let index : usize = i as usize - 2;
+        let mut expected_ack_value : u32 = 0;
+        // in-progress ackable operations that have not failed should be marked as slow start
+        if i < 6 && statuses[index] != SlowStartOperationState::CompleteFailure {
+            expected_ack_value = 1;
+            operation_sum += 1;
+        }
+
+        let operation_option = fixture.client_state.operations.get(&i);
+        if let Some(operation) = operation_option {
+            assert_eq!(expected_ack_value, operation.slow_start_ack_value);
+        }
+    }
+
+    operation_sum
+}
+
+fn get_pending_op_count(fixture : &ProtocolStateTestFixture) -> usize {
+        fixture.client_state.pending_publish_operations.len() +
+        fixture.client_state.pending_non_publish_operations.len()
+}
+
+fn is_pending_op(fixture : &ProtocolStateTestFixture, op_id : u64) -> bool {
+    let pending_non_publish_ids : Vec<u64> = fixture.client_state.pending_non_publish_operations.values().copied().collect();
+    let pending_publish_ids : Vec<u64> = fixture.client_state.pending_publish_operations.values().copied().collect();
+
+    pending_non_publish_ids.contains(&op_id) || pending_publish_ids.contains(&op_id)
+}
+
+fn encode_to_buffer(packet: &MqttPacket) -> GneissResult<Vec<u8>> {
+    let mut encoded_packet = Vec::with_capacity(4096);
+    let mut encoder_buffer = Vec::with_capacity(4096);
+    let mut encoder = Encoder::new();
+
+    let encoding_context = EncodingContext {
+        outbound_alias_resolution: OutboundAliasResolution {
+            skip_topic: false,
+            alias: None,
+        },
+        protocol_version: ProtocolVersion::Mqtt5,
+    };
+
+    encoder.reset(packet, &encoding_context)?;
+
+    let mut encode_result = EncodeResult::Full;
+    while encode_result == EncodeResult::Full {
+        encode_result = encoder.encode(packet, &mut encoder_buffer)?;
+        encoded_packet.append(&mut encoder_buffer);
+        encoder_buffer.clear();
+    }
+
+    Ok(encoded_packet)
+}
+
+fn get_acks_needed_for_operation(op_id : u64) -> Vec<MqttPacket> {
+    match op_id {
+        2 => {
+            vec!(MqttPacket::Puback(PubackPacket {
+                packet_id : 1,
+                ..Default::default()
+            }))
+        }
+        3 => {
+            vec!(MqttPacket::Suback(SubackPacket {
+                packet_id : 5, // 2 was first subscribe, 4 was first unsubscribe, 5 is open
+                reason_codes : vec!( SubackReasonCode::GrantedQos0 ),
+                ..Default::default()
+            }))
+        }
+        4 => {
+            vec!(MqttPacket::Pubrec(PubrecPacket {
+                    packet_id : 3,  // 2 was allocated for first subscribe attempt
+                    ..Default::default()
+                }),
+                MqttPacket::Pubcomp(PubcompPacket {
+                    packet_id : 3,
+                    ..Default::default()
+                })
+            )
+        }
+        5 => {
+            vec!(MqttPacket::Unsuback(UnsubackPacket {
+                packet_id : 6, // 2 was first subscribe, 4 was first unsubscribe, 5 is second subscribe, 6 is open
+                reason_codes : vec!( UnsubackReasonCode::Success ),
+                ..Default::default()
+            }))
+        }
+        _ => { panic!("Unexpected operation id"); }
+    }
+}
 
 fn do_slow_start_test(offline_queue_policy: OfflineQueuePolicy, session_present: bool) -> GneissResult<()> {
-    let mut state_config = build_standard_test_config(311);
+    let mut state_config = build_standard_test_config(5);
     state_config.post_reconnect_queue_drain_policy = PostReconnectQueueDrainPolicy::OneAtATime;
     state_config.offline_queue_policy = offline_queue_policy;
 
@@ -4748,23 +4841,77 @@ fn do_slow_start_test(offline_queue_policy: OfflineQueuePolicy, session_present:
     let expected_disconnect_statuses = get_expected_status_post_disconnect(offline_queue_policy);
     assert!(do_statuses_match(&expected_disconnect_statuses, &statuses));
 
-    for i in 2u64..12u64 {
-        let index : usize = i as usize - 2;
-        let mut expected_ack_value : u32 = 0;
-        // in-progress ackable operations that have not failed should be marked as slow start
-        if i < 6 && statuses[index] != SlowStartOperationState::CompleteFailure {
-            expected_ack_value = 1;
-        }
-
-        let operation_option = fixture.client_state.operations.get(&i);
-        if let Some(operation) = operation_option {
-            assert_eq!(expected_ack_value, operation.slow_start_ack_value);
-        }
-    }
+    check_expected_slow_start_ack_values(&fixture, &statuses);
 
     // reconnect with session_present value
+    assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 30).is_ok());
+    update_operation_statuses(&fixture, &result_receivers, &mut statuses);
+    let expected_reconnect_statuses = get_expected_status_post_reconnect(offline_queue_policy, session_present);
+    assert!(do_statuses_match(&expected_reconnect_statuses, &statuses));
+
+    let slow_start_sum = check_expected_slow_start_ack_values(&fixture, &statuses);
+    assert_eq!(slow_start_sum, fixture.client_state.slow_start_ack_count);
+
+    let expected_pending_op_order : [u64; 4] = [2, 4, 3, 5];
 
     // ack, one-by-one as appropriate, verify nothing else gets done
+    for op_id in expected_pending_op_order {
+        let op_index : usize = op_id as usize - 2;
+        if statuses[op_index] == SlowStartOperationState::CompleteFailure {
+            continue;
+        }
+
+        let starting_slow_start_count = fixture.client_state.slow_start_ack_count;
+
+        assert_ne!(0, fixture.client_state.slow_start_ack_count);
+        assert_ne!(SlowStartOperationState::CompleteSuccess, statuses[op_index]);
+
+        for i in 0..4 {
+            let service_result = fixture.service_once(30 + op_id, 4096);
+            assert!(service_result.is_ok());
+            if i == 0 {
+                assert!(fixture.client_state.pending_write_completion);
+                assert!(fixture.on_write_completion(30 + op_id).is_ok());
+            } else {
+                assert!(!fixture.client_state.pending_write_completion);
+                assert_eq!(0, service_result.unwrap().len());
+            }
+
+            let pending_count = get_pending_op_count(&fixture);
+            assert_eq!(1, pending_count);
+            assert!(is_pending_op(&fixture, op_id));
+        }
+
+        let necessary_ack_packets : Vec<MqttPacket> = get_acks_needed_for_operation(op_id);
+        assert!(necessary_ack_packets.len() > 0);
+
+        for i in 0..necessary_ack_packets.len() {
+            let packet = &necessary_ack_packets[i];
+            let ack_bytes = encode_to_buffer(packet)?;
+            fixture.on_incoming_bytes(30 + op_id, ack_bytes.as_slice())?;
+
+            if i + 1 < necessary_ack_packets.len() {
+                assert_eq!(1, get_pending_op_count(&fixture));
+                assert!(is_pending_op(&fixture, op_id));
+
+                assert!(fixture.service_once(30 + op_id, 4096).is_ok());
+                assert!(fixture.on_write_completion(30 + op_id).is_ok());
+
+                assert_eq!(1, get_pending_op_count(&fixture));
+                assert!(is_pending_op(&fixture, op_id));
+            }
+        }
+
+        assert!(!is_pending_op(&fixture, op_id));
+        assert_eq!(0, get_pending_op_count(&fixture));
+        assert_eq!(starting_slow_start_count - 1, fixture.client_state.slow_start_ack_count);
+    }
+
+    assert_eq!(0, fixture.client_state.slow_start_ack_count);
+
+    assert!(fixture.service_once(50, 4096).is_ok());
+
+    assert_eq!(0, fixture.client_state.user_operation_queue.len());
 
     Ok(())
 }
