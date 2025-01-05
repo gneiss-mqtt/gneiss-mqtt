@@ -4656,7 +4656,7 @@ fn should_fail_after_disconnect(operation_type : SlowStartOperationType, offline
             offline_queue_policy != OfflineQueuePolicy::PreserveAll
         }
         SlowStartOperationType::Qos1Publish | SlowStartOperationType::Qos2Publish => {
-            false
+            offline_queue_policy == OfflineQueuePolicy::PreserveNothing
         }
         SlowStartOperationType::Subscribe | SlowStartOperationType::Unsubscribe => {
             offline_queue_policy != OfflineQueuePolicy::PreserveAll && offline_queue_policy != OfflineQueuePolicy::PreserveAcknowledged
@@ -4700,8 +4700,17 @@ fn should_fail_after_reconnect(operation_type : SlowStartOperationType, offline_
 fn get_expected_status_post_reconnect(offline_queue_policy: OfflineQueuePolicy, session_present: bool) -> [SlowStartOperationState; 10] {
     let sub_unsub_state = if should_fail_after_reconnect(SlowStartOperationType::Subscribe, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
     let qos0_state = if should_fail_after_reconnect(SlowStartOperationType::Qos0Publish, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
-    let pending_qos12_state = if should_fail_after_reconnect(SlowStartOperationType::Qos1Publish, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::ResubmitQueue };
-    let qos12_state = if should_fail_after_reconnect(SlowStartOperationType::Qos1Publish, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let qos12_state = if offline_queue_policy == OfflineQueuePolicy::PreserveNothing { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let pending_qos12_state =
+        if should_fail_after_reconnect(SlowStartOperationType::Qos1Publish, offline_queue_policy, session_present) {
+            SlowStartOperationState::CompleteFailure
+        } else {
+            if session_present {
+                SlowStartOperationState::ResubmitQueue
+            } else {
+                SlowStartOperationState::UserQueue
+            }
+        };
 
     [
         pending_qos12_state,
@@ -4775,35 +4784,51 @@ fn encode_to_buffer(packet: &MqttPacket) -> GneissResult<Vec<u8>> {
     Ok(encoded_packet)
 }
 
-fn get_acks_needed_for_operation(op_id : u64) -> Vec<MqttPacket> {
+fn compute_used_packet_id_for_pending(fixture : &ProtocolStateTestFixture, op_id : u64) -> u16 {
+    for pending_id_pair in fixture.client_state.pending_publish_operations.iter() {
+        assert_eq!(op_id, *pending_id_pair.1);
+        return *pending_id_pair.0;
+    }
+
+    for pending_id_pair in fixture.client_state.pending_non_publish_operations.iter() {
+        assert_eq!(op_id, *pending_id_pair.1);
+        return *pending_id_pair.0;
+    }
+
+    panic!("Unreachable state");
+}
+
+fn get_acks_needed_for_operation(fixture : &ProtocolStateTestFixture, op_id : u64) -> Vec<MqttPacket> {
+    let used_packet_id = compute_used_packet_id_for_pending(fixture, op_id);
+
     match op_id {
         2 => {
             vec!(MqttPacket::Puback(PubackPacket {
-                packet_id : 1,
+                packet_id : used_packet_id,
                 ..Default::default()
             }))
         }
         3 => {
             vec!(MqttPacket::Suback(SubackPacket {
-                packet_id : 5, // 2 was first subscribe, 4 was first unsubscribe, 5 is open
+                packet_id : used_packet_id,
                 reason_codes : vec!( SubackReasonCode::GrantedQos0 ),
                 ..Default::default()
             }))
         }
         4 => {
             vec!(MqttPacket::Pubrec(PubrecPacket {
-                    packet_id : 3,  // 2 was allocated for first subscribe attempt
+                    packet_id : used_packet_id,
                     ..Default::default()
                 }),
                 MqttPacket::Pubcomp(PubcompPacket {
-                    packet_id : 3,
+                    packet_id : used_packet_id,
                     ..Default::default()
                 })
             )
         }
         5 => {
             vec!(MqttPacket::Unsuback(UnsubackPacket {
-                packet_id : 6, // 2 was first subscribe, 4 was first unsubscribe, 5 is second subscribe, 6 is open
+                packet_id : used_packet_id,
                 reason_codes : vec!( UnsubackReasonCode::Success ),
                 ..Default::default()
             }))
@@ -4852,7 +4877,12 @@ fn do_slow_start_test(offline_queue_policy: OfflineQueuePolicy, session_present:
     let slow_start_sum = check_expected_slow_start_ack_values(&fixture, &statuses);
     assert_eq!(slow_start_sum, fixture.client_state.slow_start_ack_count);
 
-    let expected_pending_op_order : [u64; 4] = [2, 4, 3, 5];
+    let expected_pending_op_order : [u64; 4] =
+        if session_present {
+            [2, 4, 3, 5]
+        } else {
+            [2, 3, 4, 5]
+        };
 
     // ack, one-by-one as appropriate, verify nothing else gets done
     for op_id in expected_pending_op_order {
@@ -4882,7 +4912,7 @@ fn do_slow_start_test(offline_queue_policy: OfflineQueuePolicy, session_present:
             assert!(is_pending_op(&fixture, op_id));
         }
 
-        let necessary_ack_packets : Vec<MqttPacket> = get_acks_needed_for_operation(op_id);
+        let necessary_ack_packets : Vec<MqttPacket> = get_acks_needed_for_operation(&fixture, op_id);
         assert!(necessary_ack_packets.len() > 0);
 
         for i in 0..necessary_ack_packets.len() {
@@ -4921,3 +4951,37 @@ fn do_slow_start_test_keep_all_session_present() {
     assert!(do_slow_start_test(OfflineQueuePolicy::PreserveAll, true).is_ok());
 }
 
+#[test]
+fn do_slow_start_test_keep_all_session_not_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveAll, false).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_ackable_session_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveAcknowledged, true).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_ackable_session_not_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveAcknowledged, false).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_qos1plus_session_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveQos1PlusPublishes, true).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_qos1plus_session_not_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveQos1PlusPublishes, false).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_nothing_session_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveNothing, true).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_nothing_session_not_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveNothing, false).is_ok());
+}

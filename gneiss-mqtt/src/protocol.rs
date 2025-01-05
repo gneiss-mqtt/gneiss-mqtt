@@ -1668,8 +1668,8 @@ impl ProtocolState {
                 self.next_ping_timepoint = None;
             }
 
-            self.apply_session_present_to_connection(connack.session_present)?;
             self.initialize_slow_start();
+            self.apply_session_present_to_connection(connack.session_present)?;
 
             context.packet_events.push_back(PacketEvent::Connack(connack));
 
