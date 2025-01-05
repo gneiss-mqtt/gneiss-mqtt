@@ -44,6 +44,7 @@ fn build_standard_test_config(protocol_version : i32) -> ProtocolStateConfig {
         ping_timeout: Duration::from_millis(30000),
         outbound_alias_resolver: None,
         protocol_mode,
+        post_reconnect_queue_drain_policy: PostReconnectQueueDrainPolicy::None,
     }
 }
 
@@ -4380,4 +4381,607 @@ fn connected_state_disconnect_with_high_priority_pubrel(raw_version : i32) {
     } else {
         panic!("Expected a pubcomp");
     }
+}
+
+// Slow start test scenario
+//
+// id 1 - connect packet
+//
+// id 2 - in progress qos 1 publish
+// id 3 - in progress subscribe
+// id 4 - in progress qos 2 publish
+// id 5 - in progress unsubscribe
+// id 6 - no-write-complete qos 0 publish
+// id 7 - queued qos1 publish
+// id 8 - queued subscribe
+// id 9 - queued qos2 publish
+// id 10 - queued qos0 publish
+// id 11 - queued unsubscribe
+
+struct SlowStartTestOperationReceivers {
+    receiver2: std::sync::mpsc::Receiver<PublishResult>,
+    receiver3: std::sync::mpsc::Receiver<SubscribeResult>,
+    receiver4: std::sync::mpsc::Receiver<PublishResult>,
+    receiver5: std::sync::mpsc::Receiver<UnsubscribeResult>,
+    receiver6: std::sync::mpsc::Receiver<PublishResult>,
+    receiver7: std::sync::mpsc::Receiver<PublishResult>,
+    receiver8: std::sync::mpsc::Receiver<SubscribeResult>,
+    receiver9: std::sync::mpsc::Receiver<PublishResult>,
+    receiver10: std::sync::mpsc::Receiver<PublishResult>,
+    receiver11: std::sync::mpsc::Receiver<UnsubscribeResult>,
+}
+
+fn setup_slow_start_test_scenario(fixture: &mut ProtocolStateTestFixture) -> SlowStartTestOperationReceivers {
+    assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
+
+    // pending ack operations
+
+    let receiver2 = fixture.publish(10, PublishPacket {
+        qos: QualityOfService::AtLeastOnce,
+        topic: "a/b".to_string(),
+        ..Default::default()
+    }, PublishOptions::default()).unwrap();
+
+    let receiver3 = fixture.subscribe(11, SubscribePacket {
+        subscriptions: vec!(Subscription::new_simple("a/b".to_string(), QualityOfService::AtLeastOnce)),
+        ..Default::default()
+    }, SubscribeOptions::default()).unwrap();
+
+    let receiver4 = fixture.publish(12, PublishPacket {
+        qos: QualityOfService::ExactlyOnce,
+        topic: "a/b".to_string(),
+        ..Default::default()
+    }, PublishOptions::default()).unwrap();
+
+    let receiver5 = fixture.unsubscribe(13, UnsubscribePacket {
+        topic_filters: vec!("a/b".to_string()),
+        ..Default::default()
+    }, UnsubscribeOptions::default()).unwrap();
+
+    // flush fully to broker, verify pending acks
+    assert!(fixture.service_with_drain(13, 4096).is_ok());
+
+    assert_eq!(2, fixture.client_state.pending_publish_operations.len());
+    assert_eq!(2, fixture.client_state.pending_non_publish_operations.len());
+    assert_eq!(0, fixture.client_state.pending_write_completion_operations.len());
+    assert_eq!(0, fixture.client_state.user_operation_queue.len());
+    assert_eq!(4, fixture.client_state.operations.len());
+
+    // pending write completion operation
+
+    let receiver6 = fixture.publish(14, PublishPacket {
+        qos: QualityOfService::AtMostOnce,
+        topic: "a/b".to_string(),
+        ..Default::default()
+    }, PublishOptions::default()).unwrap();
+
+    // flush to broker, but no write completion
+    // it doesn't matter that we don't actually send the bytes to the mock server
+    assert!(fixture.service_once(14, 4096).is_ok());
+
+    assert_eq!(2, fixture.client_state.pending_publish_operations.len());
+    assert_eq!(2, fixture.client_state.pending_non_publish_operations.len());
+    assert_eq!(1, fixture.client_state.pending_write_completion_operations.len());
+    assert_eq!(0, fixture.client_state.user_operation_queue.len());
+    assert_eq!(5, fixture.client_state.operations.len());
+
+    // queued operations
+
+    let receiver7 = fixture.publish(15, PublishPacket {
+        qos: QualityOfService::AtLeastOnce,
+        topic: "b/c".to_string(),
+        ..Default::default()
+    }, PublishOptions::default()).unwrap();
+
+    let receiver8 = fixture.subscribe(16, SubscribePacket {
+        subscriptions: vec!(Subscription::new_simple("b/c".to_string(), QualityOfService::AtLeastOnce)),
+        ..Default::default()
+    }, SubscribeOptions::default()).unwrap();
+
+    let receiver9 = fixture.publish(17, PublishPacket {
+        qos: QualityOfService::ExactlyOnce,
+        topic: "b/c".to_string(),
+        ..Default::default()
+    }, PublishOptions::default()).unwrap();
+
+    let receiver10 = fixture.publish(18, PublishPacket {
+        qos: QualityOfService::AtMostOnce,
+        topic: "b/c".to_string(),
+        ..Default::default()
+    }, PublishOptions::default()).unwrap();
+
+    let receiver11 = fixture.unsubscribe(19, UnsubscribePacket {
+        topic_filters: vec!("c/d".to_string()),
+        ..Default::default()
+    }, UnsubscribeOptions::default()).unwrap();
+
+    assert_eq!(2, fixture.client_state.pending_publish_operations.len());
+    assert_eq!(2, fixture.client_state.pending_non_publish_operations.len());
+    assert_eq!(1, fixture.client_state.pending_write_completion_operations.len());
+    assert_eq!(5, fixture.client_state.user_operation_queue.len());
+    assert_eq!(10, fixture.client_state.operations.len());
+
+    SlowStartTestOperationReceivers {
+        receiver2,
+        receiver3,
+        receiver4,
+        receiver5,
+        receiver6,
+        receiver7,
+        receiver8,
+        receiver9,
+        receiver10,
+        receiver11,
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+enum SlowStartOperationState {
+    None,
+    UserQueue,
+    ResubmitQueue,
+    PendingWriteCompletion,
+    PendingAckPublish,
+    PendingAckNonPublish,
+    CompleteSuccess,
+    CompleteFailure,
+}
+
+fn get_publish_receiver_status(receiver : &std::sync::mpsc::Receiver<PublishResult>) -> SlowStartOperationState {
+    if let Ok(result) = receiver.try_recv() {
+        if result.is_ok() {
+            return SlowStartOperationState::CompleteSuccess;
+        } else {
+            return SlowStartOperationState::CompleteFailure;
+        }
+    } else {
+        return SlowStartOperationState::None;
+    }
+}
+
+fn get_subscribe_receiver_status(receiver : &std::sync::mpsc::Receiver<SubscribeResult>) -> SlowStartOperationState {
+    if let Ok(result) = receiver.try_recv() {
+        if result.is_ok() {
+            return SlowStartOperationState::CompleteSuccess;
+        } else {
+            return SlowStartOperationState::CompleteFailure;
+        }
+    } else {
+        return SlowStartOperationState::None;
+    }
+}
+
+fn get_unsubscribe_receiver_status(receiver : &std::sync::mpsc::Receiver<UnsubscribeResult>) -> SlowStartOperationState {
+    if let Ok(result) = receiver.try_recv() {
+        if result.is_ok() {
+            return SlowStartOperationState::CompleteSuccess;
+        } else {
+            return SlowStartOperationState::CompleteFailure;
+        }
+    } else {
+        return SlowStartOperationState::None;
+    }
+}
+
+type SlowStartOperationStatuses = [SlowStartOperationState; 10];
+
+fn fold_receiver_status(receiver_status: SlowStartOperationState, existing_status: SlowStartOperationState) -> SlowStartOperationState {
+    if receiver_status != SlowStartOperationState::None {
+        receiver_status
+    } else {
+        existing_status
+    }
+}
+
+fn apply_receiver_status(op_id: u64, receivers: &SlowStartTestOperationReceivers, statuses : &mut SlowStartOperationStatuses) {
+    match op_id {
+        2 => { statuses[0] = fold_receiver_status(get_publish_receiver_status(&receivers.receiver2), statuses[0]); },
+        3 => { statuses[1] = fold_receiver_status(get_subscribe_receiver_status(&receivers.receiver3), statuses[1]); },
+        4 => { statuses[2] = fold_receiver_status(get_publish_receiver_status(&receivers.receiver4), statuses[2]); },
+        5 => { statuses[3] = fold_receiver_status(get_unsubscribe_receiver_status(&receivers.receiver5), statuses[3]); },
+        6 => { statuses[4] = fold_receiver_status(get_publish_receiver_status(&receivers.receiver6), statuses[4]); },
+        7 => { statuses[5] = fold_receiver_status(get_publish_receiver_status(&receivers.receiver7), statuses[5]); },
+        8 => { statuses[6] = fold_receiver_status(get_subscribe_receiver_status(&receivers.receiver8), statuses[6]); },
+        9 => { statuses[7] = fold_receiver_status(get_publish_receiver_status(&receivers.receiver9), statuses[7]); },
+        10 => { statuses[8] = fold_receiver_status(get_publish_receiver_status(&receivers.receiver10), statuses[8]); },
+        11 => { statuses[9] = fold_receiver_status(get_unsubscribe_receiver_status(&receivers.receiver11), statuses[9]); },
+        _ => { panic!("Illegal operation id"); }
+    }
+}
+
+fn update_operation_statuses(fixture: &ProtocolStateTestFixture, receivers: &SlowStartTestOperationReceivers, statuses : &mut SlowStartOperationStatuses) {
+    let pending_non_publish_ids : Vec<u64> = fixture.client_state.pending_non_publish_operations.values().copied().collect();
+    let pending_publish_ids : Vec<u64> = fixture.client_state.pending_publish_operations.values().copied().collect();
+
+    for op_id in 2u64..12u64 {
+        apply_receiver_status(op_id, receivers, statuses);
+        let op_index : usize = op_id as usize - 2;
+        let mut status = statuses[op_index];
+        if status == SlowStartOperationState::CompleteSuccess || status == SlowStartOperationState::CompleteFailure {
+            continue;
+        }
+
+        if fixture.client_state.user_operation_queue.contains(&op_id) {
+            status = SlowStartOperationState::UserQueue;
+        } else if fixture.client_state.resubmit_operation_queue.contains(&op_id) {
+            status = SlowStartOperationState::ResubmitQueue;
+        } else if fixture.client_state.pending_write_completion_operations.contains(&op_id) {
+            status = SlowStartOperationState::PendingWriteCompletion;
+        } else if pending_non_publish_ids.contains(&op_id) {
+            status = SlowStartOperationState::PendingAckNonPublish;
+        } else if pending_publish_ids.contains(&op_id) {
+            status = SlowStartOperationState::PendingAckPublish;
+        } else {
+            panic!("Illegal state");
+        }
+
+        statuses[op_index] = status;
+    }
+}
+
+static EXPECTED_INITIAL_STATUSES : [SlowStartOperationState; 10] = [
+    SlowStartOperationState::PendingAckPublish,
+    SlowStartOperationState::PendingAckNonPublish,
+    SlowStartOperationState::PendingAckPublish,
+    SlowStartOperationState::PendingAckNonPublish,
+    SlowStartOperationState::PendingWriteCompletion,
+    SlowStartOperationState::UserQueue,
+    SlowStartOperationState::UserQueue,
+    SlowStartOperationState::UserQueue,
+    SlowStartOperationState::UserQueue,
+    SlowStartOperationState::UserQueue,
+];
+
+fn do_statuses_match(expected_statuses: &[SlowStartOperationState; 10], current_statuses: &SlowStartOperationStatuses) -> bool {
+    for i in 0..expected_statuses.len() {
+        if expected_statuses[i] != current_statuses[i] {
+           return false;
+        }
+    }
+
+    true
+}
+
+enum SlowStartOperationType {
+    Qos0Publish,
+    Qos1Publish,
+    Qos2Publish,
+    Subscribe,
+    Unsubscribe,
+}
+
+fn should_fail_after_disconnect(operation_type : SlowStartOperationType, offline_queue_policy : OfflineQueuePolicy) -> bool {
+    match operation_type {
+        SlowStartOperationType::Qos0Publish => {
+            offline_queue_policy != OfflineQueuePolicy::PreserveAll
+        }
+        SlowStartOperationType::Qos1Publish | SlowStartOperationType::Qos2Publish => {
+            offline_queue_policy == OfflineQueuePolicy::PreserveNothing
+        }
+        SlowStartOperationType::Subscribe | SlowStartOperationType::Unsubscribe => {
+            offline_queue_policy != OfflineQueuePolicy::PreserveAll && offline_queue_policy != OfflineQueuePolicy::PreserveAcknowledged
+        }
+    }
+}
+
+fn get_expected_status_post_disconnect(offline_queue_policy: OfflineQueuePolicy) -> [SlowStartOperationState; 10] {
+    let sub_unsub_state = if should_fail_after_disconnect(SlowStartOperationType::Subscribe, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let qos0_state = if should_fail_after_disconnect(SlowStartOperationType::Qos0Publish, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let qos12_state = if should_fail_after_disconnect(SlowStartOperationType::Qos1Publish, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+
+    [
+        SlowStartOperationState::ResubmitQueue,
+        sub_unsub_state,
+        SlowStartOperationState::ResubmitQueue,
+        sub_unsub_state,
+        qos0_state,
+        qos12_state,
+        sub_unsub_state,
+        qos12_state,
+        qos0_state,
+        sub_unsub_state,
+    ]
+}
+
+fn should_fail_after_reconnect(operation_type : SlowStartOperationType, offline_queue_policy : OfflineQueuePolicy, session_present: bool) -> bool {
+    match operation_type {
+        SlowStartOperationType::Qos0Publish => {
+            offline_queue_policy != OfflineQueuePolicy::PreserveAll
+        }
+        SlowStartOperationType::Qos1Publish | SlowStartOperationType::Qos2Publish => {
+            !session_present && offline_queue_policy == OfflineQueuePolicy::PreserveNothing
+        }
+        SlowStartOperationType::Subscribe | SlowStartOperationType::Unsubscribe => {
+            offline_queue_policy != OfflineQueuePolicy::PreserveAll && offline_queue_policy != OfflineQueuePolicy::PreserveAcknowledged
+        }
+    }
+}
+
+fn get_expected_status_post_reconnect(offline_queue_policy: OfflineQueuePolicy, session_present: bool) -> [SlowStartOperationState; 10] {
+    let sub_unsub_state = if should_fail_after_reconnect(SlowStartOperationType::Subscribe, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let qos0_state = if should_fail_after_reconnect(SlowStartOperationType::Qos0Publish, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let qos12_state = if offline_queue_policy == OfflineQueuePolicy::PreserveNothing { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let pending_qos12_state =
+        if should_fail_after_reconnect(SlowStartOperationType::Qos1Publish, offline_queue_policy, session_present) {
+            SlowStartOperationState::CompleteFailure
+        } else {
+            if session_present {
+                SlowStartOperationState::ResubmitQueue
+            } else {
+                SlowStartOperationState::UserQueue
+            }
+        };
+
+    [
+        pending_qos12_state,
+        sub_unsub_state,
+        pending_qos12_state,
+        sub_unsub_state,
+        qos0_state,
+        qos12_state,
+        sub_unsub_state,
+        qos12_state,
+        qos0_state,
+        sub_unsub_state,
+    ]
+}
+
+fn check_expected_slow_start_ack_values(fixture : &ProtocolStateTestFixture, statuses : &[SlowStartOperationState; 10]) -> u32 {
+    let mut operation_sum : u32 = 0;
+
+    for i in 2u64..12u64 {
+        let index : usize = i as usize - 2;
+        let mut expected_ack_value : u32 = 0;
+        // in-progress ackable operations that have not failed should be marked as slow start
+        if i < 6 && statuses[index] != SlowStartOperationState::CompleteFailure {
+            expected_ack_value = 1;
+            operation_sum += 1;
+        }
+
+        let operation_option = fixture.client_state.operations.get(&i);
+        if let Some(operation) = operation_option {
+            assert_eq!(expected_ack_value, operation.slow_start_ack_value);
+        }
+    }
+
+    operation_sum
+}
+
+fn get_pending_op_count(fixture : &ProtocolStateTestFixture) -> usize {
+        fixture.client_state.pending_publish_operations.len() +
+        fixture.client_state.pending_non_publish_operations.len()
+}
+
+fn is_pending_op(fixture : &ProtocolStateTestFixture, op_id : u64) -> bool {
+    let pending_non_publish_ids : Vec<u64> = fixture.client_state.pending_non_publish_operations.values().copied().collect();
+    let pending_publish_ids : Vec<u64> = fixture.client_state.pending_publish_operations.values().copied().collect();
+
+    pending_non_publish_ids.contains(&op_id) || pending_publish_ids.contains(&op_id)
+}
+
+fn encode_to_buffer(packet: &MqttPacket) -> GneissResult<Vec<u8>> {
+    let mut encoded_packet = Vec::with_capacity(4096);
+    let mut encoder_buffer = Vec::with_capacity(4096);
+    let mut encoder = Encoder::new();
+
+    let encoding_context = EncodingContext {
+        outbound_alias_resolution: OutboundAliasResolution {
+            skip_topic: false,
+            alias: None,
+        },
+        protocol_version: ProtocolVersion::Mqtt5,
+    };
+
+    encoder.reset(packet, &encoding_context)?;
+
+    let mut encode_result = EncodeResult::Full;
+    while encode_result == EncodeResult::Full {
+        encode_result = encoder.encode(packet, &mut encoder_buffer)?;
+        encoded_packet.append(&mut encoder_buffer);
+        encoder_buffer.clear();
+    }
+
+    Ok(encoded_packet)
+}
+
+fn compute_used_packet_id_for_pending(fixture : &ProtocolStateTestFixture, op_id : u64) -> u16 {
+    for pending_id_pair in fixture.client_state.pending_publish_operations.iter() {
+        assert_eq!(op_id, *pending_id_pair.1);
+        return *pending_id_pair.0;
+    }
+
+    for pending_id_pair in fixture.client_state.pending_non_publish_operations.iter() {
+        assert_eq!(op_id, *pending_id_pair.1);
+        return *pending_id_pair.0;
+    }
+
+    panic!("Unreachable state");
+}
+
+fn get_acks_needed_for_operation(fixture : &ProtocolStateTestFixture, op_id : u64) -> Vec<MqttPacket> {
+    let used_packet_id = compute_used_packet_id_for_pending(fixture, op_id);
+
+    match op_id {
+        2 => {
+            vec!(MqttPacket::Puback(PubackPacket {
+                packet_id : used_packet_id,
+                ..Default::default()
+            }))
+        }
+        3 => {
+            vec!(MqttPacket::Suback(SubackPacket {
+                packet_id : used_packet_id,
+                reason_codes : vec!( SubackReasonCode::GrantedQos0 ),
+                ..Default::default()
+            }))
+        }
+        4 => {
+            vec!(MqttPacket::Pubrec(PubrecPacket {
+                    packet_id : used_packet_id,
+                    ..Default::default()
+                }),
+                MqttPacket::Pubcomp(PubcompPacket {
+                    packet_id : used_packet_id,
+                    ..Default::default()
+                })
+            )
+        }
+        5 => {
+            vec!(MqttPacket::Unsuback(UnsubackPacket {
+                packet_id : used_packet_id,
+                reason_codes : vec!( UnsubackReasonCode::Success ),
+                ..Default::default()
+            }))
+        }
+        _ => { panic!("Unexpected operation id"); }
+    }
+}
+
+fn do_slow_start_test(offline_queue_policy: OfflineQueuePolicy, session_present: bool) -> GneissResult<()> {
+    let mut state_config = build_standard_test_config(5);
+    state_config.post_reconnect_queue_drain_policy = PostReconnectQueueDrainPolicy::OneAtATime;
+    state_config.offline_queue_policy = offline_queue_policy;
+
+    let mut fixture = ProtocolStateTestFixture::new(state_config);
+
+    // disable all acks
+    fixture.broker_packet_handlers.insert(PacketType::Publish, Box::new(handle_with_nothing));
+    fixture.broker_packet_handlers.insert(PacketType::Subscribe, Box::new(handle_with_nothing));
+    fixture.broker_packet_handlers.insert(PacketType::Unsubscribe, Box::new(handle_with_nothing));
+    if session_present {
+        fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_session_resumption));
+    } else {
+        fixture.broker_packet_handlers.insert(PacketType::Connect, Box::new(handle_connect_with_successful_connack));
+    }
+
+    let result_receivers = setup_slow_start_test_scenario(&mut fixture);
+    let mut statuses = [SlowStartOperationState::None; 10];
+
+    update_operation_statuses(&fixture, &result_receivers, &mut statuses);
+    assert!(do_statuses_match(&EXPECTED_INITIAL_STATUSES, &statuses));
+
+    // disconnect
+    assert!(fixture.on_connection_closed(20).is_ok());
+    update_operation_statuses(&fixture, &result_receivers, &mut statuses);
+    let expected_disconnect_statuses = get_expected_status_post_disconnect(offline_queue_policy);
+    assert!(do_statuses_match(&expected_disconnect_statuses, &statuses));
+
+    check_expected_slow_start_ack_values(&fixture, &statuses);
+
+    // reconnect with session_present value
+    assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 30).is_ok());
+    update_operation_statuses(&fixture, &result_receivers, &mut statuses);
+    let expected_reconnect_statuses = get_expected_status_post_reconnect(offline_queue_policy, session_present);
+    assert!(do_statuses_match(&expected_reconnect_statuses, &statuses));
+
+    let slow_start_sum = check_expected_slow_start_ack_values(&fixture, &statuses);
+    assert_eq!(slow_start_sum, fixture.client_state.slow_start_ack_count);
+
+    let expected_pending_op_order : [u64; 4] =
+        if session_present {
+            [2, 4, 3, 5]
+        } else {
+            [2, 3, 4, 5]
+        };
+
+    // ack, one-by-one as appropriate, verify nothing else gets done
+    for op_id in expected_pending_op_order {
+        let op_index : usize = op_id as usize - 2;
+        if statuses[op_index] == SlowStartOperationState::CompleteFailure {
+            continue;
+        }
+
+        let starting_slow_start_count = fixture.client_state.slow_start_ack_count;
+
+        assert_ne!(0, fixture.client_state.slow_start_ack_count);
+        assert_ne!(SlowStartOperationState::CompleteSuccess, statuses[op_index]);
+
+        for i in 0..4 {
+            let service_result = fixture.service_once(30 + op_id, 4096);
+            assert!(service_result.is_ok());
+            if i == 0 {
+                assert!(fixture.client_state.pending_write_completion);
+                assert!(fixture.on_write_completion(30 + op_id).is_ok());
+            } else {
+                assert!(!fixture.client_state.pending_write_completion);
+                assert_eq!(0, service_result.unwrap().len());
+            }
+
+            let pending_count = get_pending_op_count(&fixture);
+            assert_eq!(1, pending_count);
+            assert!(is_pending_op(&fixture, op_id));
+        }
+
+        let necessary_ack_packets : Vec<MqttPacket> = get_acks_needed_for_operation(&fixture, op_id);
+        assert!(necessary_ack_packets.len() > 0);
+
+        for i in 0..necessary_ack_packets.len() {
+            let packet = &necessary_ack_packets[i];
+            let ack_bytes = encode_to_buffer(packet)?;
+            fixture.on_incoming_bytes(30 + op_id, ack_bytes.as_slice())?;
+
+            if i + 1 < necessary_ack_packets.len() {
+                assert_eq!(1, get_pending_op_count(&fixture));
+                assert!(is_pending_op(&fixture, op_id));
+
+                assert!(fixture.service_once(30 + op_id, 4096).is_ok());
+                assert!(fixture.on_write_completion(30 + op_id).is_ok());
+
+                assert_eq!(1, get_pending_op_count(&fixture));
+                assert!(is_pending_op(&fixture, op_id));
+            }
+        }
+
+        assert!(!is_pending_op(&fixture, op_id));
+        assert_eq!(0, get_pending_op_count(&fixture));
+        assert_eq!(starting_slow_start_count - 1, fixture.client_state.slow_start_ack_count);
+    }
+
+    assert_eq!(0, fixture.client_state.slow_start_ack_count);
+
+    assert!(fixture.service_once(50, 4096).is_ok());
+
+    assert_eq!(0, fixture.client_state.user_operation_queue.len());
+
+    Ok(())
+}
+
+#[test]
+fn do_slow_start_test_keep_all_session_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveAll, true).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_all_session_not_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveAll, false).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_ackable_session_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveAcknowledged, true).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_ackable_session_not_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveAcknowledged, false).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_qos1plus_session_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveQos1PlusPublishes, true).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_qos1plus_session_not_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveQos1PlusPublishes, false).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_nothing_session_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveNothing, true).is_ok());
+}
+
+#[test]
+fn do_slow_start_test_keep_nothing_session_not_present() {
+    assert!(do_slow_start_test(OfflineQueuePolicy::PreserveNothing, false).is_ok());
 }
