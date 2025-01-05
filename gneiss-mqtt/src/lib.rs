@@ -69,8 +69,8 @@ each broker supports.
 
 Currently, these crates include:
 * *[gneiss-mqtt-aws](https://crates.io/crates/gneiss-mqtt-aws)* - A crate with a builder that
-supports all connection methods allowed by the AWS MQTT broker implementation,
-[AWS IoT Core](https://docs.aws.amazon.com/iot/latest/developerguide/iot-gs.html).
+  supports all connection methods allowed by the AWS MQTT broker implementation,
+  [AWS IoT Core](https://docs.aws.amazon.com/iot/latest/developerguide/iot-gs.html).
 
 # Examples
 

@@ -760,11 +760,11 @@ impl ProtocolState {
             return false;
         }
 
-        return true;
+        true
     }
 
     fn has_pending_ack(&self) -> bool {
-        return self.pending_publish_operations.len() > 0 || self.pending_non_publish_operations.len() > 0;
+        !self.pending_publish_operations.is_empty() || !self.pending_non_publish_operations.is_empty()
     }
 
     fn complete_operation_as_success(&mut self, id : u64, completion_result: Option<OperationResponse>) -> GneissResult<()> {
@@ -1624,8 +1624,8 @@ impl ProtocolState {
         }
 
         let mut slow_start_ack_count : u32 = 0;
-        for (id, _) in &self.operations {
-            let operation = self.operations.get(&id).unwrap();
+        for id in self.operations.keys() {
+            let operation = self.operations.get(id).unwrap();
             slow_start_ack_count += operation.slow_start_ack_value;
         }
 
@@ -1712,11 +1712,22 @@ impl ProtocolState {
             let packet_id = suback.packet_id;
             let operation_id_option = self.pending_non_publish_operations.get(&packet_id);
             if let Some(operation_id) = operation_id_option {
-                return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Subscribe(suback)));
+                let matching_operation = self.operations.get(operation_id).unwrap();
+                if let MqttPacket::Subscribe(subscribe) = &*matching_operation.packet {
+                    if suback.reason_codes.len() != subscribe.subscriptions.len() {
+                        error!("[{} ms] handle_suback -  SUBACK with packet id {} does not contain the correct number of reason codes for original subscribe", self.elapsed_time_ms, packet_id);
+                        return Err(GneissError::new_protocol_error("suback reason code amount mismatch"));
+                    }
+
+                    return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Subscribe(suback)));
+                } else {
+                    error!("[{} ms] handle_suback - SUBACK packet id {}, matching operation is not a subscribe", self.elapsed_time_ms, packet_id);
+                    return Err(GneissError::new_protocol_error("no pending subscribe exists for incoming suback"));
+                }
             }
 
             error!("[{} ms] handle_suback - no matching operation corresponding to SUBACK packet id {}", self.elapsed_time_ms, packet_id);
-            return Err(GneissError::new_protocol_error("no pending subscribe exists for incoming suback"));
+            return Err(GneissError::new_protocol_error("no matching operation exists for incoming suback"));
         }
 
         panic!("handle_suback - invalid input");
@@ -1732,18 +1743,43 @@ impl ProtocolState {
             _ => {}
         }
 
-        if let MqttPacket::Unsuback(unsuback) = *packet {
+        if let MqttPacket::Unsuback(mut unsuback) = *packet {
             let packet_id = unsuback.packet_id;
             let operation_id_option = self.pending_non_publish_operations.get(&packet_id);
             if let Some(operation_id) = operation_id_option {
-                return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Unsubscribe(unsuback)));
+                let matching_operation = self.operations.get(operation_id).unwrap();
+                if let MqttPacket::Unsubscribe(unsubscribe) = &*matching_operation.packet {
+                    // synthesize successful acks in the 311 case, what else can we do?
+                    // Allows users to make more consistent result handlers
+                    let original_topic_filter_count = unsubscribe.topic_filters.len();
+                    if self.protocol_version == ProtocolVersion::Mqtt311 {
+                        unsuback.reason_codes = vec![UnsubackReasonCode::Success; original_topic_filter_count];
+                    } else if unsuback.reason_codes.len() != original_topic_filter_count {
+                        error!("[{} ms] handle_unsuback -  UNSUBACK with packet id {} does not contain the correct number of reason codes for original unsubscribe", self.elapsed_time_ms, packet_id);
+                        return Err(GneissError::new_protocol_error("unsuback reason code amount mismatch"));
+                    }
+                    return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Unsubscribe(unsuback)));
+                } else {
+                    error!("[{} ms] handle_unsuback - UNSUBACK packet id {}, matching operation is not an unsubscribe", self.elapsed_time_ms, packet_id);
+                    return Err(GneissError::new_protocol_error("no pending unsubscribe exists for incoming unsuback"));
+                }
             }
 
             error!("[{} ms] handle_unsuback - no matching operation corresponding to UNSUBACK packet id {}", self.elapsed_time_ms, packet_id);
-            return Err(GneissError::new_protocol_error("no pending unsubscribe exists for incoming unsuback"));
+            return Err(GneissError::new_protocol_error("no matching operation exists for incoming unsuback"));
         }
 
         panic!("handle_unsuback - invalid input");
+    }
+
+    fn is_operation_publish_of_qos(&self, operation_id : u64, qos: QualityOfService) -> bool {
+        if let Some(operation) = self.operations.get(&operation_id) {
+            if let MqttPacket::Publish(publish) = &*operation.packet {
+                return publish.qos == qos;
+            }
+        }
+
+        false
     }
 
     fn handle_puback(&mut self, packet: Box<MqttPacket>) -> GneissResult<()> {
@@ -1760,7 +1796,12 @@ impl ProtocolState {
             let packet_id = puback.packet_id;
             let operation_id_option = self.pending_publish_operations.get(&packet_id);
             if let Some(operation_id) = operation_id_option {
-                return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Publish(PublishResponse::Qos1(puback))));
+                if self.is_operation_publish_of_qos(*operation_id, QualityOfService::AtLeastOnce) {
+                    return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Publish(PublishResponse::Qos1(puback))));
+                } else {
+                    error!("[{} ms] handle_puback -  PUBACK packet id {}, matching operation is not a QoS1 publish", self.elapsed_time_ms, packet_id);
+                    return Err(GneissError::new_protocol_error("matching operation is not a QoS1 publish"));
+                }
             }
 
             error!("[{} ms] handle_puback - no matching operation corresponding to PUBACK packet id {}", self.elapsed_time_ms, packet_id);
@@ -1784,13 +1825,14 @@ impl ProtocolState {
             let packet_id = pubrec.packet_id;
             let operation_id_option = self.pending_publish_operations.get(&packet_id);
             if let Some(operation_id) = operation_id_option {
-                if pubrec.reason_code as u8 >= 128 {
-                    return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Publish(PublishResponse::Qos2(Qos2Response::Pubrec(pubrec)))));
-                } else {
-                    let operation_option = self.operations.get_mut(operation_id);
-                    if let Some(operation) = operation_option {
-                        if let MqttPacket::Publish(publish) = &*operation.packet {
-                            if publish.qos == QualityOfService::ExactlyOnce {
+                let operation_option = self.operations.get_mut(operation_id);
+                if let Some(operation) = operation_option {
+                    if let MqttPacket::Publish(publish) = &*operation.packet {
+                        if publish.qos == QualityOfService::ExactlyOnce {
+                            if pubrec.reason_code as u8 >= 128 {
+                                return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Publish(PublishResponse::Qos2(Qos2Response::Pubrec(pubrec)))));
+                            } else {
+                                // unsure if further protocol validation is safe/correct here
                                 operation.qos2_pubrel = Some(Box::new(MqttPacket::Pubrel(PubrelPacket {
                                     packet_id: pubrec.packet_id,
                                     ..Default::default()
@@ -1799,15 +1841,18 @@ impl ProtocolState {
                                 self.enqueue_operation(*operation_id, ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Back);
                                 return Ok(());
                             }
+                        } else {
+                            error!("[{} ms] handle_pubrec - operation {} corresponding to packet id {} is not a QoS 2 publish", self.elapsed_time_ms, operation_id, packet_id);
+                            return Err(GneissError::new_protocol_error("pubrec received for a pending operation that is not a qos2 publish"));
                         }
-
-                        error!("[{} ms] handle_pubrec - operation {} corresponding to packet id {} is not a QoS 2 publish", self.elapsed_time_ms, operation_id, packet_id);
-                        return Err(GneissError::new_protocol_error("pubrec received for a pending operation that is not a qos2 publish"));
                     }
 
-                    warn!("[{} ms] handle_pubrec - operation {} corresponding to packet id {} does not exist", self.elapsed_time_ms, operation_id, packet_id);
-                    return Ok(());
+                    error!("[{} ms] handle_pubrec - operation {} corresponding to packet id {} is not a publish", self.elapsed_time_ms, operation_id, packet_id);
+                    return Err(GneissError::new_protocol_error("pubrec received for a pending operation that is not a publish"));
                 }
+
+                warn!("[{} ms] handle_pubrec - operation {} corresponding to packet id {} does not exist", self.elapsed_time_ms, operation_id, packet_id);
+                return Ok(());
             }
 
             error!("[{} ms] handle_pubrec - no matching operation corresponding to PUBREC packet id {}", self.elapsed_time_ms, packet_id);
@@ -1858,7 +1903,22 @@ impl ProtocolState {
             let packet_id = pubcomp.packet_id;
             let operation_id_option = self.pending_publish_operations.get(&packet_id);
             if let Some(operation_id) = operation_id_option {
-                return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Publish(PublishResponse::Qos2(Qos2Response::Pubcomp(pubcomp)))));
+                let operation = self.operations.get_mut(operation_id).unwrap();
+                if let MqttPacket::Publish(publish) = &*operation.packet {
+                    if publish.qos == QualityOfService::ExactlyOnce {
+                        if operation.qos2_pubrel.is_some() {
+                            return self.complete_operation_as_success(*operation_id, Some(OperationResponse::Publish(PublishResponse::Qos2(Qos2Response::Pubcomp(pubcomp)))));
+                        } else {
+                            error!("[{} ms] handle_pubcomp - received a pubcomp with packet id {} for operation {} before a pubrel had been sent", self.elapsed_time_ms, packet_id, operation_id);
+                            return Err(GneissError::new_protocol_error("received a pubcomp before sending a pubrel"));
+                        }
+                    } else {
+                        error!("[{} ms] handle_pubcomp - received a pubcomp for with packet id {} operation {} which is not a qos 2 publish", self.elapsed_time_ms, packet_id, operation_id);
+                        return Err(GneissError::new_protocol_error("received a pubcomp before sending a pubrel"));
+                    }
+                } else {
+                    panic!("pending publish operation is not a publish");
+                }
             }
 
             error!("[{} ms] handle_pubcomp - no matching operation corresponding to PUBCOMP packet id {}", self.elapsed_time_ms, packet_id);

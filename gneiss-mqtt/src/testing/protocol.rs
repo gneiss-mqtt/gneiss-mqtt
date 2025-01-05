@@ -1690,13 +1690,13 @@ fn do_unsubscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_
     assert!(unsubscribe_result.is_ok());
 
     let unsuback_result = unsubscribe_result.unwrap();
+    assert_eq!(1, unsuback_result.reason_codes.len());
     match fixture.client_state.protocol_version {
         ProtocolVersion::Mqtt5 => {
-            assert_eq!(1, unsuback_result.reason_codes.len());
             assert_eq!(expected_reason_code, unsuback_result.reason_codes[0]);
         }
         ProtocolVersion::Mqtt311 => {
-            assert_eq!(0, unsuback_result.reason_codes.len());
+            assert_eq!(UnsubackReasonCode::Success, unsuback_result.reason_codes[0]);
         }
     }
 
@@ -4530,36 +4530,36 @@ enum SlowStartOperationState {
 fn get_publish_receiver_status(receiver : &std::sync::mpsc::Receiver<PublishResult>) -> SlowStartOperationState {
     if let Ok(result) = receiver.try_recv() {
         if result.is_ok() {
-            return SlowStartOperationState::CompleteSuccess;
+            SlowStartOperationState::CompleteSuccess
         } else {
-            return SlowStartOperationState::CompleteFailure;
+            SlowStartOperationState::CompleteFailure
         }
     } else {
-        return SlowStartOperationState::None;
+        SlowStartOperationState::None
     }
 }
 
 fn get_subscribe_receiver_status(receiver : &std::sync::mpsc::Receiver<SubscribeResult>) -> SlowStartOperationState {
     if let Ok(result) = receiver.try_recv() {
         if result.is_ok() {
-            return SlowStartOperationState::CompleteSuccess;
+            SlowStartOperationState::CompleteSuccess
         } else {
-            return SlowStartOperationState::CompleteFailure;
+            SlowStartOperationState::CompleteFailure
         }
     } else {
-        return SlowStartOperationState::None;
+        SlowStartOperationState::None
     }
 }
 
 fn get_unsubscribe_receiver_status(receiver : &std::sync::mpsc::Receiver<UnsubscribeResult>) -> SlowStartOperationState {
     if let Ok(result) = receiver.try_recv() {
         if result.is_ok() {
-            return SlowStartOperationState::CompleteSuccess;
+            SlowStartOperationState::CompleteSuccess
         } else {
-            return SlowStartOperationState::CompleteFailure;
+            SlowStartOperationState::CompleteFailure
         }
     } else {
-        return SlowStartOperationState::None;
+        SlowStartOperationState::None
     }
 }
 
@@ -4644,10 +4644,8 @@ fn do_statuses_match(expected_statuses: &[SlowStartOperationState; 10], current_
 
 enum SlowStartOperationType {
     Qos0Publish,
-    Qos1Publish,
-    Qos2Publish,
-    Subscribe,
-    Unsubscribe,
+    Qos12Publish,
+    SubscribeUnsubscribe,
 }
 
 fn should_fail_after_disconnect(operation_type : SlowStartOperationType, offline_queue_policy : OfflineQueuePolicy) -> bool {
@@ -4655,19 +4653,19 @@ fn should_fail_after_disconnect(operation_type : SlowStartOperationType, offline
         SlowStartOperationType::Qos0Publish => {
             offline_queue_policy != OfflineQueuePolicy::PreserveAll
         }
-        SlowStartOperationType::Qos1Publish | SlowStartOperationType::Qos2Publish => {
+        SlowStartOperationType::Qos12Publish => {
             offline_queue_policy == OfflineQueuePolicy::PreserveNothing
         }
-        SlowStartOperationType::Subscribe | SlowStartOperationType::Unsubscribe => {
+        SlowStartOperationType::SubscribeUnsubscribe => {
             offline_queue_policy != OfflineQueuePolicy::PreserveAll && offline_queue_policy != OfflineQueuePolicy::PreserveAcknowledged
         }
     }
 }
 
 fn get_expected_status_post_disconnect(offline_queue_policy: OfflineQueuePolicy) -> [SlowStartOperationState; 10] {
-    let sub_unsub_state = if should_fail_after_disconnect(SlowStartOperationType::Subscribe, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let sub_unsub_state = if should_fail_after_disconnect(SlowStartOperationType::SubscribeUnsubscribe, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
     let qos0_state = if should_fail_after_disconnect(SlowStartOperationType::Qos0Publish, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
-    let qos12_state = if should_fail_after_disconnect(SlowStartOperationType::Qos1Publish, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let qos12_state = if should_fail_after_disconnect(SlowStartOperationType::Qos12Publish, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
 
     [
         SlowStartOperationState::ResubmitQueue,
@@ -4688,28 +4686,26 @@ fn should_fail_after_reconnect(operation_type : SlowStartOperationType, offline_
         SlowStartOperationType::Qos0Publish => {
             offline_queue_policy != OfflineQueuePolicy::PreserveAll
         }
-        SlowStartOperationType::Qos1Publish | SlowStartOperationType::Qos2Publish => {
+        SlowStartOperationType::Qos12Publish => {
             !session_present && offline_queue_policy == OfflineQueuePolicy::PreserveNothing
         }
-        SlowStartOperationType::Subscribe | SlowStartOperationType::Unsubscribe => {
+        SlowStartOperationType::SubscribeUnsubscribe => {
             offline_queue_policy != OfflineQueuePolicy::PreserveAll && offline_queue_policy != OfflineQueuePolicy::PreserveAcknowledged
         }
     }
 }
 
 fn get_expected_status_post_reconnect(offline_queue_policy: OfflineQueuePolicy, session_present: bool) -> [SlowStartOperationState; 10] {
-    let sub_unsub_state = if should_fail_after_reconnect(SlowStartOperationType::Subscribe, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let sub_unsub_state = if should_fail_after_reconnect(SlowStartOperationType::SubscribeUnsubscribe, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
     let qos0_state = if should_fail_after_reconnect(SlowStartOperationType::Qos0Publish, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
     let qos12_state = if offline_queue_policy == OfflineQueuePolicy::PreserveNothing { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
     let pending_qos12_state =
-        if should_fail_after_reconnect(SlowStartOperationType::Qos1Publish, offline_queue_policy, session_present) {
+        if should_fail_after_reconnect(SlowStartOperationType::Qos12Publish, offline_queue_policy, session_present) {
             SlowStartOperationState::CompleteFailure
+        } else if session_present {
+            SlowStartOperationState::ResubmitQueue
         } else {
-            if session_present {
-                SlowStartOperationState::ResubmitQueue
-            } else {
-                SlowStartOperationState::UserQueue
-            }
+            SlowStartOperationState::UserQueue
         };
 
     [
@@ -4785,12 +4781,12 @@ fn encode_to_buffer(packet: &MqttPacket) -> GneissResult<Vec<u8>> {
 }
 
 fn compute_used_packet_id_for_pending(fixture : &ProtocolStateTestFixture, op_id : u64) -> u16 {
-    for pending_id_pair in fixture.client_state.pending_publish_operations.iter() {
+    if let Some(pending_id_pair) = fixture.client_state.pending_publish_operations.iter().next() {
         assert_eq!(op_id, *pending_id_pair.1);
         return *pending_id_pair.0;
     }
 
-    for pending_id_pair in fixture.client_state.pending_non_publish_operations.iter() {
+    if let Some(pending_id_pair) = fixture.client_state.pending_non_publish_operations.iter().next() {
         assert_eq!(op_id, *pending_id_pair.1);
         return *pending_id_pair.0;
     }
@@ -4913,7 +4909,7 @@ fn do_slow_start_test(offline_queue_policy: OfflineQueuePolicy, session_present:
         }
 
         let necessary_ack_packets : Vec<MqttPacket> = get_acks_needed_for_operation(&fixture, op_id);
-        assert!(necessary_ack_packets.len() > 0);
+        assert!(!necessary_ack_packets.is_empty());
 
         for i in 0..necessary_ack_packets.len() {
             let packet = &necessary_ack_packets[i];
