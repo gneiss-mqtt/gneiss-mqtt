@@ -1690,13 +1690,13 @@ fn do_unsubscribe_success(fixture : &mut ProtocolStateTestFixture, transmission_
     assert!(unsubscribe_result.is_ok());
 
     let unsuback_result = unsubscribe_result.unwrap();
+    assert_eq!(1, unsuback_result.reason_codes.len());
     match fixture.client_state.protocol_version {
         ProtocolVersion::Mqtt5 => {
-            assert_eq!(1, unsuback_result.reason_codes.len());
             assert_eq!(expected_reason_code, unsuback_result.reason_codes[0]);
         }
         ProtocolVersion::Mqtt311 => {
-            assert_eq!(0, unsuback_result.reason_codes.len());
+            assert_eq!(UnsubackReasonCode::Success, unsuback_result.reason_codes[0]);
         }
     }
 
@@ -4530,36 +4530,36 @@ enum SlowStartOperationState {
 fn get_publish_receiver_status(receiver : &std::sync::mpsc::Receiver<PublishResult>) -> SlowStartOperationState {
     if let Ok(result) = receiver.try_recv() {
         if result.is_ok() {
-            return SlowStartOperationState::CompleteSuccess;
+            SlowStartOperationState::CompleteSuccess
         } else {
-            return SlowStartOperationState::CompleteFailure;
+            SlowStartOperationState::CompleteFailure
         }
     } else {
-        return SlowStartOperationState::None;
+        SlowStartOperationState::None
     }
 }
 
 fn get_subscribe_receiver_status(receiver : &std::sync::mpsc::Receiver<SubscribeResult>) -> SlowStartOperationState {
     if let Ok(result) = receiver.try_recv() {
         if result.is_ok() {
-            return SlowStartOperationState::CompleteSuccess;
+            SlowStartOperationState::CompleteSuccess
         } else {
-            return SlowStartOperationState::CompleteFailure;
+            SlowStartOperationState::CompleteFailure
         }
     } else {
-        return SlowStartOperationState::None;
+        SlowStartOperationState::None
     }
 }
 
 fn get_unsubscribe_receiver_status(receiver : &std::sync::mpsc::Receiver<UnsubscribeResult>) -> SlowStartOperationState {
     if let Ok(result) = receiver.try_recv() {
         if result.is_ok() {
-            return SlowStartOperationState::CompleteSuccess;
+            SlowStartOperationState::CompleteSuccess
         } else {
-            return SlowStartOperationState::CompleteFailure;
+            SlowStartOperationState::CompleteFailure
         }
     } else {
-        return SlowStartOperationState::None;
+        SlowStartOperationState::None
     }
 }
 
@@ -4644,10 +4644,8 @@ fn do_statuses_match(expected_statuses: &[SlowStartOperationState; 10], current_
 
 enum SlowStartOperationType {
     Qos0Publish,
-    Qos1Publish,
-    Qos2Publish,
-    Subscribe,
-    Unsubscribe,
+    Qos12Publish,
+    SubscribeUnsubscribe,
 }
 
 fn should_fail_after_disconnect(operation_type : SlowStartOperationType, offline_queue_policy : OfflineQueuePolicy) -> bool {
@@ -4655,19 +4653,19 @@ fn should_fail_after_disconnect(operation_type : SlowStartOperationType, offline
         SlowStartOperationType::Qos0Publish => {
             offline_queue_policy != OfflineQueuePolicy::PreserveAll
         }
-        SlowStartOperationType::Qos1Publish | SlowStartOperationType::Qos2Publish => {
+        SlowStartOperationType::Qos12Publish => {
             offline_queue_policy == OfflineQueuePolicy::PreserveNothing
         }
-        SlowStartOperationType::Subscribe | SlowStartOperationType::Unsubscribe => {
+        SlowStartOperationType::SubscribeUnsubscribe => {
             offline_queue_policy != OfflineQueuePolicy::PreserveAll && offline_queue_policy != OfflineQueuePolicy::PreserveAcknowledged
         }
     }
 }
 
 fn get_expected_status_post_disconnect(offline_queue_policy: OfflineQueuePolicy) -> [SlowStartOperationState; 10] {
-    let sub_unsub_state = if should_fail_after_disconnect(SlowStartOperationType::Subscribe, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let sub_unsub_state = if should_fail_after_disconnect(SlowStartOperationType::SubscribeUnsubscribe, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
     let qos0_state = if should_fail_after_disconnect(SlowStartOperationType::Qos0Publish, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
-    let qos12_state = if should_fail_after_disconnect(SlowStartOperationType::Qos1Publish, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let qos12_state = if should_fail_after_disconnect(SlowStartOperationType::Qos12Publish, offline_queue_policy) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
 
     [
         SlowStartOperationState::ResubmitQueue,
@@ -4688,28 +4686,26 @@ fn should_fail_after_reconnect(operation_type : SlowStartOperationType, offline_
         SlowStartOperationType::Qos0Publish => {
             offline_queue_policy != OfflineQueuePolicy::PreserveAll
         }
-        SlowStartOperationType::Qos1Publish | SlowStartOperationType::Qos2Publish => {
+        SlowStartOperationType::Qos12Publish => {
             !session_present && offline_queue_policy == OfflineQueuePolicy::PreserveNothing
         }
-        SlowStartOperationType::Subscribe | SlowStartOperationType::Unsubscribe => {
+        SlowStartOperationType::SubscribeUnsubscribe => {
             offline_queue_policy != OfflineQueuePolicy::PreserveAll && offline_queue_policy != OfflineQueuePolicy::PreserveAcknowledged
         }
     }
 }
 
 fn get_expected_status_post_reconnect(offline_queue_policy: OfflineQueuePolicy, session_present: bool) -> [SlowStartOperationState; 10] {
-    let sub_unsub_state = if should_fail_after_reconnect(SlowStartOperationType::Subscribe, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
+    let sub_unsub_state = if should_fail_after_reconnect(SlowStartOperationType::SubscribeUnsubscribe, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
     let qos0_state = if should_fail_after_reconnect(SlowStartOperationType::Qos0Publish, offline_queue_policy, session_present) { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
     let qos12_state = if offline_queue_policy == OfflineQueuePolicy::PreserveNothing { SlowStartOperationState::CompleteFailure } else { SlowStartOperationState::UserQueue };
     let pending_qos12_state =
-        if should_fail_after_reconnect(SlowStartOperationType::Qos1Publish, offline_queue_policy, session_present) {
+        if should_fail_after_reconnect(SlowStartOperationType::Qos12Publish, offline_queue_policy, session_present) {
             SlowStartOperationState::CompleteFailure
+        } else if session_present {
+            SlowStartOperationState::ResubmitQueue
         } else {
-            if session_present {
-                SlowStartOperationState::ResubmitQueue
-            } else {
-                SlowStartOperationState::UserQueue
-            }
+            SlowStartOperationState::UserQueue
         };
 
     [
@@ -4785,12 +4781,12 @@ fn encode_to_buffer(packet: &MqttPacket) -> GneissResult<Vec<u8>> {
 }
 
 fn compute_used_packet_id_for_pending(fixture : &ProtocolStateTestFixture, op_id : u64) -> u16 {
-    for pending_id_pair in fixture.client_state.pending_publish_operations.iter() {
+    if let Some(pending_id_pair) = fixture.client_state.pending_publish_operations.iter().next() {
         assert_eq!(op_id, *pending_id_pair.1);
         return *pending_id_pair.0;
     }
 
-    for pending_id_pair in fixture.client_state.pending_non_publish_operations.iter() {
+    if let Some(pending_id_pair) = fixture.client_state.pending_non_publish_operations.iter().next() {
         assert_eq!(op_id, *pending_id_pair.1);
         return *pending_id_pair.0;
     }
@@ -4913,7 +4909,7 @@ fn do_slow_start_test(offline_queue_policy: OfflineQueuePolicy, session_present:
         }
 
         let necessary_ack_packets : Vec<MqttPacket> = get_acks_needed_for_operation(&fixture, op_id);
-        assert!(necessary_ack_packets.len() > 0);
+        assert!(!necessary_ack_packets.is_empty());
 
         for i in 0..necessary_ack_packets.len() {
             let packet = &necessary_ack_packets[i];
@@ -4984,4 +4980,284 @@ fn do_slow_start_test_keep_nothing_session_present() {
 #[test]
 fn do_slow_start_test_keep_nothing_session_not_present() {
     assert!(do_slow_start_test(OfflineQueuePolicy::PreserveNothing, false).is_ok());
+}
+
+fn do_bad_ack_response_protocol_test(protocol_version: i32, packet : MqttPacket, packet_handler: PacketHandler) {
+    let state_config = build_standard_test_config(protocol_version);
+    let mut fixture = ProtocolStateTestFixture::new(state_config);
+
+    match &packet {
+        MqttPacket::Subscribe(_) => {
+            fixture.broker_packet_handlers.insert(PacketType::Subscribe, packet_handler);
+        }
+        MqttPacket::Unsubscribe(_) => {
+            fixture.broker_packet_handlers.insert(PacketType::Unsubscribe, packet_handler);
+        }
+        MqttPacket::Publish(_) => {
+            fixture.broker_packet_handlers.insert(PacketType::Publish, packet_handler);
+        }
+        _ => {
+            panic!("illegal packet type for test")
+        }
+    }
+
+    assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
+
+    match packet {
+        MqttPacket::Subscribe(subscribe) => {
+            assert!(fixture.subscribe(5, subscribe, SubscribeOptions::default()).is_ok());
+        }
+        MqttPacket::Unsubscribe(unsubscribe) => {
+            assert!(fixture.unsubscribe(5, unsubscribe, UnsubscribeOptions::default()).is_ok());
+        }
+        MqttPacket::Publish(publish) => {
+            assert!(fixture.publish(5, publish, PublishOptions::default()).is_ok());
+        }
+        _ => {
+            panic!("illegal packet type for test")
+        }
+    }
+
+    let service_result = fixture.service_round_trip(10, 20, 4096);
+    assert!(service_result.is_err());
+
+    let service_error = service_result.err().unwrap();
+    assert_matches!(service_error, GneissError::ProtocolError(_));
+}
+
+fn get_packet_id_from_packet(packet: &MqttPacket) -> u16 {
+    match packet {
+        MqttPacket::Subscribe(subscribe) => {
+            subscribe.packet_id
+        }
+        MqttPacket::Unsubscribe(unsubscribe) => {
+            unsubscribe.packet_id
+        }
+        MqttPacket::Publish(publish) => {
+            publish.packet_id
+        }
+        _ => {
+            panic!("Illegal packet type for protocol ack test");
+        }
+    }
+}
+
+fn handle_ackable_with_suback(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    let response = Box::new(MqttPacket::Suback(SubackPacket {
+        packet_id : get_packet_id_from_packet(packet),
+        reason_codes : vec![SubackReasonCode::GrantedQos0],
+        ..Default::default()
+    }));
+    response_packets.push_back(response);
+
+    Ok(())
+}
+
+fn handle_ackable_with_suback_too_many_rcs(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    let response = Box::new(MqttPacket::Suback(SubackPacket {
+        packet_id : get_packet_id_from_packet(packet),
+        reason_codes : vec![SubackReasonCode::GrantedQos0, SubackReasonCode::UnspecifiedError, SubackReasonCode::GrantedQos1],
+        ..Default::default()
+    }));
+    response_packets.push_back(response);
+
+    Ok(())
+}
+
+fn handle_ackable_with_puback(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    let response = Box::new(MqttPacket::Puback(PubackPacket {
+        packet_id : get_packet_id_from_packet(packet),
+        ..Default::default()
+    }));
+    response_packets.push_back(response);
+
+    Ok(())
+}
+
+fn handle_ackable_with_unsuback5(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    let response = Box::new(MqttPacket::Unsuback(UnsubackPacket {
+        packet_id : get_packet_id_from_packet(packet),
+        reason_codes : vec![ UnsubackReasonCode::Success ],
+        ..Default::default()
+    }));
+    response_packets.push_back(response);
+
+    Ok(())
+}
+
+fn handle_ackable_with_unsuback_too_many_rcs5(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    let response = Box::new(MqttPacket::Unsuback(UnsubackPacket {
+        packet_id : get_packet_id_from_packet(packet),
+        reason_codes : vec![ UnsubackReasonCode::Success, UnsubackReasonCode::Success, UnsubackReasonCode::Success ],
+        ..Default::default()
+    }));
+    response_packets.push_back(response);
+
+    Ok(())
+}
+
+fn handle_ackable_with_unsuback311(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    let response = Box::new(MqttPacket::Unsuback(UnsubackPacket {
+        packet_id : get_packet_id_from_packet(packet),
+        ..Default::default()
+    }));
+    response_packets.push_back(response);
+
+    Ok(())
+}
+
+fn handle_ackable_with_pubrec(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    let response = Box::new(MqttPacket::Pubrec(PubrecPacket {
+        packet_id : get_packet_id_from_packet(packet),
+        ..Default::default()
+    }));
+    response_packets.push_back(response);
+
+    Ok(())
+}
+
+fn handle_ackable_with_pubcomp(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
+    let response = Box::new(MqttPacket::Pubcomp(PubcompPacket {
+        packet_id : get_packet_id_from_packet(packet),
+        ..Default::default()
+    }));
+    response_packets.push_back(response);
+
+    Ok(())
+}
+
+fn make_ack_mismatch_subscribe() -> MqttPacket {
+    MqttPacket::Subscribe(SubscribePacket{
+        subscriptions: vec![Subscription::new_simple("a/b".to_string(), QualityOfService::AtLeastOnce)],
+        ..Default::default()
+    })
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_subscribe_with_puback(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_subscribe(), Box::new(handle_ackable_with_puback));
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_subscribe_with_pubrec(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_subscribe(), Box::new(handle_ackable_with_pubrec));
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_subscribe_with_pubcomp(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_subscribe(), Box::new(handle_ackable_with_pubcomp));
+}
+
+#[test]
+fn ack_mismatch_protocol_failure_subscribe_with_unsuback5() {
+    do_bad_ack_response_protocol_test(5, make_ack_mismatch_subscribe(), Box::new(handle_ackable_with_unsuback5));
+}
+
+#[test]
+fn ack_mismatch_protocol_failure_subscribe_with_unsuback311() {
+    do_bad_ack_response_protocol_test(311, make_ack_mismatch_subscribe(), Box::new(handle_ackable_with_unsuback311));
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_subscribe_with_too_many_rcs(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_subscribe(), Box::new(handle_ackable_with_suback_too_many_rcs));
+}
+
+fn make_ack_mismatch_unsubscribe() -> MqttPacket {
+    MqttPacket::Unsubscribe(UnsubscribePacket{
+        topic_filters: vec!["a/b".to_string()],
+        ..Default::default()
+    })
+}
+
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_unsubscribe_with_puback(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_unsubscribe(), Box::new(handle_ackable_with_puback));
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_unsubscribe_with_pubrec(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_unsubscribe(), Box::new(handle_ackable_with_pubrec));
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_unsubscribe_with_pubcomp(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_unsubscribe(), Box::new(handle_ackable_with_pubcomp));
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_unsubscribe_with_suback(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_unsubscribe(), Box::new(handle_ackable_with_suback));
+}
+
+#[test]
+fn ack_mismatch_protocol_failure_subscribe_with_unsuback_too_many_rcs5() {
+    do_bad_ack_response_protocol_test(5, make_ack_mismatch_unsubscribe(), Box::new(handle_ackable_with_unsuback_too_many_rcs5));
+}
+
+fn make_ack_mismatch_qos1_publish() -> MqttPacket {
+    MqttPacket::Publish(PublishPacket{
+        topic: "a/b".to_string(),
+        qos: QualityOfService::AtLeastOnce,
+        ..Default::default()
+    })
+}
+
+#[test]
+fn ack_mismatch_protocol_failure_qos1_publish_with_unsuback5() {
+    do_bad_ack_response_protocol_test(5, make_ack_mismatch_qos1_publish(), Box::new(handle_ackable_with_unsuback5));
+}
+
+#[test]
+fn ack_mismatch_protocol_failure_qos1_publish_with_unsuback311() {
+    do_bad_ack_response_protocol_test(311, make_ack_mismatch_qos1_publish(), Box::new(handle_ackable_with_unsuback311));
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_qos1_publish_with_pubrec(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_qos1_publish(), Box::new(handle_ackable_with_pubrec));
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_qos1_publish_with_pubcomp(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_qos1_publish(), Box::new(handle_ackable_with_pubcomp));
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_qos1_publish_with_suback(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_qos1_publish(), Box::new(handle_ackable_with_suback));
+}
+
+fn make_ack_mismatch_qos2_publish() -> MqttPacket {
+    MqttPacket::Publish(PublishPacket{
+        topic: "a/b".to_string(),
+        qos: QualityOfService::ExactlyOnce,
+        ..Default::default()
+    })
+}
+
+#[test]
+fn ack_mismatch_protocol_failure_qos2_publish_with_unsuback5() {
+    do_bad_ack_response_protocol_test(5, make_ack_mismatch_qos2_publish(), Box::new(handle_ackable_with_unsuback5));
+}
+
+#[test]
+fn ack_mismatch_protocol_failure_qos2_publish_with_unsuback311() {
+    do_bad_ack_response_protocol_test(311, make_ack_mismatch_qos2_publish(), Box::new(handle_ackable_with_unsuback311));
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_qos2_publish_with_puback(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_qos2_publish(), Box::new(handle_ackable_with_puback));
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_qos2_publish_with_pubcomp(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_qos2_publish(), Box::new(handle_ackable_with_pubcomp));
+}
+
+#[test_matrix([311, 5])]
+fn ack_mismatch_protocol_failure_qos2_publish_with_suback(raw_version : i32) {
+    do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_qos2_publish(), Box::new(handle_ackable_with_suback));
 }
