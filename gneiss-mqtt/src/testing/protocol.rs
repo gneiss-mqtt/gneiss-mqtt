@@ -45,6 +45,7 @@ fn build_standard_test_config(protocol_version : i32) -> ProtocolStateConfig {
         outbound_alias_resolver: None,
         protocol_mode,
         post_reconnect_queue_drain_policy: PostReconnectQueueDrainPolicy::None,
+        max_interrupted_retries: None,
     }
 }
 

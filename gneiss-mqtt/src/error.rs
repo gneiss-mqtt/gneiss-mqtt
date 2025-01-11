@@ -121,6 +121,11 @@ pub struct OtherErrorContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
+/// Additional details about an MaxInterruptedRetriesExceeded error variant
+#[derive(Debug)]
+pub struct MaxInterruptedRetriesExceededContext {
+    source: Box<dyn Error + Send + Sync + 'static>
+}
 
 /// Basic error type for the entire gneiss-mqtt crate.
 #[derive(Debug)]
@@ -196,6 +201,10 @@ pub enum GneissError {
     /// auxiliary crates whose error category doesn't match anything but that want to restrict
     /// results to GneissError.
     OtherError(OtherErrorContext),
+
+    /// Error applied to operations that are failed because they have been interrupted too
+    /// many times relative to the interrupt maximum the client has been configured with.
+    MaxInterruptedRetriesExceeded(MaxInterruptedRetriesExceededContext)
 }
 
 impl GneissError {
@@ -353,6 +362,14 @@ impl GneissError {
             }
         )
     }
+
+    pub(crate) fn new_max_interrupted_retries_exceeded_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        GneissError::OtherError (
+            OtherErrorContext {
+                source : source.into()
+            }
+        )
+    }
 }
 
 impl Error for GneissError {
@@ -398,6 +415,9 @@ impl Error for GneissError {
                 Some(context.source.as_ref())
             }
             GneissError::OtherError(context) => {
+                Some(context.source.as_ref())
+            }
+            GneissError::MaxInterruptedRetriesExceeded(context) => {
                 Some(context.source.as_ref())
             }
             _ => { None }
@@ -461,6 +481,9 @@ impl fmt::Display for GneissError {
             }
             GneissError::OtherError(context) => {
                 write!(f, "Other error: {}", context.source)
+            }
+            GneissError::MaxInterruptedRetriesExceeded(_) => {
+                write!(f, "Operation failed due exceeding the maximum interrupted retries limit")
             }
         }
     }
