@@ -20,3 +20,6 @@ This document is currently hand-written and non-authoritative.
 
 ## 0.4.0
 * Threaded client support for mtls and custom auth
+
+## 0.5.0
+* When using MQTT311, apply some default settings designed to make the connection more reliable in the face of limit violations when using IoT Core

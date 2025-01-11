@@ -745,7 +745,7 @@ impl AwsClientBuilder {
 
         let mut builder = TokioClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
         builder.with_connect_options(final_connect_options)
-            .with_client_options(client_options)
+            .with_client_options(apply_aws_defaults(client_options))
             .with_tls_options(tls_options);
 
         #[cfg(feature = "tokio-websockets")]
@@ -797,7 +797,7 @@ impl AwsClientBuilder {
 
         let mut builder = ThreadedClientBuilder::new(self.endpoint.as_str(), DEFAULT_PORT);
         builder.with_connect_options(final_connect_options)
-            .with_client_options(client_options)
+            .with_client_options(apply_aws_defaults(client_options))
             .with_tls_options(tls_options);
 
         if self.threaded_options.is_some() {
@@ -855,6 +855,23 @@ impl AwsClientBuilder {
     #[cfg(all(not(any(feature = "tokio-rustls", feature = "threaded-rustls")), any(feature = "tokio-native-tls", feature = "threaded-native-tls")))]
     fn build_tls_options(&self) -> GneissResult<TlsOptions> {
         self.tls_options_builder.build_native_tls()
+    }
+}
+
+fn apply_aws_defaults(options: MqttClientOptions) -> MqttClientOptions {
+    if options.protocol_mode() == ProtocolMode::Mqtt311 &&
+        options.post_reconnect_queue_drain_policy().is_none() &&
+        options.max_interrupted_retries().is_none() {
+
+        // if nothing has been overridden then apply the special config that prevents death
+        // loops in 311 when IoT Core is the broker.
+        let mut builder = options.to_builder();
+        builder.with_post_reconnect_queue_drain_policy(PostReconnectQueueDrainPolicy::OneAtATime)
+            .with_max_interrupted_retries(2);
+
+        builder.build()
+    } else {
+        options
     }
 }
 
