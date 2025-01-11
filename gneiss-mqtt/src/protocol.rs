@@ -76,6 +76,12 @@ pub(crate) struct ClientOperation {
     // completes, it subtracts from the slow start ack count.  When the slow start ack count returns
     // to zero, the client will start processing more than one operation at a time.
     pub(crate) slow_start_ack_value: u32,
+
+    // How many times has this operation been interrupted while waiting for an ack packet?
+    // If this count exceeds the configured maximum for the client (if it's set), then the
+    // operation will be failed even if the queue policy or the MQTT spec would otherwise require
+    // it to be resent.
+    pub(crate) interruption_count: u32,
 }
 
 impl ClientOperation {
@@ -213,6 +219,8 @@ pub(crate) struct ProtocolStateConfig {
     pub protocol_mode: ProtocolMode,
 
     pub post_reconnect_queue_drain_policy: PostReconnectQueueDrainPolicy,
+
+    pub max_interrupted_retries: Option<u32>
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -936,6 +944,47 @@ impl ProtocolState {
         }
     }
 
+    fn update_interrupted_retries(&mut self) {
+        if self.config.max_interrupted_retries.is_none() {
+            return;
+        }
+
+        let pending_non_publish_operations : Vec<u64> = self.pending_non_publish_operations.values().copied().collect();
+        for id in pending_non_publish_operations {
+            let operation = self.operations.get_mut(&id).unwrap();
+            operation.interruption_count += 1;
+        }
+
+        let pending_publish_operations : Vec<u64> = self.pending_publish_operations.values().copied().collect();
+        for id in pending_publish_operations {
+            let operation = self.operations.get_mut(&id).unwrap();
+            operation.interruption_count += 1;
+        }
+    }
+
+    fn fail_operations_exceeding_max_interruption_limit(&mut self) -> GneissResult<()> {
+        let mut result : GneissResult<()> = Ok(());
+
+        if let Some(limit) = self.config.max_interrupted_retries {
+
+            let pending_non_publish_breaching_operations : Vec<u64> = self.pending_non_publish_operations.values().filter(|val|{
+                let operation = self.operations.get(val).unwrap();
+                operation.interruption_count > limit
+            }).copied().collect();
+
+            result = fold_mqtt_result(result, self.complete_operation_sequence_as_failure(pending_non_publish_breaching_operations.into_iter(), generate_interrupt_retries_exceeded_error));
+
+            let pending_publish_breaching_operations : Vec<u64> = self.pending_publish_operations.values().filter(|val|{
+                let operation = self.operations.get(val).unwrap();
+                operation.interruption_count > limit
+            }).copied().collect();
+
+            result = fold_mqtt_result(result, self.complete_operation_sequence_as_failure(pending_publish_breaching_operations.into_iter(), generate_interrupt_retries_exceeded_error));
+        }
+
+        result
+    }
+
     fn handle_network_event_connection_closed(&mut self, _: &mut NetworkEventContext) -> GneissResult<()> {
         if self.state == ProtocolStateType::Disconnected {
             error!("[{} ms] handle_network_event_connection_closed - called in invalid state", self.elapsed_time_ms);
@@ -951,6 +1000,7 @@ impl ProtocolState {
 
         self.apply_connection_closed_to_current_operation()?;
         self.apply_slow_start_initialization();
+        self.update_interrupted_retries();
 
         let mut result : GneissResult<()> = Ok(());
         let mut completions : VecDeque<u64> = VecDeque::new();
@@ -987,6 +1037,9 @@ impl ProtocolState {
         /*
          * unacked operations are processed as follows:
          *
+         *   publish/subscribe/unsubscribe have their interrupted retry count checked against
+         *   the client's limit, if it exists.  Those that have exceeded the limit are failed.
+         *
          *   subscribes and unsubscribes have the offline queue policy applied.  If they fail, the
          *   operation is failed, otherwise it gets put back in the user queue
          *
@@ -994,6 +1047,7 @@ impl ProtocolState {
          *   next successful connection and either have the offline queue policy applied (if no
          *   session is found) or stay in the resubmit queue.
          */
+        result = fold_mqtt_result(result, self.fail_operations_exceeding_max_interruption_limit());
 
         /*
          * qos1+ publishes: mark as duplicate and add to end of resubmit queue
@@ -2077,6 +2131,7 @@ impl ProtocolState {
             options,
             ping_extension_base_timepoint : None,
             slow_start_ack_value: 0,
+            interruption_count: 0,
         };
 
         self.operations.insert(id, operation);
@@ -2159,6 +2214,10 @@ fn generate_connection_closed_error() -> GneissError {
 
 fn generate_offline_queue_policy_failed_error() -> GneissError {
     GneissError::new_offline_queue_policy_failed()
+}
+
+fn generate_interrupt_retries_exceeded_error() -> GneissError {
+    GneissError::new_max_interrupted_retries_exceeded_error("Operation failed due to exceeding the max interrupted retries limit")
 }
 
 fn build_negotiated_settings(config: &ProtocolStateConfig, packet: &ConnackPacket, existing_settings: &Option<NegotiatedSettings>) -> NegotiatedSettings {
@@ -2332,6 +2391,7 @@ mod tests {
             outbound_alias_resolver: None,
             protocol_mode: ProtocolMode::Mqtt5, // nothing tested in this module varies based on protocol version
             post_reconnect_queue_drain_policy: PostReconnectQueueDrainPolicy::None,
+            max_interrupted_retries: None,
         }
     }
 
@@ -2604,6 +2664,7 @@ mod tests {
             outbound_alias_resolver: None,
             protocol_mode: ProtocolMode::Mqtt5,
             post_reconnect_queue_drain_policy: PostReconnectQueueDrainPolicy::None,
+            max_interrupted_retries: None,
         };
 
         ProtocolState::new(config)

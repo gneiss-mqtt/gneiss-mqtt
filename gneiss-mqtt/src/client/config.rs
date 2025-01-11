@@ -920,6 +920,8 @@ pub struct MqttClientOptions {
 
     // use an Option so that the AWS client builder can tell if this has been explicitly set or not
     pub(crate) post_reconnect_queue_drain_policy: Option<PostReconnectQueueDrainPolicy>,
+
+    pub(crate) max_interrupted_retries: Option<u32>,
 }
 
 impl MqttClientOptions {
@@ -970,6 +972,7 @@ impl MqttClientOptionsBuilder {
                 reconnect_options: ReconnectOptions::default(),
                 protocol_mode: ProtocolMode::Mqtt5,
                 post_reconnect_queue_drain_policy: None,
+                max_interrupted_retries: None,
             }
         }
     }
@@ -1058,6 +1061,26 @@ impl MqttClientOptionsBuilder {
     /// Defaults to a policy that does not apply any throttling to resubmission
     pub fn with_post_reconnect_queue_drain_policy(&mut self, policy: PostReconnectQueueDrainPolicy) -> &mut Self {
         self.options.post_reconnect_queue_drain_policy = Some(policy);
+        self
+    }
+
+    /// Configures how quickly, if at all, the client will give up on publish/subscribe/unsubscribe
+    /// operations that are interrupted (ie the operation has been sent but not acknowledged) by
+    /// disconnections.
+    ///
+    /// This setting is useful when you have a broker that disconnects you in response to
+    /// certain valid (by the spec) operations.  In that case, if operations are always retried,
+    /// the client enters a "death loop" where it continuously sends the operation on post-reconnect
+    /// and immediately gets disconnected again.
+    ///
+    /// This setting works together with the post reconnect queue drain policy to isolate "poison"
+    /// packets and eventually fail them rather than let them wreck the client.  It's expected that
+    /// this is mostly useful when operating in MQTT311 mode, where error reporting is extremely
+    /// limited and brokers may just close the connection when you exceed a service limit.
+    ///
+    /// Defaults to no limit.
+    pub fn with_max_interrupted_retries(&mut self, max_retries: u32) -> &mut Self {
+        self.options.max_interrupted_retries = Some(max_retries);
         self
     }
 
