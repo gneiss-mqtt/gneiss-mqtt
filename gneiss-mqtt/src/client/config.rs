@@ -935,6 +935,21 @@ impl MqttClientOptions {
     pub fn to_builder(self) -> MqttClientOptionsBuilder {
         MqttClientOptionsBuilder::new_from_options(self)
     }
+
+    #[doc(hidden)]
+    pub fn protocol_mode(&self) -> ProtocolMode {
+        self.protocol_mode
+    }
+
+    #[doc(hidden)]
+    pub fn post_reconnect_queue_drain_policy(&self) -> Option<PostReconnectQueueDrainPolicy> {
+        self.post_reconnect_queue_drain_policy
+    }
+
+    #[doc(hidden)]
+    pub fn max_interrupted_retries(&self) -> Option<u32> {
+        self.max_interrupted_retries
+    }
 }
 
 impl Debug for MqttClientOptions {
