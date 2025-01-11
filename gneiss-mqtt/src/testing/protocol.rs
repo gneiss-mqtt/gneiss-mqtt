@@ -5262,3 +5262,109 @@ fn ack_mismatch_protocol_failure_qos2_publish_with_pubcomp(raw_version : i32) {
 fn ack_mismatch_protocol_failure_qos2_publish_with_suback(raw_version : i32) {
     do_bad_ack_response_protocol_test(raw_version, make_ack_mismatch_qos2_publish(), Box::new(handle_ackable_with_suback));
 }
+
+struct MaxRetriesTestOperationReceivers {
+    publish_qos1_receiver: std::sync::mpsc::Receiver<PublishResult>,
+    subscribe_receiver: std::sync::mpsc::Receiver<SubscribeResult>,
+    publish_qos2_receiver: std::sync::mpsc::Receiver<PublishResult>,
+    unsubscribe_receiver: std::sync::mpsc::Receiver<UnsubscribeResult>,
+}
+
+fn verify_max_retries_are_incomplete(receivers: &MaxRetriesTestOperationReceivers) {
+    assert_matches!(receivers.publish_qos1_receiver.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty));
+    assert_matches!(receivers.subscribe_receiver.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty));
+    assert_matches!(receivers.publish_qos2_receiver.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty));
+    assert_matches!(receivers.unsubscribe_receiver.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty));
+}
+
+fn verify_max_retries_are_pending(fixture: &ProtocolStateTestFixture) {
+    assert_eq!(2, fixture.client_state.pending_publish_operations.len());
+    assert_eq!(2, fixture.client_state.pending_non_publish_operations.len());
+    assert_eq!(0, fixture.client_state.pending_write_completion_operations.len());
+    assert_eq!(0, fixture.client_state.user_operation_queue.len());
+    assert_eq!(4, fixture.client_state.operations.len());
+}
+
+fn verify_max_retries_have_failed(fixture: &ProtocolStateTestFixture, receivers: &MaxRetriesTestOperationReceivers) {
+    assert_eq!(0, fixture.client_state.pending_publish_operations.len());
+    assert_eq!(0, fixture.client_state.pending_non_publish_operations.len());
+    assert_eq!(0, fixture.client_state.pending_write_completion_operations.len());
+    assert_eq!(0, fixture.client_state.user_operation_queue.len());
+    assert_eq!(0, fixture.client_state.operations.len());
+
+    assert_matches!(receivers.publish_qos1_receiver.try_recv(), Ok(Err(GneissError::MaxInterruptedRetriesExceeded(_))));
+    assert_matches!(receivers.subscribe_receiver.try_recv(), Ok(Err(GneissError::MaxInterruptedRetriesExceeded(_))));
+    assert_matches!(receivers.publish_qos2_receiver.try_recv(), Ok(Err(GneissError::MaxInterruptedRetriesExceeded(_))));
+    assert_matches!(receivers.unsubscribe_receiver.try_recv(), Ok(Err(GneissError::MaxInterruptedRetriesExceeded(_))));
+}
+
+fn setup_max_retries_test_scenario(fixture: &mut ProtocolStateTestFixture) -> MaxRetriesTestOperationReceivers {
+    assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
+
+    // pending ack operations
+
+    let publish_qos1_receiver = fixture.publish(0, PublishPacket {
+        qos: QualityOfService::AtLeastOnce,
+        topic: "a/b".to_string(),
+        ..Default::default()
+    }, PublishOptions::default()).unwrap();
+
+    let subscribe_receiver = fixture.subscribe(0, SubscribePacket {
+        subscriptions: vec!(Subscription::new_simple("a/b".to_string(), QualityOfService::AtLeastOnce)),
+        ..Default::default()
+    }, SubscribeOptions::default()).unwrap();
+
+    let publish_qos2_receiver = fixture.publish(0, PublishPacket {
+        qos: QualityOfService::ExactlyOnce,
+        topic: "a/b".to_string(),
+        ..Default::default()
+    }, PublishOptions::default()).unwrap();
+
+    let unsubscribe_receiver = fixture.unsubscribe(0, UnsubscribePacket {
+        topic_filters: vec!("a/b".to_string()),
+        ..Default::default()
+    }, UnsubscribeOptions::default()).unwrap();
+
+    assert!(fixture.service_with_drain(0, 4096).is_ok());
+
+    MaxRetriesTestOperationReceivers {
+        publish_qos1_receiver,
+        subscribe_receiver,
+        publish_qos2_receiver,
+        unsubscribe_receiver
+    }
+}
+fn do_max_interrupted_retries_test(max_retries: u32) {
+    let mut state_config = build_standard_test_config(5);
+    state_config.max_interrupted_retries = Some(max_retries);
+    state_config.offline_queue_policy = OfflineQueuePolicy::PreserveAll;
+
+    let mut fixture = ProtocolStateTestFixture::new(state_config);
+    fixture.broker_packet_handlers.insert(PacketType::Subscribe, Box::new(handle_with_nothing));
+    fixture.broker_packet_handlers.insert(PacketType::Unsubscribe, Box::new(handle_with_nothing));
+    fixture.broker_packet_handlers.insert(PacketType::Publish, Box::new(handle_with_nothing));
+
+    let receivers = setup_max_retries_test_scenario(&mut fixture);
+    verify_max_retries_are_pending(&fixture);
+    verify_max_retries_are_incomplete(&receivers);
+
+    for i in 0..max_retries {
+        assert!(fixture.on_connection_closed((i + 1) as u64).is_ok());
+
+        verify_max_retries_are_incomplete(&receivers);
+
+        assert!(fixture.advance_disconnected_to_state(ProtocolStateType::Connected, 0).is_ok());
+        assert!(fixture.service_with_drain(0, 4096).is_ok());
+
+        verify_max_retries_are_pending(&fixture);
+        verify_max_retries_are_incomplete(&receivers);
+    }
+
+    assert!(fixture.on_connection_closed((max_retries + 1) as u64).is_ok());
+    verify_max_retries_have_failed(&fixture, &receivers);
+}
+
+#[test_matrix([0, 1, 2, 3])]
+fn max_interrupted_retries(max_retries: u32) {
+    do_max_interrupted_retries_test(max_retries);
+}

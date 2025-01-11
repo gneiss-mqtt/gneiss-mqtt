@@ -364,8 +364,8 @@ impl GneissError {
     }
 
     pub(crate) fn new_max_interrupted_retries_exceeded_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        GneissError::OtherError (
-            OtherErrorContext {
+        GneissError::MaxInterruptedRetriesExceeded (
+            MaxInterruptedRetriesExceededContext {
                 source : source.into()
             }
         )
