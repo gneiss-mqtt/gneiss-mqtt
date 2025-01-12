@@ -7,6 +7,9 @@ No-fuss configuration for:
 * [IoT Core via websockets with sigv4 signing](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_aws-signing.html)
 * [IoT Core via Custom Authentication](https://docs.aws.amazon.com/iot/latest/developerguide/custom-authentication.html)
 
+### Frequently Asked Questions
+See [FAQ](https://github.com/gneiss-mqtt/gneiss-mqtt/blob/main/FAQ.md)
+
 ### Roadmap
 See [Gneiss MQTT Roadmap](https://github.com/gneiss-mqtt/gneiss-mqtt/blob/main/README.md#roadmap)
 

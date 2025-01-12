@@ -250,6 +250,9 @@ Further details can be found in the relevant sections of the `gneiss-mqtt` docs:
 * [`MqttClientOptions`](https://docs.rs/gneiss-mqtt/latest/gneiss_mqtt/config/struct.MqttClientOptionsBuilder.html)
 * [`ConnectOptions`](https://docs.rs/gneiss-mqtt/latest/gneiss_mqtt/config/struct.ConnectOptionsBuilder.html)
 
+# Frequently Asked Questions
+See [FAQ](https://github.com/gneiss-mqtt/gneiss-mqtt/blob/main/FAQ.md)
+
  */
 
 #![cfg_attr(docsrs, feature(doc_cfg))]

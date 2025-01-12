@@ -273,16 +273,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```"##)]
 
 /*!
-# Additional Notes
-
-This crate's public API is expected to be very unstable until v0.4.0.  See the roadmap
-in the README for more details.
+# Frequently Asked Questions
+See [FAQ](https://github.com/gneiss-mqtt/gneiss-mqtt/blob/main/FAQ.md)
 
 */
 
-#![warn(missing_docs)]
-
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![warn(missing_docs)]
 #![cfg_attr(not(any(feature = "tokio", feature = "threaded")), allow(dead_code))]
 #![cfg_attr(all(feature = "testing", not(test)), allow(dead_code, unused_imports, unused_macros))]
 #![cfg_attr(feature = "strict", deny(warnings))]

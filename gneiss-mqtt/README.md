@@ -2,6 +2,9 @@
 
 Tokio (async) and thread-based MQTT client implementations.
 
+### Frequently Asked Questions
+See [FAQ](https://github.com/gneiss-mqtt/gneiss-mqtt/blob/main/FAQ.md)
+
 ### Spec Compliance Notes
 Gneiss-mqtt supports all aspects of the MQTT311 and MQTT5 specifications with the following exceptions:
 * **Extended Utf-8 Validation** - No client-side utf-8 validation is done beyond what the Rust standard library does for strings.  The MQTT5 specification imposes additional constraints that the Rust standard library does not check.

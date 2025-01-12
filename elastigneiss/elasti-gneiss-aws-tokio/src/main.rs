@@ -156,8 +156,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         }
 
-        let mut log_config_builder = simplelog::ConfigBuilder::new();
-        let log_config = log_config_builder.build();
+        let log_config = simplelog::ConfigBuilder::new().build();
         WriteLogger::init(LevelFilter::Debug, log_config, log_file_result.unwrap()).unwrap();
     }
 
