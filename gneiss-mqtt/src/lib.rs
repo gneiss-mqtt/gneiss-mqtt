@@ -12,17 +12,15 @@ both [MQTT5](https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html) and
 recommend using MQTT5 over 311 for the significant error handling and communication improvements.
 MQTT specification links within crate documentation are made to the MQTT5 spec.
 
-# Overview
-
 Depending on feature selection, the crate can provide either a client based on the [`tokio`](https://crates.io/crates/tokio)
 runtime or a client that runs in a background thread.  The interfaces to these two clients
 are similar but differ slightly in certain ways (primarily in how operations complete).
 Both clients are asynchronous in the sense that requests to perform MQTT operations are carried out
 asynchronously, but only the tokio-based client has an interface that uses Rust's async keyword.
 
-### Features
+# Feature Flags
 
-The crate supports a variety of connection methods, including:
+The crate supports a variety of common transport options, including:
 * **TLS** - provided by either *[`rustls`](https://crates.io/crates/rustls)* or *[`native-tls`](https://crates.io/crates/native-tls)*
 * **Websockets** - provided by *[`tungstenite`](https://crates.io/crates/tungstenite)*
 * **HTTP proxies** - bespoke implementation
@@ -33,15 +31,15 @@ This crate has been designed with the goal of providing a solution, not a piece 
 While this crate does support bring-your-own-transport, it also provides optional features that
 greatly simplify the setup required to use common transport level options.
 
-The crate supports the following features:
-* **tokio** - enables the tokio-based async client
-* **tokio-rustls** - enables TLS (backed by the rustls crate) support within the tokio-based async client
-* **tokio-native-tls** - enables TLS (backed by the native-tls crate) support within the tokio-based async client
-* **tokio-websockets** - enables websockets support within the tokio-based async client
-* **threaded** - enables the thread-based client
-* **threaded-rustls** - enables TLS (backed by the rustls crate) support within the thread-based client
-* **threaded-native-tls** - enables TLS (backed by the native-tls crate) support within the thread-based client
-* **threaded-websockets** - enables websockets support within the thread-based client
+The crate supports the following feature flags:
+* `tokio` - enables the tokio-based async client
+* `tokio-rustls` - enables TLS (backed by the rustls crate) support within the tokio-based async client
+* `tokio-native-tls` - enables TLS (backed by the native-tls crate) support within the tokio-based async client
+* `tokio-websockets` - enables websockets support within the tokio-based async client
+* `threaded` - enables the thread-based client
+* `threaded-rustls` - enables TLS (backed by the rustls crate) support within the thread-based client
+* `threaded-native-tls` - enables TLS (backed by the native-tls crate) support within the thread-based client
+* `threaded-websockets` - enables websockets support within the thread-based client
 
 # Usage
 
@@ -273,16 +271,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```"##)]
 
 /*!
-# Additional Notes
-
-This crate's public API is expected to be very unstable until v0.4.0.  See the roadmap
-in the README for more details.
+# Frequently Asked Questions
+See [FAQ](https://github.com/gneiss-mqtt/gneiss-mqtt/blob/main/FAQ.md)
 
 */
 
-#![warn(missing_docs)]
-
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![warn(missing_docs)]
 #![cfg_attr(not(any(feature = "tokio", feature = "threaded")), allow(dead_code))]
 #![cfg_attr(all(feature = "testing", not(test)), allow(dead_code, unused_imports, unused_macros))]
 #![cfg_attr(feature = "strict", deny(warnings))]
