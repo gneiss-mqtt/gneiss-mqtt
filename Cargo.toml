@@ -26,5 +26,5 @@ members = [
 	"gneiss-mqtt-aws/examples/aws-custom-auth-unsigned-tokio",
 	"gneiss-mqtt-aws/examples/aws-mtls-threaded",
 	"gneiss-mqtt-aws/examples/aws-mtls-tokio",
-	"gneiss-mqtt-aws/examples/aws-websockets-tokio",
+	"gneiss-mqtt-aws/examples/aws-websockets-tokio", "gneiss-mqtt-request-response",
 ]
