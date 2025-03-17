@@ -11,3 +11,6 @@
 
 pub mod client;
 pub mod error;
+
+// Temp hand-written shadow clients using the API
+pub mod shadow;

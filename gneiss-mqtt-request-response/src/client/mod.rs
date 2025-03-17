@@ -2,31 +2,33 @@
  * Copyright Bret Ambrose. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+use std::sync::Arc;
 use std::time::Duration;
+use gneiss_mqtt::mqtt::PublishPacket;
 use crate::error::*;
 
 pub mod asynchronous;
 pub mod synchronous;
 
 #[derive(Default, Copy, Clone)]
-pub struct RequestResponseClientOptions {
-    operation_timeout: Option<Duration>,
-    max_request_response_subscriptions: u32,
-    max_streaming_subscriptions: u32,
+pub struct ClientOptions {
+    pub(crate) operation_timeout: Option<Duration>,
+    pub(crate) max_request_response_subscriptions: u32,
+    pub(crate) max_streaming_subscriptions: u32,
 }
 
-impl RequestResponseClientOptions {
-    pub fn builder() -> RequestResponseClientOptionsBuilder {
-        RequestResponseClientOptionsBuilder::new()
+impl ClientOptions {
+    pub fn builder() -> ClientOptionsBuilder {
+        ClientOptionsBuilder::new()
     }
 }
 
 #[derive(Default, Copy, Clone)]
-pub struct RequestResponseClientOptionsBuilder {
-    options: RequestResponseClientOptions
+pub struct ClientOptionsBuilder {
+    options: ClientOptions
 }
 
-impl RequestResponseClientOptionsBuilder {
+impl ClientOptionsBuilder {
     pub fn with_operation_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
         self.options.operation_timeout = timeout;
         self
@@ -42,77 +44,227 @@ impl RequestResponseClientOptionsBuilder {
         self
     }
 
-    pub fn build(&self) -> RequestResponseClientOptions {
+    pub fn build(&self) -> ClientOptions {
         self.options
     }
 
-    fn new() -> RequestResponseClientOptionsBuilder {
-        RequestResponseClientOptionsBuilder {
+    fn new() -> Self {
+        Self {
             ..Default::default()
         }
     }
 }
 
 #[derive(Default, Clone)]
-pub struct RequestResponsePath {
-    topic: String,
-    correlation_token_json_path: Option<String>,
+pub struct ResponsePath {
+    pub(crate) topic: String,
+    pub(crate) correlation_token_json_path: Option<String>,
 }
 
-impl RequestResponsePath {
+impl ResponsePath {
     pub fn new(topic: String, correlation_token_json_path: Option<String>) -> Self {
-        RequestResponsePath {
+        Self {
             topic,
             correlation_token_json_path,
         }
     }
 }
 
+type ResponseHandler = dyn Fn(RequestResponseResult<Response>) + Send + Sync;
+
 #[derive(Clone)]
-pub struct RequestResponseOptions {
-    publish_topic: String,
-    subscriptions: Vec<String>,
-    payload: Vec<u8>,
-    response_paths: Vec<RequestResponsePath>,
-    correlation_token: Option<String>,
-
+pub struct RequestOptions {
+    pub(crate) publish_topic: String,
+    pub(crate) subscriptions: Vec<String>,
+    pub(crate) payload: Vec<u8>,
+    pub(crate) response_paths: Vec<ResponsePath>,
+    pub(crate) correlation_token: Option<String>,
+    pub(crate) response_handler: Box<ResponseHandler>,
 }
 
-impl RequestResponseOptions {
-    pub fn builder() -> RequestResponseOptionsBuilder {
-        RequestResponseOptionsBuilder::new()
+impl RequestOptions {
+    pub fn builder(publish_topic: String, payload: Vec<u8>, response_handler: Box<ResponseHandler>) -> RequestOptionsBuilder {
+        RequestOptionsBuilder::new(publish_topic, payload, response_handler)
     }
 }
 
-#[derive(Default)]
-pub struct RequestResponseOptionsBuilder {
-    publish_topic: Option<String>,
-    subscriptions: Vec<String>,
-    payload: Vec<u8>,
-    response_paths: Vec<RequestResponsePath>,
-    correlation_token: Option<String>,
+pub struct RequestOptionsBuilder {
+    options: RequestOptions,
 }
 
-impl RequestResponseOptionsBuilder {
+impl RequestOptionsBuilder {
     fn is_valid_configuration(&self) -> bool {
-        self.publish_topic.is_some() && !self.subscriptions.is_empty() && !self.response_paths.is_empty()
+        !self.options.subscriptions.is_empty() && !self.options.response_paths.is_empty()
     }
 
-    pub fn new() -> Self {
-        Self::default()
+    pub(crate) fn new(publish_topic: String, payload: Vec<u8>, response_handler: Box<ResponseHandler>) -> Self {
+        Self {
+            options: RequestOptions {
+                publish_topic,
+                subscriptions: Vec::new(),
+                payload,
+                response_paths: Vec::new(),
+                correlation_token: None,
+                response_handler
+            }
+        }
     }
 
-    pub fn build(self) -> RequestResponseResult<RequestResponseOptions> {
+    pub fn with_subscription(&mut self, subscription: String) -> &mut Self {
+        self.options.subscriptions.push(subscription);
+
+        self
+    }
+
+    pub fn with_response_path(&mut self, response_path: ResponsePath) -> &mut Self {
+        self.options.response_paths.push(response_path);
+
+        self
+    }
+
+    pub fn with_correlation_token(&mut self, correlation_token: String) -> &mut Self {
+        self.options.correlation_token = Some(correlation_token);
+
+        self
+    }
+
+    pub fn build(self) -> RequestResponseResult<RequestOptions> {
         if !self.is_valid_configuration() {
             Err(RequestResponseError::new_invalid_configuration())
         } else {
-            Ok(RequestResponseOptions{
-                publish_topic: self.publish_topic.unwrap(),
-                subscriptions: self.subscriptions,
-                payload: self.payload,
-                response_paths: self.response_paths,
-                correlation_token: self.correlation_token,
-            })
+            Ok(self.options)
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct Response {
+    message: PublishPacket,
+}
+
+impl Response {
+    pub fn message(&self) -> &PublishPacket {
+        &self.message
+    }
+
+    pub(crate) fn new(message: PublishPacket) -> Self {
+        Self {
+            message
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct StreamingOperationMessage {
+    message: PublishPacket,
+}
+
+impl StreamingOperationMessage {
+    pub fn message(&self) -> &PublishPacket {
+        &self.message
+    }
+}
+
+pub type StreamingOperationMessageHandler = dyn Fn(Arc<StreamingOperationMessage>) + Send + Sync;
+
+pub enum StreamingOperationEvent {
+
+    /// The streaming operation is successfully subscribed to its topic (filter)
+    SubscriptionEstablished,
+
+    /// The streaming operation has temporarily lost its subscription to its topic (filter)
+    SubscriptionLost(RequestResponseError),
+
+    /// The streaming operation has entered a terminal state where it has given up trying to subscribe
+    /// to its topic (filter).  This is always due to user error (bad topic filter or IoT Core permission policy).
+    SubscriptionHalted(RequestResponseError),
+}
+
+pub type StreamingOperationEventHandler = dyn Fn(Arc<StreamingOperationEvent>) + Send + Sync;
+
+#[derive(Clone)]
+pub struct StreamingOperationOptions {
+    pub(crate) topic_filter: String,
+
+    pub(crate) event_handler: Option<Arc<StreamingOperationEventHandler>>,
+
+    pub(crate) message_handler: Arc<StreamingOperationMessageHandler>
+}
+
+impl StreamingOperationOptions {
+    pub fn builder(topic_filter: String, message_handler: Arc<StreamingOperationMessageHandler>) -> StreamingOperationOptionsBuilder {
+        StreamingOperationOptionsBuilder::new(topic_filter, message_handler)
+    }
+}
+
+pub struct StreamingOperationOptionsBuilder {
+    options: StreamingOperationOptions,
+}
+
+impl StreamingOperationOptionsBuilder {
+
+    pub fn new(topic_filter: String, message_handler: Arc<StreamingOperationMessageHandler>) -> Self {
+        Self {
+            options: StreamingOperationOptions {
+                topic_filter,
+                event_handler: None,
+                message_handler
+            }
+        }
+    }
+
+    pub fn with_event_handler(&mut self, event_handler: Arc<StreamingOperationEventHandler>) -> &mut Self {
+        self.options.event_handler = Some(event_handler);
+
+        self
+    }
+
+    pub fn build(self) -> StreamingOperationOptions {
+        self.options
+    }
+}
+
+pub trait StreamingOperation {
+
+    fn open(&self) -> ();
+
+    fn close(&self) -> ();
+
+}
+
+pub struct StreamingOperationHandle {
+    stream: Arc<dyn StreamingOperation>,
+}
+
+impl StreamingOperation for StreamingOperationHandle {
+    fn open(&self) -> () {
+        self.stream.open()
+    }
+
+    fn close(&self) -> () {
+        self.stream.close()
+    }
+}
+
+pub trait Client {
+
+    fn make_request(&self, options: RequestOptions) -> RequestResponseResult<()>;
+
+    fn create_stream(&self, options: StreamingOperationOptions) -> RequestResponseResult<StreamingOperationHandle>;
+}
+
+#[derive(Clone)]
+pub struct ClientHandle {
+    client: Arc<dyn Client + Send + Sync>
+}
+
+impl Client for ClientHandle {
+
+    fn make_request(&self, options: RequestOptions) -> RequestResponseResult<()> {
+        self.client.make_request(options)
+    }
+
+    fn create_stream(&self, options: StreamingOperationOptions) -> RequestResponseResult<StreamingOperationHandle> {
+        self.client.create_stream(options)
     }
 }
