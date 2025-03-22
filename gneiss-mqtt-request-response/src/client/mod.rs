@@ -70,8 +70,6 @@ impl ResponsePath {
     }
 }
 
-type ResponseHandler = dyn Fn(RequestResponseResult<Response>) + Send + Sync;
-
 #[derive(Clone)]
 pub struct RequestOptions {
     pub(crate) publish_topic: String,
@@ -79,12 +77,11 @@ pub struct RequestOptions {
     pub(crate) payload: Vec<u8>,
     pub(crate) response_paths: Vec<ResponsePath>,
     pub(crate) correlation_token: Option<String>,
-    pub(crate) response_handler: Box<ResponseHandler>,
 }
 
 impl RequestOptions {
-    pub fn builder(publish_topic: String, payload: Vec<u8>, response_handler: Box<ResponseHandler>) -> RequestOptionsBuilder {
-        RequestOptionsBuilder::new(publish_topic, payload, response_handler)
+    pub fn builder(publish_topic: String, payload: Vec<u8>) -> RequestOptionsBuilder {
+        RequestOptionsBuilder::new(publish_topic, payload)
     }
 }
 
@@ -97,7 +94,7 @@ impl RequestOptionsBuilder {
         !self.options.subscriptions.is_empty() && !self.options.response_paths.is_empty()
     }
 
-    pub(crate) fn new(publish_topic: String, payload: Vec<u8>, response_handler: Box<ResponseHandler>) -> Self {
+    pub(crate) fn new(publish_topic: String, payload: Vec<u8>) -> Self {
         Self {
             options: RequestOptions {
                 publish_topic,
@@ -105,7 +102,6 @@ impl RequestOptionsBuilder {
                 payload,
                 response_paths: Vec::new(),
                 correlation_token: None,
-                response_handler
             }
         }
     }
@@ -128,7 +124,7 @@ impl RequestOptionsBuilder {
         self
     }
 
-    pub fn build(self) -> RequestResponseResult<RequestOptions> {
+    pub fn build(mut self) -> RequestResponseResult<RequestOptions> {
         if !self.is_valid_configuration() {
             Err(RequestResponseError::new_invalid_configuration())
         } else {
@@ -246,9 +242,11 @@ impl StreamingOperation for StreamingOperationHandle {
     }
 }
 
+type ResponseHandler = dyn Fn(RequestResponseResult<Response>) + Send + Sync;
+
 pub trait Client {
 
-    fn make_request(&self, options: RequestOptions) -> RequestResponseResult<()>;
+    fn make_request(&self, options: RequestOptions, response_handler: Box<ResponseHandler>) -> RequestResponseResult<()>;
 
     fn create_stream(&self, options: StreamingOperationOptions) -> RequestResponseResult<StreamingOperationHandle>;
 }
@@ -260,8 +258,8 @@ pub struct ClientHandle {
 
 impl Client for ClientHandle {
 
-    fn make_request(&self, options: RequestOptions) -> RequestResponseResult<()> {
-        self.client.make_request(options)
+    fn make_request(&self, options: RequestOptions, response_handler: Box<ResponseHandler>) -> RequestResponseResult<()> {
+        self.client.make_request(options, response_handler)
     }
 
     fn create_stream(&self, options: StreamingOperationOptions) -> RequestResponseResult<StreamingOperationHandle> {

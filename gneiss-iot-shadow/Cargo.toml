@@ -1,0 +1,33 @@
+[package]
+name = "gneiss-iot-shadow"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+keywords = ["shadow", "iot", "aws", "iotcore"]
+categories = [ "asynchronous", "network-programming" ]
+description = "MQT-based client for the AWS IoT Shadow service"
+homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+documentation = "https://docs.rs/gneiss-iot-shadow"
+repository = "https://github.com/gneiss-mqtt/gneiss-mqtt"
+readme = "README.md"
+resolver = "2"
+
+[features]
+strict = [] # treats warnings as errors, only intended for internal checks
+testing = [] # enable when running tests to also run environmentally-controlled integration tests
+threaded = [ "gneiss-mqtt/threaded", "gneiss-mqtt-request-response/threaded" ]
+tokio = [ "dep:tokio", "gneiss-mqtt/tokio", "gneiss-mqtt-request-response/tokio" ]
+
+[dev-dependencies]
+gneiss-mqtt = { path = "../gneiss-mqtt", features = [ "testing" ] }
+gneiss-mqtt-aws = { path = "../gneiss-mqtt-aws", features = [ "testing" ]}
+gneiss-mqtt-request-response = { path = "../gneiss-mqtt-request-response", features = [ "testing" ]}
+
+[dependencies]
+chrono = { version = "0.4" }
+gneiss-mqtt = { path = "../gneiss-mqtt" }
+gneiss-mqtt-request-response = { path = "../gneiss-mqtt-request-response" }
+tokio = { version = "1", features = ["full"], optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
+uuid = { version = "1", features = [ "v4" ] }

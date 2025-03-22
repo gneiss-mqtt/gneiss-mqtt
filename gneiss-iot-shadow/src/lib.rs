@@ -9,5 +9,7 @@
 #![cfg_attr(all(feature = "testing", not(test)), allow(dead_code, unused_imports, unused_macros))]
 #![cfg_attr(feature = "strict", deny(warnings))]
 
-pub mod client;
-pub mod error;
+pub mod model;
+pub mod asynchronous;
+pub mod synchronous;
+mod error;
