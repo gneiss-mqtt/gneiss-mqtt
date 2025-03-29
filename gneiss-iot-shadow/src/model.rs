@@ -4,9 +4,12 @@
  */
 
 use chrono::DateTime;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use gneiss_mqtt_request_response::client::{RequestOptions, RequestOptionsBuilder, ResponsePath};
+use gneiss_mqtt_request_response::client::{RequestOptions, RequestOptionsBuilder, Response, ResponsePath};
+use gneiss_mqtt_request_response::error::RequestResponseResult;
 use crate::error::*;
+use std::fmt;
 
 #[derive(Clone, Default, Serialize)]
 pub struct GetShadowRequest {
@@ -111,4 +114,46 @@ pub struct ServiceErrorResponse {
     pub message: String,
 
     pub timestamp: DateTime<chrono::Utc>,
+}
+
+impl fmt::Display for ServiceErrorResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{ code: {}, message: {}}}", self.code, self.message)
+    }
+}
+
+pub fn convert_json_response<R : DeserializeOwned, E : DeserializeOwned>(response_result: RequestResponseResult<Response>, response_topic: &str, error_topic: &str, rejected_converter: &dyn Fn(E) -> ModeledServiceException) -> ShadowResult<R> {
+    match response_result {
+        Err(err) => {
+            Err(ShadowError::new_request_response(err))
+        }
+        Ok(response) => {
+            if let Some(payload) = response.message().payload() {
+                let topic = response.message().topic();
+                if topic == response_topic {
+                    match serde_json::from_slice(payload) {
+                        Err(err) => {
+                            Err(ShadowError::new_deserialization_failure(format!("Accepted response could not be deserialized: {}", err)))
+                        }
+                        Ok(accepted_response) => {
+                            Ok(accepted_response)
+                        }
+                    }
+                } else if topic == error_topic {
+                    match serde_json::from_slice(payload) {
+                        Err(err) => {
+                            Err(ShadowError::new_deserialization_failure(format!("Rejected response could not be deserialized: {}", err)))
+                        }
+                        Ok(rejected_response) => {
+                            Err(ShadowError::new_service_exception(rejected_converter(rejected_response)))
+                        }
+                    }
+                } else {
+                    Err(ShadowError::new_deserialization_failure("Response arrived on invalid topic"))
+                }
+            } else {
+                Err(ShadowError::new_deserialization_failure("Response had empty payload"))
+            }
+        }
+    }
 }

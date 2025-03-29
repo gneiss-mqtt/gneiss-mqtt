@@ -18,11 +18,19 @@ pub struct ProtocolClientContext {
     pub source: Box<GneissError>
 }
 
+/// Additional details about an OperationChannelFailure error variant
+#[derive(Debug)]
+pub struct OperationChannelFailureContext {
+    pub source: Box<dyn Error + Send + Sync + 'static>
+}
+
+
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum RequestResponseError {
     InvalidConfiguration(InvalidConfigurationContext),
     ProtocolClient(ProtocolClientContext),
+    OperationChannelFailure(OperationChannelFailureContext),
 }
 
 impl RequestResponseError {
@@ -40,12 +48,21 @@ impl RequestResponseError {
             }
         )
     }
+
+    pub fn new_operation_channel_failure(error: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        RequestResponseError::OperationChannelFailure(
+            OperationChannelFailureContext {
+                source: error.into()
+            }
+        )
+    }
 }
 
 impl Error for RequestResponseError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             RequestResponseError::ProtocolClient(context) => Some(&context.source),
+            RequestResponseError::OperationChannelFailure(context) => Some(context.source.as_ref()),
             _ => { None }
         }
     }
@@ -59,6 +76,9 @@ impl fmt::Display for RequestResponseError {
             }
             RequestResponseError::ProtocolClient( context ) => {
                 write!(f, "Protocol client error: {}", context.source)
+            }
+            RequestResponseError::OperationChannelFailure( context ) => {
+                write!(f, "Failure encountered while sending/receiving on a request-response operation-related channel: {}", context.source)
             }
         }
     }

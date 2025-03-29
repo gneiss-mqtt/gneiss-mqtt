@@ -68,6 +68,10 @@ impl ResponsePath {
             correlation_token_json_path,
         }
     }
+
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
 }
 
 #[derive(Clone)]
@@ -82,6 +86,10 @@ pub struct RequestOptions {
 impl RequestOptions {
     pub fn builder(publish_topic: String, payload: Vec<u8>) -> RequestOptionsBuilder {
         RequestOptionsBuilder::new(publish_topic, payload)
+    }
+
+    pub fn response_paths(&self) -> &[ResponsePath] {
+        &self.response_paths
     }
 }
 
@@ -242,11 +250,11 @@ impl StreamingOperation for StreamingOperationHandle {
     }
 }
 
-type ResponseHandler = dyn Fn(RequestResponseResult<Response>) + Send + Sync;
+pub(crate) type ResponseHandler = Box<dyn FnOnce(RequestResponseResult<Response>) -> RequestResponseResult<()> + Send + Sync>;
 
 pub trait Client {
 
-    fn make_request(&self, options: RequestOptions, response_handler: Box<ResponseHandler>) -> RequestResponseResult<()>;
+    fn make_request(&self, options: RequestOptions, response_handler: ResponseHandler) -> RequestResponseResult<()>;
 
     fn create_stream(&self, options: StreamingOperationOptions) -> RequestResponseResult<StreamingOperationHandle>;
 }
@@ -258,7 +266,7 @@ pub struct ClientHandle {
 
 impl Client for ClientHandle {
 
-    fn make_request(&self, options: RequestOptions, response_handler: Box<ResponseHandler>) -> RequestResponseResult<()> {
+    fn make_request(&self, options: RequestOptions, response_handler: ResponseHandler) -> RequestResponseResult<()> {
         self.client.make_request(options, response_handler)
     }
 

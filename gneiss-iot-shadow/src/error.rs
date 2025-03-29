@@ -10,8 +10,14 @@ use gneiss_mqtt_request_response::error::*;
 
 #[derive(Debug)]
 #[non_exhaustive]
-enum ModeledServiceException {
+pub enum ModeledServiceException {
     ServiceErrorResponse(ServiceErrorResponse)
+}
+
+impl From<ServiceErrorResponse> for ModeledServiceException {
+    fn from(error_response: ServiceErrorResponse) -> Self {
+        ModeledServiceException::ServiceErrorResponse(error_response)
+    }
 }
 
 impl fmt::Display for ModeledServiceException {
@@ -34,11 +40,25 @@ pub struct ServiceExceptionContext {
     pub modeled_exception: ModeledServiceException,
 }
 
+/// Additional details about an OperationChannelFailure error variant
+#[derive(Debug)]
+pub struct OperationChannelFailureContext {
+    pub source: Box<dyn Error + Send + Sync + 'static>
+}
+
+#[derive(Debug)]
+pub struct DeserializationFailureContext {
+    pub source: Box<dyn Error + Send + Sync + 'static>
+}
+
+
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ShadowError {
     RequestResponse(RequestResponseContext),
     ServiceException(ServiceExceptionContext),
+    OperationChannelFailure(OperationChannelFailureContext),
+    DeserializationFailure(DeserializationFailureContext)
 }
 
 impl ShadowError {
@@ -57,12 +77,30 @@ impl ShadowError {
             }
         )
     }
+
+    pub(crate) fn new_operation_channel_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        ShadowError::OperationChannelFailure(
+            OperationChannelFailureContext {
+                source: source.into()
+            }
+        )
+    }
+
+    pub(crate) fn new_deserialization_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        ShadowError::DeserializationFailure(
+            DeserializationFailureContext {
+                source: source.into()
+            }
+        )
+    }
 }
 
 impl Error for ShadowError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            ShadowError::RequestResponse(err) => { Some(&err.source) }
+            ShadowError::RequestResponse(context) => { Some(context.source.as_ref()) }
+            ShadowError::OperationChannelFailure(context) => Some(context.source.as_ref()),
+            ShadowError::DeserializationFailure(context) => Some(context.source.as_ref()),
             _ => { None }
         }
     }
@@ -77,6 +115,12 @@ impl fmt::Display for ShadowError {
             ShadowError::ServiceException(context) => {
                 write!(f, "Modeled service exception: {}", context.modeled_exception)
             }
+            ShadowError::OperationChannelFailure( context ) => {
+                write!(f, "Failure encountered while sending/receiving on a shadow operation-related channel: {}", context.source)
+            }
+            ShadowError::DeserializationFailure( context ) => {
+                write!(f, "Failure deserializing response: {}", context.source)
+            }
         }
     }
 }
@@ -84,6 +128,12 @@ impl fmt::Display for ShadowError {
 impl From<RequestResponseError> for ShadowError {
     fn from(error: RequestResponseError) -> Self {
         ShadowError::new_request_response(error)
+    }
+}
+
+impl From<tokio::sync::oneshot::error::RecvError> for ShadowError {
+    fn from(err: tokio::sync::oneshot::error::RecvError) -> Self {
+        ShadowError::new_operation_channel_failure(err)
     }
 }
 
