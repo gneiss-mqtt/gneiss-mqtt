@@ -15,10 +15,10 @@ use std::fmt;
 pub struct GetShadowRequest {
 
     #[serde(skip)]
-    pub(crate) thing_name: String,
+    thing_name: String,
 
     #[serde(rename = "clientToken")]
-    pub(crate) client_token: String,
+    client_token: String,
 }
 
 impl GetShadowRequest {
@@ -79,46 +79,103 @@ impl GetShadowRequestBuilder {
 
 #[derive(Clone, Deserialize)]
 pub struct ShadowStateWithDelta {
-    pub desired: serde_json::Value,
-    pub reported: serde_json::Value,
-    pub delta: serde_json::Value,
+    desired: serde_json::Value,
+    reported: serde_json::Value,
+    delta: serde_json::Value,
+}
+
+impl ShadowStateWithDelta {
+    pub fn desired(&self) -> &serde_json::Value {
+        &self.desired
+    }
+
+    pub fn reported(&self) -> &serde_json::Value {
+        &self.reported
+    }
+
+    pub fn delta(&self) -> &serde_json::Value {
+        &self.delta
+    }
 }
 
 #[derive(Clone, Deserialize)]
 pub struct ShadowMetadata {
-    pub desired: serde_json::Value,
-    pub reported: serde_json::Value,
+    desired: serde_json::Value,
+    reported: serde_json::Value,
 }
+
+impl ShadowMetadata {
+    pub fn desired(&self) -> &serde_json::Value {
+        &self.desired
+    }
+
+    pub fn reported(&self) -> &serde_json::Value {
+        &self.reported
+    }
+}
+
 
 #[derive(Clone, Deserialize)]
 pub struct GetShadowResponse {
     #[serde(rename = "clientToken")]
-    pub client_token: String,
+    client_token: String,
 
-    pub state: ShadowStateWithDelta,
+    state: ShadowStateWithDelta,
 
-    pub metadata: ShadowMetadata,
+    metadata: ShadowMetadata,
 
-    pub timestamp: DateTime<chrono::Utc>,
+    timestamp: DateTime<chrono::Utc>,
 
-    pub version: i32,
+    version: i32,
+}
+
+impl GetShadowResponse {
+    pub fn state(&self) -> &ShadowStateWithDelta {
+        &self.state
+    }
+
+    pub fn metadata(&self) -> &ShadowMetadata {
+        &self.metadata
+    }
+
+    pub fn timestamp(&self) -> &DateTime<chrono::Utc> {
+        &self.timestamp
+    }
+
+    pub fn version(&self) -> i32 {
+        self.version
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ServiceErrorResponse {
     #[serde(rename = "clientToken")]
-    pub client_token: String,
+    client_token: String,
 
-    pub code: i32,
+    code: i32,
 
-    pub message: String,
+    message: String,
 
-    pub timestamp: DateTime<chrono::Utc>,
+    timestamp: DateTime<chrono::Utc>,
 }
 
 impl fmt::Display for ServiceErrorResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{{ code: {}, message: {}}}", self.code, self.message)
+    }
+}
+
+impl ServiceErrorResponse {
+    pub fn code(&self) -> i32 {
+        self.code
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    pub fn timestamp(&self) -> &DateTime<chrono::Utc> {
+        &self.timestamp
     }
 }
 
