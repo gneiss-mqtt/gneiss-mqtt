@@ -11,6 +11,18 @@ use gneiss_mqtt_request_response::error::RequestResponseResult;
 use crate::error::*;
 use std::fmt;
 
+/*
+ Codegen notes:
+
+ Requests: to_json_payload, to_request_response_options
+ RequestsClosure: validate, builder + API, Serialize, Clone, Default
+ Responses:
+ ResponsesClosure: Clone, Deserialize, accessors
+ Exceptions: ModeledServiceException enum entry and From impl
+ ExceptionsClosure: Clone, Debug, Deserialize, accessors, fmt::Display
+
+ */
+
 #[derive(Clone, Default, Serialize)]
 pub struct GetShadowRequest {
 
