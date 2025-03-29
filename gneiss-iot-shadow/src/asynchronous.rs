@@ -16,57 +16,13 @@ use gneiss_mqtt_request_response::error::RequestResponseError;
 pub type GetShadowResult = ShadowResult<GetShadowResponse>;
 pub type AsyncGetShadowResult = Pin<Box<dyn Future<Output = GetShadowResult> + Send>>;
 
-macro_rules! submit_tokio_operation {
-    ($self:ident, $request:ident) => ({
+macro_rules! submit_shadow_operation_tokio {
+    ($self:ident, $request:ident, $response_type:ident, $error_type:ident, $result_type:ident) => ({
 
         let (response_sender, rx) = tokio::sync::oneshot::channel();
-        let response_handler = Box::new(move |res| {
-            if response_sender.send(res).is_err() {
-                return Err(ShadowError::new_operation_channel_failure("Failed to send operation result on result channel"));
-            }
-
-            Ok(())
-        });
 
         let mut submit_error_option = None;
         match $request.to_request_response_options() {
-            Err(e) => {
-                submit_error_option = Some(e)
-            }
-            Ok(request_options) => {
-                submit_error_option = $self.rr_client.make_request(request_options, response_handler);
-            }
-        }
-
-        Box::pin(async move {
-            match submit_error_option {
-                Some(error) => {
-                    Err(error)
-                }
-                _ => {
-                    rx.await?
-                }
-            }
-        })
-    })
-}
-
-pub trait AsynchronousShadowClient {
-    fn get_shadow(&self, request: GetShadowRequest) -> AsyncGetShadowResult;
-}
-
-struct TokioShadowClient {
-    rr_client: ClientHandle,
-}
-
-impl AsynchronousShadowClient for TokioShadowClient {
-    fn get_shadow(&self, request: GetShadowRequest) -> AsyncGetShadowResult {
-        //submit_tokio_operation!(self, request)
-
-        let (response_sender, rx) = tokio::sync::oneshot::channel();
-
-        let mut submit_error_option = None;
-        match request.to_request_response_options() {
             Err(e) => {
                 submit_error_option = Some(e)
             }
@@ -75,15 +31,15 @@ impl AsynchronousShadowClient for TokioShadowClient {
                 let rejected_topic = request_options.response_paths()[1].topic().to_string();
 
                 let response_handler = Box::new(move |res| {
-                    let typed_result : GetShadowResult = convert_json_response::<GetShadowResponse, ServiceErrorResponse>(res, &accepted_topic, &rejected_topic, &ModeledServiceException::from);
+                    let typed_result : $result_type = convert_json_response::<$response_type, $error_type>(res, &accepted_topic, &rejected_topic, &ModeledServiceException::from);
                     if response_sender.send(typed_result).is_err() {
-                        return Err(RequestResponseError::new_operation_channel_failure("Failed to send the get_shadow result on the result channel"));
+                        return Err(RequestResponseError::new_operation_channel_failure("Failed to send the result on the result channel"));
                     }
 
                     Ok(())
                 });
 
-                if let Err(err) = self.rr_client.make_request(request_options, response_handler) {
+                if let Err(err) = $self.rr_client.make_request(request_options, response_handler) {
                     submit_error_option = Some(ShadowError::new_request_response(err))
                 }
             }
@@ -106,6 +62,20 @@ impl AsynchronousShadowClient for TokioShadowClient {
                 }
             }
         })
+    })
+}
+
+pub trait AsynchronousShadowClient {
+    fn get_shadow(&self, request: GetShadowRequest) -> AsyncGetShadowResult;
+}
+
+struct TokioShadowClient {
+    rr_client: ClientHandle,
+}
+
+impl AsynchronousShadowClient for TokioShadowClient {
+    fn get_shadow(&self, request: GetShadowRequest) -> AsyncGetShadowResult {
+        submit_shadow_operation_tokio!(self, request, GetShadowResponse, ServiceErrorResponse, GetShadowResult)
     }
 }
 
