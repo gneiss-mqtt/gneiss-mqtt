@@ -159,6 +159,8 @@ impl GetShadowResponse {
     }
 }
 
+pub type GetShadowResult = ShadowResult<GetShadowResponse>;
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct ServiceErrorResponse {
     #[serde(rename = "clientToken")]

@@ -1042,7 +1042,7 @@ pub use crate::client::asynchronous::tokio::new_tokio_client;
 #[cfg(feature = "tokio")]
 pub use crate::client::asynchronous::tokio::builder::TokioClientBuilder;
 
-pub use crate::client::synchronous::{SyncClient, SyncClientHandle, SyncPublishResult, SyncPublishResultCallback, SyncResultReceiver, SyncSubscribeResult, SyncSubscribeResultCallback, SyncUnsubscribeResult, SyncUnsubscribeResultCallback};
+pub use crate::client::synchronous::{new_sync_result_pair, SyncClient, SyncClientHandle, SyncPublishResult, SyncPublishResultCallback, SyncResultReceiver, SyncResultSender, SyncSubscribeResult, SyncSubscribeResultCallback, SyncUnsubscribeResult, SyncUnsubscribeResultCallback};
 
 #[cfg(feature = "threaded")]
 pub use crate::client::synchronous::threaded::new_threaded_client;

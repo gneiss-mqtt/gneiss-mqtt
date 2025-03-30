@@ -15,13 +15,14 @@ use crate::error::GneissResult;
 use crate::mqtt::*;
 use super::*;
 
-/// Helper type to wait on MQTT operation results when using a non-async client
+/// Helper type to wait on operation results when using a non-async client
 pub struct SyncResultReceiver<T> {
     result_lock: Arc<Mutex<Option<T>>>,
     result_signal: Arc<Condvar>
 }
 
-pub(crate) struct SyncResultSender<T> {
+/// Helper type to communicate the result of an operation when using a non-async client
+pub struct SyncResultSender<T> {
     result_lock: Arc<Mutex<Option<T>>>,
     result_signal: Arc<Condvar>
 }
@@ -44,8 +45,9 @@ impl<T> SyncResultSender<T> {
         }
     }
 
+    /// Sets the result of an operation
     #[cfg_attr(not(feature="threaded"), allow(dead_code))]
-    pub(crate) fn apply(&self, value: T) {
+    pub fn apply(&self, value: T) {
         let mut current_value = self.result_lock.lock().unwrap();
 
         if current_value.is_some() {
@@ -68,7 +70,7 @@ impl<T> SyncResultReceiver<T> {
         }
     }
 
-    /// Blocking.  Waits for a result from a synchronous client MQTT operation.
+    /// Blocking.  Waits for a result from a synchronous client operation.
     pub fn recv(&self) -> T {
         let mut current_value = self.result_lock.lock().unwrap();
         while current_value.is_none() {
@@ -78,7 +80,7 @@ impl<T> SyncResultReceiver<T> {
         current_value.take().unwrap()
     }
 
-    /// Non-blocking.  Checks if a synchronous client MQTT operation has produced a result yet.
+    /// Non-blocking.  Checks if a synchronous client operation has produced a result yet.
     /// Returns the result value if so.
     pub fn try_recv(&self) -> Option<T> {
         let mut current_value = self.result_lock.lock().unwrap();
@@ -90,8 +92,10 @@ impl<T> SyncResultReceiver<T> {
     }
 }
 
+/// Creates a new pair of values that support sending and receiving the result of an operation
+/// in a synchronous context
 #[cfg_attr(not(feature="threaded"), allow(dead_code))]
-pub(crate) fn new_sync_result_pair<T>() -> (SyncResultReceiver<T>, SyncResultSender<T>) {
+pub fn new_sync_result_pair<T>() -> (SyncResultReceiver<T>, SyncResultSender<T>) {
     let lock = Arc::new(Mutex::new(None));
     let signal = Arc::new(Condvar::new());
 

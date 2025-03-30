@@ -13,10 +13,9 @@ use std::sync::Arc;
 use ::tokio::runtime::Handle;
 use gneiss_mqtt_request_response::error::RequestResponseError;
 
-pub type GetShadowResult = ShadowResult<GetShadowResponse>;
 pub type AsyncGetShadowResult = Pin<Box<dyn Future<Output = GetShadowResult> + Send>>;
 
-macro_rules! submit_shadow_operation_tokio {
+macro_rules! submit_shadow_operation_async {
     ($self:ident, $request:ident, $response_type:ident, $error_type:ident, $result_type:ident) => ({
 
         let (response_sender, rx) = tokio::sync::oneshot::channel();
@@ -75,7 +74,7 @@ struct TokioShadowClient {
 
 impl AsynchronousShadowClient for TokioShadowClient {
     fn get_shadow(&self, request: GetShadowRequest) -> AsyncGetShadowResult {
-        submit_shadow_operation_tokio!(self, request, GetShadowResponse, ServiceErrorResponse, GetShadowResult)
+        submit_shadow_operation_async!(self, request, GetShadowResponse, ServiceErrorResponse, GetShadowResult)
     }
 }
 
@@ -89,3 +88,4 @@ impl AsynchronousShadowClient for AsynchronousShadowClientHandle {
         self.client.get_shadow(request)
     }
 }
+

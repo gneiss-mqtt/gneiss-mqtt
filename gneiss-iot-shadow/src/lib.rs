@@ -10,6 +10,8 @@
 //#![cfg_attr(feature = "strict", deny(warnings))]
 
 pub mod model;
+#[cfg(feature = "tokio")]
 pub mod asynchronous;
+#[cfg(feature = "threaded")]
 pub mod synchronous;
 mod error;
