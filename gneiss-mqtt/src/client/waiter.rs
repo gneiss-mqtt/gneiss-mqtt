@@ -47,6 +47,10 @@ pub enum ClientEventType {
     /// Corresponds to a ClientEvent::PublishReceived, the client event emitted every time a Publish packet
     /// is received
     PublishReceived,
+
+    /// Corresponds to a ClientEvent::ListenerInitialStatus, the client event emitted to newly-added
+    /// listeners
+    ListenerInitialStatus,
 }
 
 /// Checks if a ClientEvent matches a ClientEventType
@@ -58,6 +62,7 @@ pub fn client_event_matches(event: &Arc<ClientEvent>, event_type: ClientEventTyp
         ClientEvent::Disconnection(_) => { event_type == ClientEventType::Disconnection }
         ClientEvent::Stopped(_) => { event_type == ClientEventType::Stopped }
         ClientEvent::PublishReceived(_) => { event_type == ClientEventType::PublishReceived }
+        ClientEvent::ListenerInitialStatus(_) => { event_type == ClientEventType::ListenerInitialStatus }
     }
 }
 

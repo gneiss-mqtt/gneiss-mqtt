@@ -274,3 +274,61 @@ impl Client for ClientHandle {
         self.client.create_stream(options)
     }
 }
+
+// protocol adapter
+
+pub(crate) struct SubscriptionEventContext {
+    pub(crate) topic_filter: String,
+    pub(crate) outcome: RequestResponseResult<()>,
+    pub(crate) retryable: bool,
+}
+
+pub(crate) enum SubscriptionResultEvent {
+    Subscribe(SubscriptionEventContext),
+    Unsubscribe(SubscriptionEventContext),
+}
+
+pub(crate) struct IncomingPublishEvent {
+    pub(crate) publish: Arc<PublishPacket>,
+}
+
+pub(crate) struct ConnectedContext {
+    pub(crate) rejoined_session: bool
+}
+
+pub(crate) enum ConnectionStatusEvent {
+    Connected(ConnectedContext),
+    Disconnected,
+}
+
+pub(crate) enum ProtocolAdapterEvent {
+    Publish(IncomingPublishEvent),
+    Subscription(SubscriptionResultEvent),
+    Connection(ConnectionStatusEvent)
+}
+
+pub(crate) struct SubscribeOptions {
+    pub(crate) topic_filter: String,
+    pub(crate) timeout: Duration,
+}
+
+pub(crate) struct UnsubscribeOptions {
+    pub(crate) topic_filter: String,
+    pub(crate) timeout: Duration,
+}
+
+pub(crate) struct PublishOptions {
+    pub(crate) topic: String,
+    pub(crate) payload: Vec<u8>,
+    pub(crate) timeout: Duration
+}
+
+pub(crate) trait ProtocolAdapter {
+
+    fn subscribe(&self, options: SubscribeOptions) -> RequestResponseResult<()>;
+
+    fn unsubscribe(&self, options: UnsubscribeOptions) -> RequestResponseResult<()>;
+
+    fn publish(&self, options: PublishOptions) -> RequestResponseResult<()>;
+}
+

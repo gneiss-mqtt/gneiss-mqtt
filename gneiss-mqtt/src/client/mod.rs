@@ -360,7 +360,7 @@ pub struct ConnectionSuccessEvent {
 
     /// Connack packet sent by the broker as the final step of successful MQTT connection
     /// establishment
-    pub connack: ConnackPacket,
+    pub connack: Arc<ConnackPacket>,
 
     /// Set of protocol-related values that are negotiated by the Connect <-> Connack handshake
     pub settings: NegotiatedSettings
@@ -368,7 +368,7 @@ pub struct ConnectionSuccessEvent {
 
 impl Display for ConnectionSuccessEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ConnectionSuccessEvent {{ {}, {} }}", self.connack, self.settings)
+        write!(f, "ConnectionSuccessEvent {{ {}, {} }}", *self.connack, self.settings)
     }
 }
 
@@ -383,13 +383,13 @@ pub struct ConnectionFailureEvent {
 
     /// If the connection attempt was rejected by the broker with a Connack with
     /// failing reason code, that packet is found here.
-    pub connack: Option<ConnackPacket>,
+    pub connack: Option<Arc<ConnackPacket>>,
 }
 
 impl Display for ConnectionFailureEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(connack) = &self.connack {
-            write!(f, "ConnectionFailureEvent {{ {}, {} }}", self.error, connack )
+            write!(f, "ConnectionFailureEvent {{ {}, {} }}", self.error, *connack )
         } else {
             write!(f, "ConnectionFailureEvent {{ {}, None }}", self.error )
         }
@@ -406,13 +406,13 @@ pub struct DisconnectionEvent {
 
     /// If the connection was shut down due to the receipt of a broker-sent Disconnect packet,
     /// then that packet is found here.
-    pub disconnect: Option<DisconnectPacket>,
+    pub disconnect: Option<Arc<DisconnectPacket>>,
 }
 
 impl Display for DisconnectionEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(disconnect) = &self.disconnect {
-            write!(f, "DisconnectionEvent {{ {}, {} }}", self.error, disconnect)
+            write!(f, "DisconnectionEvent {{ {}, {} }}", self.error, *disconnect)
         } else {
             write!(f, "DisconnectionEvent {{ {}, None }}", self.error)
         }
@@ -440,12 +440,28 @@ pub struct PublishReceivedEvent {
     /// Publish that was received from the broker.  Currently, the appropriate Ack is always
     /// sent by the client before this event is emitted.  In the future, bridging support
     /// may make the sending of Acks a user-controlled option.
-    pub publish: PublishPacket
+    pub publish: Arc<PublishPacket>
 }
 
 impl Display for PublishReceivedEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "PublishReceivedEvent {{ {} }}", self.publish )
+        write!(f, "PublishReceivedEvent {{ {} }}", *self.publish )
+    }
+}
+
+/// An event communicating the current values of any internal client state that might be of
+/// interest to listeners.  This event is not broadcast, it is only sent to attaching listeners.
+/// It is guaranteed that this is the first event a listener will receive.
+#[derive(Debug)]
+pub struct ListenerInitialStatusEvent {
+
+    /// Whether or not the client is currently connected
+    pub connected: bool,
+}
+
+impl Display for ListenerInitialStatusEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ListenerInitialStatusEvent {{ connected: {} }}", self.connected )
     }
 }
 
@@ -475,6 +491,9 @@ pub enum ClientEvent {
 
     /// An event emitted by the client whenever it receives a Publish packet from the broker.
     PublishReceived(PublishReceivedEvent),
+
+    /// An event communicating the current values of internal client state
+    ListenerInitialStatus(ListenerInitialStatusEvent),
 }
 
 impl Display for ClientEvent {
@@ -486,6 +505,7 @@ impl Display for ClientEvent {
             ClientEvent::Disconnection(event) => { write!(f, "{}", event) }
             ClientEvent::Stopped(event) => { write!(f, "{}", event) }
             ClientEvent::PublishReceived(event) => { write!(f, "{}", event) }
+            ClientEvent::ListenerInitialStatus(event) => { write!(f, "{}", event) }
         }
     }
 }
@@ -499,7 +519,7 @@ pub type ClientEventListener = Arc<ClientEventListenerCallback>;
 /// Opaque structure that represents the identity of a client event listener.
 ///
 /// Returned by adding a listener and used to remove that same listener if needed.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct ListenerHandle {
     pub(crate) id: u64
 }
@@ -726,6 +746,12 @@ impl MqttClientImpl {
             }
             OperationOptions::AddListener(id, listener) => {
                 debug!("Adding listener {} to client events", id);
+
+                let event = ListenerInitialStatusEvent {
+                    connected: self.current_state == ClientImplState::Connected
+                };
+                listener(Arc::new(ClientEvent::ListenerInitialStatus(event)));
+
                 self.add_listener(id, listener);
             }
             OperationOptions::RemoveListener(id) => {
@@ -744,7 +770,7 @@ impl MqttClientImpl {
                 PacketEvent::Publish(publish) => {
                     debug!("dispatch_packet_events - publish packet");
                     let publish_event = PublishReceivedEvent {
-                        publish,
+                        publish: Arc::new(publish),
                     };
 
                     let publish_client_event = Arc::new(ClientEvent::PublishReceived(publish_event));
@@ -891,7 +917,7 @@ impl MqttClientImpl {
         let settings = self.protocol_state.get_negotiated_settings().as_ref().unwrap();
 
         let connection_success_event = ConnectionSuccessEvent {
-            connack: self.last_connack.as_ref().unwrap().clone(),
+            connack: Arc::new(self.last_connack.as_ref().unwrap().clone()),
             settings: settings.clone(),
         };
 
@@ -905,7 +931,7 @@ impl MqttClientImpl {
         };
 
         if let Some(connack) = &self.last_connack {
-            connection_failure_event.connack = Some(connack.clone());
+            connection_failure_event.connack = Some(Arc::new(connack.clone()));
         }
 
         self.broadcast_event(Arc::new(ClientEvent::ConnectionFailure(connection_failure_event)));
@@ -918,7 +944,7 @@ impl MqttClientImpl {
         };
 
         if let Some(disconnect) = &self.last_disconnect {
-            disconnection_event.disconnect = Some(disconnect.clone());
+            disconnection_event.disconnect = Some(Arc::new(disconnect.clone()));
         }
 
         self.broadcast_event(Arc::new(ClientEvent::Disconnection(disconnection_event)));

@@ -92,7 +92,7 @@ impl<T> SyncResultReceiver<T> {
     }
 }
 
-/// Creates a new pair of values that support sending and receiving the result of an operation
+/// Creates a new linked pair of values that support sending and receiving the result of an operation
 /// in a synchronous context
 #[cfg_attr(not(feature="threaded"), allow(dead_code))]
 pub fn new_sync_result_pair<T>() -> (SyncResultReceiver<T>, SyncResultSender<T>) {

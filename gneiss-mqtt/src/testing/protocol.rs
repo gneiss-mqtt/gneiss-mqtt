@@ -807,19 +807,22 @@ pub(crate) fn validate_reconnect_failure_sequence(events: &[ClientEventRecord]) 
     let mut actual_delays : Vec<Duration> = Vec::new();
 
     for (i, event_record) in events.iter().enumerate() {
-        if i % 2 == 0 {
-            assert_matches!(*event_record.event, ClientEvent::ConnectionAttempt(_));
-            if let Some(previous_timestamp) = &previous_failure_time {
-                assert!(*previous_timestamp < event_record.timestamp);
-                actual_delays.push(event_record.timestamp - *previous_timestamp);
+        // first even is ListenerInitialStatus, after that it's pairs of (attempt, success/fail)
+        if i > 0 {
+            if i % 2 == 1 {
+                assert_matches!(*event_record.event, ClientEvent::ConnectionAttempt(_));
+                if let Some(previous_timestamp) = &previous_failure_time {
+                    assert!(*previous_timestamp < event_record.timestamp);
+                    actual_delays.push(event_record.timestamp - *previous_timestamp);
+                }
+            } else {
+                assert_matches!(*event_record.event, ClientEvent::ConnectionFailure(_));
+                connection_failures += 1;
+                if let Some(old_failure_time) = previous_failure_time {
+                    assert!(old_failure_time < event_record.timestamp);
+                }
+                previous_failure_time = Some(event_record.timestamp);
             }
-        } else {
-            assert_matches!(*event_record.event, ClientEvent::ConnectionFailure(_));
-            connection_failures += 1;
-            if let Some(old_failure_time) = previous_failure_time {
-                assert!(old_failure_time < event_record.timestamp);
-            }
-            previous_failure_time = Some(event_record.timestamp);
         }
     }
 
