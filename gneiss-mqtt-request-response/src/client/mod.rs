@@ -7,7 +7,9 @@ use std::time::Duration;
 use gneiss_mqtt::mqtt::PublishPacket;
 use crate::error::*;
 
+#[cfg(feature="tokio")]
 pub mod asynchronous;
+#[cfg(feature="threaded")]
 pub mod synchronous;
 
 #[derive(Default, Copy, Clone)]

@@ -38,7 +38,7 @@ impl ProtocolAdapter for ThreadedClientProtocolAdapter {
             };
 
             if let Err(e) = result {
-                event.outcome = Err(e);
+                event.outcome = Err(RequestResponseError::from(e));
             }
 
             let _ = completion_output_channel.send(
@@ -72,7 +72,7 @@ impl ProtocolAdapter for ThreadedClientProtocolAdapter {
             };
 
             if let Err(e) = result {
-                event.outcome = Err(e);
+                event.outcome = Err(RequestResponseError::from(e));
             }
 
             let _ = completion_output_channel.send(
@@ -109,7 +109,7 @@ impl Drop for ThreadedClientProtocolAdapter {
 }
 
 fn client_event_handler(event_sender: &std::sync::mpsc::Sender<ProtocolAdapterEvent>, event: Arc<ClientEvent>) {
-    match event {
+    match &*event {
         ClientEvent::ConnectionSuccess(success_event) => {
             let _ = event_sender.send(
                 ProtocolAdapterEvent::Connection(ConnectionStatusEvent::Connected(ConnectedContext{
@@ -125,7 +125,7 @@ fn client_event_handler(event_sender: &std::sync::mpsc::Sender<ProtocolAdapterEv
         ClientEvent::PublishReceived(publish_event) => {
             let _ = event_sender.send(
                 ProtocolAdapterEvent::Publish(IncomingPublishEvent{
-                    publish: publish_event.publish,
+                    publish: publish_event.publish.clone(),
                 })
             );
         }

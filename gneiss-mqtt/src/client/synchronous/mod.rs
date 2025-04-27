@@ -118,13 +118,13 @@ pub type SyncSubscribeResult = SyncResultReceiver<SubscribeResult>;
 pub type SyncUnsubscribeResult = SyncResultReceiver<UnsubscribeResult>;
 
 /// Result callback for a Publish operation on a synchronous client.
-pub type SyncPublishResultCallback = Box<dyn Fn(PublishResult) + Send + Sync>;
+pub type SyncPublishResultCallback = Box<dyn FnOnce(PublishResult) + Send + Sync>;
 
 /// Result callback for a Subscribe operation on a synchronous client.
-pub type SyncSubscribeResultCallback = Box<dyn Fn(SubscribeResult) + Send + Sync>;
+pub type SyncSubscribeResultCallback = Box<dyn FnOnce(SubscribeResult) + Send + Sync>;
 
 /// Result callback for an Unsubscribe operation on a synchronous client.
-pub type SyncUnsubscribeResultCallback = Box<dyn Fn(UnsubscribeResult) + Send + Sync>;
+pub type SyncUnsubscribeResultCallback = Box<dyn FnOnce(UnsubscribeResult) + Send + Sync>;
 
 /// Interface for a non-async network client that functions as a thin wrapper over the MQTT protocol.
 ///

@@ -51,9 +51,6 @@ fn handle_publish(client: &SyncClientHandle, args: PublishArgs) {
         publish_builder = publish_builder.with_payload(payload.as_bytes().to_vec());
     }
 
-    let correlation_data = vec![0; 1024 * 9];
-    publish_builder = publish_builder.with_correlation_data(correlation_data);
-
     let publish_result = client.publish(publish_builder.build(), None).recv();
     match &publish_result {
         Ok(publish_response) => {
