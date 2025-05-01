@@ -166,3 +166,46 @@ impl ThreadedClientProtocolAdapter {
         }
     }
 }
+
+#[cfg(feature = "testing")]
+mod testing {
+    use gneiss_mqtt::client::ThreadedClientBuilder;
+    use super::*;
+
+    type ThreadedTestFactory = Box<dyn Fn(&ThreadedClientProtocolAdapter, std::sync::mpsc::Receiver<ProtocolAdapterEvent>) -> RequestResponseResult<()>>;
+
+    fn do_synchronous_adapter_test(test_factory: ThreadedTestFactory, builder: ThreadedClientBuilder) {
+        let client = builder.build()?;
+        client.start(None)?;
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let adapter = ThreadedClientProtocolAdapter::new(client.clone(), sender)?;
+        (*test_factory)(&adapter, receiver).unwrap();
+
+        client.stop(None)?;
+        client.close()?;
+    }
+
+    fn publish_test(adapter: &ThreadedClientProtocolAdapter, receiver: std::sync::mpsc::Receiver<ProtocolAdapterEvent>) -> RequestResponseResult<()> {
+
+        Ok(())
+    }
+
+    fn create_success_server_config() -> gneiss_mqtt::testing::mock_server::ClientTestOptions {
+        gneiss_mqtt::testing::mock_server::ClientTestOptions {
+            protocol_version: ProtocolVersion
+        }
+    }
+
+    #[test]
+    fn publish_success_test() {
+        let (builder, server) =
+            gneiss_mqtt::testing::mock_server::build_mock_client_server_threaded(create_success_server_config());
+
+        do_synchronous_adapter_test(Box::new(|adapter: &ThreadedClientProtocolAdapter, receiver: std::sync::mpsc::Receiver<ProtocolAdapterEvent>| {
+            publish_test(adapter, receiver)
+        }), builder);
+
+        server.close();
+    }
+}

@@ -210,20 +210,20 @@ impl MockBroker {
 }
 
 #[derive(Default)]
-pub(crate) struct ClientTestOptions {
-    pub(crate) protocol_version: ProtocolVersion,
+pub struct ClientTestOptions {
+    pub protocol_version: ProtocolVersion,
 
-    pub(crate) packet_handler_set_factory_fn: Option<PacketHandlerSetFactory>,
-
-    #[allow(clippy::type_complexity)]
-    pub(crate) client_options_mutator_fn: Option<Box<dyn Fn(&mut MqttClientOptionsBuilder)>>,
+    pub packet_handler_set_factory_fn: Option<PacketHandlerSetFactory>,
 
     #[allow(clippy::type_complexity)]
-    pub(crate) connect_options_mutator_fn: Option<Box<dyn Fn(&mut ConnectOptionsBuilder)>>
+    pub client_options_mutator_fn: Option<Box<dyn Fn(&mut MqttClientOptionsBuilder)>>,
+
+    #[allow(clippy::type_complexity)]
+    pub connect_options_mutator_fn: Option<Box<dyn Fn(&mut ConnectOptionsBuilder)>>
 }
 
 #[cfg(feature = "tokio")]
-pub(crate) fn build_mock_client_server_tokio(mut config: ClientTestOptions) -> (TokioClientBuilder, MockBroker) {
+pub fn build_mock_client_server_tokio(mut config: ClientTestOptions) -> (TokioClientBuilder, MockBroker) {
     let handler_set_factory : PacketHandlerSetFactory =
         if config.packet_handler_set_factory_fn.is_some() {
             config.packet_handler_set_factory_fn.take().unwrap()
@@ -253,7 +253,7 @@ pub(crate) fn build_mock_client_server_tokio(mut config: ClientTestOptions) -> (
 }
 
 #[cfg(feature = "threaded")]
-pub(crate) fn build_mock_client_server_threaded(mut config: ClientTestOptions) -> (ThreadedClientBuilder, MockBroker) {
+pub fn build_mock_client_server_threaded(mut config: ClientTestOptions) -> (ThreadedClientBuilder, MockBroker) {
     let handler_set_factory : PacketHandlerSetFactory =
         if config.packet_handler_set_factory_fn.is_some() {
             config.packet_handler_set_factory_fn.take().unwrap()

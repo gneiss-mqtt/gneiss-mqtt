@@ -10,5 +10,5 @@ Integration test functionality used throughout the gneiss ecosystem.  Only enabl
 
 #[cfg(any(feature = "tokio", feature = "threaded"))]
 pub(crate) mod integration;
-pub(crate) mod protocol;
-pub(crate) mod mock_server;
+pub mod protocol;
+pub mod mock_server;

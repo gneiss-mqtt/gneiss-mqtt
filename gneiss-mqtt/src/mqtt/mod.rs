@@ -29,8 +29,9 @@ pub(crate) mod unsuback;
 pub(crate) mod unsubscribe;
 pub(crate) mod utils;
 
+#[allow(missing_docs)]
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum ProtocolVersion {
+pub enum ProtocolVersion {
     #[default]
     Mqtt5,
 
