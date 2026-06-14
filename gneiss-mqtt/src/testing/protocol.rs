@@ -5,7 +5,6 @@
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use crate::protocol::*;
 use assert_matches::assert_matches;
@@ -18,7 +17,6 @@ use crate::encode::MAXIMUM_VARIABLE_LENGTH_INTEGER;
 use crate::error::{GneissError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::utils::mqtt_packet_to_packet_type;
-use crate::testing::mock_server::ClientTestOptions;
 use crate::validate::testing::verify_validation_failure;
 
 use test_case::test_matrix;
@@ -50,12 +48,13 @@ fn build_standard_test_config(protocol_version : i32) -> ProtocolStateConfig {
 
 #[derive(Default)]
 pub(crate) struct BrokerTestContext {
+    // TODO: fix when client impls refactored
+    #[allow(dead_code)]
     pub(crate) connect_count: usize,
 }
 
 pub(crate) type PacketHandler = Box<dyn Fn(&MqttPacket, &mut VecDeque<Box<MqttPacket>>, &mut BrokerTestContext) -> GneissResult<()> + Send + Sync + 'static>;
 pub(crate) type PacketHandlerSet = HashMap<PacketType, PacketHandler>;
-pub(crate) type PacketHandlerSetFactory = Box<dyn Fn() -> PacketHandlerSet + Send + Sync>;
 
 fn handle_connect_with_successful_connack(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Connect(connect) = packet {
@@ -772,94 +771,6 @@ fn verify_protocol_state_empty(fixture: &ProtocolStateTestFixture) {
     assert_eq!(0, fixture.client_state.pending_publish_operations.len());
     assert_eq!(0, fixture.client_state.pending_non_publish_operations.len());
     assert_eq!(0, fixture.client_state.pending_write_completion_operations.len());
-}
-
-pub(crate) fn is_reconnect_related_event(event: &Arc<ClientEvent>) -> bool {
-    !matches!(**event, ClientEvent::Stopped(_) | ClientEvent::PublishReceived(_))
-}
-
-#[allow(clippy::field_reassign_with_default)]
-pub(crate) fn build_reconnect_test_options() -> ClientTestOptions {
-    let mut test_options = ClientTestOptions::default();
-
-    test_options.client_options_mutator_fn = Some(Box::new(|builder| {
-        builder.with_base_reconnect_period(Duration::from_millis(250));
-        builder.with_max_reconnect_period(Duration::from_millis(6000));
-        builder.with_reconnect_period_jitter(ExponentialBackoffJitterType::None);
-        builder.with_reconnect_stability_reset_period(Duration::from_millis(5000));
-    }));
-
-    test_options.packet_handler_set_factory_fn = Some(Box::new(|| {
-        let mut handlers = create_default_packet_handlers();
-
-        handlers.insert(PacketType::Connect, Box::new(crate::testing::protocol::handle_connect_with_failure_connack));
-
-        handlers
-    }));
-
-    test_options
-}
-
-pub(crate) fn handle_connect_with_conditional_connack(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, context: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Connect(_) = packet {
-        context.connect_count += 1;
-
-        if context.connect_count < 6 {
-            let response = Box::new(MqttPacket::Connack(ConnackPacket {
-                reason_code: ConnectReasonCode::Banned,
-                ..Default::default()
-            }));
-            response_packets.push_back(response);
-        } else {
-            let response = Box::new(MqttPacket::Connack(ConnackPacket {
-                reason_code: ConnectReasonCode::Success,
-                assigned_client_identifier: Some("client-id".to_string()),
-                ..Default::default()
-            }));
-            response_packets.push_back(response);
-        }
-
-        return Ok(());
-    }
-
-    panic!("Invalid packet handler state")
-}
-
-pub(crate) fn handle_publish_with_disconnect(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
-    if let MqttPacket::Publish(_) = packet {
-        let response = Box::new(MqttPacket::Disconnect(DisconnectPacket {
-            reason_code: DisconnectReasonCode::NotAuthorized,
-            ..Default::default()
-        }));
-        response_packets.push_back(response);
-
-        return Ok(());
-    }
-
-    panic!("Invalid packet handler state")
-}
-
-#[allow(clippy::field_reassign_with_default)]
-pub(crate) fn build_reconnect_reset_test_options() -> ClientTestOptions {
-    let mut test_options = ClientTestOptions::default();
-
-    test_options.client_options_mutator_fn = Some(Box::new(|builder| {
-        builder.with_base_reconnect_period(Duration::from_millis(500));
-        builder.with_max_reconnect_period(Duration::from_millis(6000));
-        builder.with_reconnect_period_jitter(ExponentialBackoffJitterType::None);
-        builder.with_reconnect_stability_reset_period(Duration::from_millis(3000));
-    }));
-
-    test_options.packet_handler_set_factory_fn = Some(Box::new(|| {
-        let mut handlers = create_default_packet_handlers();
-
-        handlers.insert(PacketType::Connect, Box::new(handle_connect_with_conditional_connack));
-        handlers.insert(PacketType::Publish, Box::new(handle_publish_with_disconnect));
-
-        handlers
-    }));
-
-    test_options
 }
 
 #[test_matrix([5, 311])]

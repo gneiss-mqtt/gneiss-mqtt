@@ -877,12 +877,8 @@ mod tests {
 
         assert!(validate_publish_packet_outbound(&publish_packet).is_ok());
 
-        let outbound_packet = MqttPacket::Publish(publish_packet);
-
-        let mut packet2 = create_publish_with_all_fields();
-        packet2.subscription_identifiers = None;
-
-        let outbound_internal_packet = MqttPacket::Publish(packet2);
+        publish_packet.packet_id = 1;
+        let outbound_internal_packet = MqttPacket::Publish(publish_packet);
 
         let mut test_validation_context = create_pinned_validation_context();
         test_validation_context.settings.maximum_qos = QualityOfService::ExactlyOnce;

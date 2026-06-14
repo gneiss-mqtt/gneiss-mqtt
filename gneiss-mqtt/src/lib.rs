@@ -45,6 +45,7 @@ mod logging;
 pub mod mqtt;
 mod protocol;
 #[cfg(feature = "testing")]
+#[doc(hidden)]
 pub mod testing;
 #[doc(hidden)]
 pub mod validate;

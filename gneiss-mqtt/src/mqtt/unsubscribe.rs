@@ -371,12 +371,8 @@ mod tests {
 
         assert!(validate_unsubscribe_packet_outbound(&unsubscribe_packet).is_ok());
 
-        let outbound_packet = MqttPacket::Unsubscribe(unsubscribe_packet);
-
-        let mut packet2 = create_unsubscribe_all_properties();
-        packet2.packet_id = 1;
-
-        let outbound_internal_packet = MqttPacket::Unsubscribe(packet2);
+        unsubscribe_packet.packet_id = 1;
+        let outbound_internal_packet = MqttPacket::Unsubscribe(unsubscribe_packet);
 
         let test_validation_context = create_pinned_validation_context();
 

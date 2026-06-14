@@ -544,15 +544,11 @@ mod tests {
     fn subscribe_validate_success() {
         let mut subscribe_packet = create_subscribe_all_properties();
         subscribe_packet.packet_id = 0;
-        
+
         assert!(validate_subscribe_packet_outbound(&subscribe_packet).is_ok());
 
-        let outbound_packet = MqttPacket::Subscribe(subscribe_packet);
-
-        let mut packet2 = create_subscribe_all_properties();
-        packet2.packet_id = 1;
-
-        let outbound_internal_packet = MqttPacket::Subscribe(packet2);
+        subscribe_packet.packet_id = 1;
+        let outbound_internal_packet = MqttPacket::Subscribe(subscribe_packet);
 
         let test_validation_context = create_pinned_validation_context();
 

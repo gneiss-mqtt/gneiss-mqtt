@@ -8,5 +8,5 @@ Integration test functionality used throughout the gneiss ecosystem.  Only enabl
 `testing` feature.  Should never be enabled in production.
 */
 
-pub(crate) mod protocol;
-pub(crate) mod mock_server;
+#[doc(hidden)]
+pub mod protocol;
