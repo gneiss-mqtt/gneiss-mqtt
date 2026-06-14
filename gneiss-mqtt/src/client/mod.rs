@@ -10,7 +10,6 @@ Module containing the public MQTT client and associated types necessary to invok
 pub mod config;
 pub(crate) mod synchronous;
 pub(crate) mod asynchronous;
-pub mod waiter;
 
 use crate::client::config::*;
 use crate::error::{GneissError, GneissResult};
@@ -18,7 +17,6 @@ use crate::mqtt::*;
 use crate::protocol::*;
 
 use log::*;
-use rand::Rng;
 use std::collections::{HashMap, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use std::mem;
@@ -281,6 +279,45 @@ impl StopOptionsBuilder {
     }
 }
 
+#[doc(hidden)]
+pub type ResponseHandler<T> = Box<dyn FnOnce(T) -> GneissResult<()> + Send + Sync>;
+
+#[doc(hidden)]
+pub struct PublishOptionsInternal {
+    pub options: PublishOptions,
+    pub response_handler: Option<ResponseHandler<PublishResult>>,
+}
+
+#[doc(hidden)]
+pub struct SubscribeOptionsInternal {
+    pub options: SubscribeOptions,
+    pub response_handler: Option<ResponseHandler<SubscribeResult>>,
+}
+
+#[doc(hidden)]
+pub struct UnsubscribeOptionsInternal {
+    pub options: UnsubscribeOptions,
+    pub response_handler: Option<ResponseHandler<UnsubscribeResult>>,
+}
+
+#[doc(hidden)]
+#[derive(Debug, Default)]
+pub struct StopOptionsInternal {
+    pub options: StopOptions,
+}
+
+#[doc(hidden)]
+pub enum OperationOptions {
+    Publish(PublishPacket, PublishOptionsInternal),
+    Subscribe(SubscribePacket, SubscribeOptionsInternal),
+    Unsubscribe(UnsubscribePacket, UnsubscribeOptionsInternal),
+    Start(Option<ClientEventListener>),
+    Stop(StopOptionsInternal),
+    Shutdown(),
+    AddListener(u64, ClientEventListener),
+    RemoveListener(u64)
+}
+
 /// Structure containing all of the variable MQTT protocol settings that get negotiated as part of
 /// each new network connection's Connect <-> Connack handshake on establishment.
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
@@ -498,47 +535,14 @@ pub type ClientEventListener = Arc<ClientEventListenerCallback>;
 
 /// Opaque structure that represents the identity of a client event listener.
 ///
-/// Returned by adding a listener and used to remove that same listener if needed.
-#[derive(Debug, Eq, PartialEq)]
-pub struct ListenerHandle {
-    pub(crate) id: u64
+/// Returned by adding a listener.  The listener is removed when this value gets dropped.
+pub trait ListenerHandle {
 }
 
-pub(crate) type ResponseHandler<T> = Box<dyn FnOnce(T) -> GneissResult<()> + Send + Sync>;
 
-pub(crate) struct PublishOptionsInternal {
-    pub options: PublishOptions,
-    pub response_handler: Option<ResponseHandler<PublishResult>>,
-}
-
-pub(crate) struct SubscribeOptionsInternal {
-    pub options: SubscribeOptions,
-    pub response_handler: Option<ResponseHandler<SubscribeResult>>,
-}
-
-pub(crate) struct UnsubscribeOptionsInternal {
-    pub options: UnsubscribeOptions,
-    pub response_handler: Option<ResponseHandler<UnsubscribeResult>>,
-}
-
-#[derive(Debug, Default)]
-pub(crate) struct StopOptionsInternal {
-    pub disconnect: Option<Box<MqttPacket>>,
-}
-
-pub(crate) enum OperationOptions {
-    Publish(Box<MqttPacket>, PublishOptionsInternal),
-    Subscribe(Box<MqttPacket>, SubscribeOptionsInternal),
-    Unsubscribe(Box<MqttPacket>, UnsubscribeOptionsInternal),
-    Start(Option<ClientEventListener>),
-    Stop(StopOptionsInternal),
-    Shutdown(),
-    AddListener(u64, ClientEventListener),
-    RemoveListener(u64)
-}
-
+#[doc(hidden)]
 #[derive(Eq, PartialEq, Copy, Clone)]
-pub(crate) enum ClientImplState {
+pub enum ClientImplState {
     Stopped,
     Connecting,
     Connected,
@@ -558,9 +562,11 @@ impl Display for ClientImplState {
     }
 }
 
-pub(crate) type CallbackSpawnerFunction = Box<dyn Fn(Arc<ClientEvent>, Arc<ClientEventListenerCallback>) + Send + Sync>;
+#[doc(hidden)]
+pub type CallbackSpawnerFunction = Box<dyn Fn(Arc<ClientEvent>, Arc<ClientEventListenerCallback>) + Send + Sync>;
 
-pub(crate) struct MqttClientImpl {
+#[doc(hidden)]
+pub struct MqttClientImpl {
     protocol_state: ProtocolState,
     listeners: HashMap<u64, ClientEventListener>,
 
@@ -588,7 +594,7 @@ pub(crate) struct MqttClientImpl {
 
 impl MqttClientImpl {
 
-    pub(crate) fn new(client_config: MqttClientOptions, connect_config: ConnectOptions, callback_spawner: CallbackSpawnerFunction) -> Self {
+    pub fn new(client_config: MqttClientOptions, connect_config: ConnectOptions, callback_spawner: CallbackSpawnerFunction) -> Self {
         debug!("Creating new MQTT client - client options: {:?}", client_config);
         debug!("Creating new MQTT client - connect options: {:?}", connect_config);
 
@@ -626,15 +632,15 @@ impl MqttClientImpl {
         client_impl
     }
 
-    pub(crate) fn connect_timeout(&self) -> &Duration {
+    pub fn connect_timeout(&self) -> &Duration {
         &self.connect_timeout
     }
 
-    pub(crate) fn get_current_state(&self) -> ClientImplState {
+    pub fn get_current_state(&self) -> ClientImplState {
         self.current_state
     }
 
-    pub(crate) fn get_protocol_state(&self) -> ProtocolStateType {
+    pub fn get_protocol_state(&self) -> ProtocolStateType {
         self.protocol_state.state()
     }
 
@@ -654,7 +660,7 @@ impl MqttClientImpl {
         }
     }
 
-    pub(crate) fn apply_error(&mut self, error: GneissError) {
+    pub fn apply_error(&mut self, error: GneissError) {
         debug!("Applying error to client: {}", error);
 
         if self.last_error.is_none() {
@@ -662,37 +668,40 @@ impl MqttClientImpl {
         }
     }
 
-    pub(crate) fn handle_incoming_operation(&mut self, operation: OperationOptions) {
+    pub fn handle_incoming_operation(&mut self, operation: OperationOptions) {
         let current_time = Instant::now();
 
         match operation {
             OperationOptions::Publish(packet, internal_options) => {
                 debug!("Submitting publish operation to protocol state");
                 let user_event_context = UserEventContext {
-                    event: UserEvent::Publish(packet, internal_options),
+                    event: UserEvent::Publish(Box::new(MqttPacket::Publish(packet)), internal_options),
                     current_time
                 };
 
                 self.protocol_state.handle_user_event(user_event_context);
             }
+
             OperationOptions::Subscribe(packet, internal_options) => {
                 debug!("Submitting subscribe operation to protocol state");
                 let user_event_context = UserEventContext {
-                    event: UserEvent::Subscribe(packet, internal_options),
+                    event: UserEvent::Subscribe(Box::new(MqttPacket::Subscribe(packet)), internal_options),
                     current_time
                 };
 
                 self.protocol_state.handle_user_event(user_event_context);
             }
+
             OperationOptions::Unsubscribe(packet, internal_options) => {
                 debug!("Submitting unsubscribe operation to protocol state");
                 let user_event_context = UserEventContext {
-                    event: UserEvent::Unsubscribe(packet, internal_options),
+                    event: UserEvent::Unsubscribe(Box::new(MqttPacket::Unsubscribe(packet)), internal_options),
                     current_time
                 };
 
                 self.protocol_state.handle_user_event(user_event_context);
             }
+
             OperationOptions::Start(listener_option) => {
                 if let Some(listener) = listener_option {
                     self.listeners.insert(0, listener);
@@ -702,12 +711,12 @@ impl MqttClientImpl {
                 self.desired_stop_options = None;
                 self.desired_state = ClientImplState::Connected;
             }
-            OperationOptions::Stop(options) => {
 
-                if let Some(disconnect) = &options.disconnect {
+            OperationOptions::Stop(options) => {
+                if let Some(disconnect) = &options.options.disconnect {
                     debug!("Submitting disconnect operation to protocol state");
                     let disconnect_context = UserEventContext {
-                        event: UserEvent::Disconnect(disconnect.clone()),
+                        event: UserEvent::Disconnect(Box::new(MqttPacket::Disconnect(disconnect.clone()))),
                         current_time
                     };
 
@@ -719,11 +728,13 @@ impl MqttClientImpl {
                 self.apply_error(GneissError::new_user_initiated_disconnect());
                 self.desired_state = ClientImplState::Stopped;
             }
+
             OperationOptions::Shutdown() => {
                 debug!("Updating desired state to Shutdown");
                 self.protocol_state.reset(&current_time);
                 self.desired_state = ClientImplState::Shutdown;
             }
+
             OperationOptions::AddListener(id, listener) => {
                 debug!("Adding listener {} to client events", id);
                 self.add_listener(id, listener);
@@ -769,7 +780,7 @@ impl MqttClientImpl {
         self.packet_events.clear();
     }
 
-    pub(crate) fn handle_incoming_bytes(&mut self, bytes: &[u8]) -> GneissResult<()> {
+    pub fn handle_incoming_bytes(&mut self, bytes: &[u8]) -> GneissResult<()> {
         debug!("client impl - handle_incoming_bytes: {} bytes", bytes.len());
 
         let mut context = NetworkEventContext {
@@ -783,7 +794,7 @@ impl MqttClientImpl {
         result
     }
 
-    pub(crate) fn handle_write_completion(&mut self) -> GneissResult<()> {
+    pub fn handle_write_completion(&mut self) -> GneissResult<()> {
         debug!("client impl - handle_write_completion");
 
         let mut context = NetworkEventContext {
@@ -795,7 +806,7 @@ impl MqttClientImpl {
         self.protocol_state.handle_network_event(&mut context)
     }
 
-    pub(crate) fn handle_service(&mut self, outbound_data: &mut Vec<u8>) -> GneissResult<()> {
+    pub fn handle_service(&mut self, outbound_data: &mut Vec<u8>) -> GneissResult<()> {
         debug!("client impl - handle_service");
 
         let mut context = ServiceContext {
@@ -815,12 +826,11 @@ impl MqttClientImpl {
     }
 
     fn compute_uniform_jitter_period(&self, max_nanos: u128) -> Duration {
-        let mut rng = rand::thread_rng();
-        let uniform_nanos = rng.gen_range(0..max_nanos);
+        let uniform_nanos = rand::random_range(0..max_nanos);
         Duration::from_nanos(uniform_nanos as u64)
     }
 
-    pub(crate) fn advance_reconnect_period(&mut self) -> Duration {
+    pub fn advance_reconnect_period(&mut self) -> Duration {
         let reconnect_period = self.next_reconnect_period;
         self.next_reconnect_period = self.clamp_reconnect_period(self.next_reconnect_period * 2);
 
@@ -834,7 +844,7 @@ impl MqttClientImpl {
         }
     }
 
-    pub(crate) fn compute_optional_state_transition(&self) -> Option<ClientImplState> {
+    pub fn compute_optional_state_transition(&self) -> Option<ClientImplState> {
         match self.current_state {
             ClientImplState::Stopped => {
                 match self.desired_state {
@@ -857,7 +867,7 @@ impl MqttClientImpl {
             ClientImplState::Connected => {
                 if self.desired_state != ClientImplState::Connected {
                     if let Some(stop_options) = &self.desired_stop_options {
-                        if stop_options.disconnect.is_none() {
+                        if stop_options.options.disconnect.is_none() {
                             return Some(ClientImplState::Stopped);
                         }
                     } else {
@@ -872,7 +882,7 @@ impl MqttClientImpl {
         None
     }
 
-    pub(crate) fn get_next_connected_service_time(&mut self) -> Option<Instant> {
+    pub fn get_next_connected_service_time(&mut self) -> Option<Instant> {
         if self.current_state == ClientImplState::Connected {
             return self.protocol_state.get_next_service_timepoint(&Instant::now());
         }
@@ -941,7 +951,7 @@ impl MqttClientImpl {
         self.emit_connection_attempt_event();
     }
 
-    pub(crate) fn transition_to_state(&mut self, mut new_state: ClientImplState) -> GneissResult<()> {
+    pub fn transition_to_state(&mut self, mut new_state: ClientImplState) -> GneissResult<()> {
         let current_time = Instant::now();
         let old_state = self.current_state;
         if old_state == new_state {
@@ -1032,22 +1042,25 @@ impl MqttClientImpl {
     }
 }
 
-// Re-exports to mask internal module structure
+pub use crate::client::asynchronous::{
+    AsyncClient,
+    AsyncClientHandle,
+    AsyncPublishResult,
+    AsyncSubscribeResult,
+    AsyncUnsubscribeResult
+};
 
-pub use crate::client::asynchronous::{AsyncClient, AsyncClientHandle, AsyncPublishResult, AsyncSubscribeResult, AsyncUnsubscribeResult};
+pub use crate::client::synchronous::{
+    SyncClient,
+    SyncClientHandle,
+    SyncPublishResult,
+    SyncPublishResultCallback,
+    SyncResultReceiver,
+    SyncSubscribeResult,
+    SyncSubscribeResultCallback,
+    SyncUnsubscribeResult,
+    SyncUnsubscribeResultCallback
+};
 
-#[cfg(feature = "tokio")]
-pub use crate::client::asynchronous::tokio::new_tokio_client;
-
-#[cfg(feature = "tokio")]
-pub use crate::client::asynchronous::tokio::builder::TokioClientBuilder;
-
-pub use crate::client::synchronous::{SyncClient, SyncClientHandle, SyncPublishResult, SyncPublishResultCallback, SyncResultReceiver, SyncSubscribeResult, SyncSubscribeResultCallback, SyncUnsubscribeResult, SyncUnsubscribeResultCallback};
-
-#[cfg(feature = "threaded")]
-pub use crate::client::synchronous::threaded::new_threaded_client;
-
-#[cfg(feature = "threaded")]
-pub use crate::client::synchronous::threaded::builder::ThreadedClientBuilder;
 
 

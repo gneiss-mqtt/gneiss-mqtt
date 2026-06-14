@@ -8,7 +8,5 @@ Integration test functionality used throughout the gneiss ecosystem.  Only enabl
 `testing` feature.  Should never be enabled in production.
 */
 
-#[cfg(any(feature = "tokio", feature = "threaded"))]
-pub(crate) mod integration;
 pub(crate) mod protocol;
 pub(crate) mod mock_server;

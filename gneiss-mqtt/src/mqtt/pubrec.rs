@@ -199,9 +199,9 @@ mod tests {
 
     use crate::validate::testing::*;
 
-    test_ack_validate_success!(pubrec_validate_success, Pubrec, create_pubrec_with_all_properties);
-    test_ack_validate_failure_reason_string_length!(pubrec_validate_failure_reason_string_length, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);
-    test_ack_validate_failure_invalid_user_properties!(pubrec_validate_failure_invalid_user_properties, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);
+    test_ack_validate_success!(pubrec_validate_success, Pubrec, create_pubrec_with_all_properties, validate_pubrec_packet_outbound);
+    test_ack_validate_failure_reason_string_length!(pubrec_validate_failure_reason_string_length, create_pubrec_with_all_properties, PacketType::Pubrec, validate_pubrec_packet_outbound);
+    test_ack_validate_failure_invalid_user_properties!(pubrec_validate_failure_invalid_user_properties, create_pubrec_with_all_properties, PacketType::Pubrec, validate_pubrec_packet_outbound);
     test_ack_validate_failure_outbound_size!(pubrec_validate_failure_outbound_size5, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec, ProtocolVersion::Mqtt5);
     test_ack_validate_failure_outbound_size!(pubrec_validate_failure_outbound_size311, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec, ProtocolVersion::Mqtt311);
     test_ack_validate_failure_packet_id_zero!(pubrec_validate_failure_packet_id_zero, Pubrec, create_pubrec_with_all_properties, PacketType::Pubrec);

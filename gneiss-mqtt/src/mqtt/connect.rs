@@ -606,7 +606,8 @@ pub(crate) fn decode_connect_packet311(_: u8, _: &[u8]) -> GneissResult<Box<Mqtt
     Err(GneissError::new_unimplemented("decode_connect_packet311 - test-only functionality"))
 }
 
-pub(crate) fn validate_connect_packet_outbound(packet: &ConnectPacket) -> GneissResult<()> {
+#[doc(hidden)]
+pub fn validate_connect_packet_outbound(packet: &ConnectPacket) -> GneissResult<()> {
 
     validate_optional_string_length(&packet.client_id, PacketType::Connect, "validate_connect_packet_outbound", "client_id")?;
     validate_optional_integer_non_zero!(receive_maximum, packet.receive_maximum, PacketType::Connect, "validate_connect_packet_outbound", "receive_maximum");
@@ -1511,10 +1512,11 @@ mod tests {
 
     #[test]
     fn connect_validate_success_all_properties() {
-        let packet = MqttPacket::Connect(create_connect_packet_all_properties());
+        let connect_packet = create_connect_packet_all_properties();
 
-        assert!(validate_packet_outbound(&packet).is_ok());
+        assert!(validate_connect_packet_outbound(&connect_packet).is_ok());
 
+        let packet = MqttPacket::Connect(connect_packet);
         let test_validation_context = create_pinned_validation_context();
         let validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
 
@@ -1526,7 +1528,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.client_id = Some("noooooo".repeat(10000));
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1534,7 +1536,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.receive_maximum = Some(0);
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1542,7 +1544,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.maximum_packet_size_bytes = Some(0);
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1550,7 +1552,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.authentication_method = None;
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1558,7 +1560,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.authentication_method = Some("hello".repeat(20000));
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1566,7 +1568,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.authentication_data = Some(vec![0; 70 * 1024]);
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1574,7 +1576,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.username = Some("ladeeda".repeat(20000));
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1582,7 +1584,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.password = Some(vec![0; 80 * 1024]);
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1590,7 +1592,7 @@ mod tests {
         let mut packet = create_connect_packet_all_properties();
         packet.user_properties = Some(create_invalid_user_properties());
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1599,7 +1601,7 @@ mod tests {
         let will = packet.will.as_mut();
         will.unwrap().content_type = Some("NotJson".repeat(10000));
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1608,7 +1610,7 @@ mod tests {
         let will = packet.will.as_mut();
         will.unwrap().response_topic = Some("NotJson".repeat(10000));
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1617,7 +1619,7 @@ mod tests {
         let will = packet.will.as_mut();
         will.unwrap().correlation_data = Some(vec![0; 80 * 1024]);
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1626,7 +1628,7 @@ mod tests {
         let will = packet.will.as_mut();
         will.unwrap().user_properties = Some(create_invalid_user_properties());
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1635,7 +1637,7 @@ mod tests {
         let will = packet.will.as_mut();
         will.unwrap().topic = "Terrible".repeat(10000);
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 
     #[test]
@@ -1644,6 +1646,6 @@ mod tests {
         let will = packet.will.as_mut();
         will.unwrap().payload = Some(vec![0; 80 * 1024]);
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Connect(packet)), PacketType::Connect);
+        verify_validation_failure!(validate_connect_packet_outbound(&packet), PacketType::Connect);
     }
 }

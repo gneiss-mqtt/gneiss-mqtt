@@ -11,7 +11,6 @@ use crate::error::{GneissError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::auth::*;
 use crate::mqtt::connack::*;
-use crate::mqtt::connect::*;
 use crate::mqtt::disconnect::*;
 use crate::mqtt::puback::*;
 use crate::mqtt::pubcomp::*;
@@ -54,35 +53,6 @@ pub(crate) fn validate_user_properties(properties: &Option<Vec<UserProperty>>, p
     }
 
     Ok(())
-}
-
-/// Validates client-outbound packets against the MQTT5 spec requirements.
-///
-/// The validation applied here does not take into account any connection-bound state
-/// like maximum_qos, maximum_packet_size, etc...  Those constraints are checked in a different
-/// function.  This function is called synchronously on submitted packets before even crossing
-/// the async boundary into the client implementation.
-///
-/// Utf-8 codepoints are not currently checked by any validation function.
-pub(crate) fn validate_packet_outbound(packet: &MqttPacket) -> GneissResult<()> {
-    match packet {
-        MqttPacket::Auth(auth) => { validate_auth_packet_outbound(auth) }
-        MqttPacket::Connect(connect) => { validate_connect_packet_outbound(connect) }
-        MqttPacket::Disconnect(disconnect) => { validate_disconnect_packet_outbound(disconnect) }
-        MqttPacket::Pingreq(_) => { Ok(()) }
-        MqttPacket::Puback(puback) => { validate_puback_packet_outbound(puback) }
-        MqttPacket::Pubcomp(pubcomp) => { validate_pubcomp_packet_outbound(pubcomp) }
-        MqttPacket::Publish(publish) => { validate_publish_packet_outbound(publish) }
-        MqttPacket::Pubrec(pubrec) => { validate_pubrec_packet_outbound(pubrec) }
-        MqttPacket::Pubrel(pubrel) => { validate_pubrel_packet_outbound(pubrel) }
-        MqttPacket::Subscribe(subscribe) => { validate_subscribe_packet_outbound(subscribe) }
-        MqttPacket::Unsubscribe(unsubscribe) => { validate_unsubscribe_packet_outbound(unsubscribe) }
-        _ => {
-            let message = "validate_packet_outbound - unexpected packet type";
-            error!("{}", message);
-            Err(GneissError::new_protocol_error(message))
-        }
-    }
 }
 
 /// Validates outbound packets against per-connection dynamic constraints.  Called internally
@@ -183,7 +153,8 @@ pub(crate) use validate_optional_integer_non_zero;
 
 macro_rules! validate_ack_outbound {
     ($function_name: ident, $packet_type_name: ident, $packet_type: expr, $validate_function_name: expr) => {
-        pub(crate) fn $function_name(packet: &$packet_type_name) -> GneissResult<()> {
+        #[doc(hidden)]
+        pub fn $function_name(packet: &$packet_type_name) -> GneissResult<()> {
 
             validate_optional_string_length(&packet.reason_string, $packet_type, $validate_function_name, "reason_string")?;
             validate_user_properties(&packet.user_properties, $packet_type, $validate_function_name)?;
@@ -415,13 +386,14 @@ pub(crate) mod testing {
     pub(crate) use verify_validation_failure;
 
     macro_rules! test_ack_validate_success {
-        ($function_name: ident, $packet_type: ident, $packet_factory_function: ident) => {
+        ($function_name: ident, $packet_type: ident, $packet_factory_function: ident, $validator_function: ident) => {
             #[test]
             fn $function_name() {
-                let packet = MqttPacket::$packet_type($packet_factory_function());
+                let ack_packet = $packet_factory_function();
 
-                assert!(validate_packet_outbound(&packet).is_ok());
+                assert!($validator_function(&ack_packet).is_ok());
 
+                let packet = MqttPacket::$packet_type(ack_packet);
                 let test_validation_context = create_pinned_validation_context();
 
                 let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
@@ -436,13 +408,13 @@ pub(crate) mod testing {
     pub(crate) use test_ack_validate_success;
 
     macro_rules! test_ack_validate_failure_reason_string_length {
-        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: expr) => {
+        ($function_name: ident, $packet_factory_function: ident, $packet_type: expr, $validator_function: ident) => {
             #[test]
             fn $function_name() {
                 let mut packet = $packet_factory_function();
                 packet.reason_string = Some("A".repeat(128 * 1024).to_string());
 
-                verify_validation_failure!(validate_packet_outbound(&MqttPacket::$packet_type_name(packet)), $packet_type);
+                verify_validation_failure!($validator_function(&packet), $packet_type);
             }
         };
     }
@@ -450,13 +422,13 @@ pub(crate) mod testing {
     pub(crate) use test_ack_validate_failure_reason_string_length;
 
     macro_rules! test_ack_validate_failure_invalid_user_properties {
-        ($function_name: ident, $packet_type_name: ident, $packet_factory_function: ident, $packet_type: expr) => {
+        ($function_name: ident, $packet_factory_function: ident, $packet_type: expr, $validator_function: ident) => {
             #[test]
             fn $function_name() {
                 let mut packet = $packet_factory_function();
                 packet.user_properties = Some(create_invalid_user_properties());
 
-                verify_validation_failure!(validate_packet_outbound(&MqttPacket::$packet_type_name(packet)), $packet_type);
+                verify_validation_failure!($validator_function(&packet), $packet_type);
             }
         };
     }

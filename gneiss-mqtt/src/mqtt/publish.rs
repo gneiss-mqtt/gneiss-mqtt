@@ -334,7 +334,8 @@ pub(crate) fn decode_publish_packet311(first_byte: u8, packet_body: &[u8]) -> Gn
     panic!("decode_publish_packet311 - internal error");
 }
 
-pub(crate) fn validate_publish_packet_outbound(packet: &PublishPacket) -> GneissResult<()> {
+#[doc(hidden)]
+pub fn validate_publish_packet_outbound(packet: &PublishPacket) -> GneissResult<()> {
 
     // This validation function gets called before packet id assignment
     if packet.packet_id != 0 {
@@ -869,14 +870,14 @@ mod tests {
 
     #[test]
     fn publish_validate_success() {
-        let mut packet = create_publish_with_all_fields();
-        packet.subscription_identifiers = None;
-        packet.packet_id = 0;
-        packet.duplicate = false;
+        let mut publish_packet = create_publish_with_all_fields();
+        publish_packet.subscription_identifiers = None;
+        publish_packet.packet_id = 0;
+        publish_packet.duplicate = false;
 
-        let outbound_packet = MqttPacket::Publish(packet);
+        assert!(validate_publish_packet_outbound(&publish_packet).is_ok());
 
-        assert!(validate_packet_outbound(&outbound_packet).is_ok());
+        let outbound_packet = MqttPacket::Publish(publish_packet);
 
         let mut packet2 = create_publish_with_all_fields();
         packet2.subscription_identifiers = None;
@@ -899,7 +900,7 @@ mod tests {
         packet.qos = QualityOfService::AtMostOnce;
         packet.duplicate = true;
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Publish(packet)), PacketType::Publish);
+        verify_validation_failure!(validate_publish_packet_outbound(&packet), PacketType::Publish);
     }
 
     #[test]
@@ -908,7 +909,7 @@ mod tests {
         packet.qos = QualityOfService::AtMostOnce;
         packet.packet_id = 1;
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Publish(packet)), PacketType::Publish);
+        verify_validation_failure!(validate_publish_packet_outbound(&packet), PacketType::Publish);
     }
 
     #[test]
@@ -916,7 +917,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.topic = "A".repeat(65536).to_string();
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Publish(packet)), PacketType::Publish);
+        verify_validation_failure!(validate_publish_packet_outbound(&packet), PacketType::Publish);
     }
 
     #[test]
@@ -924,7 +925,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.topic = "A/+/B".to_string();
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Publish(packet)), PacketType::Publish);
+        verify_validation_failure!(validate_publish_packet_outbound(&packet), PacketType::Publish);
     }
 
     #[test]
@@ -932,7 +933,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.topic_alias = Some(0);
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Publish(packet)), PacketType::Publish);
+        verify_validation_failure!(validate_publish_packet_outbound(&packet), PacketType::Publish);
     }
 
     #[test]
@@ -940,7 +941,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.response_topic = Some("A/#/B".to_string());
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Publish(packet)), PacketType::Publish);
+        verify_validation_failure!(validate_publish_packet_outbound(&packet), PacketType::Publish);
     }
 
     #[test]
@@ -948,7 +949,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.response_topic = Some("AB".repeat(33000).to_string());
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Publish(packet)), PacketType::Publish);
+        verify_validation_failure!(validate_publish_packet_outbound(&packet), PacketType::Publish);
     }
 
     #[test]
@@ -956,7 +957,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.subscription_identifiers = Some(vec![2, 3, 4]);
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Publish(packet)), PacketType::Publish);
+        verify_validation_failure!(validate_publish_packet_outbound(&packet), PacketType::Publish);
     }
 
     #[test]
@@ -964,7 +965,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.user_properties = Some(create_invalid_user_properties());
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Publish(packet)), PacketType::Publish);
+        verify_validation_failure!(validate_publish_packet_outbound(&packet), PacketType::Publish);
     }
 
     #[test]
@@ -972,7 +973,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.correlation_data = Some(vec![0; 80 * 1024]);
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Publish(packet)), PacketType::Publish);
+        verify_validation_failure!(validate_publish_packet_outbound(&packet), PacketType::Publish);
     }
 
     #[test]
@@ -980,7 +981,7 @@ mod tests {
         let mut packet = create_outbound_publish_with_all_fields();
         packet.content_type = Some("CD".repeat(33000).to_string());
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Publish(packet)), PacketType::Publish);
+        verify_validation_failure!(validate_publish_packet_outbound(&packet), PacketType::Publish);
     }
 
     #[test]

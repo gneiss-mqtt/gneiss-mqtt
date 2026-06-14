@@ -501,62 +501,6 @@ impl From<core::str::Utf8Error> for GneissError {
     }
 }
 
-#[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
-impl From<rustls_pki_types::InvalidDnsNameError> for GneissError {
-    fn from(err: rustls_pki_types::InvalidDnsNameError) -> Self {
-        GneissError::new_connection_establishment_failure(err)
-    }
-}
-
-#[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
-impl From<rustls::Error> for GneissError {
-    fn from(err: rustls::Error) -> Self {
-        GneissError::new_tls_error(err)
-    }
-}
-
-#[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
-impl From<native_tls::Error> for GneissError {
-    fn from(err: native_tls::Error) -> Self {
-        GneissError::new_tls_error(err)
-    }
-}
-
-#[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
-impl<S> From<native_tls::HandshakeError<S>> for GneissError {
-    fn from(_err: native_tls::HandshakeError<S>) -> Self {
-        // TODO: is there a better way of handling this?  S is the transport stream which
-        // isn't copy/clone so it doesn't seem like we can wrap it
-        GneissError::new_tls_error("native-tls handshake error")
-    }
-}
-
-#[cfg(feature="tokio-websockets")]
-impl From<tungstenite::error::Error> for GneissError {
-    fn from(err: tungstenite::error::Error) -> Self {
-        GneissError::new_transport_error(err)
-    }
-}
-
-#[cfg(feature="threaded-websockets")]
-use std::io::{Read, Write};
-
-#[cfg(feature="threaded-websockets")]
-impl <S> From<tungstenite::HandshakeError<tungstenite::ClientHandshake<S>>>  for GneissError
-where S : Read + Write {
-    fn from(err: tungstenite::HandshakeError<tungstenite::ClientHandshake<S>>) -> Self {
-        let message = format!("websocket handshake error: {}", err);
-        GneissError::new_transport_error(message)
-    }
-}
-
-#[cfg(feature="tokio")]
-impl From<tokio::sync::oneshot::error::RecvError> for GneissError {
-    fn from(err: tokio::sync::oneshot::error::RecvError) -> Self {
-        GneissError::new_operation_channel_failure(err)
-    }
-}
-
 impl <T> From<std::sync::mpsc::SendError<T>> for GneissError
 where T : Send + Sync + 'static {
     fn from(err: std::sync::mpsc::SendError<T>) -> Self {

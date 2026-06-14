@@ -256,7 +256,8 @@ pub(crate) fn decode_subscribe_packet311(_: u8, _: &[u8]) -> GneissResult<Box<Mq
     Err(GneissError::new_unimplemented("decode_subscribe_packet311 - test-only functionality"))
 }
 
-pub(crate) fn validate_subscribe_packet_outbound(packet: &SubscribePacket) -> GneissResult<()> {
+#[doc(hidden)]
+pub fn validate_subscribe_packet_outbound(packet: &SubscribePacket) -> GneissResult<()> {
 
     if packet.packet_id != 0 {
         let message = "validate_subscribe_packet_outbound - packet id may not be set";
@@ -541,12 +542,12 @@ mod tests {
 
     #[test]
     fn subscribe_validate_success() {
-        let mut packet = create_subscribe_all_properties();
-        packet.packet_id = 0;
+        let mut subscribe_packet = create_subscribe_all_properties();
+        subscribe_packet.packet_id = 0;
+        
+        assert!(validate_subscribe_packet_outbound(&subscribe_packet).is_ok());
 
-        let outbound_packet = MqttPacket::Subscribe(packet);
-
-        assert!(validate_packet_outbound(&outbound_packet).is_ok());
+        let outbound_packet = MqttPacket::Subscribe(subscribe_packet);
 
         let mut packet2 = create_subscribe_all_properties();
         packet2.packet_id = 1;
@@ -564,7 +565,7 @@ mod tests {
         let mut packet = create_subscribe_all_properties();
         packet.packet_id = 1;
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), PacketType::Subscribe);
+        verify_validation_failure!(validate_subscribe_packet_outbound(&packet), PacketType::Subscribe);
     }
 
     #[test]
@@ -572,7 +573,7 @@ mod tests {
         let mut packet = create_subscribe_all_properties();
         packet.subscriptions = vec![];
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), PacketType::Subscribe);
+        verify_validation_failure!(validate_subscribe_packet_outbound(&packet), PacketType::Subscribe);
     }
 
     #[test]
@@ -580,7 +581,7 @@ mod tests {
         let mut packet = create_subscribe_all_properties();
         packet.user_properties = Some(create_invalid_user_properties());
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Subscribe(packet)), PacketType::Subscribe);
+        verify_validation_failure!(validate_subscribe_packet_outbound(&packet), PacketType::Subscribe);
     }
 
     #[test]

@@ -204,9 +204,9 @@ mod tests {
         do_inbound_size_decode_failure_test(&MqttPacket::Puback(packet), ProtocolVersion::Mqtt5);
     }
 
-    test_ack_validate_success!(puback_validate_success, Puback, create_puback_with_all_properties);
-    test_ack_validate_failure_reason_string_length!(puback_validate_failure_reason_string_length, Puback, create_puback_with_all_properties, PacketType::Puback);
-    test_ack_validate_failure_invalid_user_properties!(puback_validate_failure_invalid_user_properties, Puback, create_puback_with_all_properties, PacketType::Puback);
+    test_ack_validate_success!(puback_validate_success, Puback, create_puback_with_all_properties, validate_puback_packet_outbound);
+    test_ack_validate_failure_reason_string_length!(puback_validate_failure_reason_string_length, create_puback_with_all_properties, PacketType::Puback, validate_puback_packet_outbound);
+    test_ack_validate_failure_invalid_user_properties!(puback_validate_failure_invalid_user_properties, create_puback_with_all_properties, PacketType::Puback, validate_puback_packet_outbound);
     test_ack_validate_failure_outbound_size!(puback_validate_failure_outbound_size5, Puback, create_puback_with_all_properties, PacketType::Puback, ProtocolVersion::Mqtt5);
     test_ack_validate_failure_outbound_size!(puback_validate_failure_outbound_size311, Puback, create_puback_with_all_properties, PacketType::Puback, ProtocolVersion::Mqtt311);
     test_ack_validate_failure_packet_id_zero!(puback_validate_failure_packet_id_zero, Puback, create_puback_with_all_properties, PacketType::Puback);

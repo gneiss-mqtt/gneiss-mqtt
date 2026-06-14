@@ -194,7 +194,8 @@ pub(crate) fn decode_unsubscribe_packet311(_: u8, _: &[u8]) -> GneissResult<Box<
     Err(GneissError::new_unimplemented("decode_unsubscribe_packet311 - test-only functionality"))
 }
 
-pub(crate) fn validate_unsubscribe_packet_outbound(packet: &UnsubscribePacket) -> GneissResult<()> {
+#[doc(hidden)]
+pub fn validate_unsubscribe_packet_outbound(packet: &UnsubscribePacket) -> GneissResult<()> {
     if packet.packet_id != 0 {
         let message = "validate_unsubscribe_packet_outbound - packet id may not be set";
         error!("{}", message);
@@ -365,12 +366,12 @@ mod tests {
 
     #[test]
     fn unsubscribe_validate_success() {
-        let mut packet = create_unsubscribe_all_properties();
-        packet.packet_id = 0;
+        let mut unsubscribe_packet = create_unsubscribe_all_properties();
+        unsubscribe_packet.packet_id = 0;
 
-        let outbound_packet = MqttPacket::Unsubscribe(packet);
+        assert!(validate_unsubscribe_packet_outbound(&unsubscribe_packet).is_ok());
 
-        assert!(validate_packet_outbound(&outbound_packet).is_ok());
+        let outbound_packet = MqttPacket::Unsubscribe(unsubscribe_packet);
 
         let mut packet2 = create_unsubscribe_all_properties();
         packet2.packet_id = 1;
@@ -388,7 +389,7 @@ mod tests {
         let mut packet = create_unsubscribe_all_properties();
         packet.packet_id = 1;
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Unsubscribe(packet)), PacketType::Unsubscribe);
+        verify_validation_failure!(validate_unsubscribe_packet_outbound(&packet), PacketType::Unsubscribe);
     }
 
     #[test]
@@ -396,7 +397,7 @@ mod tests {
         let mut packet = create_unsubscribe_all_properties();
         packet.topic_filters = vec![];
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Unsubscribe(packet)), PacketType::Unsubscribe);
+        verify_validation_failure!(validate_unsubscribe_packet_outbound(&packet), PacketType::Unsubscribe);
     }
 
     #[test]
@@ -404,7 +405,7 @@ mod tests {
         let mut packet = create_unsubscribe_all_properties();
         packet.user_properties = Some(create_invalid_user_properties());
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Unsubscribe(packet)), PacketType::Unsubscribe);
+        verify_validation_failure!(validate_unsubscribe_packet_outbound(&packet), PacketType::Unsubscribe);
     }
 
     #[test]

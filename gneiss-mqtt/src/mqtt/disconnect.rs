@@ -168,7 +168,8 @@ pub(crate) fn decode_disconnect_packet311(first_byte: u8, packet_body: &[u8]) ->
     })))
 }
 
-pub(crate) fn validate_disconnect_packet_outbound(packet: &DisconnectPacket) -> GneissResult<()> {
+#[doc(hidden)]
+pub fn validate_disconnect_packet_outbound(packet: &DisconnectPacket) -> GneissResult<()> {
 
     validate_optional_string_length(&packet.reason_string, PacketType::Disconnect, "validate_disconnect_packet_outbound", "reason_string")?;
     validate_user_properties(&packet.user_properties, PacketType::Disconnect, "validate_disconnect_packet_outbound")?;
@@ -431,12 +432,12 @@ mod tests {
 
     #[test]
     fn disconnect_validate_success() {
-        let mut packet = create_disconnect_packet_all_properties();
-        packet.session_expiry_interval_seconds = None;
-        let mqtt_packet = MqttPacket::Disconnect(packet);
+        let mut disconnect_packet = create_disconnect_packet_all_properties();
+        disconnect_packet.session_expiry_interval_seconds = None;
 
-        assert!(validate_packet_outbound(&mqtt_packet).is_ok());
+        assert!(validate_disconnect_packet_outbound(&disconnect_packet).is_ok());
 
+        let mqtt_packet = MqttPacket::Disconnect(disconnect_packet);
         let test_validation_context = create_pinned_validation_context();
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
@@ -451,7 +452,7 @@ mod tests {
         let mut packet = create_disconnect_packet_all_properties();
         packet.reason_string = Some("A".repeat(128 * 1024).to_string());
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Disconnect(packet)), PacketType::Disconnect);
+        verify_validation_failure!(validate_disconnect_packet_outbound(&packet), PacketType::Disconnect);
     }
 
     #[test]
@@ -459,7 +460,7 @@ mod tests {
         let mut packet = create_disconnect_packet_all_properties();
         packet.user_properties = Some(create_invalid_user_properties());
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Disconnect(packet)), PacketType::Disconnect);
+        verify_validation_failure!(validate_disconnect_packet_outbound(&packet), PacketType::Disconnect);
     }
 
     #[test]
@@ -467,7 +468,7 @@ mod tests {
         let mut packet = create_disconnect_packet_all_properties();
         packet.server_reference = Some("Z".repeat(65 * 1024).to_string());
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Disconnect(packet)), PacketType::Disconnect);
+        verify_validation_failure!(validate_disconnect_packet_outbound(&packet), PacketType::Disconnect);
     }
 
     #[test]

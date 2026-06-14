@@ -13,6 +13,7 @@ use crate::encode::*;
 use crate::error::{fold_mqtt_result, GneissError, GneissResult};
 use crate::mqtt::*;
 use crate::mqtt::connack::*;
+use crate::mqtt::connect::validate_connect_packet_outbound;
 use crate::mqtt::utils::*;
 use crate::validate::*;
 
@@ -180,17 +181,14 @@ pub(crate) struct ServiceContext<'a> {
     pub(crate) current_time: Instant,
 }
 
+#[doc(hidden)]
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub(crate) enum ProtocolStateType {
+pub enum ProtocolStateType {
     Disconnected,
     PendingConnack,
     Connected,
     PendingDisconnect,
     Halted
-}
-
-pub(crate) fn is_connection_established(state: ProtocolStateType) -> bool {
-    state == ProtocolStateType::Connected
 }
 
 impl Display for ProtocolStateType {
@@ -271,18 +269,17 @@ pub(crate) struct OperationTimeoutRecord {
     timeout: Instant
 }
 
-impl PartialOrd for OperationTimeoutRecord {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.timeout.cmp(&other.timeout))
-    }    
-}
-
 impl Ord for OperationTimeoutRecord {
     fn cmp(&self, other: &Self) -> Ordering {
         self.timeout.cmp(&other.timeout)
     }
 }
 
+impl PartialOrd for OperationTimeoutRecord {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 // Primary data structure that tracks MQTT-related state for the containing client.
 pub(crate) struct ProtocolState {
     pub(crate) config: ProtocolStateConfig,
@@ -866,7 +863,7 @@ impl ProtocolState {
             self.decoder.reset_for_new_connection();
 
             // Queue up a Connect packet
-            let connect = self.create_connect();
+            let connect = self.create_connect()?;
             let connect_op_id = self.create_operation(connect, None);
 
             self.enqueue_operation(connect_op_id, ProtocolQueueType::HighPriority, ProtocolEnqueuePosition::Front);
@@ -1696,7 +1693,7 @@ impl ProtocolState {
             }
 
             if connack.reason_code != ConnectReasonCode::Success {
-                error!("[{} ms] handle_connack - connection rejected with reason code {}", self.elapsed_time_ms, connack.reason_code.to_string());
+                error!("[{} ms] handle_connack - connection rejected with reason code {}", self.elapsed_time_ms, connack.reason_code);
                 context.packet_events.push_back(PacketEvent::Connack(connack));
                 return Err(GneissError::new_connection_establishment_failure("broker rejected connection attempt with failing connack"));
             }
@@ -2139,7 +2136,7 @@ impl ProtocolState {
         id
     }
 
-    fn create_connect(&self) -> Box<MqttPacket> {
+    fn create_connect(&self) -> GneissResult<Box<MqttPacket>> {
         let mut connect = self.config.connect_options.to_connect_packet(self.has_connected_successfully);
 
         if connect.client_id.is_none() {
@@ -2148,7 +2145,9 @@ impl ProtocolState {
             }
         }
 
-        Box::new(MqttPacket::Connect(connect))
+        validate_connect_packet_outbound(&connect)?;
+
+        Ok(Box::new(MqttPacket::Connect(connect)))
     }
 
     fn acquire_free_packet_id(&mut self, operation_id: u64) -> GneissResult<u16> {
@@ -2224,10 +2223,10 @@ fn build_negotiated_settings(config: &ProtocolStateConfig, packet: &ConnackPacke
     let connect = &config.connect_options;
 
     let final_client_id =
-        if packet.assigned_client_identifier.is_some() {
-            packet.assigned_client_identifier.as_ref().unwrap().clone()
-        } else if connect.client_id.is_some() {
-            connect.client_id.as_ref().unwrap().clone()
+        if let Some(assigned_client_identifier) = &packet.assigned_client_identifier {
+            assigned_client_identifier.clone()
+        } else if let Some(client_id) = &connect.client_id {
+            client_id.clone()
         } else if let Some(settings) = &existing_settings {
             settings.client_id.clone()
         } else {

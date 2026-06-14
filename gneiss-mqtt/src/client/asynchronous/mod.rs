@@ -7,8 +7,6 @@
 Module containing types and functionality for async MQTT clients
  */
 
-#[cfg(feature = "tokio")]
-pub mod tokio;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -104,10 +102,7 @@ pub trait AsyncClient {
     ///
     /// This is useful when
     /// multiple higher-level constructs are sharing the same MQTT client.
-    fn add_event_listener(&self, listener: ClientEventListener) -> GneissResult<ListenerHandle>;
-
-    /// Removes a listener from this client's set of event listeners.
-    fn remove_event_listener(&self, listener: ListenerHandle) -> GneissResult<()>;
+    fn add_event_listener(&self, listener: ClientEventListener) -> GneissResult<Arc<dyn ListenerHandle>>;
 }
 
 /// An async network client that functions as a thin wrapper over the MQTT protocol.
@@ -140,8 +135,8 @@ pub struct AsyncClientHandle {
 
 impl AsyncClientHandle {
 
-    #[cfg_attr(not(any(feature = "tokio-rustls", feature = "tokio-native-tls", feature = "tokio-websockets")), allow(dead_code))]
-    pub(crate) fn new(client: Arc<dyn AsyncClient + Send + Sync>) -> Self {
+    /// Creates a new client handle from a client
+    pub fn new(client: Arc<dyn AsyncClient + Send + Sync>) -> Self {
         Self { client }
     }
 }
@@ -171,11 +166,7 @@ impl AsyncClient for AsyncClientHandle {
         self.client.unsubscribe(packet, options)
     }
 
-    fn add_event_listener(&self, listener: ClientEventListener) -> GneissResult<ListenerHandle> {
+    fn add_event_listener(&self, listener: ClientEventListener) -> GneissResult<Arc<dyn ListenerHandle>> {
         self.client.add_event_listener(listener)
-    }
-
-    fn remove_event_listener(&self, listener: ListenerHandle) -> GneissResult<()> {
-        self.client.remove_event_listener(listener)
     }
 }

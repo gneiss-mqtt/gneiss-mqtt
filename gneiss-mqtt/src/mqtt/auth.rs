@@ -138,7 +138,9 @@ pub(crate) fn decode_auth_packet5(first_byte: u8, packet_body: &[u8]) -> GneissR
     panic!("decode_auth_packet5 - Internal error");
 }
 
-pub(crate) fn validate_auth_packet_outbound(packet: &AuthPacket) -> GneissResult<()> {
+#[doc(hidden)]
+#[allow(dead_code)]
+pub fn validate_auth_packet_outbound(packet: &AuthPacket) -> GneissResult<()> {
 
     if packet.authentication_method.is_none() {
         let message = "validate_auth_packet_outbound - authentication method must be set";
@@ -372,10 +374,10 @@ mod tests {
 
     #[test]
     fn auth_validate_success_all_properties5() {
-        let packet = MqttPacket::Auth(create_all_properties_auth_packet());
+        let auth_packet = create_all_properties_auth_packet();
+        assert!(validate_auth_packet_outbound(&auth_packet).is_ok());
 
-        assert!(validate_packet_outbound(&packet).is_ok());
-
+        let packet = MqttPacket::Auth(auth_packet);
         let test_validation_context = create_pinned_validation_context();
 
         let outbound_validation_context = create_outbound_validation_context_from_pinned(&test_validation_context);
@@ -390,7 +392,7 @@ mod tests {
         let mut packet = create_all_properties_auth_packet();
         packet.authentication_method = Some("a".repeat(65537));
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Auth(packet)), PacketType::Auth);
+        verify_validation_failure!(validate_auth_packet_outbound(&packet), PacketType::Auth);
     }
 
     #[test]
@@ -398,7 +400,7 @@ mod tests {
         let mut packet = create_all_properties_auth_packet();
         packet.authentication_method = None;
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Auth(packet)), PacketType::Auth);
+        verify_validation_failure!(validate_auth_packet_outbound(&packet), PacketType::Auth);
     }
 
     #[test]
@@ -416,7 +418,7 @@ mod tests {
         let mut packet = create_all_properties_auth_packet();
         packet.authentication_data = Some(vec![0; 128 * 1024]);
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Auth(packet)), PacketType::Auth);
+        verify_validation_failure!(validate_auth_packet_outbound(&packet), PacketType::Auth);
     }
 
     #[test]
@@ -424,7 +426,7 @@ mod tests {
         let mut packet = create_all_properties_auth_packet();
         packet.reason_string = Some("a".repeat(199000));
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Auth(packet)), PacketType::Auth);
+        verify_validation_failure!(validate_auth_packet_outbound(&packet), PacketType::Auth);
     }
 
     #[test]
@@ -432,7 +434,7 @@ mod tests {
         let mut packet = create_all_properties_auth_packet();
         packet.user_properties = Some(create_invalid_user_properties());
 
-        verify_validation_failure!(validate_packet_outbound(&MqttPacket::Auth(packet)), PacketType::Auth);
+        verify_validation_failure!(validate_auth_packet_outbound(&packet), PacketType::Auth);
     }
 
     #[test]

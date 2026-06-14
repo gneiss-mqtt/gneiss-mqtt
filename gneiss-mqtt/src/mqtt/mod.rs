@@ -2228,3 +2228,13 @@ impl fmt::Display for PacketType {
         }
     }
 }
+
+// TODO: privatize acks once protocol impl is updated to use them
+pub use crate::mqtt::disconnect::validate_disconnect_packet_outbound;
+pub use crate::mqtt::puback::validate_puback_packet_outbound;
+pub use crate::mqtt::pubcomp::validate_pubcomp_packet_outbound;
+pub use crate::mqtt::publish::validate_publish_packet_outbound;
+pub use crate::mqtt::pubrec::validate_pubrec_packet_outbound;
+pub use crate::mqtt::pubrel::validate_pubrel_packet_outbound;
+pub use crate::mqtt::subscribe::validate_subscribe_packet_outbound;
+pub use crate::mqtt::unsubscribe::validate_unsubscribe_packet_outbound;

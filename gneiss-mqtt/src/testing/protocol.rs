@@ -11,7 +11,6 @@ use crate::protocol::*;
 use assert_matches::assert_matches;
 use crate::alias::{OutboundAliasResolution, OutboundAliasResolverFactory};
 use crate::client::*;
-use crate::client::waiter::ClientEventRecord;
 use crate::client::config::*;
 use crate::decode::{Decoder, DecodingContext};
 use crate::encode::{Encoder, EncodeResult, EncodingContext};
@@ -801,44 +800,6 @@ pub(crate) fn build_reconnect_test_options() -> ClientTestOptions {
     test_options
 }
 
-pub(crate) fn validate_reconnect_failure_sequence(events: &[ClientEventRecord]) -> GneissResult<()> {
-    let mut connection_failures: usize = 0;
-    let mut previous_failure_time : Option<Instant> = None;
-    let mut actual_delays : Vec<Duration> = Vec::new();
-
-    for (i, event_record) in events.iter().enumerate() {
-        if i % 2 == 0 {
-            assert_matches!(*event_record.event, ClientEvent::ConnectionAttempt(_));
-            if let Some(previous_timestamp) = &previous_failure_time {
-                assert!(*previous_timestamp < event_record.timestamp);
-                actual_delays.push(event_record.timestamp - *previous_timestamp);
-            }
-        } else {
-            assert_matches!(*event_record.event, ClientEvent::ConnectionFailure(_));
-            connection_failures += 1;
-            if let Some(old_failure_time) = previous_failure_time {
-                assert!(old_failure_time < event_record.timestamp);
-            }
-            previous_failure_time = Some(event_record.timestamp);
-        }
-    }
-
-    assert_eq!(7, connection_failures);
-
-    let expected_delays : Vec<Duration> = vec!(250, 500, 1000, 2000, 4000, 6000).into_iter().map(|val| {Duration::from_millis(val)}).collect();
-    assert_eq!(expected_delays.len(), actual_delays.len());
-
-    let zipped_iter = expected_delays.iter().zip(actual_delays.iter());
-
-    for (expected_delay, actual_delay) in zipped_iter {
-        assert!(*actual_delay >= *expected_delay);
-    }
-
-    Ok(())
-}
-
-pub(crate) type ReconnectEventTestValidatorFn = Box<dyn Fn(&Vec<ClientEventRecord>) -> GneissResult<()> + Send + Sync>;
-
 pub(crate) fn handle_connect_with_conditional_connack(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, context: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Connect(_) = packet {
         context.connect_count += 1;
@@ -899,41 +860,6 @@ pub(crate) fn build_reconnect_reset_test_options() -> ClientTestOptions {
     }));
 
     test_options
-}
-
-pub(crate) fn validate_reconnect_backoff_failure_sequence(events: &[ClientEventRecord]) -> GneissResult<()> {
-    let mut connection_failures: usize = 0;
-
-    for (i, event_record) in events.iter().enumerate() {
-        if i % 2 == 0 {
-            assert_matches!(*event_record.event, ClientEvent::ConnectionAttempt(_));
-        } else if i < 11 {
-            assert_matches!(*event_record.event, ClientEvent::ConnectionFailure(_));
-            connection_failures += 1;
-        } else {
-            assert_matches!(*event_record.event, ClientEvent::ConnectionSuccess(_));
-        }
-    }
-
-    assert_eq!(5, connection_failures);
-    Ok(())
-}
-
-pub(crate) fn validate_reconnect_backoff_reset_sequence(events: &[ClientEventRecord], expected_reconnect_delay: Duration) -> GneissResult<()> {
-
-    let record1 = &events[0];
-    let record2 = &events[1];
-    let record3 = &events[2];
-
-    assert_matches!(*record1.event, ClientEvent::Disconnection(_));
-    assert_matches!(*record2.event, ClientEvent::ConnectionAttempt(_));
-    assert_matches!(*record3.event, ClientEvent::ConnectionSuccess(_));
-
-    let reconnect_delay = record2.timestamp - record1.timestamp;
-
-    assert!(reconnect_delay >= expected_reconnect_delay && reconnect_delay < 2 * expected_reconnect_delay);
-
-    Ok(())
 }
 
 #[test_matrix([5, 311])]

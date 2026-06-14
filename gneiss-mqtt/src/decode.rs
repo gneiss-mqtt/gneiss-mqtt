@@ -367,7 +367,7 @@ pub(crate) enum DecodeVliResult<'a> {
     Value(u32, &'a[u8]), /* (decoded value, remaining bytes) */
 }
 
-pub(crate) fn decode_vli(buffer: &[u8]) -> GneissResult<DecodeVliResult> {
+pub(crate) fn decode_vli<'a>(buffer: &'a[u8]) -> GneissResult<DecodeVliResult<'a>> {
     let mut value: u32 = 0;
     let mut needs_data: bool;
     let mut shift: u32 = 0;
