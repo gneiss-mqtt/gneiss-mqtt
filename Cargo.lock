@@ -113,7 +113,6 @@ dependencies = [
  "assert_matches",
  "gneiss-mqtt",
  "gneiss-mqtt-client-sync",
- "log",
  "test-case",
 ]
 
@@ -125,6 +124,7 @@ dependencies = [
  "gneiss-mqtt",
  "gneiss-mqtt-client-sync",
  "gneiss-mqtt-client-threaded",
+ "log",
  "test-case",
 ]
 

@@ -31,6 +31,10 @@ pub struct PublishOptions {
 
 impl PublishOptions {
 
+    pub fn ack_timeout(&self) -> &Option<Duration> {
+        &self.ack_timeout
+    }
+
     /// Creates a new builder for PublishOptions instances using default values.
     pub fn builder() -> PublishOptionsBuilder {
         PublishOptionsBuilder::new()
@@ -142,6 +146,10 @@ pub struct SubscribeOptions {
 
 impl SubscribeOptions {
 
+    pub fn ack_timeout(&self) -> &Option<Duration> {
+        &self.ack_timeout
+    }
+
     /// Creates a new builder for SubscribeOptions instances using default values.
     pub fn builder() -> SubscribeOptionsBuilder {
         SubscribeOptionsBuilder::new()
@@ -191,6 +199,10 @@ pub struct UnsubscribeOptions {
 }
 
 impl UnsubscribeOptions {
+
+    pub fn ack_timeout(&self) -> &Option<Duration> {
+        &self.ack_timeout
+    }
 
     /// Creates a new builder for UnsubscribeOptions instances using default values
     pub fn builder() -> UnsubscribeOptionsBuilder {
@@ -245,6 +257,10 @@ pub struct StopOptions {
 
 impl StopOptions {
 
+    pub fn disconnect(&self) -> &Option<DisconnectPacket> {
+        &self.disconnect
+    }
+    
     /// Creates a new builder for StopOptions instances using default values.
     pub fn builder() -> StopOptionsBuilder {
         StopOptionsBuilder::new()

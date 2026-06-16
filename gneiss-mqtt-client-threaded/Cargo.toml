@@ -21,6 +21,7 @@ features = []
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
+log = { version = "0.4" }
 gneiss-mqtt = { path = "../gneiss-mqtt" }
 gneiss-mqtt-client-sync = { path = "../gneiss-mqtt-client-sync" }
 assert_matches = { version = "1", optional = true } # only included in test builds

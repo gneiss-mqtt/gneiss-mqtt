@@ -217,7 +217,7 @@ impl GneissError {
         )
     }
 
-    pub(crate) fn new_operation_channel_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+    pub fn new_operation_channel_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         GneissError::OperationChannelFailure(
             OperationChannelFailureContext {
                 source : source.into()

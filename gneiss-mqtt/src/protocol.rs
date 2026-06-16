@@ -1274,17 +1274,17 @@ impl ProtocolState {
     fn get_operation_timeout_duration(&self, operation: &ClientOperation) -> Option<Duration> {
         match &operation.options {
             Some(ClientOperationOptions::Unsubscribe(unsubscribe_options)) => {
-                if let Some(timeout) = &unsubscribe_options.options.ack_timeout {
+                if let Some(timeout) = &unsubscribe_options.options.ack_timeout() {
                     return Some(*timeout);
                 }
             }
             Some(ClientOperationOptions::Subscribe(subscribe_options)) => {
-                if let Some(timeout) = &subscribe_options.options.ack_timeout {
+                if let Some(timeout) = &subscribe_options.options.ack_timeout() {
                     return Some(*timeout);
                 }
             }
             Some(ClientOperationOptions::Publish(publish_options)) => {
-                if let Some(timeout) = &publish_options.options.ack_timeout {
+                if let Some(timeout) = &publish_options.options.ack_timeout() {
                     return Some(*timeout);
                 }
             }
