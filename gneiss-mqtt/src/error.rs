@@ -217,6 +217,8 @@ impl GneissError {
         )
     }
 
+    /// Constructs a new OperationChannelFailure variant from an existing error.  Typically this occurs
+    /// when constructing a new channel or using a half-dropped channel.
     pub fn new_operation_channel_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         GneissError::OperationChannelFailure(
             OperationChannelFailureContext {
@@ -257,6 +259,8 @@ impl GneissError {
         )
     }
 
+    /// Constructs a new ConnectionEstablishmentFailure variant from an existing error.  Typically this occurs
+    /// when a client attempts to connect and fails.
     pub fn new_connection_establishment_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         GneissError::ConnectionEstablishmentFailure(
             ConnectionEstablishmentFailureContext{
@@ -273,6 +277,7 @@ impl GneissError {
         )
     }
 
+    /// Constructs a new ConnectionClosed variant from an existing error.
     pub fn new_connection_closed(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         GneissError::ConnectionClosed(
             ConnectionClosedContext {

@@ -31,6 +31,8 @@ pub struct PublishOptions {
 
 impl PublishOptions {
 
+    /// The time interval after which the operation should be failed if no response has been received.  The timeout starts
+    /// when the operation is written to the wire (and not when it is submitted to the client).
     pub fn ack_timeout(&self) -> &Option<Duration> {
         &self.ack_timeout
     }
@@ -146,6 +148,8 @@ pub struct SubscribeOptions {
 
 impl SubscribeOptions {
 
+    /// The time interval after which the operation should be failed if no response has been received.  The timeout starts
+    /// when the operation is written to the wire (and not when it is submitted to the client).
     pub fn ack_timeout(&self) -> &Option<Duration> {
         &self.ack_timeout
     }
@@ -200,6 +204,8 @@ pub struct UnsubscribeOptions {
 
 impl UnsubscribeOptions {
 
+    /// The time interval after which the operation should be failed if no response has been received.  The timeout starts
+    /// when the operation is written to the wire (and not when it is submitted to the client).
     pub fn ack_timeout(&self) -> &Option<Duration> {
         &self.ack_timeout
     }
@@ -250,17 +256,17 @@ pub type UnsubscribeResult = GneissResult<UnsubackPacket>;
 #[derive(Debug, Default, Clone)]
 pub struct StopOptions {
 
-    /// MQTT Disconnect packet the client should send before closing the connection and entering
-    /// the Stopped state.
     pub(crate) disconnect: Option<DisconnectPacket>,
 }
 
 impl StopOptions {
 
+    /// Optional MQTT Disconnect packet the client should send before closing the connection and entering
+    /// the Stopped state.
     pub fn disconnect(&self) -> &Option<DisconnectPacket> {
         &self.disconnect
     }
-    
+
     /// Creates a new builder for StopOptions instances using default values.
     pub fn builder() -> StopOptionsBuilder {
         StopOptionsBuilder::new()
@@ -566,6 +572,7 @@ pub enum ClientImplState {
     Shutdown,
 }
 
+#[doc(hidden)]
 pub fn is_connection_established(state: ProtocolStateType) -> bool {
     state == ProtocolStateType::Connected
 }

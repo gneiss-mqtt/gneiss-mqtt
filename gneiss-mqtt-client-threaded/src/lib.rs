@@ -10,13 +10,11 @@ Implementation of an MQTT client that uses one or more background threads for pr
 use std::io::{Read, Write};
 
 use gneiss_mqtt::error::{GneissError, GneissResult};
-use gneiss_mqtt::client::config::{ConnectOptions, MqttClientOptions, MqttClientOptionsBuilder};
+use gneiss_mqtt::client::config::{ConnectOptions, MqttClientOptions};
 use gneiss_mqtt::client::*;
 use gneiss_mqtt::mqtt::*;
 use gneiss_mqtt_client_sync::{StreamHandle, SyncClientConnectionFactory, SyncStreamTransform};
 
-use std::net;
-use net::TcpStream;
 use std::time::Duration;
 use std::sync::{Arc, Condvar, Mutex};
 
@@ -75,9 +73,6 @@ impl ThreadedOptionsBuilder {
 }
 
 pub struct ThreadedClientBuilder {
-    endpoint: String,
-    port: u16,
-
     connection_factory: SyncClientConnectionFactory,
     threaded_options: Option<ThreadedOptions>,
     client_options: Option<MqttClientOptions>,
@@ -87,8 +82,6 @@ pub struct ThreadedClientBuilder {
 impl ThreadedClientBuilder {
     pub fn new(endpoint: &str, port: u16) -> ThreadedClientBuilder {
         ThreadedClientBuilder {
-            endpoint: endpoint.to_string(),
-            port,
             connection_factory: SyncClientConnectionFactory::new(endpoint, port),
             threaded_options: None,
             client_options: None,
