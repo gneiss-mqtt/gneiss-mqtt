@@ -257,7 +257,7 @@ impl GneissError {
         )
     }
 
-    pub(crate) fn new_connection_establishment_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+    pub fn new_connection_establishment_failure(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         GneissError::ConnectionEstablishmentFailure(
             ConnectionEstablishmentFailureContext{
                 source : source.into()
@@ -273,7 +273,7 @@ impl GneissError {
         )
     }
 
-    pub(crate) fn new_connection_closed(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+    pub fn new_connection_closed(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         GneissError::ConnectionClosed(
             ConnectionClosedContext {
                 source : source.into()

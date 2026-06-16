@@ -1,5 +1,5 @@
 [workspace]
 resolver = "2"
 members = [
-	"gneiss-mqtt",
+	"gneiss-mqtt", "gneiss-mqtt-client-async", "gneiss-mqtt-client-sync", "gneiss-mqtt-client-threaded", "gneiss-mqtt-client-tokio",
 ]

@@ -97,6 +97,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "gneiss-mqtt-client-async"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "gneiss-mqtt",
+ "gneiss-mqtt-client-async",
+ "test-case",
+]
+
+[[package]]
+name = "gneiss-mqtt-client-sync"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "gneiss-mqtt",
+ "gneiss-mqtt-client-sync",
+ "log",
+ "test-case",
+]
+
+[[package]]
+name = "gneiss-mqtt-client-threaded"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "gneiss-mqtt",
+ "gneiss-mqtt-client-sync",
+ "gneiss-mqtt-client-threaded",
+ "test-case",
+]
+
+[[package]]
+name = "gneiss-mqtt-client-tokio"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "gneiss-mqtt",
+ "gneiss-mqtt-client-async",
+ "gneiss-mqtt-client-tokio",
+ "test-case",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

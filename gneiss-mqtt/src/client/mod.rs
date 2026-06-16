@@ -550,6 +550,10 @@ pub enum ClientImplState {
     Shutdown,
 }
 
+pub fn is_connection_established(state: ProtocolStateType) -> bool {
+    state == ProtocolStateType::Connected
+}
+
 impl Display for ClientImplState {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

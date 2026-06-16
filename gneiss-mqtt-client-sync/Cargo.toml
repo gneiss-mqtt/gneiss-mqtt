@@ -1,0 +1,30 @@
+[package]
+name = "gneiss-mqtt-client-sync"
+license = "Apache-2.0"
+version = "0.1.0"
+edition = "2021"
+keywords = ["mqtt", "mqtt5", "iot"]
+categories = [ "asynchronous", "network-programming" ]
+description = "Synchronous MQTT clients"
+homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt-client-sync"
+documentation = "https://docs.rs/gneiss-mqtt-client-sync"
+repository = "https://github.com/gneiss-mqtt/gneiss-mqtt-client-sync"
+readme = "README.md"
+resolver = "2"
+
+[features]
+strict = [] # treats warnings as errors, only intended for internal checks
+testing = [ "dep:assert_matches", "dep:test-case", "gneiss-mqtt/testing" ]
+
+[package.metadata.docs.rs]
+features = []
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+log = { version = "0.4" }
+gneiss-mqtt = { path = "../gneiss-mqtt" }
+assert_matches = { version = "1", optional = true } # only included in test builds
+test-case = { version = "3", optional = true }
+
+[dev-dependencies]
+gneiss-mqtt-client-sync = { path = ".", features = [ "testing" ]}
