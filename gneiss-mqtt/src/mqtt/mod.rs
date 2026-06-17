@@ -29,8 +29,9 @@ pub(crate) mod unsuback;
 pub(crate) mod unsubscribe;
 pub(crate) mod utils;
 
+#[doc(hidden)]
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum ProtocolVersion {
+pub enum ProtocolVersion {
     #[default]
     Mqtt5,
 
@@ -1327,7 +1328,8 @@ impl SubscriptionBuilder {
 
 /// Data model of an [MQTT5 AUTH](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901217) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct AuthPacket {
+#[doc(hidden)]
+pub struct AuthPacket {
 
     /// Specifies an endpoint's response to a previously-received AUTH packet as part of an authentication exchange.
     ///
@@ -1503,9 +1505,10 @@ impl ConnackPacket {
     pub fn authentication_data(&self) -> Option<&[u8]> { self.authentication_data.as_deref() }
 }
 
+#[doc(hidden)]
 /// Data model of an [MQTT CONNECT](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901033) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct ConnectPacket {
+pub struct ConnectPacket {
     pub(crate) keep_alive_interval_seconds: u16,
     pub(crate) clean_start: bool,
     pub(crate) client_id: Option<String>,
@@ -1632,11 +1635,13 @@ impl DisconnectPacketBuilder {
 
 /// Data model of an [MQTT PINGREQ](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901195) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct PingreqPacket {}
+#[doc(hidden)]
+pub struct PingreqPacket {}
 
 /// Data model of an [MQTT PINGRESP](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901200) packet.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct PingrespPacket {}
+#[doc(hidden)]
+pub struct PingrespPacket {}
 
 /// Data model of an [MQTT PUBACK](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901121) packet
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -2140,7 +2145,8 @@ impl UnsubscribePacketBuilder {
 /// Algebraic union of all MQTT packet types.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "testing", derive(PartialEq, Eq))]
-pub(crate) enum MqttPacket {
+#[doc(hidden)]
+pub enum MqttPacket {
     Connect(ConnectPacket),
     Connack(ConnackPacket),
     Publish(PublishPacket),

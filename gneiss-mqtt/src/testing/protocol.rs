@@ -47,14 +47,21 @@ fn build_standard_test_config(protocol_version : i32) -> ProtocolStateConfig {
 }
 
 #[derive(Default)]
-pub(crate) struct BrokerTestContext {
+#[doc(hidden)]
+pub struct BrokerTestContext {
     // TODO: fix when client impls refactored
     #[allow(dead_code)]
     pub(crate) connect_count: usize,
 }
 
-pub(crate) type PacketHandler = Box<dyn Fn(&MqttPacket, &mut VecDeque<Box<MqttPacket>>, &mut BrokerTestContext) -> GneissResult<()> + Send + Sync + 'static>;
-pub(crate) type PacketHandlerSet = HashMap<PacketType, PacketHandler>;
+#[doc(hidden)]
+pub type PacketHandler = Box<dyn Fn(&MqttPacket, &mut VecDeque<Box<MqttPacket>>, &mut BrokerTestContext) -> GneissResult<()> + Send + Sync + 'static>;
+
+#[doc(hidden)]
+pub type PacketHandlerSet = HashMap<PacketType, PacketHandler>;
+
+#[doc(hidden)]
+pub type PacketHandlerSetFactory = Box<dyn Fn() -> PacketHandlerSet + Send + Sync>;
 
 fn handle_connect_with_successful_connack(packet: &MqttPacket, response_packets: &mut VecDeque<Box<MqttPacket>>, _: &mut BrokerTestContext) -> GneissResult<()> {
     if let MqttPacket::Connect(connect) = packet {

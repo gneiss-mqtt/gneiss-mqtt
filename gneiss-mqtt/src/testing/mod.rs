@@ -10,3 +10,6 @@ Integration test functionality used throughout the gneiss ecosystem.  Only enabl
 
 #[doc(hidden)]
 pub mod protocol;
+
+#[doc(hidden)]
+pub mod mock_server;

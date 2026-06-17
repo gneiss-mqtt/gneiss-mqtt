@@ -33,6 +33,9 @@ See [FAQ](https://github.com/gneiss-mqtt/gneiss-mqtt/blob/main/FAQ.md)
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
 #![cfg_attr(feature = "strict", deny(warnings))]
+#![cfg_attr(feature = "testing", allow(dead_code))]
+#![cfg_attr(feature = "testing", allow(unused_macros))]
+#![cfg_attr(feature = "testing", allow(unused_imports))]
 #![allow(clippy::collapsible_match)]
 
 pub mod alias;

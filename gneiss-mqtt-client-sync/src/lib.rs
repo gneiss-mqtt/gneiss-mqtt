@@ -26,15 +26,32 @@ pub trait Stream {
 
     /// std::io::Write trait accessor
     fn get_write(&mut self) -> &mut dyn Write;
+
+    fn set_non_blocking(&mut self) -> GneissResult<()>;
 }
 
-impl <T> Stream for T where T : Read + Write {
+pub trait NonBlocking {
+    fn set_non_blocking(&mut self) -> GneissResult<()>;
+}
+
+impl NonBlocking for TcpStream {
+    fn set_non_blocking(&mut self) -> GneissResult<()> {
+        self.set_nonblocking(true)?;
+        Ok(())
+    }
+}
+
+impl <T> Stream for T where T : Read + Write + NonBlocking {
     fn get_read(&mut self) -> &mut dyn Read {
         self
     }
 
     fn get_write(&mut self) -> &mut dyn Write {
         self
+    }
+
+    fn set_non_blocking(&mut self) -> GneissResult<()> {
+        NonBlocking::set_non_blocking(self)
     }
 }
 
@@ -66,6 +83,12 @@ impl Write for StreamHandle {
 
     fn flush(&mut self) -> std::io::Result<()> {
         self.stream.get_write().flush()
+    }
+}
+
+impl NonBlocking for StreamHandle {
+    fn set_non_blocking(&mut self) -> GneissResult<()> {
+        self.stream.set_non_blocking()
     }
 }
 
@@ -170,7 +193,8 @@ impl SyncClientConnectionFactory {
     /// Create a new connection using the stream source and composed transforms
     pub fn connect(&self) -> GneissResult<StreamHandle> {
         let base_stream = self.source.create_source()?;
-        let wrapper_stream = (self.stream_wrapper)(base_stream)?;
+        let mut wrapper_stream = (self.stream_wrapper)(base_stream)?;
+        Stream::set_non_blocking(&mut wrapper_stream)?;
 
         Ok(wrapper_stream)
     }
