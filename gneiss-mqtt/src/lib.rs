@@ -32,7 +32,6 @@ See [FAQ](https://github.com/gneiss-mqtt/gneiss-mqtt/blob/main/FAQ.md)
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
-#![cfg_attr(all(feature = "testing", not(test)), allow(dead_code, unused_imports, unused_macros))]
 #![cfg_attr(feature = "strict", deny(warnings))]
 #![allow(clippy::collapsible_match)]
 

@@ -7,71 +7,29 @@
 Implementation of an MQTT client that uses one or more background threads for processing.
  */
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![warn(missing_docs)]
+#![cfg_attr(feature = "strict", deny(warnings))]
+
 use std::io::{Read, Write};
+use std::time::Instant;
+use std::cmp::min;
+use std::time::Duration;
+use std::sync::{Arc, Condvar, Mutex};
 
 use gneiss_mqtt::error::{GneissError, GneissResult};
 use gneiss_mqtt::client::config::{ConnectOptions, MqttClientOptions};
 use gneiss_mqtt::client::*;
 use gneiss_mqtt::mqtt::*;
 use gneiss_mqtt_client_sync::{StreamHandle, SyncClientConnectionFactory, SyncStreamTransform};
-
-use std::time::Duration;
-use std::sync::{Arc, Condvar, Mutex};
-
 use log::*;
-use gneiss_mqtt::client::{is_connection_established, ClientImplState, MqttClientImpl};
-use std::time::Instant;
-use std::cmp::min;
 
+use crate::config::*;
+
+/// Configuration types specific to creating a threaded client
 pub mod config;
 
-
-#[derive(Default, Clone)]
-pub struct ThreadedOptions {
-    pub(crate) idle_service_sleep: Option<Duration>,
-}
-
-impl ThreadedOptions {
-
-    /// Creates a new builder for ThreadedClientOptions instances
-    pub fn builder() -> ThreadedOptionsBuilder {
-        ThreadedOptionsBuilder::new()
-    }
-}
-
-/// Builder type for threaded client configuration
-pub struct ThreadedOptionsBuilder {
-    config: ThreadedOptions
-}
-
-impl ThreadedOptionsBuilder {
-
-    pub(crate) fn new() -> Self {
-        ThreadedOptionsBuilder {
-            config: ThreadedOptions {
-                idle_service_sleep: None,
-            }
-        }
-    }
-
-    /// Configures the time interval to sleep the thread the client runs on between io
-    /// processing events.
-    ///
-    /// Only used if no events occurred on the previous iteration.  If the
-    /// client is handling significant work, it will not sleep, but if there's nothing
-    /// happening, it will.
-    ///
-    /// If not set, defaults to 20 milliseconds.
-    pub fn with_idle_service_sleep(&mut self, duration: Duration) {
-        self.config.idle_service_sleep = Some(duration);
-    }
-
-    /// Builds a new set of threaded client configuration options
-    pub fn build(self) -> ThreadedOptions {
-        self.config
-    }
-}
-
+/// Builder type used to configure and create thread-based clients
 pub struct ThreadedClientBuilder {
     connection_factory: SyncClientConnectionFactory,
     threaded_options: Option<ThreadedOptions>,
@@ -80,6 +38,9 @@ pub struct ThreadedClientBuilder {
 }
 
 impl ThreadedClientBuilder {
+
+    /// Constructor function for a new threaded client builder.  By default contains no options
+    /// overrides and connects directly via TCP to the broker.
     pub fn new(endpoint: &str, port: u16) -> ThreadedClientBuilder {
         ThreadedClientBuilder {
             connection_factory: SyncClientConnectionFactory::new(endpoint, port),
@@ -89,30 +50,37 @@ impl ThreadedClientBuilder {
         }
     }
 
+    /// Applies a stream transformation to the connection establishment process.  Typical
+    /// transformations include wrappers for websockets and TLS.
     pub fn apply_connection_transform(&mut self, transform: &SyncStreamTransform) -> &mut Self {
         self.connection_factory.apply_transform(transform.transform());
 
         self
     }
 
+    /// Applies configuration options related to the thread-based client implementation
     pub fn with_threaded_options(&mut self, options: ThreadedOptions) -> &mut Self {
         self.threaded_options = Some(options);
 
         self
     }
 
+    /// Applies configuration options related to general MQTT client behavior
     pub fn with_client_options(&mut self, options: MqttClientOptions) -> &mut Self {
         self.client_options = Some(options);
 
         self
     }
 
+    /// Applies configuration options related to the initial connect packet sent by the client
+    /// each time a connection to the broker is successfully established.
     pub fn with_connect_options(&mut self, options: ConnectOptions) -> &mut Self {
         self.connect_options = Some(options);
 
         self
     }
 
+    /// Builds a new thread-based MQTT client
     pub fn build(&self) -> SyncClientHandle {
         let connect_options =
             if let Some(options) = &self.connect_options {
