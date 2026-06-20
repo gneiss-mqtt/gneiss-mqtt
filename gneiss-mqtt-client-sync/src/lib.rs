@@ -27,21 +27,26 @@ pub trait Stream {
     /// std::io::Write trait accessor
     fn get_write(&mut self) -> &mut dyn Write;
 
-    fn set_non_blocking(&mut self) -> GneissResult<()>;
+    /// perform any final connection-related operations before the stream is considered ready to use
+    fn complete(&mut self) -> GneissResult<()>;
 }
 
-pub trait NonBlocking {
-    fn set_non_blocking(&mut self) -> GneissResult<()>;
+#[doc(hidden)]
+pub trait CompletableStream {
+
+    /// perform any final connection-related operations before the stream is considered ready to use
+    fn complete(&mut self) -> GneissResult<()>;
 }
 
-impl NonBlocking for TcpStream {
-    fn set_non_blocking(&mut self) -> GneissResult<()> {
+impl CompletableStream for TcpStream {
+    fn complete(&mut self) -> GneissResult<()> {
         self.set_nonblocking(true)?;
         Ok(())
     }
 }
 
-impl <T> Stream for T where T : Read + Write + NonBlocking {
+impl <T> Stream for T where T : Read + Write + CompletableStream
+{
     fn get_read(&mut self) -> &mut dyn Read {
         self
     }
@@ -50,8 +55,8 @@ impl <T> Stream for T where T : Read + Write + NonBlocking {
         self
     }
 
-    fn set_non_blocking(&mut self) -> GneissResult<()> {
-        NonBlocking::set_non_blocking(self)
+    fn complete(&mut self) -> GneissResult<()> {
+        CompletableStream::complete(self)
     }
 }
 
@@ -86,9 +91,9 @@ impl Write for StreamHandle {
     }
 }
 
-impl NonBlocking for StreamHandle {
-    fn set_non_blocking(&mut self) -> GneissResult<()> {
-        self.stream.set_non_blocking()
+impl CompletableStream for StreamHandle {
+    fn complete(&mut self) -> GneissResult<()> {
+        self.stream.complete()
     }
 }
 
@@ -122,9 +127,13 @@ impl TcpStreamSource {
     }
 }
 
+use std::net::{ToSocketAddrs};
+
 impl SyncStreamSource for TcpStreamSource {
     fn create_source(&self) -> GneissResult<StreamHandle> {
-        let stream = TcpStream::connect((self.host.as_str(), self.port))?;
+        let mut to_socket_addrs = (self.host.as_str(), self.port).to_socket_addrs()?;
+        let addr = to_socket_addrs.next().unwrap();
+        let stream = TcpStream::connect(addr)?;
         Ok(StreamHandle::new(stream))
     }
 
@@ -194,7 +203,7 @@ impl SyncClientConnectionFactory {
     pub fn connect(&self) -> GneissResult<StreamHandle> {
         let base_stream = self.source.create_source()?;
         let mut wrapper_stream = (self.stream_wrapper)(base_stream)?;
-        Stream::set_non_blocking(&mut wrapper_stream)?;
+        Stream::complete(&mut wrapper_stream)?;
 
         Ok(wrapper_stream)
     }
