@@ -7,6 +7,8 @@
 Module containing types and functionality for non-async MQTT clients
  */
 
+pub mod network;
+
 use std::sync::Arc;
 use crate::error::GneissResult;
 use crate::mqtt::*;

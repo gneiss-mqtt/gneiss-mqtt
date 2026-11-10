@@ -1,14 +1,14 @@
 [package]
-name = "gneiss-mqtt-client-async"
-license = "Apache-2.0"
-version = "0.1.0"
+name = "gneiss-mqtt-client-tls"
 edition = "2021"
+version = "0.1.0"
+license = "Apache-2.0"
 keywords = ["mqtt", "mqtt5", "iot"]
-categories = [ "asynchronous", "network-programming" ]
-description = "Asynchronous MQTT client"
-homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt-client-async"
-documentation = "https://docs.rs/gneiss-mqtt-client-async"
-repository = "https://github.com/gneiss-mqtt/gneiss-mqtt-client-async"
+categories = [ "asynchronous", "network-programming", "tls" ]
+description = "Shared TLS data types for gneiss mqtt client configuration"
+homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt-client-tls"
+documentation = "https://docs.rs/gneiss-mqtt-client-tls"
+repository = "https://github.com/gneiss-mqtt/gneiss-mqtt-client-tls"
 readme = "README.md"
 resolver = "2"
 
@@ -26,4 +26,4 @@ assert_matches = { version = "1", optional = true } # only included in test buil
 test-case = { version = "3", optional = true }
 
 [dev-dependencies]
-gneiss-mqtt-client-async = { path = ".", features = [ "testing" ]}
+gneiss-mqtt-client-tls = { path = ".", features = [ "testing" ]}

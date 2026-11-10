@@ -30,7 +30,8 @@ use gneiss_mqtt::error::{GneissError, GneissResult};
 use gneiss_mqtt::client::config::{ConnectOptions, MqttClientOptions};
 use gneiss_mqtt::client::*;
 use gneiss_mqtt::mqtt::*;
-use gneiss_mqtt_client_sync::{StreamHandle, SyncClientConnectionFactory, SyncStreamTransform};
+use gneiss_mqtt::client::synchronous::*;
+use gneiss_mqtt::client::synchronous::network::*;
 use log::*;
 
 use crate::config::*;
@@ -60,7 +61,7 @@ impl ThreadedClientBuilder {
     /// Applies a stream transformation to the connection establishment process.  Typical
     /// transformations include wrappers for websockets and TLS.
     pub fn apply_connection_transform(&mut self, transform: &SyncStreamTransform) -> &mut Self {
-        self.connection_factory.apply_transform(transform.transform());
+        self.connection_factory.apply_transform(transform.clone());
 
         self
     }

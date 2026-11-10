@@ -7,6 +7,7 @@
 Module containing types and functionality for async MQTT clients
  */
 
+pub mod network;
 
 use std::future::Future;
 use std::pin::Pin;

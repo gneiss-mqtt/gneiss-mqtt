@@ -8,8 +8,8 @@ Module containing the public MQTT client and associated types necessary to invok
  */
 
 pub mod config;
-pub(crate) mod synchronous;
-pub(crate) mod asynchronous;
+pub mod synchronous;
+pub mod asynchronous;
 pub mod waiter;
 
 use crate::client::config::*;
@@ -1069,26 +1069,6 @@ impl MqttClientImpl {
         Ok(())
     }
 }
-
-pub use crate::client::asynchronous::{
-    AsyncClient,
-    AsyncClientHandle,
-    AsyncPublishResult,
-    AsyncSubscribeResult,
-    AsyncUnsubscribeResult
-};
-
-pub use crate::client::synchronous::{
-    SyncClient,
-    SyncClientHandle,
-    SyncPublishResult,
-    SyncPublishResultCallback,
-    SyncResultReceiver,
-    SyncSubscribeResult,
-    SyncSubscribeResultCallback,
-    SyncUnsubscribeResult,
-    SyncUnsubscribeResultCallback
-};
 
 
 

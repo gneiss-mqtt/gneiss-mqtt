@@ -4,6 +4,7 @@
  */
 
 use gneiss_mqtt::client::*;
+use gneiss_mqtt::client::synchronous::*;
 use gneiss_mqtt::client::waiter::*;
 use gneiss_mqtt::error::*;
 

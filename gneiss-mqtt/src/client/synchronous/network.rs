@@ -4,18 +4,13 @@
  */
 
 /*!
-Shared types needed by all synchronous client implementations.  Likely this is just the threaded client.
+Module containing types and functionality for building sync MQTT client network connections
  */
 
-#![cfg_attr(docsrs, feature(doc_cfg))]
-#![warn(missing_docs)]
-#![cfg_attr(feature = "strict", deny(warnings))]
-
-use gneiss_mqtt::error::GneissResult;
-
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::Arc;
+use crate::error::GneissResult;
 
 /// Bidirectional stream trait that allows (non-simultaneous) access to both Read and Write
 /// traits
@@ -127,8 +122,6 @@ impl TcpStreamSource {
     }
 }
 
-use std::net::{ToSocketAddrs};
-
 impl SyncStreamSource for TcpStreamSource {
     fn create_source(&self) -> GneissResult<StreamHandle> {
         let mut to_socket_addrs = (self.host.as_str(), self.port).to_socket_addrs()?;
@@ -148,18 +141,19 @@ pub type CrossThreadStreamSource = Arc<dyn SyncStreamSource + Send + Sync>;
 /// Thread-safe stream source transformer type
 pub type CrossThreadStreamSourceTransform = Arc<dyn Fn(Arc<dyn SyncStreamSource>) -> GneissResult<CrossThreadStreamSource> + Send + Sync>;
 
+/// Thread-safe stream -> stream transformation function
+pub type SyncStreamTransform = Arc<dyn Fn(StreamHandle) -> GneissResult<StreamHandle> + Send + Sync>;
 
 /// Stream connection factory type.  We distinguish between transformers (after the initial stream is created) and the stream source to
-/// allow for proxy configuration to "rewrite" the stream source (by replacing the source connection factory with one that connects to the proxy
-/// instead).
+/// allow for proxy configuration to "rewrite" the stream source (by replacing the original stream source with a pair
+/// (proxy-source, proxy-connect) where proxy-source is a stream source that connects to the proxy and proxy-connect is a transform
+/// that triggers the proxy to establish a connection to the remote host).
 #[derive(Clone)]
 pub struct SyncClientConnectionFactory {
     source: CrossThreadStreamSource,
 
-    stream_wrapper: Arc<dyn Fn(StreamHandle) -> GneissResult<StreamHandle> + Send + Sync>,
+    stream_transform: SyncStreamTransform,
 }
-
-
 
 impl SyncClientConnectionFactory {
 
@@ -167,7 +161,7 @@ impl SyncClientConnectionFactory {
     pub fn new(host: &str, port: u16) -> SyncClientConnectionFactory {
         SyncClientConnectionFactory {
             source: Arc::new(TcpStreamSource::new(host, port)),
-            stream_wrapper: Arc::new(|stream| {
+            stream_transform: Arc::new(|stream| {
                 Ok(stream)
             })
         }
@@ -177,10 +171,10 @@ impl SyncClientConnectionFactory {
     /// steps in the connection establishment process.  For example, starting with a base stream source, you can generically apply
     /// TLS and websockets stages by applying an appropriate transform from the crate that supplies that functionality.
     pub fn apply_transform(&mut self, stream_transform: Arc<dyn Fn(StreamHandle) -> GneissResult<StreamHandle> + Send + Sync>) -> &mut Self {
-        let base_stream_wrapper = self.stream_wrapper.clone();
+        let base_stream_wrapper = self.stream_transform.clone();
         let new_stream_wrapper = stream_transform.clone();
 
-        self.stream_wrapper = Arc::new(move |stream| {
+        self.stream_transform = Arc::new(move |stream| {
             let base_stream = base_stream_wrapper(stream)?;
             let wrapped_stream = new_stream_wrapper(base_stream)?;
 
@@ -202,13 +196,16 @@ impl SyncClientConnectionFactory {
     /// Create a new connection using the stream source and composed transforms
     pub fn connect(&self) -> GneissResult<StreamHandle> {
         let base_stream = self.source.create_source()?;
-        let mut wrapper_stream = (self.stream_wrapper)(base_stream)?;
+        let mut wrapper_stream = (self.stream_transform)(base_stream)?;
         Stream::complete(&mut wrapper_stream)?;
 
         Ok(wrapper_stream)
     }
 }
 
+
+
+/*
 /// Thread-safe container for stream -> stream transformation functions
 pub struct SyncStreamTransform {
     transform: Arc<dyn Fn(StreamHandle) -> GneissResult<StreamHandle> + Send + Sync>
@@ -221,3 +218,4 @@ impl SyncStreamTransform {
         self.transform.clone()
     }
 }
+*/

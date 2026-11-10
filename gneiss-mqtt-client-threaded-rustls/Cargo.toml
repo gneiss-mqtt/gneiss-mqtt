@@ -1,0 +1,33 @@
+[package]
+name = "gneiss-mqtt-client-threaded-rustls"
+license = "Apache-2.0"
+version = "0.1.0"
+edition = "2021"
+keywords = ["mqtt", "mqtt5", "iot"]
+categories = [ "network-programming" ]
+description = "Rustls-based TLS connectors for Gneiss MQTT clients"
+homepage = "https://github.com/gneiss-mqtt/gneiss-mqtt-client-threaded-rustls"
+documentation = "https://docs.rs/gneiss-mqtt-client-threaded-rustls"
+repository = "https://github.com/gneiss-mqtt/gneiss-mqtt-client-threaded-rustls"
+readme = "README.md"
+resolver = "2"
+
+[features]
+strict = [] # treats warnings as errors, only intended for internal checks
+testing = [ "gneiss-mqtt/testing", "gneiss-mqtt-client-tls/testing" ]
+
+[package.metadata.docs.rs]
+features = []
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+gneiss-mqtt = { path = "../gneiss-mqtt" }
+gneiss-mqtt-client-tls = { path = "../gneiss-mqtt-client-tls" }
+log = { version = "0.4" }
+rustls = { version = "0.23", features = ["std"] }
+rustls-native-certs = { version = "0.7" }
+rustls-pemfile = { version = "2" }
+rustls-pki-types = { version = "1" }
+
+[dev-dependencies]
+gneiss-mqtt-client-threaded-rustls = { path = ".", features = [ "testing" ]}
