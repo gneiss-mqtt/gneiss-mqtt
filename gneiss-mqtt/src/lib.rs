@@ -20,26 +20,9 @@ asynchronously, but only the tokio-based client has an interface that uses Rust'
 
 # Feature Flags
 
-The crate supports a variety of common transport options, including:
-* **TLS** - provided by either *[`rustls`](https://crates.io/crates/rustls)* or *[`native-tls`](https://crates.io/crates/native-tls)*
-* **Websockets** - provided by *[`tungstenite`](https://crates.io/crates/tungstenite)*
-* **HTTP proxies** - bespoke implementation
-
-It is common to see crates provide transport-agnostic clients -- which is clean and minimal -- but at
-the cost of forcing the user to construct the transport connection themselves, which can be daunting.
-This crate has been designed with the goal of providing a solution, not a piece of a solution.
-While this crate does support bring-your-own-transport, it also provides optional features that
-greatly simplify the setup required to use common transport level options.
-
 The crate supports the following feature flags:
 * `tokio` - enables the tokio-based async client
-* `tokio-rustls` - enables TLS (backed by the rustls crate) support within the tokio-based async client
-* `tokio-native-tls` - enables TLS (backed by the native-tls crate) support within the tokio-based async client
-* `tokio-websockets` - enables websockets support within the tokio-based async client
 * `threaded` - enables the thread-based client
-* `threaded-rustls` - enables TLS (backed by the rustls crate) support within the thread-based client
-* `threaded-native-tls` - enables TLS (backed by the native-tls crate) support within the thread-based client
-* `threaded-websockets` - enables websockets support within the thread-based client
 
 # Usage
 

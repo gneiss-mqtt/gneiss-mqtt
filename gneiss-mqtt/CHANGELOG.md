@@ -58,3 +58,6 @@ This document is currently hand-written and non-authoritative.
 * Add support for a "slow start" mode after reconnection.  While in slow start, the client only processes one ackable packet at a time until all interrupted packets have been processed.  This setting is intended primarily for MQTT311 and AWS IoT Core.
 * Additional protocol error detection in the case of an ack mismatching the source operation type
 * Add support for limiting the number of times a user-submitted operation can be interrupted (waiting for ack) before getting failed
+
+## 0.6.0
+* Dependency refactor - base crate no longer has connector features and dependencies
