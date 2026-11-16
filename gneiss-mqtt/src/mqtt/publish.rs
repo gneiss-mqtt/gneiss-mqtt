@@ -419,13 +419,12 @@ pub(crate) fn validate_publish_packet_outbound_internal(packet: &PublishPacket, 
                 return Err(GneissError::new_packet_validation(PacketType::Publish, message));
             }
         }
-        QualityOfService::AtLeastOnce => {
-            if packet.qos == QualityOfService::ExactlyOnce {
+        QualityOfService::AtLeastOnce
+            if packet.qos == QualityOfService::ExactlyOnce => {
                 let message = "validate_publish_packet_outbound_internal - quality of service exceeds established maximum";
                 error!("{}", message);
                 return Err(GneissError::new_packet_validation(PacketType::Publish, message));
             }
-        }
         _ => {}
     }
 

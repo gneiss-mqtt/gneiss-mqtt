@@ -140,7 +140,7 @@ pub struct AsyncClientHandle {
 
 impl AsyncClientHandle {
 
-    #[cfg_attr(not(any(feature = "tokio-rustls", feature = "tokio-native-tls", feature = "tokio-websockets")), allow(dead_code))]
+//    #[cfg_attr(not(any(feature = "tokio-rustls", feature = "tokio-native-tls", feature = "tokio-websockets")), allow(dead_code))]
     pub(crate) fn new(client: Arc<dyn AsyncClient + Send + Sync>) -> Self {
         Self { client }
     }

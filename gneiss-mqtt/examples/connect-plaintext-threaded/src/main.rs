@@ -4,7 +4,7 @@
  */
 
 use argh::FromArgs;
-use gneiss_mqtt::client::{SyncClient, ClientEvent, ThreadedClientBuilder};
+use gneiss_mqtt::client::{SyncClient, ClientEvent, ThreadedClientBuilder, make_threaded_tcp_stream_connection_factory};
 use gneiss_mqtt::client::waiter::{ClientEventType, ThreadedClientEventWaiter};
 use gneiss_mqtt::error::{GneissError, GneissResult};
 use std::str::FromStr;
@@ -56,9 +56,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let host_and_port = parse_endpoint(&args.endpoint)?;
 
     // Create the client
-    let client = ThreadedClientBuilder::new(&host_and_port.0, host_and_port.1).build()?;
+    let client = ThreadedClientBuilder::new().build(
+        make_threaded_tcp_stream_connection_factory(host_and_port.0.clone(), host_and_port.1)
+    )?;
 
-    println!("Connecting to {}:{}...\n", host_and_port.0, host_and_port.1);
+    println!("Connecting to {}:{}...\n", host_and_port.0.clone(), host_and_port.1);
 
     // Before connecting, create a waiter object that completes when it receives a connection
     // success event

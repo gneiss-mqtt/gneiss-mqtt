@@ -273,7 +273,7 @@ pub(crate) struct OperationTimeoutRecord {
 
 impl PartialOrd for OperationTimeoutRecord {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.timeout.cmp(&other.timeout))
+        Some(self.cmp(other))
     }    
 }
 
@@ -1322,11 +1322,10 @@ impl ProtocolState {
             MqttPacket::Subscribe(_) | MqttPacket::Unsubscribe(_) => {
                 extension_base_option = operation.ping_extension_base_timepoint;
             }
-            MqttPacket::Publish(publish) => {
-                if publish.qos != QualityOfService::AtMostOnce {
+            MqttPacket::Publish(publish)
+                if publish.qos != QualityOfService::AtMostOnce => {
                     extension_base_option = operation.ping_extension_base_timepoint;
                 }
-            }
             _ => {}
         }
 
@@ -2224,10 +2223,10 @@ fn build_negotiated_settings(config: &ProtocolStateConfig, packet: &ConnackPacke
     let connect = &config.connect_options;
 
     let final_client_id =
-        if packet.assigned_client_identifier.is_some() {
-            packet.assigned_client_identifier.as_ref().unwrap().clone()
-        } else if connect.client_id.is_some() {
-            connect.client_id.as_ref().unwrap().clone()
+        if let Some(assigned_client_id) = &packet.assigned_client_identifier {
+            assigned_client_id.clone()
+        } else if let Some(connect_client_id) = &connect.client_id {
+            connect_client_id.clone()
         } else if let Some(settings) = &existing_settings {
             settings.client_id.clone()
         } else {

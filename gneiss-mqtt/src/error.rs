@@ -93,12 +93,6 @@ pub struct StdIoErrorContext {
     source: Box<dyn Error + Send + Sync + 'static>
 }
 
-/// Additional details about a TlsError error variant
-#[derive(Debug)]
-pub struct TlsErrorContext {
-    source: Box<dyn Error + Send + Sync + 'static>
-}
-
 /// Additional details about a TransportError error variant
 #[derive(Debug)]
 pub struct TransportErrorContext {
@@ -184,10 +178,6 @@ pub enum GneissError {
 
     /// Generic error wrapping std::io::Error
     StdIoError(StdIoErrorContext),
-
-    /// Generic error associated with parsing TLS configuration from memory or applying it to a
-    /// TLS context
-    TlsError(TlsErrorContext),
 
     /// Generic error associated with feature-selected transport options.  For now, this mostly
     /// wraps websocket implementation specific errors
@@ -320,18 +310,6 @@ impl GneissError {
         )
     }
 
-    /// Constructs a new TlsError variant from an existing error.  Typically this should be
-    /// an error surfacing from a third-party TLS library or an attempt to initialize configuration
-    /// for one.
-    #[doc(hidden)]
-    pub fn new_tls_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        GneissError::TlsError(
-            TlsErrorContext {
-                source : source.into()
-            }
-        )
-    }
-
     /// Constructs a new TransportError variant from an existing error.  Typically this should be
     /// an error surfacing from a third-party transport library.
     #[doc(hidden)]
@@ -405,9 +383,6 @@ impl Error for GneissError {
             GneissError::StdIoError(context) => {
                 Some(context.source.as_ref())
             }
-            GneissError::TlsError(context) => {
-                Some(context.source.as_ref())
-            }
             GneissError::TransportError(context) => {
                 Some(context.source.as_ref())
             }
@@ -470,9 +445,6 @@ impl fmt::Display for GneissError {
             GneissError::StdIoError(context) => {
                 write!(f, "std::io::Error: {}", context.source)
             }
-            GneissError::TlsError(context) => {
-                write!(f, "TLS error: {}", context.source)
-            }
             GneissError::TransportError(context) => {
                 write!(f, "Transport error: {}", context.source)
             }
@@ -498,55 +470,6 @@ impl From<std::io::Error> for GneissError {
 impl From<core::str::Utf8Error> for GneissError {
     fn from(err: core::str::Utf8Error) -> Self {
         GneissError::new_decoding_failure(err)
-    }
-}
-
-#[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
-impl From<rustls_pki_types::InvalidDnsNameError> for GneissError {
-    fn from(err: rustls_pki_types::InvalidDnsNameError) -> Self {
-        GneissError::new_connection_establishment_failure(err)
-    }
-}
-
-#[cfg(any(feature = "tokio-rustls", feature = "threaded-rustls"))]
-impl From<rustls::Error> for GneissError {
-    fn from(err: rustls::Error) -> Self {
-        GneissError::new_tls_error(err)
-    }
-}
-
-#[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
-impl From<native_tls::Error> for GneissError {
-    fn from(err: native_tls::Error) -> Self {
-        GneissError::new_tls_error(err)
-    }
-}
-
-#[cfg(any(feature = "tokio-native-tls", feature = "threaded-native-tls"))]
-impl<S> From<native_tls::HandshakeError<S>> for GneissError {
-    fn from(_err: native_tls::HandshakeError<S>) -> Self {
-        // TODO: is there a better way of handling this?  S is the transport stream which
-        // isn't copy/clone so it doesn't seem like we can wrap it
-        GneissError::new_tls_error("native-tls handshake error")
-    }
-}
-
-#[cfg(feature="tokio-websockets")]
-impl From<tungstenite::error::Error> for GneissError {
-    fn from(err: tungstenite::error::Error) -> Self {
-        GneissError::new_transport_error(err)
-    }
-}
-
-#[cfg(feature="threaded-websockets")]
-use std::io::{Read, Write};
-
-#[cfg(feature="threaded-websockets")]
-impl <S> From<tungstenite::HandshakeError<tungstenite::ClientHandshake<S>>>  for GneissError
-where S : Read + Write {
-    fn from(err: tungstenite::HandshakeError<tungstenite::ClientHandshake<S>>) -> Self {
-        let message = format!("websocket handshake error: {}", err);
-        GneissError::new_transport_error(message)
     }
 }
 

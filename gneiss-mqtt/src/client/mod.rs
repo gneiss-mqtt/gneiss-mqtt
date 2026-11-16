@@ -848,14 +848,13 @@ impl MqttClientImpl {
                 }
             }
 
-            ClientImplState::Connecting | ClientImplState::PendingReconnect => {
-                if self.desired_state != ClientImplState::Connected {
+            ClientImplState::Connecting | ClientImplState::PendingReconnect
+                if self.desired_state != ClientImplState::Connected => {
                     return Some(ClientImplState::Stopped)
                 }
-            }
 
-            ClientImplState::Connected => {
-                if self.desired_state != ClientImplState::Connected {
+            ClientImplState::Connected
+                if self.desired_state != ClientImplState::Connected => {
                     if let Some(stop_options) = &self.desired_stop_options {
                         if stop_options.disconnect.is_none() {
                             return Some(ClientImplState::Stopped);
@@ -864,7 +863,6 @@ impl MqttClientImpl {
                         return Some(ClientImplState::Stopped);
                     }
                 }
-            }
 
             _ => { }
         }
@@ -1037,7 +1035,7 @@ impl MqttClientImpl {
 pub use crate::client::asynchronous::{AsyncClient, AsyncClientHandle, AsyncPublishResult, AsyncSubscribeResult, AsyncUnsubscribeResult};
 
 #[cfg(feature = "tokio")]
-pub use crate::client::asynchronous::tokio::new_tokio_client;
+pub use crate::client::asynchronous::tokio::{make_tokio_tcp_stream_connection_factory};
 
 #[cfg(feature = "tokio")]
 pub use crate::client::asynchronous::tokio::builder::TokioClientBuilder;
@@ -1045,7 +1043,7 @@ pub use crate::client::asynchronous::tokio::builder::TokioClientBuilder;
 pub use crate::client::synchronous::{SyncClient, SyncClientHandle, SyncPublishResult, SyncPublishResultCallback, SyncResultReceiver, SyncSubscribeResult, SyncSubscribeResultCallback, SyncUnsubscribeResult, SyncUnsubscribeResultCallback};
 
 #[cfg(feature = "threaded")]
-pub use crate::client::synchronous::threaded::new_threaded_client;
+pub use crate::client::synchronous::threaded::{make_threaded_tcp_stream_connection_factory};
 
 #[cfg(feature = "threaded")]
 pub use crate::client::synchronous::threaded::builder::ThreadedClientBuilder;

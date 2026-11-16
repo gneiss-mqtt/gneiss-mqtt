@@ -10,8 +10,8 @@ use crate::client::waiter::*;
 use crate::testing::mock_server::*;
 use crate::testing::protocol::*;
 
-fn simple_reconnect_test(builder : ThreadedClientBuilder, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> GneissResult<()> {
-    let client = builder.build()?;
+fn simple_reconnect_test(builder : ThreadedClientBuilder, server: MockBroker, event_count: usize, event_checker: ReconnectEventTestValidatorFn) -> GneissResult<()> {
+    let client = builder.build(server.threaded_connection_factory())?;
 
     let wait_options = ClientEventWaiterOptions {
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
@@ -26,6 +26,8 @@ fn simple_reconnect_test(builder : ThreadedClientBuilder, event_count: usize, ev
     client.stop(None)?;
     client.close()?;
 
+    server.close();
+
     (event_checker)(&reconnect_events)
 }
 
@@ -34,14 +36,12 @@ fn client_reconnect_with_backoff() {
     let (builder, server) = build_mock_client_server_threaded(build_reconnect_test_options());
 
     do_builder_test(Box::new(|builder| {
-        simple_reconnect_test(builder, 14, Box::new(|events|{validate_reconnect_failure_sequence(events)}))
+        simple_reconnect_test(builder, server,14, Box::new(|events|{validate_reconnect_failure_sequence(events)}))
     }), builder);
-
-    server.close();
 }
 
-fn reconnect_backoff_reset_test(builder : ThreadedClientBuilder, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> GneissResult<()> {
-    let client = builder.build()?;
+fn reconnect_backoff_reset_test(builder : ThreadedClientBuilder, server : MockBroker, first_event_checker: ReconnectEventTestValidatorFn, second_event_checker_fn: ReconnectEventTestValidatorFn, connection_success_wait_millis: u64) -> GneissResult<()> {
+    let client = builder.build(server.threaded_connection_factory())?;
 
     let first_wait_options = ClientEventWaiterOptions {
         wait_type: ClientEventWaitType::Predicate(Box::new(|event|{ is_reconnect_related_event(event) }))
@@ -71,6 +71,8 @@ fn reconnect_backoff_reset_test(builder : ThreadedClientBuilder, first_event_che
     client.stop(None)?;
     client.close()?;
 
+    server.close();
+
     (first_event_checker)(&first_reconnect_events)?;
     (second_event_checker_fn)(&final_reconnect_events)
 }
@@ -80,13 +82,11 @@ fn client_reconnect_with_backoff_and_backoff_reset() {
     let (builder, server) = build_mock_client_server_threaded(build_reconnect_reset_test_options());
 
     do_builder_test(Box::new(move |builder| {
-        reconnect_backoff_reset_test(builder,
+        reconnect_backoff_reset_test(builder, server,
                                      Box::new(|events|{validate_reconnect_backoff_failure_sequence(events)}),
                                      Box::new(|events|{validate_reconnect_backoff_reset_sequence(events, Duration::from_millis(500))}),
                                      4000)
     }), builder);
-
-    server.close();
 }
 
 #[test]
@@ -94,11 +94,9 @@ fn client_reconnect_with_backoff_and_no_backoff_reset() {
     let (builder, server) = build_mock_client_server_threaded(build_reconnect_reset_test_options());
 
     do_builder_test(Box::new(move |builder| {
-        reconnect_backoff_reset_test(builder,
+        reconnect_backoff_reset_test(builder, server,
                                      Box::new(|events|{validate_reconnect_backoff_failure_sequence(events)}),
                                      Box::new(|events|{validate_reconnect_backoff_reset_sequence(events, Duration::from_millis(6000))}),
                                      500)
     }), builder);
-
-    server.close();
 }

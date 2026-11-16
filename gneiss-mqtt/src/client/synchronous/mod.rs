@@ -233,7 +233,7 @@ pub struct SyncClientHandle {
 
 impl SyncClientHandle {
 
-    #[cfg_attr(not(any(feature = "threaded-rustls", feature = "threaded-native-tls", feature = "threaded-websockets")), allow(dead_code))]
+ //   #[cfg_attr(not(any(feature = "threaded-rustls", feature = "threaded-native-tls", feature = "threaded-websockets")), allow(dead_code))]
     pub(crate) fn new(client: Arc<dyn SyncClient + Send + Sync>) -> SyncClientHandle {
         SyncClientHandle {
             client,

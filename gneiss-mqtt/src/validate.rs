@@ -355,7 +355,7 @@ pub(crate) mod testing {
         pinned_context
     }
 
-    pub(crate) fn create_outbound_validation_context_from_pinned(pinned: &PinnedValidationContext) -> OutboundValidationContext {
+    pub(crate) fn create_outbound_validation_context_from_pinned<'a>(pinned: &'a PinnedValidationContext) -> OutboundValidationContext<'a> {
         OutboundValidationContext {
             negotiated_settings : Some(&pinned.settings),
             connect_options : Some(&pinned.connect_options),
@@ -363,17 +363,17 @@ pub(crate) mod testing {
         }
     }
 
-    pub(crate) fn create_inbound_validation_context_from_pinned(pinned: &PinnedValidationContext) -> InboundValidationContext {
+    pub(crate) fn create_inbound_validation_context_from_pinned<'a>(pinned: &'a PinnedValidationContext) -> InboundValidationContext<'a> {
         InboundValidationContext {
             negotiated_settings : Some(&pinned.settings),
         }
     }
 
     pub(crate) fn create_invalid_user_properties() -> Vec<UserProperty> {
-        vec!(
+        vec![
             UserProperty{name: "GoodName".to_string(), value: "badvalue".repeat(20000)},
             UserProperty{name: "badname".repeat(10000), value: "goodvalue".to_string()},
-        )
+        ]
     }
 
     use crate::decode::testing::*;

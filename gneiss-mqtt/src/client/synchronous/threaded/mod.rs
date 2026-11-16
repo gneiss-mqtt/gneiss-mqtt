@@ -16,7 +16,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use log::{debug, error, info, trace};
+use log::{debug, info, trace};
 use crate::client::*;
 use crate::client::config::*;
 use crate::client::waiter::*;
@@ -484,8 +484,8 @@ impl SyncClient for ThreadedClient {
             disconnect : None,
         };
 
-        if options.disconnect.is_some() {
-            stop_options.disconnect = Some(Box::new(MqttPacket::Disconnect(options.disconnect.unwrap())));
+        if let Some(disconnect) = options.disconnect {
+            stop_options.disconnect = Some(Box::new(MqttPacket::Disconnect(disconnect)));
         }
 
         if let Err(send_error) = self.operation_sender.send(OperationOptions::Stop(stop_options)) {
@@ -578,8 +578,7 @@ pub(crate) fn create_runtime_states<T>(threaded_config: ThreadedOptions, connect
     (sender, impl_state)
 }
 
-/// Creates a new sync MQTT client that will use background threads for the client and connection attempts.
-pub fn new_threaded_client<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, threaded_config: ThreadedOptions, connection_factory: ThreadedConnectionFactory<T>) -> SyncClientHandle
+fn new_threaded_client<T>(client_config: MqttClientOptions, connect_config: ConnectOptions, threaded_config: ThreadedOptions, connection_factory: ThreadedConnectionFactory<T>) -> SyncClientHandle
 where T: Read + Write + Send + Sync + 'static {
     let (operation_sender, internal_state) = create_runtime_states(threaded_config, connection_factory);
 
@@ -599,19 +598,7 @@ where T: Read + Write + Send + Sync + 'static {
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn make_client_threaded(endpoint: String, port: u16, client_options: MqttClientOptions, connect_options: ConnectOptions, threaded_config: ThreadedOptions) -> GneissResult<SyncClientHandle> {
-    let connection_factory = Arc::new(move || {
-        let tcp_stream = make_tcp_stream(endpoint, port)?;
-        tcp_stream.set_nonblocking(true)?;
-        Ok(tcp_stream)
-    });
-
-    info!("threaded make_direct_client_no_tls - plaintext-to-broker");
-    Ok(new_threaded_client(client_options, connect_options, threaded_config, connection_factory))
-}
-
-pub fn make_tcp_stream(endpoint: String, port: u16) -> GneissResult<TcpStream> {
+fn make_tcp_stream(endpoint: String, port: u16) -> GneissResult<TcpStream> {
     let addr = make_addr(endpoint.as_str(), port)?;
     debug!("make_tcp_stream - opening TCP stream");
     let stream = TcpStream::connect(addr)?;
@@ -625,9 +612,11 @@ pub fn make_tcp_stream(endpoint: String, port: u16) -> GneissResult<TcpStream> {
     Ok(stream)
 }
 
-pub fn make_tcp_stream_connection_factory(endpoint: String, port: u16) -> ThreadedConnectionFactory<TcpStream> {
+/// Threaded client connection factory that creates a plaintext TCP stream to a specified
+/// host and port
+pub fn make_threaded_tcp_stream_connection_factory(endpoint: String, port: u16) -> ThreadedConnectionFactory<TcpStream> {
     Arc::new(move || {
-        let tcp_stream = make_tcp_stream(endpoint, port)?;
+        let tcp_stream = make_tcp_stream(endpoint.clone(), port)?;
         tcp_stream.set_nonblocking(true)?;
         Ok(tcp_stream)
     })
@@ -741,12 +730,16 @@ impl Drop for ThreadedClientEventWaiter {
 
 #[cfg(feature = "testing")]
 pub(crate) mod testing {
-    use crate::client::synchronous::*;
     use crate::testing::integration::*;
     use super::*;
 
+    fn create_plaintext_client_from_builder(builder: ThreadedClientBuilder) -> SyncClientHandle {
+        let connection_factory = make_threaded_tcp_stream_connection_factory(get_broker_endpoint(), get_broker_port());
+        builder.build(connection_factory).unwrap()
+    }
+
     fn threaded_connect_disconnect_test(builder: ThreadedClientBuilder) -> GneissResult<()> {
-        let client = builder.build()?;
+        let client = create_plaintext_client_from_builder(builder);
 
         start_sync_client(&client)?;
         stop_sync_client(&client)?;
@@ -754,89 +747,87 @@ pub(crate) mod testing {
         Ok(())
     }
 
-    fn do_good_client_test(tls: TlsUsage, ws: WebsocketUsage, proxy: ProxyUsage, test_factory: ThreadedTestFactory) {
-        assert!((*test_factory)(create_good_threaded_client_builder(tls, ws, proxy)).is_ok());
+    fn do_good_client_test(test_factory: ThreadedTestFactory) {
+        assert!((test_factory)(create_good_threaded_client_builder()).is_ok());
     }
 
     #[test]
     #[cfg(feature = "threaded")]
     fn client_connect_disconnect_direct_plaintext_no_proxy() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+        do_good_client_test(Box::new(|builder|{
             threaded_connect_disconnect_test(builder)
         }));
     }
 
     fn threaded_subscribe_unsubscribe_test(builder: ThreadedClientBuilder) -> GneissResult<()> {
-        sync_subscribe_unsubscribe_test(builder.build()?)
+        sync_subscribe_unsubscribe_test(create_plaintext_client_from_builder(builder))
     }
 
     #[test]
     fn client_subscribe_unsubscribe() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+        do_good_client_test(Box::new(|builder|{
             threaded_subscribe_unsubscribe_test(builder)
         }));
     }
 
     fn threaded_subscribe_publish_test(builder: ThreadedClientBuilder, qos: QualityOfService) -> GneissResult<()> {
-        let client = builder.build()?;
+        let client = create_plaintext_client_from_builder(builder);
         sync_subscribe_publish_test(client, qos)
     }
 
     #[test]
     fn client_subscribe_publish_qos0() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+        do_good_client_test(Box::new(|builder|{
             threaded_subscribe_publish_test(builder, QualityOfService::AtMostOnce)
         }));
     }
 
     #[test]
     fn client_subscribe_publish_qos1() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+        do_good_client_test(Box::new(|builder|{
             threaded_subscribe_publish_test(builder, QualityOfService::AtLeastOnce)
         }));
     }
 
     #[test]
     fn client_subscribe_publish_qos2() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+        do_good_client_test(Box::new(|builder|{
             threaded_subscribe_publish_test(builder, QualityOfService::ExactlyOnce)
         }));
     }
 
-    fn build_threaded_client(builder: ThreadedClientBuilder,) -> SyncClientHandle {
-        builder.build().unwrap()
-    }
-
     // This primarily tests that the will configuration works.  Will functionality is mostly broker-side.
     fn threaded_will_test(builder: ThreadedClientBuilder) -> GneissResult<()> {
-        sync_will_test(builder, build_threaded_client)
+        sync_will_test(builder, create_plaintext_client_from_builder)
     }
 
     #[test]
     fn client_will_sent() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+        do_good_client_test(Box::new(|builder|{
             threaded_will_test(builder)
         }));
     }
 
     fn threaded_connect_disconnect_cycle_session_rejoin_test(builder: ThreadedClientBuilder) -> GneissResult<()> {
-        let client = builder.build()?;
+        let client = create_plaintext_client_from_builder(builder);
         sync_connect_disconnect_cycle_session_rejoin_test(client)
     }
 
     #[test]
     fn connect_disconnect_cycle_session_rejoin() {
-        do_good_client_test(TlsUsage::None, WebsocketUsage::None, ProxyUsage::None, Box::new(|builder|{
+        do_good_client_test(Box::new(|builder|{
             threaded_connect_disconnect_cycle_session_rejoin_test(builder)
         }));
     }
 
     pub(crate) fn do_builder_test(test_factory: ThreadedTestFactory, builder: ThreadedClientBuilder) {
-        (*test_factory)(builder).unwrap();
+        (test_factory)(builder).unwrap();
     }
 
-    fn connection_failure_test(builder : ThreadedClientBuilder) -> GneissResult<()> {
-        let client = builder.build()?;
+    fn connection_failure_test(builder : ThreadedClientBuilder, host: &str, port: u16) -> GneissResult<()> {
+        let connection_factory = make_threaded_tcp_stream_connection_factory(host.to_string(), port);
+        let client = builder.build(connection_factory).unwrap();
+
         let connection_failure_waiter = ThreadedClientEventWaiter::new_single(client.clone(), ClientEventType::ConnectionFailure);
 
         client.start(None)?;
@@ -847,248 +838,25 @@ pub(crate) mod testing {
         Ok(())
     }
 
-    #[cfg(any(feature = "threaded-websockets", feature="threaded-rustls", feature="threaded-native-tls"))]
-    fn create_mismatch_builder(tls_config: TlsUsage, ws_config: WebsocketUsage, tls_endpoint: TlsUsage, ws_endpoint: WebsocketUsage) -> ThreadedClientBuilder {
-        assert!(tls_config != tls_endpoint || ws_config != ws_endpoint);
-
-        let connect_options = ConnectOptions::builder().build();
-
-        let mut builder = create_threaded_client_builder_internal(connect_options, tls_config, ProxyUsage::None, tls_endpoint, ws_endpoint);
-        apply_mismatch_sync_client_options(&mut builder, ws_config);
-        builder
-    }
-
-    #[cfg(any(feature = "threaded-websockets", feature="threaded-rustls", feature="threaded-native-tls"))]
-    #[cfg_attr(not(feature = "threaded-websockets"), allow(unused_mut, unused_variables))]
-    fn apply_mismatch_sync_client_options(builder: &mut ThreadedClientBuilder, _ws_config: WebsocketUsage) {
-        #[cfg(feature = "threaded-websockets")]
-        {
-            let websocket_config_option = create_websocket_options_sync(_ws_config);
-            if let Some(websocket_options) = websocket_config_option {
-                builder.with_websocket_options(websocket_options);
-            } else {
-                builder.clear_websocket_options();
-            }
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "threaded-rustls")]
-    fn connection_failure_direct_rustls_tls_config_direct_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(feature = "threaded-native-tls")]
-    fn connection_failure_direct_native_tls_tls_config_direct_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
-    fn connection_failure_direct_rustls_tls_config_websocket_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
-    fn connection_failure_direct_native_tls_tls_config_websocket_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
-    fn connection_failure_direct_rustls_tls_config_websocket_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
-    fn connection_failure_direct_native_tls_tls_config_websocket_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(feature = "threaded-rustls")]
-    fn connection_failure_direct_plaintext_config_direct_rustls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::None);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(feature = "threaded-native-tls")]
-    fn connection_failure_direct_plaintext_config_direct_native_tls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::None);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(feature = "threaded-websockets")]
-    fn connection_failure_direct_plaintext_config_websocket_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
-    fn connection_failure_direct_plaintext_config_websocket_rustls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
-    fn connection_failure_direct_plaintext_config_websocket_native_tls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::None, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
-    fn connection_failure_websocket_rustls_tls_config_direct_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
-    fn connection_failure_websocket_native_tls_tls_config_direct_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
-    fn connection_failure_websocket_rustls_tls_config_websocket_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
-    fn connection_failure_websocket_native_tls_tls_config_websocket_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
-    fn connection_failure_websocket_rustls_tls_config_direct_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Rustls, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
-    fn connection_failure_websocket_native_tls_tls_config_direct_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::Nativetls, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::None);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(feature="threaded-websockets")]
-    fn connection_failure_websocket_plaintext_config_direct_plaintext_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::None, WebsocketUsage::None);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
-    fn connection_failure_websocket_plaintext_config_websocket_rustls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
-    fn connection_failure_websocket_plaintext_config_websocket_native_tls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::Tungstenite);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-rustls", feature = "threaded-websockets"))]
-    fn connection_failure_websocket_plaintext_config_direct_rustls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Rustls, WebsocketUsage::None);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
-    #[test]
-    #[cfg(all(feature = "threaded-native-tls", feature = "threaded-websockets"))]
-    fn connection_failure_websocket_plaintext_config_direct_native_tls_tls_endpoint() {
-        let builder = create_mismatch_builder(TlsUsage::None, WebsocketUsage::Tungstenite, TlsUsage::Nativetls, WebsocketUsage::None);
-        do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
-        }), builder);
-    }
-
     #[test]
     fn connection_failure_invalid_endpoint() {
         let client_options = MqttClientOptionsBuilder::new()
             .with_connect_timeout(Duration::from_secs(3))
             .build();
 
-        let mut builder = ThreadedClientBuilder::new("example.com", 8000);
+        let mut builder = ThreadedClientBuilder::new();
         builder.with_client_options(client_options);
 
         do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
+            connection_failure_test(builder, "example.com", 8000)
         }), builder);
     }
 
     #[test]
     fn connection_failure_invalid_endpoint_http() {
-        let builder = ThreadedClientBuilder::new("amazon.com", 443);
+        let builder = ThreadedClientBuilder::new();
         do_builder_test(Box::new(move |builder| {
-            connection_failure_test(builder)
+            connection_failure_test(builder, "amazon.com", 443)
         }), builder);
     }
 }

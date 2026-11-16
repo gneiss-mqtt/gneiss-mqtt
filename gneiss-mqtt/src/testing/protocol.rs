@@ -3942,16 +3942,16 @@ fn connected_state_multi_operation_sequence_simple_success(raw_version : i32) {
 
     verify_protocol_state_empty(&fixture);
 
-    for (_, result) in context.publish_receivers.iter_mut() {
+    for result in context.publish_receivers.values_mut() {
         let result_value = result.try_recv().unwrap();
         assert!(result_value.is_ok());
     }
 
-    for (_, result) in context.subscribe_receivers.iter_mut() {
+    for result in context.subscribe_receivers.values_mut() {
         let result_value = result.try_recv().unwrap();
         assert!(result_value.is_ok());
     }
-    for (_, result) in context.unsubscribe_receivers.iter_mut() {
+    for result in context.unsubscribe_receivers.values_mut() {
         let result_value = result.try_recv().unwrap();
         assert!(result_value.is_ok());
     }
@@ -5321,7 +5321,7 @@ fn setup_max_retries_test_scenario(fixture: &mut ProtocolStateTestFixture) -> Ma
     }, PublishOptions::default()).unwrap();
 
     let unsubscribe_receiver = fixture.unsubscribe(0, UnsubscribePacket {
-        topic_filters: vec!("a/b".to_string()),
+        topic_filters: vec!["a/b".to_string()],
         ..Default::default()
     }, UnsubscribeOptions::default()).unwrap();
 

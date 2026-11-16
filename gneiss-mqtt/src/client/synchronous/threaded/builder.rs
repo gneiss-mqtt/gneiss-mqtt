@@ -9,6 +9,7 @@ use crate::error::*;
 use super::*;
 
 /// A builder for creating thread-based MQTT clients.
+#[derive(Default)]
 pub struct ThreadedClientBuilder {
     connect_options: Option<ConnectOptions>,
     client_options: Option<MqttClientOptions>,
@@ -19,12 +20,8 @@ impl ThreadedClientBuilder {
 
     /// Creates a new ThreadedClientBuilder instance that will construct clients that connect
     /// to the specified endpoint and port.
-    pub fn new(endpoint: &str, port: u16) -> Self {
-        ThreadedClientBuilder {
-            connect_options: None,
-            client_options: None,
-            threaded_options: None,
-        }
+    pub fn new() -> Self {
+        ThreadedClientBuilder::default()
     }
 
     /// Configures the Connect packet related options for created clients.

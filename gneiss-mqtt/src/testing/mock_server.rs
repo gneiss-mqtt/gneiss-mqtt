@@ -21,7 +21,8 @@ use crate::mqtt::utils::mqtt_packet_to_packet_type;
 use crate::testing::protocol::*;
 use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
-
+use crate::client::asynchronous::tokio::TokioConnectionFactory;
+use crate::client::synchronous::threaded::ThreadedConnectionFactory;
 
 struct MockBrokerConnection {
     decoder: Decoder,
@@ -150,19 +151,30 @@ impl MockBrokerConnection {
     }
 }
 
+const MOCK_BROKER_HOST : &str = "127.0.0.1";
+
 pub(crate) struct MockBroker {
     port: u16,
     shutdown_flag: Arc<Mutex<bool>>
 }
 
 impl MockBroker {
+
+    pub fn threaded_connection_factory(&self) -> ThreadedConnectionFactory<std::net::TcpStream> {
+        crate::client::synchronous::threaded::make_threaded_tcp_stream_connection_factory(MOCK_BROKER_HOST.to_string(), self.port)
+    }
+
+    pub fn tokio_connection_factory(&self) -> TokioConnectionFactory<tokio::net::TcpStream> {
+        crate::client::asynchronous::tokio::make_tokio_tcp_stream_connection_factory(MOCK_BROKER_HOST.to_string(), self.port)
+    }
+
     pub fn close(&self) {
         let mut shutdown_status = self.shutdown_flag.lock().unwrap();
         *shutdown_status = true;
     }
 
     pub fn new(protocol_version: ProtocolVersion, handler_set_factory: PacketHandlerSetFactory) -> Self {
-        let bind_result = TcpListener::bind("127.0.0.1:0");
+        let bind_result = TcpListener::bind(MOCK_BROKER_HOST.to_string() + ":0");
         if let Ok(listener) = bind_result {
             listener.set_nonblocking(true).expect("Failed to set listener socket non-blocking");
 
@@ -245,7 +257,7 @@ pub(crate) fn build_mock_client_server_tokio(mut config: ClientTestOptions) -> (
         (*connect_options_mutator)(&mut connect_options_builder);
     }
 
-    let mut client_builder = TokioClientBuilder::new("127.0.0.1", broker.port);
+    let mut client_builder = TokioClientBuilder::new();
     client_builder.with_client_options(client_options_builder.build());
     client_builder.with_connect_options(connect_options_builder.build());
 
@@ -275,7 +287,7 @@ pub(crate) fn build_mock_client_server_threaded(mut config: ClientTestOptions) -
         (*connect_options_mutator)(&mut connect_options_builder);
     }
 
-    let mut client_builder = ThreadedClientBuilder::new("127.0.0.1", broker.port);
+    let mut client_builder = ThreadedClientBuilder::new();
     client_builder.with_client_options(client_options_builder.build());
     client_builder.with_connect_options(connect_options_builder.build());
 

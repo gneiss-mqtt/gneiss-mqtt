@@ -13,8 +13,6 @@ use crate::mqtt::*;
 
 use log::*;
 use std::fmt::{Debug, Formatter};
-use std::fs::File;
-use std::io::Read;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 #[cfg(feature = "tokio")]

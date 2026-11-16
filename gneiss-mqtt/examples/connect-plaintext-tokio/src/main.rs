@@ -4,7 +4,7 @@
  */
 
 use argh::FromArgs;
-use gneiss_mqtt::client::{AsyncClient, ClientEvent, TokioClientBuilder};
+use gneiss_mqtt::client::{make_tokio_tcp_stream_connection_factory, AsyncClient, ClientEvent, TokioClientBuilder};
 use gneiss_mqtt::client::waiter::{ClientEventType, TokioClientEventWaiter};
 use gneiss_mqtt::error::{GneissError, GneissResult};
 use std::str::FromStr;
@@ -57,9 +57,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let host_and_port = parse_endpoint(&args.endpoint)?;
 
     // Create the client
-    let client = TokioClientBuilder::new(&host_and_port.0, host_and_port.1).build()?;
+    let client = TokioClientBuilder::new().build(
+        make_tokio_tcp_stream_connection_factory(host_and_port.0.clone(), host_and_port.1)
+    )?;
 
-    println!("Connecting to {}:{}...\n", host_and_port.0, host_and_port.1);
+    println!("Connecting to {}:{}...\n", host_and_port.0.clone(), host_and_port.1);
 
     // Before connecting, create a waiter object that completes when it receives a connection
     // success event

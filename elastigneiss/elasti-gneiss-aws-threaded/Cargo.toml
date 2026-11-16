@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 elasti-gneiss-core = { path = "../elasti-gneiss-core" }
 elasti-gneiss-core-sync = { path = "../elasti-gneiss-core-sync" }
-gneiss-mqtt = { path = "../../gneiss-mqtt", features = ["threaded-rustls", "threaded-native-tls"] }
-gneiss-mqtt-aws = { path = "../../gneiss-mqtt-aws", features = ["threaded-rustls", "threaded-native-tls"] }
+gneiss-mqtt = { path = "../../gneiss-mqtt", features = ["threaded"] }
+gneiss-mqtt-aws = { path = "../../gneiss-mqtt-aws", features = ["threaded"] }
 simplelog = { version = "0.12" }
 argh = { version = "0.1" }
 url = { version = "2.5" }

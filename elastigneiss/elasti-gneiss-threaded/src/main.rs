@@ -18,19 +18,6 @@ use gneiss_mqtt::alias::OutboundAliasResolverFactory;
 /// elasti-gneiss-threaded - an interactive MQTT console
 struct CommandLineArgs {
 
-    /// path to the root CA to use when connecting.  If the endpoint URI is a TLS-enabled
-    /// scheme and this is not set, then the default system trust store will be used instead.
-    #[argh(option)]
-    capath: Option<String>,
-
-    /// path to a client X509 certificate to use while connecting via mTLS.
-    #[argh(option)]
-    cert: Option<String>,
-
-    /// path to the private key associated with the client X509 certificate to use while connecting via mTLS.
-    #[argh(option)]
-    key: Option<String>,
-
     /// URI of endpoint to connect to.  Supported schemes include `ws`, `mqtt` and `mqtts`
     #[argh(positional)]
     endpoint_uri: String,
@@ -38,14 +25,6 @@ struct CommandLineArgs {
     /// path to a log file that should be written
     #[argh(option)]
     logpath: Option<PathBuf>,
-
-    /// disables SNI and peer verification; only use for testing
-    #[argh(switch)]
-    no_verify_peer: bool,
-
-    /// http proxy host and port to CONNECT through
-    #[argh(option)]
-    http_proxy_uri: Option<String>,
 
     /// protocol version to use.  Valid values are `5` and `311`
     #[argh(option)]
@@ -74,69 +53,21 @@ fn build_client(connect_options: ConnectOptions, client_config: MqttClientOption
     let port = uri.port().unwrap();
     let scheme = uri.scheme().to_lowercase();
 
-    let mut builder = ThreadedClientBuilder::new(&endpoint, port);
-    builder.with_connect_options(connect_options);
-    builder.with_client_options(client_config);
-
-    if let Some(http_proxy_uri) = args.http_proxy_uri.clone() {
-        let proxy_url_parse_result = Url::parse(&http_proxy_uri);
-        if proxy_url_parse_result.is_err() {
-            return Err(ElastiError::InvalidUri(http_proxy_uri));
-        }
-
-        let proxy_uri = proxy_url_parse_result.unwrap();
-        if proxy_uri.host_str().is_none() {
-            return Err(ElastiError::InvalidUri(http_proxy_uri));
-        }
-
-        let proxy_endpoint = proxy_uri.host_str().unwrap().to_string();
-
-        if proxy_uri.port().is_none() {
-            return Err(ElastiError::InvalidUri(uri_string));
-        }
-
-        let http_proxy_options = HttpProxyOptions::builder(proxy_endpoint.as_str(), proxy_uri.port().unwrap()).build();
-        builder.with_http_proxy_options(http_proxy_options);
-    }
+    let mut builder = ThreadedClientBuilder::new();
+    builder.with_connect_options(connect_options)
+        .with_client_options(client_config);
 
     match scheme.as_str() {
-        "mqtts" => {
-            let mut tls_options_builder =
-                if args.cert.is_some() && args.key.is_some() {
-                    TlsOptions::builder_with_mtls_from_path(args.cert.as_ref().unwrap(), args.key.as_ref().unwrap()).unwrap()
-                } else {
-                    TlsOptions::builder()
-                };
-
-            if let Some(capath) = &args.capath {
-                tls_options_builder.with_root_ca_from_path(capath.as_str()).unwrap();
-            }
-
-            tls_options_builder.with_verify_peer(!args.no_verify_peer);
-
-            builder.with_tls_options(tls_options_builder.build_rustls().unwrap());
+        "mqtt" => {
         }
-        "ws" => {
-            let websocket_options = SyncWebsocketOptions::builder().build();
-            builder.with_websocket_options(websocket_options);
+        _ => {
+            return Err(ElastiError::UnsupportedUriScheme(scheme));
         }
-        "wss" => {
-            let mut tls_options_builder = TlsOptions::builder();
-            tls_options_builder.with_verify_peer(!args.no_verify_peer);
-            if let Some(capath) = &args.capath {
-                tls_options_builder.with_root_ca_from_path(capath.as_str()).unwrap();
-            }
-
-            let tls_options = tls_options_builder.build_rustls().unwrap();
-            builder.with_tls_options(tls_options);
-
-            let websocket_options = SyncWebsocketOptions::builder().build();
-            builder.with_websocket_options(websocket_options);
-        }
-        _ => {}
     }
 
-    Ok(builder.build()?)
+    Ok(builder.build(
+        make_threaded_tcp_stream_connection_factory(endpoint, port)
+    )?)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -155,7 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let connect_options = ConnectOptions::builder()
         .with_keep_alive_interval_seconds(Some(60))
-        .with_client_id("HelloClient-wss")
+        .with_client_id("elasti-gneiss-threaded")
         .with_rejoin_session_policy(RejoinSessionPolicy::PostSuccess)
         .build();
 
